@@ -56,6 +56,7 @@ Corvus は Nginx Proxy Manager のフォークではありません。既存の 
 - 自動更新される無料の Let's Encrypt 証明書(HTTP-01、または DNS-01: Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap)、または独自証明書のアップロード
 - Cloudflare や信頼できるプロキシの背後でも実際のクライアント IP を取得、ホストごとのパスワード保護(任意)
 - ホストごとのセキュリティヘッダーのプリセット(基本 / 厳格: nosniff、フレーム・リファラーポリシー、レポート専用 CSP、HttpOnly/SameSite/Secure Cookie フラグ)。アプリがすでに送っているヘッダーは上書きしません
+- テキスト応答の Gzip 圧縮(既定で有効)、ホストごとのアップロードサイズ上限とアップストリームのタイムアウト
 - すべての変更は `openresty -t` で検証され、アトミックに適用され、ロールバックも可能
 
 **Corvus Sentinel — セキュリティエンジン**

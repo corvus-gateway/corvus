@@ -47,6 +47,7 @@ Corvus 不是 Nginx Proxy Manager 的分支。它是全新的实现（OpenResty 
 - 免费的 Let's Encrypt 证书（HTTP-01，或DNS-01：Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap），自动续期，也可上传自有证书
 - 在 Cloudflare 或受信任代理之后获取真实客户端 IP；可按主机启用密码保护
 - 按主机设置安全响应头预设（基础 / 严格：nosniff、frame 与 referrer 策略、仅报告的 CSP、HttpOnly/SameSite/Secure Cookie 标志），绝不覆盖应用自身已发送的响应头
+- 文本响应的 Gzip 压缩（默认开启），以及按主机设置的上传大小限制和上游超时
 - 每次变更都会通过 `openresty -t` 验证，原子化应用，并且可以回滚
 
 **Corvus Sentinel — 安全引擎**

@@ -56,6 +56,7 @@ Go control plane, React console) that can **import an existing NPM setup**.
 - Free Let's Encrypt certificates (HTTP-01, or DNS-01 via Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) with automatic renewal, or upload your own
 - Real client IP behind Cloudflare or trusted proxies; optional password protection per host
 - Security header presets per host (basic / strict: nosniff, frame and referrer policy, report-only CSP, HttpOnly/SameSite/Secure cookie flags), never overriding what the app already sends
+- Gzip compression of text responses (on by default), and per-host upload size limit and upstream timeout
 - Every change is validated with `openresty -t`, applied atomically and can be rolled back
 
 **Corvus Sentinel — security engine**

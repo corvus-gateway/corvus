@@ -33,6 +33,7 @@ const blank: Form = {
   ssl_forced: false, http2: true, waitroom_id: null, waitroom_path: "/", advanced_config: "", enabled: true,
   client_ip: "direct", rate_limit_id: null, access_list_id: null, block_exploits: true,
   body_inspection: "log", body_max_kb: 1024, security_headers: "off",
+  max_upload_mb: null, upstream_timeout_s: null, gzip: true,
   under_attack: "off", under_attack_config: { ...UA_DEFAULTS },
 };
 
@@ -74,6 +75,7 @@ export default function ProxyHosts() {
   const showBody = has("body_inspection");
   const showHeaders = has("security_headers");
   const showUA = has("under_attack");
+  const showTuning = has("gzip");
   const showLimits = !limits.missing && has("rate_limit_id");
   const showLists = !lists.missing && has("access_list_id");
 
@@ -102,6 +104,7 @@ export default function ProxyHosts() {
     if (!showExploits) { delete body.block_exploits; }
     if (!showBody) { delete body.body_inspection; delete body.body_max_kb; }
     if (!showHeaders) { delete body.security_headers; }
+    if (!showTuning) { delete body.max_upload_mb; delete body.upstream_timeout_s; delete body.gzip; }
     if (!showUA) { delete body.under_attack; delete body.under_attack_config; }
     if (!showLimits) { delete body.rate_limit_id; }
     if (!showLists) { delete body.basic_auth; }
@@ -368,6 +371,15 @@ export default function ProxyHosts() {
           </FormSection>
 
           <FormSection title={t("secAdvanced")}>
+            {showTuning && (<>
+              <IdField label={t("maxUpload")} hint={t("maxUploadHint")} error={fieldErr(error, "max_upload_mb")}>
+                {(id) => <NumberInput id={id} min={0} max={1048576} suffix="MB" placeholder="100" value={f.max_upload_mb ?? NaN} onChange={(v) => set({ max_upload_mb: Number.isFinite(v) ? v : null })} />}
+              </IdField>
+              <IdField label={t("upstreamTimeout")} hint={t("upstreamTimeoutHint")} error={fieldErr(error, "upstream_timeout_s")}>
+                {(id) => <NumberInput id={id} min={1} max={86400} suffix="s" placeholder={f.websocket ? "3600" : "60"} value={f.upstream_timeout_s ?? NaN} onChange={(v) => set({ upstream_timeout_s: Number.isFinite(v) ? v : null })} />}
+              </IdField>
+              <SwitchRow label={t("gzip")} description={t("gzipDesc")} checked={f.gzip ?? true} onChange={(v) => set({ gzip: v })} />
+            </>)}
             <IdField label={t("advanced")} hint={isAdmin ? t("advancedHint") : t("advancedAdminOnly")} error={fieldErr(error, "advanced_config")}>
               {(id) => <Textarea id={id} rows={7} spellCheck={false} readOnly={!isAdmin} className={cn("font-mono text-xs leading-5", !isAdmin && "bg-surface-2 text-fg-muted")} value={f.advanced_config} onChange={(e) => set({ advanced_config: e.target.value })} placeholder={"# proxy_set_header X-Foo bar;"} invalid={!!fieldErr(error, "advanced_config")} />}
             </IdField>

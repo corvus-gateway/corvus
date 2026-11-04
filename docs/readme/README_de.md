@@ -57,6 +57,7 @@ Go-Steuerungsebene, React-Konsole), die ein **bestehendes NPM-Setup importieren*
 - Kostenlose Let's-Encrypt-Zertifikate (HTTP-01 oder DNS-01 über Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) mit automatischer Erneuerung oder eigene Zertifikate per Upload
 - Echte Client-IP hinter Cloudflare oder vertrauenswürdigen Proxys; optionaler Passwortschutz pro Host
 - Voreinstellungen für Sicherheits-Header pro Host (Basis / Streng: nosniff, Frame- und Referrer-Policy, CSP im Report-Only-Modus, Cookie-Flags HttpOnly/SameSite/Secure), ohne zu überschreiben, was die Anwendung bereits sendet
+- Gzip-Komprimierung von Textantworten (standardmäßig an) sowie Upload-Größenlimit und Upstream-Timeout pro Host
 - Jede Änderung wird mit `openresty -t` geprüft, atomar angewendet und kann zurückgerollt werden
 
 **Corvus Sentinel — Sicherheits-Engine**
