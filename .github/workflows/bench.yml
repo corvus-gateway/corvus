@@ -1,0 +1,61 @@
+# Benchmark: throughput and latency of an nginx baseline and Corvus with increasing feature
+# sets, on one runner (see deploy/bench/bench.sh and docs/benchmark.md). Manual only; nothing
+# is published.
+name: bench
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: Measured run per scenario in seconds (e.g. 20s)
+        default: 20s
+      connections:
+        description: Concurrent connections
+        default: "64"
+      ref:
+        description: Branch, tag or commit to benchmark (default the workflow's ref)
+        default: ""
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref }}
+      - id: ver
+        run: echo "version=0.0.0-bench.$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build the image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64
+          build-args: VERSION=${{ steps.ver.outputs.version }}
+          load: true
+          tags: corvus:bench
+          cache-from: |
+            type=gha,scope=release-amd64
+            type=gha,scope=bench-amd64
+          cache-to: type=gha,scope=bench-amd64,mode=max
+      - name: Install wrk
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq wrk
+      - name: Run the benchmark
+        env:
+          CORVUS_IMAGE: corvus:bench
+          DURATION: ${{ inputs.duration || '20s' }}
+          CONNECTIONS: ${{ inputs.connections || '64' }}
+          OUT_DIR: bench-out
+        run: |
+          echo "Corvus ${{ steps.ver.outputs.version }} (commit $(git rev-parse HEAD))"
+          deploy/bench/bench.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: bench-results
+          path: bench-out/
+          retention-days: 30
