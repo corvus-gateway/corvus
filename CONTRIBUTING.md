@@ -32,6 +32,11 @@ Full image: `docker build -f deploy/Dockerfile -t corvus .` (compiles OpenResty,
 - CI must pass: `go vet`, `go test -race`, `govulncheck`, TypeScript build, `npm audit`, Lua syntax check.
 - New user-facing text goes through the i18n dictionaries in `web/src/locales/` — add the English
   string at least; other languages are welcome.
-- Security-relevant changes (rules engine, auth, config generation) should come with tests.
+- **Tests:** new functionality must come with automated tests (Go unit tests, fuzz tests for
+  parsers and validators, or a case in `deploy/dev/itest.sh` for gateway behaviour). Bug fixes
+  should add a test that fails without the fix. Security-relevant changes (rules engine, auth,
+  config generation) are not merged without tests.
+- All changes reach `main` through a pull request with passing checks (go, web, lua) — this
+  applies to maintainers too.
 - By contributing you agree that your contribution is licensed under the
   [Apache License 2.0](LICENSE).
