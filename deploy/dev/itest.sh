@@ -594,6 +594,25 @@ if [ -n "${CORVUS_HOST6:-}" ]; then
 else
   ok "ipv6 not available (set CORVUS_HOST6 to test IPv6 listeners)"
 fi
+echo "[upload limits and gzip]"
+LIMJ='{"domains":["limits.corvus.test"],"forward_scheme":"http","forward_host":"demo","forward_port":80,"max_upload_mb":1,"upstream_timeout_s":30'
+LH=$(c -X POST $A/api/proxy-hosts -d "$LIMJ}" | js "d.get('id') or d.get('proxy_host',{}).get('id')")
+chk "$(c $A/api/proxy-hosts/$LH | js "(d.get('max_upload_mb'),d.get('upstream_timeout_s'),d.get('gzip'))")" "(1, 30, True)" "host stores upload size, timeout and gzip (default on)"
+sleep 2
+UP=$(mktemp)
+head -c 2097152 /dev/zero > "$UP"
+chk "$(code -H 'Host: limits.corvus.test' -H 'Content-Type: application/octet-stream' --data-binary @"$UP" "$G/upload")" 413 "2 MB upload to a 1 MB host: 413"
+head -c 524288 /dev/zero > "$UP"
+chk "$(code -H 'Host: limits.corvus.test' -H 'Content-Type: application/octet-stream' --data-binary @"$UP" "$G/upload")" 200 "512 KB upload accepted"
+rm -f "$UP"
+# whoami echoes the request headers as text/plain: a padded header makes the answer > 1 KB.
+PAD=$(head -c 3000 /dev/zero | tr '\0' a)
+ce() { curl -s -o /dev/null -D - -H 'Host: limits.corvus.test' -H 'Accept-Encoding: gzip' -H "X-Pad: $PAD" "$G/gz" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-encoding"{print $2}'; }
+chk "$(ce)" gzip "text response compressed"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$LH -d "$LIMJ,\"gzip\":false}")" 200 "turn gzip off"
+sleep 2
+chk "$(ce)" "" "gzip off: response not compressed"
+c -o /dev/null -X DELETE $A/api/proxy-hosts/$LH
 
 echo "[backup]"
 BK=$(mktemp)

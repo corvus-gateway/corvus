@@ -4,6 +4,7 @@ import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
 import { headersStrings } from "./headers.i18n";
+import { limitsStrings } from "./limits.i18n";
 import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
@@ -308,6 +309,7 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   ...tokensStrings.ja,
   ...redirectsStrings.ja,
   ...headersStrings.ja,
+  ...limitsStrings.ja,
   ...listFeedsStrings.ja,
   ...ssoStrings.ja,
   ...retentionStrings.ja,

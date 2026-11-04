@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -86,9 +87,14 @@ type hostView struct {
 	Cloudflare      []string
 	TrustedProxies  []string
 	RealIPHeader    string
-	ErrorCodes      []int // upstream errors answered with the error page (see UpstreamErrorCodes)
+	ErrorCodes      []int  // upstream errors answered with the error page (see UpstreamErrorCodes)
+	UploadLimit     string // client_max_body_size for the server ("" = global default)
+	GzipOff         bool   // the host turned compression off
 	P               Paths
 }
+
+// gzipDirective finds a gzip on/off directive in an advanced configuration.
+var gzipDirective = regexp.MustCompile(`(?m)(?:^|[;{])\s*gzip\s`)
 
 // UpstreamErrorCodes are the nginx-generated upstream errors (connection refused,
 // timeouts, invalid responses) answered with the error page. Responses the upstream
@@ -289,6 +295,15 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		v := hostView{ProxyHost: hc, P: c.P, HasRootLocation: validate.HasRootLocation(hc.AdvancedConfig), Upstream: upstreamAddr(hc.ForwardHost, static, hostGW)}
 		v.UpstreamResolve = !isIP(v.Upstream)
 		v.OwnAccessLog = strings.Contains(hc.AdvancedConfig, "access_log")
+		// Upload size and gzip are server-level directives: an advanced configuration that
+		// sets them itself (common in NPM setups) keeps its own (nginx rejects duplicates).
+		if hc.MaxUploadMB != nil && !strings.Contains(hc.AdvancedConfig, "client_max_body_size") {
+			v.UploadLimit = "0"
+			if *hc.MaxUploadMB > 0 {
+				v.UploadLimit = fmt.Sprintf("%dm", *hc.MaxUploadMB)
+			}
+		}
+		v.GzipOff = !hc.Gzip && !gzipDirective.MatchString(hc.AdvancedConfig)
 		v.CertDir = c.certDir(hc.CertificateID)
 		if hc.WaitroomID != nil {
 			if r := byID[*hc.WaitroomID]; r != nil && r.Enabled {

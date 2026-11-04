@@ -39,9 +39,16 @@
 {{- if .Websocket}}
             proxy_set_header Upgrade $corvus_upgrade;
             proxy_set_header Connection $corvus_connection_upgrade;
-            proxy_read_timeout 1h;
 {{- else}}
             proxy_set_header Connection "";
+{{- end}}
+{{- with .UpstreamTimeoutS}}
+            proxy_read_timeout {{.}}s;
+            proxy_send_timeout {{.}}s;
+{{- else}}
+{{- if .Websocket}}
+            proxy_read_timeout 1h;
+{{- end}}
 {{- end}}
             proxy_pass {{.ForwardScheme}}://corvus_up_{{.ID}};
 {{- if .ErrorCodes}}
@@ -105,6 +112,12 @@ server {
     set $corvus_ban "";
     set $corvus_skip "";
     set $corvus_auth "Restricted";
+{{- if .UploadLimit}}
+    client_max_body_size {{.UploadLimit}};{{if eq .UploadLimit "0"}}   # unlimited{{end}}
+{{- end}}
+{{- if .GzipOff}}
+    gzip off;
+{{- end}}
 
     # Security rules and attack-pattern blocking run in the rewrite phase — before
     # rate limiting, Basic auth and the access queue (corvus/rules.lua).

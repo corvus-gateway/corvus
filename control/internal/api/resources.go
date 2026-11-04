@@ -104,6 +104,10 @@ type proxyHostInput struct {
 	UnderAttack       *string                  `json:"under_attack"`
 	UnderAttackConfig *store.UnderAttackConfig `json:"under_attack_config"`
 
+	MaxUploadMB      *int  `json:"max_upload_mb"`      // null = global default (100 MB), 0 = unlimited
+	UpstreamTimeoutS *int  `json:"upstream_timeout_s"` // null = default (60 s, WebSocket 1 h)
+	Gzip             *bool `json:"gzip"`               // omitted = on
+
 	// BasicAuth edits the host's password protection; when present it replaces access_list_id.
 	BasicAuth      *basicAuthInput `json:"basic_auth"`
 	BasicAuthUsers []string        `json:"basic_auth_users"` // read-only; accepted and ignored
@@ -145,6 +149,8 @@ func (in proxyHostInput) apply(h *store.ProxyHost) {
 	h.WaitroomID, h.WaitroomPath, h.AdvancedConfig = in.WaitroomID, in.WaitroomPath, in.AdvancedConfig
 	h.HTTP2 = in.HTTP2 == nil || *in.HTTP2
 	h.Enabled = in.Enabled == nil || *in.Enabled
+	h.Gzip = in.Gzip == nil || *in.Gzip
+	h.MaxUploadMB, h.UpstreamTimeoutS = in.MaxUploadMB, in.UpstreamTimeoutS
 	h.ClientIP, h.RateLimitID, h.AccessListID, h.BlockExploits = in.ClientIP, in.RateLimitID, in.AccessListID, in.BlockExploits
 	h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders = in.BodyInspection, in.BodyMaxKB, in.SecurityHeaders
 	if in.UnderAttack != nil {

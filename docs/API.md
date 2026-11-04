@@ -119,8 +119,16 @@ Proxy host fields: `domains` (array), `forward_scheme` (`http`/`https`), `forwar
 `client_ip` (`direct`, `cloudflare`, `trusted_proxies`), `waitroom_id`, `waitroom_path`,
 `rate_limit_id`, `access_list_id` or `basic_auth`, `block_exploits`, `body_inspection`
 (`off`, `log`, `block`), `body_max_kb`, `security_headers`, `under_attack`, `under_attack_config`,
-`advanced_config`, `enabled`. `under_attack` and `under_attack_config` keep their stored value when
-omitted from a `PUT`.
+`max_upload_mb`, `upstream_timeout_s`, `gzip`, `advanced_config`, `enabled`. `under_attack` and
+`under_attack_config` keep their stored value when omitted from a `PUT`.
+
+| Field | Default | Meaning |
+|---|---|---|
+| `max_upload_mb` | `null` | Largest request body in MB; `null` = global 100 MB, `0` = unlimited (0–1048576). Larger requests get 413 |
+| `upstream_timeout_s` | `null` | Upstream read and send timeout in seconds (1–86400); `null` = 60 s (1 h for WebSocket hosts) |
+| `gzip` | `true` | Compress text responses (HTML, CSS, JS, JSON, XML, SVG; ≥ 1 KB). Responses the upstream already compressed pass unchanged |
+
+An advanced configuration that sets `client_max_body_size` or `gzip` itself keeps its own value.
 
 `security_headers` (default `off`; NPM imports use `off`) adds browser security headers to the
 host's responses, including gateway error pages. A header the upstream already sends is never

@@ -85,6 +85,11 @@ export interface ProxyHost {
   client_ip?: ClientIPMode; rate_limit_id?: number | null; access_list_id?: number | null; block_exploits?: boolean;
   body_inspection?: "off" | "log" | "block"; body_max_kb?: number;
   security_headers?: SecurityHeaders;
+  /** null = global default (100 MB), 0 = unlimited. */
+  max_upload_mb?: number | null;
+  /** Upstream read/send timeout in seconds; null = default (60 s, WebSocket 1 h). */
+  upstream_timeout_s?: number | null;
+  gzip?: boolean;
   under_attack?: UnderAttackMode;
   under_attack_config?: UnderAttackConfig;
   /** Read-only: usernames of the host's password protection (HTTP Basic auth). */
