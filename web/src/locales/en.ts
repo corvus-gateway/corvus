@@ -5,6 +5,7 @@ import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
+import { pagesStrings } from "./pages.i18n";
 import { enSecurity } from "./security.en";
 import { enUsers } from "./users.en";
 import type { ko } from "./ko";
@@ -205,4 +206,5 @@ export const en: Record<keyof typeof ko, string> = {
   ...retentionStrings.en,
   ...templatesStrings.en,
   ...backupStrings.en,
+  ...pagesStrings.en,
 };

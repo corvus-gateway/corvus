@@ -150,10 +150,21 @@ redirection hosts too; rules scoped to specific hosts target proxy hosts only.
 | DELETE | `/api/bans/{id}` | operator | Remove a ban |
 | POST | `/api/bans/{id}/permanent` | operator | Make a ban permanent |
 | GET / PUT | `/api/settings/autoban` | viewer / operator | Automatic ban settings (threshold, first and longest ban, permanent ban from offense N) |
+| GET | `/api/settings/pages` | viewer | Block and error pages: `{ "pages": { "block" \| "error": { "custom", "html", "default_html" } }, "max_bytes", "placeholders" }` |
+| PUT | `/api/settings/pages/{page}` | operator | Set a custom page (`page` = `block` or `error`, body `{ "html" }`, at most 64 KB of UTF-8) and deploy |
+| POST | `/api/settings/pages/{page}/reset` | operator | Restore the built-in page and deploy |
 | GET / POST | `/api/rate-limits` | viewer / operator | Rate limits |
 | PUT / DELETE | `/api/rate-limits/{id}` | operator | Update / delete |
 | GET / POST | `/api/access-lists` | viewer / operator | Password protection lists |
 | PUT / DELETE | `/api/access-lists/{id}` | operator | Update / delete |
+
+The **block page** is shown when a security rule, a ban or attack-pattern blocking refuses a
+request; the **error page** when a proxy host's upstream cannot be reached or times out (nginx's
+own 502/503/504; error responses the upstream sends itself are passed through, and a rate limit
+answering 503 keeps its JSON response). Pages are served as static HTML, never as configuration;
+`{{STATUS}}`, `{{RID}}` (request id), `{{HOST}}`, `{{IP}}` and `{{TIME}}` are replaced with
+HTML-escaped values. Custom pages are written into the configuration version directory, so they are
+tested, deployed and rolled back with the rest of the configuration.
 
 ### Access queue
 

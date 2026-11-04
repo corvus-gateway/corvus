@@ -26,6 +26,7 @@ const Bans = lazy(() => import("../../pages/Bans"));
 const Retention = lazy(() => import("../../pages/Retention"));
 const Certificates = lazy(() => import("../../pages/Certificates"));
 const NetworkPage = lazy(() => import("../../pages/Network"));
+const CustomPages = lazy(() => import("../../pages/CustomPages"));
 const Deployments = lazy(() => import("../../pages/Deployments"));
 const Audit = lazy(() => import("../../pages/Audit"));
 const ImportNpm = lazy(() => import("../../pages/ImportNpm"));
@@ -166,6 +167,7 @@ export function Shell() {
                 <Route path="/access-lists" element={<Navigate to="/proxy-hosts" replace />} />
                 <Route path="/certificates" element={<Certificates />} />
                 <Route path="/network" element={<NetworkPage />} />
+                <Route path="/settings/pages" element={<CustomPages />} />
                 <Route path="/deployments" element={<Deployments />} />
                 <Route path="/audit" element={<Audit />} />
                 <Route path="/alerts" element={<Alerts />} />

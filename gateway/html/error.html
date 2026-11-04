@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
+<title>Temporarily unavailable</title>
+<style>
+  :root { --bg: #f5f6f8; --card: #fff; --fg: #0f172a; --muted: #5b6474; --line: #e7e9ee; --tile: #f6f7f9; --warn: #b45309; --warn-soft: rgba(180,83,9,.10); }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b0d12; --card: #14171d; --fg: #eef1f6; --muted: #a3abba; --line: #232832; --tile: #1a1e26; --warn: #fbbf24; --warn-soft: rgba(251,191,36,.14); }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; background: var(--bg); color: var(--fg);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "PingFang SC", "Microsoft YaHei", "Hiragino Sans", "Yu Gothic", sans-serif; }
+  .card { width: 100%; max-width: 30rem; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 30px; box-shadow: 0 12px 32px -12px rgba(15,23,42,.18); }
+  .pill { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--warn); background: var(--warn-soft); padding: 4px 10px; border-radius: 999px; margin-bottom: 14px; }
+  h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: -.01em; }
+  p { margin: 0 0 18px; color: var(--muted); }
+  html:lang(ko) p { word-break: keep-all; }
+  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; background: var(--tile); border-radius: 12px; padding: 12px 14px; font-size: 13px; }
+  dt { color: var(--muted); } dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+  .retry { display: inline-block; margin-top: 18px; font-size: 14px; font-weight: 600; color: var(--fg); text-decoration: none; border: 1px solid var(--line); border-radius: 10px; padding: 7px 14px; }
+  .retry:hover { background: var(--tile); }
+  footer { margin-top: 18px; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+  <main class="card">
+    <span class="pill">{{STATUS}}</span>
+    <h1 id="h">Temporarily unavailable</h1>
+    <p id="m">The server behind this site is not responding right now. This is usually temporary — please try again in a moment. If the problem continues, contact the site owner and include the request ID below.</p>
+    <dl>
+      <dt id="d1">Request ID</dt><dd>{{RID}}</dd>
+      <dt id="d2">Site</dt><dd>{{HOST}}</dd>
+      <dt id="d3">Time</dt><dd>{{TIME}}</dd>
+    </dl>
+    <a class="retry" id="r" href="">Try again</a>
+    <footer>Protected by Corvus AWPG</footer>
+  </main>
+<script>
+(function () {
+  var L = {
+    ko: ["일시적으로 이용할 수 없습니다", "이 사이트의 서버가 지금 응답하지 않습니다. 대개 일시적인 문제이니 잠시 후 다시 시도해 주세요. 문제가 계속되면 아래 요청 ID와 함께 사이트 관리자에게 문의하세요.", "요청 ID", "사이트", "시간", "다시 시도"],
+    zh: ["暂时无法访问", "此网站的服务器当前没有响应。这通常是暂时的，请稍后重试。如果问题持续存在，请联系网站管理员并提供下方的请求 ID。", "请求 ID", "网站", "时间", "重试"],
+    ja: ["一時的にご利用いただけません", "このサイトのサーバーが現在応答していません。通常は一時的なものですので、しばらくしてから再度お試しください。問題が続く場合は、下記のリクエストIDを添えてサイト管理者にお問い合わせください。", "リクエストID", "サイト", "日時", "再試行"],
+    ru: ["Временно недоступно", "Сервер этого сайта сейчас не отвечает. Обычно это временно — попробуйте ещё раз через минуту. Если проблема не исчезнет, свяжитесь с владельцем сайта и укажите ID запроса ниже.", "ID запроса", "Сайт", "Время", "Повторить"],
+    fr: ["Temporairement indisponible", "Le serveur de ce site ne répond pas pour le moment. C’est généralement temporaire : réessayez dans un instant. Si le problème persiste, contactez le propriétaire du site en indiquant l’ID de requête ci-dessous.", "ID de requête", "Site", "Heure", "Réessayer"],
+    de: ["Vorübergehend nicht verfügbar", "Der Server hinter dieser Website antwortet gerade nicht. Das ist meist nur vorübergehend – bitte versuchen Sie es gleich noch einmal. Besteht das Problem weiter, wenden Sie sich bitte unter Angabe der unten stehenden Anfrage-ID an den Betreiber der Website.", "Anfrage-ID", "Website", "Zeit", "Erneut versuchen"],
+    es: ["No disponible temporalmente", "El servidor de este sitio no responde en este momento. Suele ser algo temporal: inténtelo de nuevo en unos instantes. Si el problema continúa, contacte con el propietario del sitio e indique el ID de solicitud que aparece abajo.", "ID de solicitud", "Sitio", "Hora", "Reintentar"]
+  };
+  var langs = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
+  for (var i = 0; i < langs.length; i++) {
+    var p = String(langs[i] || "").toLowerCase().split("-")[0];
+    if (p === "en") return;
+    var s = L[p];
+    if (s) {
+      document.documentElement.lang = p === "zh" ? "zh-CN" : p;
+      document.title = s[0];
+      var ids = ["h", "m", "d1", "d2", "d3", "r"];
+      for (var j = 0; j < ids.length; j++) document.getElementById(ids[j]).textContent = s[j];
+      return;
+    }
+  }
+})();
+</script>
+</body>
+</html>

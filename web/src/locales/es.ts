@@ -5,6 +5,7 @@ import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
+import { pagesStrings } from "./pages.i18n";
 import type { ko } from "./ko";
 import type { RuleLabels } from "../lib/rules";
 import type { AuditLabels } from "../lib/audit";
@@ -305,6 +306,7 @@ export const es: Partial<Record<keyof typeof ko, string>> = {
   ...retentionStrings.es,
   ...templatesStrings.es,
   ...backupStrings.es,
+  ...pagesStrings.es,
 };
 
 export const esRuleLabels: RuleLabels | undefined = {

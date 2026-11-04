@@ -19,6 +19,7 @@ type rulesFile struct {
 	Hosts     map[string]hostJSON `json:"hosts"`
 	Geo       string              `json:"geo"`
 	BlockPage string              `json:"block_page"`
+	ErrorPage string              `json:"error_page"` // upstream errors 502/503/504
 	// Request-body signatures from the active rule bundle (empty: built-in list in Lua).
 	BodySignatures []sigJSON `json:"body_signatures,omitempty"`
 }
@@ -83,7 +84,8 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 		hostIDs[h.ID] = true
 	}
 	out := &rulesFile{Rules: []ruleJSON{}, Hosts: map[string]hostJSON{}, Geo: c.P.GeoFile(),
-		BlockPage: filepath.ToSlash(filepath.Join(c.P.HTMLDir, "blocked.html"))}
+		BlockPage: filepath.ToSlash(filepath.Join(c.P.HTMLDir, "blocked.html")),
+		ErrorPage: filepath.ToSlash(filepath.Join(c.P.HTMLDir, "error.html"))}
 	if c.Bundle != nil {
 		if b := c.Bundle(); b != nil {
 			for _, sg := range b.Signatures {

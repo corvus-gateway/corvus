@@ -77,7 +77,58 @@ type hostView struct {
 	Cloudflare      []string
 	TrustedProxies  []string
 	RealIPHeader    string
+	ErrorCodes      []int // upstream errors answered with the error page (see UpstreamErrorCodes)
 	P               Paths
+}
+
+// UpstreamErrorCodes are the nginx-generated upstream errors (connection refused,
+// timeouts, invalid responses) answered with the error page. Responses the upstream
+// itself sends with these codes are passed through unchanged (no proxy_intercept_errors).
+var UpstreamErrorCodes = []int{502, 503, 504}
+
+// errorCodes leaves out a code a rate limit policy answers with: that status keeps
+// its own error_page (@corvus_limited).
+func errorCodes(rl *store.RateLimit) []int {
+	var out []int
+	for _, c := range UpstreamErrorCodes {
+		if rl == nil || rl.StatusCode != c {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// customPages validates the stored custom pages and writes them into the version
+// directory (pages/), so they are tested, activated and rolled back with the rest of
+// the configuration. Built-in pages are referenced from the HTML directory.
+func (c *Compiler) customPages(ctx context.Context, s *store.Store, dir string, rules *rulesFile) error {
+	pages, err := s.CustomPages(ctx)
+	if err != nil {
+		return err
+	}
+	for _, p := range []struct {
+		field, html, file string
+		target            *string
+	}{
+		{"block", pages.Block, "blocked.html", &rules.BlockPage},
+		{"error", pages.Error, "error.html", &rules.ErrorPage},
+	} {
+		if p.html == "" {
+			continue
+		}
+		if err := validate.CustomPage(p.field, p.html); err != nil {
+			return fmt.Errorf("custom %s page: %w", p.field, err)
+		}
+		if err := os.MkdirAll(filepath.Join(dir, "pages"), 0o755); err != nil {
+			return err
+		}
+		file := filepath.Join(dir, "pages", p.file)
+		if err := os.WriteFile(file, []byte(p.html), 0o644); err != nil {
+			return err
+		}
+		*p.target = filepath.ToSlash(file)
+	}
+	return nil
 }
 
 type mainView struct {
@@ -203,6 +254,9 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 	if err != nil {
 		return err
 	}
+	if err := c.customPages(ctx, s, dir, rules); err != nil {
+		return err
+	}
 
 	var static map[string]string
 	if c.Hosts != nil {
@@ -232,6 +286,11 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		}
 		if hc.RateLimitID != nil {
 			v.RateLimit = limitByID[*hc.RateLimitID]
+		}
+		// Advanced configuration with its own error_page (common in NPM setups) keeps
+		// it: a location-level error_page would override the server-level one.
+		if !strings.Contains(hc.AdvancedConfig, "error_page") {
+			v.ErrorCodes = errorCodes(v.RateLimit)
 		}
 		if hc.AccessListID != nil {
 			if a := aclByID[*hc.AccessListID]; a != nil {

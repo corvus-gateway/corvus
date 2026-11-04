@@ -25,6 +25,7 @@ local _M = {}
 local HOSTS = {}      -- host id → { rules = {...}, cf = bool, exploits = bool }
 local GEO             -- country range table (see control/internal/geoip)
 local BLOCK_PAGE = "<!doctype html><title>Blocked</title><p>Access denied.</p>"
+local ERROR_PAGE = "<!doctype html><title>Unavailable</title><p>The site is temporarily unavailable. Please try again shortly.</p>"
 
 pcall(ffi.cdef, "int memcmp(const void *s1, const void *s2, size_t n);")
 
@@ -195,6 +196,9 @@ function _M.init(path)
   if cfg.block_page then
     BLOCK_PAGE = read_file(cfg.block_page) or BLOCK_PAGE
   end
+  if cfg.error_page then
+    ERROR_PAGE = read_file(cfg.error_page) or ERROR_PAGE
+  end
 end
 
 -- ------------------------------------------------------------------ evaluate
@@ -280,21 +284,40 @@ local function matches(ctx, rule, host)
   return false
 end
 
-local function deny(status)
-  if status == 444 then return ngx.exit(444) end
+local HTML_ESC = { ["&"] = "&amp;", ["<"] = "&lt;", [">"] = "&gt;", ['"'] = "&quot;", ["'"] = "&#39;" }
+local function esc(s)
+  return (string.gsub(tostring(s or ""), "[&<>\"']", HTML_ESC))
+end
+
+-- Serves a block or error page: {{STATUS}} {{RID}} {{HOST}} {{IP}} {{TIME}} are
+-- replaced with HTML-escaped values; unknown placeholders render empty.
+local function send_page(tpl, status)
   ngx.status = status
   ngx.header["Content-Type"] = "text/html; charset=utf-8"
   ngx.header["Cache-Control"] = "no-store"
-  local rid = ngx.var.request_id or "-"
-  local page = BLOCK_PAGE:gsub("{{(%u+)}}", function(k)
-    if k == "STATUS" then return tostring(status) end
-    if k == "RID" then return rid end
-    if k == "IP" then return ngx.var.remote_addr or "" end
-    if k == "TIME" then return ngx.http_time(ngx.time()) end
-    return ""
+  local page = string.gsub(tpl, "{{(%u+)}}", function(k)
+    local v
+    if k == "STATUS" then v = status
+    elseif k == "RID" then v = ngx.var.request_id or "-"
+    elseif k == "HOST" then v = ngx.var.host
+    elseif k == "IP" then v = ngx.var.remote_addr
+    elseif k == "TIME" then v = ngx.http_time(ngx.time())
+    end
+    return esc(v)
   end)
   ngx.print(page)
   return ngx.exit(ngx.HTTP_OK)  -- status already set; finalize the request
+end
+
+local function deny(status)
+  if status == 444 then return ngx.exit(444) end
+  return send_page(BLOCK_PAGE, status)
+end
+
+-- content_by_lua of the per-host error_page locations (@corvus_e502 …): only
+-- errors nginx generates itself (upstream refused / timed out / invalid response).
+function _M.upstream_error(status)
+  return send_page(ERROR_PAGE, status)
 end
 
 function _M.rewrite(host_id)
