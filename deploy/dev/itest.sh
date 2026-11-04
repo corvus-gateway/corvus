@@ -574,13 +574,16 @@ chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/streams -d '{"incoming_po
 SID=$(c -X POST $A/api/streams -d '{"incoming_port":8090,"tcp_forwarding":true,"forward_host":"demo","forward_port":80}' | js "d.get('stream',{}).get('id')")
 [ -n "$SID" ] && [ "$SID" != None ] && ok "TCP stream created" || bad "TCP stream not created"
 sleep 2
-SB=$(curl -s -m 5 --http1.0 "http://$H:8090/stream-check")
+# Stream ports are checked from the Docker host when CORVUS_SSH is set (e.g. "ssh user@host"):
+# a NAT in front of the test server may forward only the gateway's HTTP/HTTPS/admin ports.
+scurl() { if [ -n "${CORVUS_SSH:-}" ]; then $CORVUS_SSH curl "$@" "http://127.0.0.1:8090/stream-check"; else curl "$@" "http://$H:8090/stream-check"; fi; }
+SB=$(scurl -s -m 5 --http1.0)
 echo "$SB" | grep -q '^Hostname:' && ok "TCP stream forwards to the demo backend" || bad "no whoami answer through the stream: $SB"
 echo "$SB" | grep -q 'GET /stream-check' && ok "stream passes the request through unchanged" || bad "request not passed through: $SB"
 chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/streams -d '{"incoming_port":8090,"tcp_forwarding":true,"forward_host":"demo","forward_port":80}')" 422 "second TCP stream on the same port rejected"
 c -o /dev/null -X PUT $A/api/streams/$SID -d '{"incoming_port":8090,"tcp_forwarding":true,"forward_host":"demo","forward_port":80,"enabled":false}'
 sleep 2
-chk "$(curl -s -m 5 -o /dev/null -w '%{http_code}' "http://$H:8090/")" 000 "disabled stream closes the port"
+chk "$(scurl -s -m 5 -o /dev/null -w '%{http_code}')" 000 "disabled stream closes the port"
 c -o /dev/null -X DELETE $A/api/streams/$SID
 
 echo "[access queue]"
@@ -633,7 +636,7 @@ echo "[certificate replace]"
 CT=$(mktemp -d)
 for n in 1 2; do
   san="DNS:replace.corvus.test"; [ $n = 2 ] && san="$san,DNS:www.replace.corvus.test"
-  MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -nodes -days 30 -set_serial $((1000+n)) -subj /CN=replace.corvus.test \
+  MSYS2_ARG_CONV_EXCL="/CN" openssl req -x509 -newkey rsa:2048 -nodes -days 30 -set_serial $((1000+n)) -subj /CN=replace.corvus.test \
     -addext "subjectAltName=$san" -keyout "$CT/k$n.pem" -out "$CT/c$n.pem" 2>/dev/null
 done
 certjson() { $PY -c "import json,sys; print(json.dumps({'name':'itest-replace','certificate':open(sys.argv[1]).read(),'private_key':open(sys.argv[2]).read()}))" "$CT/c$1.pem" "$CT/k$1.pem"; }

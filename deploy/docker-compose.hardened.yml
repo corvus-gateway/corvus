@@ -22,7 +22,8 @@ services:
       - "443:443"
       - "9443:9443"   # admin console — allow only trusted networks
     tmpfs:
-      - /tmp:size=256m,mode=1777,noexec,nosuid,nodev   # request-body / proxy buffers
+      # request bodies and proxy buffers; raise the size if a proxy host allows uploads above ~200 MB
+      - /tmp:size=256m,mode=1777,noexec,nosuid,nodev
     environment:
       # Extra names/IPs for the self-signed admin certificate, e.g. "corvus.example.com,203.0.113.10"
       CORVUS_ADMIN_HOSTS: ${CORVUS_ADMIN_HOSTS:-}
