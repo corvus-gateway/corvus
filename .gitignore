@@ -33,3 +33,4 @@ control/internal/webui/dist/*
 # Internal design notes, decision log and reviews stay local; only translated READMEs are published
 /docs/*
 !/docs/readme/
+!/docs/API.md

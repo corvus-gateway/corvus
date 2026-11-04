@@ -1,0 +1,28 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time! A short description is fine — we'll ask if we need more.
+        **Security vulnerability?** Please don't post it here; use [private reporting](https://github.com/corvus-gateway/corvus/security/advisories/new) instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown at the bottom of the console sidebar, or your image tag.
+      placeholder: "1.0.0"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots (optional)
+      description: "`docker compose logs corvus` output is often helpful. Remove domains, IPs or tokens you don't want to share."
+      render: text
