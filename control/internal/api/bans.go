@@ -89,6 +89,24 @@ func (s *Server) deleteBan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]string{"status": "ok"})
 }
 
+// permanentBan removes the end time of a ban (e.g. turn an automatic ban into a permanent one).
+func (s *Server) permanentBan(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	b, err := s.Store.MakeBanPermanent(r.Context(), id)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	s.audit(r, "ban.permanent", b.IP, b)
+	if s.AutoBan != nil {
+		s.AutoBan.Trigger()
+	}
+	writeJSON(w, 200, b)
+}
+
 func (s *Server) getAutoBan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, autoban.Load(r.Context(), s.Store))
 }

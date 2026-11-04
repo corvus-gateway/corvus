@@ -104,3 +104,48 @@ func TestAutoBanThresholdExemptAndEscalation(t *testing.T) {
 		t.Fatalf("banned while disabled: %v", got)
 	}
 }
+
+func TestBanUntil(t *testing.T) {
+	now := time.Date(2026, 11, 4, 0, 0, 0, 0, time.UTC)
+	set := DefaultSettings() // 15 min, doubling, max 7 days
+	got := func(off int) time.Duration {
+		u := banUntil(set, off, now)
+		if u == nil {
+			return -1
+		}
+		return u.Sub(now)
+	}
+	if got(1) != 15*time.Minute || got(2) != 30*time.Minute || got(5) != 4*time.Hour {
+		t.Fatalf("escalation: %v %v %v", got(1), got(2), got(5))
+	}
+	if got(20) != 7*24*time.Hour {
+		t.Fatalf("cap: %v", got(20))
+	}
+	set.MaxDurationS = 30 * 86400
+	if got(20) != 30*24*time.Hour {
+		t.Fatalf("30-day cap: %v", got(20))
+	}
+	set.PermanentAfter = 3
+	if got(2) == -1 || got(3) != -1 || got(4) != -1 {
+		t.Fatalf("permanent from offense 3: %v %v %v", got(2), got(3), got(4))
+	}
+}
+
+func TestValidateDurations(t *testing.T) {
+	s := DefaultSettings()
+	s.MaxDurationS = 0
+	if err := Validate(&s); err != nil || s.MaxDurationS != 7*86400 {
+		t.Fatalf("default max: %v %d", err, s.MaxDurationS)
+	}
+	for _, bad := range []func(*Settings){
+		func(s *Settings) { s.MaxDurationS = 31 * 86400 },
+		func(s *Settings) { s.MaxDurationS = 60 }, // shorter than the first ban
+		func(s *Settings) { s.PermanentAfter = 1 },
+	} {
+		s := DefaultSettings()
+		bad(&s)
+		if err := Validate(&s); err == nil {
+			t.Fatalf("accepted invalid settings: %+v", s)
+		}
+	}
+}

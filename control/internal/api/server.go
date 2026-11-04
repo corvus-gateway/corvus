@@ -146,6 +146,7 @@ func (s *Server) Handler() http.Handler {
 	priv("GET /api/bans", s.listBans)
 	op("POST /api/bans", s.createBan)
 	op("DELETE /api/bans/{id}", s.deleteBan)
+	op("POST /api/bans/{id}/permanent", s.permanentBan)
 	priv("GET /api/settings/autoban", s.getAutoBan)
 	op("PUT /api/settings/autoban", s.putAutoBan)
 	priv("GET /api/ip-lists", s.listIPLists)

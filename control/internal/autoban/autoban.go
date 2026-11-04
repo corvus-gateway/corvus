@@ -22,20 +22,24 @@ import (
 
 // Settings are stored in meta "autoban".
 type Settings struct {
-	Enabled       bool     `json:"enabled"`
-	Threshold     int      `json:"threshold"`     // detections from one IP within the window
-	WindowS       int      `json:"window_s"`      // detection window
-	DurationS     int      `json:"duration_s"`    // first ban; doubles for repeat offenders (max 24h)
-	IncludeScans  bool     `json:"include_scans"` // also ban "possible scanner" IPs (many 4xx)
-	ScanThreshold int      `json:"scan_threshold"`
-	Exempt        []string `json:"exempt"` // CIDRs never banned automatically
+	Enabled        bool     `json:"enabled"`
+	Threshold      int      `json:"threshold"`       // detections from one IP within the window
+	WindowS        int      `json:"window_s"`        // detection window
+	DurationS      int      `json:"duration_s"`      // first ban; doubles for repeat offenders up to MaxDurationS
+	MaxDurationS   int      `json:"max_duration_s"`  // longest automatic ban (up to 30 days)
+	PermanentAfter int      `json:"permanent_after"` // ban permanently from this offense on; 0 = never
+	IncludeScans   bool     `json:"include_scans"`   // also ban "possible scanner" IPs (many 4xx)
+	ScanThreshold  int      `json:"scan_threshold"`
+	Exempt         []string `json:"exempt"` // CIDRs never banned automatically
 }
 
 func DefaultSettings() Settings {
-	return Settings{Enabled: true, Threshold: 20, WindowS: 600, DurationS: 900, IncludeScans: false, ScanThreshold: 200, Exempt: []string{}}
+	return Settings{Enabled: true, Threshold: 20, WindowS: 600, DurationS: 900, MaxDurationS: 7 * 86400, IncludeScans: false, ScanThreshold: 200, Exempt: []string{}}
 }
 
-const maxDuration = 24 * time.Hour
+// maxDuration is the upper limit for any automatic ban; offense history is kept as long
+// so repeat offenders are recognised.
+const maxDuration = 30 * 24 * time.Hour
 
 // Detection kinds that count toward a ban (bans themselves do not).
 var Kinds = []string{"blocked_exploit", "exploit_detected", "blocked_rule", "rule_logged", "blocked_body", "body_detected"}
@@ -60,7 +64,16 @@ func Validate(s *Settings) error {
 		return fmt.Errorf("window must be 60-86400 seconds")
 	}
 	if s.DurationS < 60 || s.DurationS > int(maxDuration.Seconds()) {
-		return fmt.Errorf("ban duration must be 60-86400 seconds")
+		return fmt.Errorf("ban duration must be 60 seconds to 30 days")
+	}
+	if s.MaxDurationS == 0 {
+		s.MaxDurationS = 7 * 86400
+	}
+	if s.MaxDurationS < s.DurationS || s.MaxDurationS > int(maxDuration.Seconds()) {
+		return fmt.Errorf("maximum ban duration must be between the first ban duration and 30 days")
+	}
+	if s.PermanentAfter != 0 && (s.PermanentAfter < 2 || s.PermanentAfter > 100) {
+		return fmt.Errorf("permanent ban must start at offense 2-100 (0 = never)")
 	}
 	if s.ScanThreshold == 0 {
 		s.ScanThreshold = 200
@@ -121,7 +134,7 @@ func (s *Service) Run(ctx context.Context) {
 			slog.Debug("ban push failed", "err", err)
 		}
 		if now.Sub(lastPrune) > time.Hour {
-			_ = s.Store.PruneBans(ctx, now.Add(-7*24*time.Hour))
+			_ = s.Store.PruneBans(ctx, now.Add(-maxDuration))
 			lastPrune = now
 		}
 	}
@@ -200,21 +213,17 @@ func (s *Service) Evaluate(ctx context.Context, now time.Time) []string {
 			}
 		}
 		active[c.ip] = true
-		d := time.Duration(set.DurationS) * time.Second
-		for i := 1; i < offenses && d < maxDuration; i++ {
-			d *= 2
-		}
-		if d > maxDuration {
-			d = maxDuration
-		}
-		exp := now.Add(d).UTC().Truncate(time.Second)
-		b := &store.IPBan{IP: c.ip, Reason: c.reason, Source: "auto", Offenses: offenses, ExpiresAt: &exp}
+		b := &store.IPBan{IP: c.ip, Reason: c.reason, Source: "auto", Offenses: offenses, ExpiresAt: banUntil(set, offenses, now)}
 		if err := s.Store.UpsertBan(ctx, b); err != nil {
 			slog.Error("auto ban failed", "ip", c.ip, "err", err)
 			continue
 		}
-		_ = s.Store.Audit(ctx, nil, "ban.auto", c.ip, map[string]any{"reason": c.reason, "until": exp, "offenses": offenses}, "")
-		slog.Warn("IP banned automatically", "ip", c.ip, "until", exp, "offenses", offenses, "reason", c.reason)
+		until := "permanent"
+		if b.ExpiresAt != nil {
+			until = b.ExpiresAt.Format(time.RFC3339)
+		}
+		_ = s.Store.Audit(ctx, nil, "ban.auto", c.ip, map[string]any{"reason": c.reason, "until": until, "offenses": offenses}, "")
+		slog.Warn("IP banned automatically", "ip", c.ip, "until", until, "offenses", offenses, "reason", c.reason)
 		banned = append(banned, c.ip)
 	}
 	return banned
@@ -256,4 +265,25 @@ func (s *Service) Push(ctx context.Context, now time.Time) error {
 		return fmt.Errorf("gateway answered %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// banUntil returns when the automatic ban for the given offense ends; nil = permanent.
+// The first ban lasts DurationS and doubles with each repeat offense up to MaxDurationS.
+func banUntil(set Settings, offenses int, now time.Time) *time.Time {
+	if set.PermanentAfter > 0 && offenses >= set.PermanentAfter {
+		return nil
+	}
+	limit := time.Duration(set.MaxDurationS) * time.Second
+	if limit <= 0 || limit > maxDuration {
+		limit = maxDuration
+	}
+	d := time.Duration(set.DurationS) * time.Second
+	for i := 1; i < offenses && d < limit; i++ {
+		d *= 2
+	}
+	if d > limit {
+		d = limit
+	}
+	exp := now.Add(d).UTC().Truncate(time.Second)
+	return &exp
 }

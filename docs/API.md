@@ -132,7 +132,8 @@ Proxy host fields: `domains` (array), `forward_scheme` (`http`/`https`), `forwar
 | PUT / DELETE | `/api/ip-lists/{id}` | operator | Update / delete |
 | GET / POST | `/api/bans` | viewer / operator | IP bans |
 | DELETE | `/api/bans/{id}` | operator | Remove a ban |
-| GET / PUT | `/api/settings/autoban` | viewer / operator | Automatic ban settings |
+| POST | `/api/bans/{id}/permanent` | operator | Make a ban permanent |
+| GET / PUT | `/api/settings/autoban` | viewer / operator | Automatic ban settings (threshold, first and longest ban, permanent ban from offense N) |
 | GET / POST | `/api/rate-limits` | viewer / operator | Rate limits |
 | PUT / DELETE | `/api/rate-limits/{id}` | operator | Update / delete |
 | GET / POST | `/api/access-lists` | viewer / operator | Password protection lists |

@@ -99,6 +99,14 @@ func (s *Store) LiftBan(ctx context.Context, id int64) (*IPBan, error) {
 	return b, err
 }
 
+// MakeBanPermanent removes the end time of a ban.
+func (s *Store) MakeBanPermanent(ctx context.Context, id int64) (*IPBan, error) {
+	if _, err := s.q.ExecContext(ctx, `UPDATE ip_bans SET expires_at = NULL WHERE id = ?`, id); err != nil {
+		return nil, err
+	}
+	return scanBan(s.q.QueryRowContext(ctx, `SELECT `+banCols+` FROM ip_bans WHERE id = ?`, id))
+}
+
 // PruneBans removes rows that expired before cutoff (offense history older than that is forgotten).
 func (s *Store) PruneBans(ctx context.Context, cutoff time.Time) error {
 	_, err := s.q.ExecContext(ctx, `DELETE FROM ip_bans WHERE expires_at IS NOT NULL AND expires_at < ?`, cutoff.UTC())

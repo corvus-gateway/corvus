@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Ban, Plus, Save, ShieldOff } from "lucide-react";
+import { Ban, Lock, Plus, Save, ShieldOff } from "lucide-react";
 import { api } from "../api";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
@@ -14,7 +14,7 @@ import { useI18n } from "../i18n";
 import { fmtDateTime, relTime } from "../lib/utils";
 
 interface IPBan { id: number; ip: string; reason: string; source: "auto" | "manual"; offenses: number; created_at: string; expires_at: string | null }
-interface AutoBan { enabled: boolean; threshold: number; window_s: number; duration_s: number; include_scans: boolean; scan_threshold: number; exempt: string[] }
+interface AutoBan { enabled: boolean; threshold: number; window_s: number; duration_s: number; max_duration_s: number; permanent_after: number; include_scans: boolean; scan_threshold: number; exempt: string[] }
 
 const DURATIONS: { v: number; k: "dur15m" | "dur1h" | "dur24h" | "dur7d" | "durForever" }[] = [
   { v: 900, k: "dur15m" }, { v: 3600, k: "dur1h" }, { v: 86400, k: "dur24h" }, { v: 7 * 86400, k: "dur7d" }, { v: 0, k: "durForever" },
@@ -31,6 +31,11 @@ export default function Bans() {
   const saveSettings = useSubmit();
   const addBan = useSubmit();
   const lift = useSubmit();
+  const perm = useSubmit();
+  const makePermanent = async (b: IPBan) => {
+    const r = await perm.run(() => api.post(`/api/bans/${b.id}/permanent`, {}), { success: t("madePermanentOk") });
+    if (r !== undefined) bans.reload();
+  };
 
   useEffect(() => { if (settings.data) setS(settings.data); }, [settings.data]);
   const dirty = !!s && !!settings.data && JSON.stringify(s) !== JSON.stringify(settings.data);
@@ -72,6 +77,10 @@ export default function Bans() {
                         <IdField label={t("banWindow")}>{(id) => <NumberInput id={id} min={1} max={1440} value={minutes(s.window_s)} onChange={(v) => setS({ ...s, window_s: v * 60 })} />}</IdField>
                         <IdField label={t("banDuration")}>{(id) => <NumberInput id={id} min={1} max={1440} value={minutes(s.duration_s)} onChange={(v) => setS({ ...s, duration_s: v * 60 })} />}</IdField>
                       </div>
+                      <div className="grid gap-4 sm:grid-cols-3">
+                        <IdField label={t("banMaxDuration")}>{(id) => <NumberInput id={id} min={1} max={30} value={Math.max(1, Math.round((s.max_duration_s || 604800) / 86400))} onChange={(v) => setS({ ...s, max_duration_s: v * 86400 })} />}</IdField>
+                        <IdField label={t("banPermanentAfter")} hint={t("banPermanentAfterHint")}>{(id) => <NumberInput id={id} min={0} max={100} value={s.permanent_after ?? 0} onChange={(v) => setS({ ...s, permanent_after: v === 1 ? 2 : v })} />}</IdField>
+                      </div>
                       <SwitchRow label={t("banIncludeScans")} description={t("banIncludeScansDesc")} checked={s.include_scans} onChange={(v) => setS({ ...s, include_scans: v })} />
                       {s.include_scans && (
                         <div className="sm:w-1/3">
@@ -94,6 +103,7 @@ export default function Bans() {
 
         <Card>
           <Toolbar><h2 className="text-sm font-semibold">{t("activeBans")}</h2><span className="ml-auto text-xs text-fg-subtle num">{t("nItems", { n: bans.data?.length ?? 0 })}</span></Toolbar>
+          {perm.error != null && <div className="px-4 pb-3"><ErrorBox error={perm.error} /></div>}
           {bans.loading ? <TableSkeleton cols={6} rows={4} /> : bans.error && !bans.data ? <div className="p-4"><ErrorBox error={bans.error} /></div> : !bans.data?.length ? (
             <EmptyState icon={Ban} title={t("noBans")} description={t("noBansDesc")} />
           ) : (
@@ -108,7 +118,10 @@ export default function Bans() {
                     <Td className="num hidden sm:table-cell">{b.offenses}</Td>
                     <Td className="hidden text-fg-muted sm:table-cell" title={fmtDateTime(b.created_at, lang)}>{relTime(b.created_at, lang)}</Td>
                     <Td className="text-fg-muted" title={b.expires_at ? fmtDateTime(b.expires_at, lang) : undefined}>{b.expires_at ? fmtDateTime(b.expires_at, lang) : t("banUntilRemoved")}</Td>
-                    <Td>{can && <Button size="sm" onClick={() => { lift.setError(null); setLifting(b); }}><ShieldOff className="h-3.5 w-3.5" />{t("unban")}</Button>}</Td>
+                    <Td>{can && <div className="flex flex-wrap justify-end gap-1.5">
+                      {b.expires_at && <Button size="sm" variant="ghost" loading={perm.busy} onClick={() => void makePermanent(b)}><Lock className="h-3.5 w-3.5" />{t("makePermanent")}</Button>}
+                      <Button size="sm" onClick={() => { lift.setError(null); setLifting(b); }}><ShieldOff className="h-3.5 w-3.5" />{t("unban")}</Button>
+                    </div>}</Td>
                   </Tr>
                 ))}
               </tbody>
