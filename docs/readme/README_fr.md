@@ -239,6 +239,7 @@ Définissez ces variables sous `environment:` dans `docker-compose.yml`.
 | `CORVUS_REDIS_PORT` | Port du stockage intégré de la file d'attente d'accès sur 127.0.0.1 (par défaut `6379`) ; à modifier avec `network_mode: host` si l'hôte utilise déjà 6379 |
 | `CORVUS_RESOLVER` | Serveur DNS pour les hôtes de destination. Par défaut : le DNS de Docker, ou le premier `nameserver` de `/etc/resolv.conf` en réseau hôte |
 | `CORVUS_LOOPBACK=container` | Faire pointer les hôtes de destination `127.0.0.1`/`localhost` vers le conteneur lui-même plutôt que vers l'hôte Docker |
+| `CORVUS_IPV6` | `auto` (par défaut) : écouter aussi en IPv6 si le système le prend en charge · `off` : IPv4 uniquement · `on` : toujours écouter en IPv6 et résoudre aussi les hôtes de destination en adresses IPv6 (amonts IPv6 uniquement) |
 | `PUID` / `PGID` | Utilisateur et groupe sous lesquels le conteneur s'exécute et qui possèdent `./data` (par défaut `10001`), p. ex. votre utilisateur NAS |
 | `CORVUS_ACME_DIRECTORY` | URL du répertoire ACME d'une autre autorité de certification au lieu de Let's Encrypt, p. ex. un step-ca privé `https://ca.internal/acme/acme/directory` |
 | `LEGO_CA_CERTIFICATES` | Fichier(s) PEM d'une autorité de certification privée à laquelle le client ACME doit faire confiance (à monter dans le conteneur), p. ex. `/data/ca.pem` |

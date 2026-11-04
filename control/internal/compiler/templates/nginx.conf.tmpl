@@ -77,7 +77,7 @@ http {
     lua_shared_dict corvus_bb 16m;        # bad-behaviour counters per client IP and host (TTL = window)
     lua_shared_dict corvus_bb_q 2m;       # bad-behaviour settings and gateway bans not yet recorded
     lua_shared_dict corvus_ua 1m;         # "under attack" auto activations and exemptions (pushed by corvus-control)
-    resolver {{.P.Resolver}} ipv6=off valid=30s;
+    resolver {{.P.Resolver}} ipv6={{if .P.ResolverIPv6}}on{{else}}off{{end}} valid=30s;
     resolver_timeout 5s;
 
     # Security rules: cap PCRE backtracking so a pathological pattern cannot stall a worker.
@@ -206,6 +206,10 @@ http {
     server {
         listen {{.P.HTTPPort}} default_server;
         listen {{.P.HTTPSPort}} ssl default_server;
+{{- if .P.IPv6}}
+        listen [::]:{{.P.HTTPPort}} default_server;
+        listen [::]:{{.P.HTTPSPort}} ssl default_server;
+{{- end}}
         server_name _;
         ssl_reject_handshake on;
         set $corvus_wr "-";

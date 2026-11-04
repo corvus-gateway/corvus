@@ -229,6 +229,7 @@ docker compose -f docker-compose.hardened.yml up -d
 | `CORVUS_REDIS_PORT` | Порт встроенного хранилища очереди доступа на 127.0.0.1 (по умолчанию `6379`); измените его при `network_mode: host`, если порт 6379 на хосте уже занят |
 | `CORVUS_RESOLVER` | DNS-сервер для целевых хостов. По умолчанию: DNS Docker, а при сети хоста — первый `nameserver` из `/etc/resolv.conf` |
 | `CORVUS_LOOPBACK=container` | Целевые хосты `127.0.0.1`/`localhost` указывают на сам контейнер, а не на Docker-хост |
+| `CORVUS_IPV6` | `auto` (по умолчанию): слушать также IPv6, если он есть в системе · `off`: только IPv4 · `on`: всегда слушать IPv6 и разрешать целевые хосты также в IPv6-адреса (апстримы только с IPv6) |
 | `PUID` / `PGID` | Пользователь и группа, от имени которых работает контейнер и которым принадлежит `./data` (по умолчанию `10001`), например ваш пользователь NAS |
 | `CORVUS_ACME_DIRECTORY` | URL каталога ACME другого центра сертификации вместо Let's Encrypt, например частного step-ca `https://ca.internal/acme/acme/directory` |
 | `LEGO_CA_CERTIFICATES` | PEM-файл(ы) частного центра сертификации, которому должен доверять ACME-клиент (смонтируйте в контейнер), например `/data/ca.pem` |

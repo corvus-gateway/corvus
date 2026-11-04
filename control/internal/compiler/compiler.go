@@ -44,6 +44,13 @@ type Paths struct {
 	StatusPort  int    // loopback-only status port used to confirm reloads (9180)
 	ACMEPort    int    // loopback port where corvus-control answers HTTP-01 challenges (9181)
 	DefaultCert string // directory holding the default fullchain.pem/privkey.pem
+	// IPv6 adds `listen [::]:port` to every public server (only when the system has
+	// IPv6: nginx fails to start if it cannot bind an IPv6 socket).
+	IPv6 bool
+	// ResolverIPv6 lets the resolver return IPv6 (AAAA) answers for forward hosts.
+	// Off by default: on a host without IPv6 routes a name with both A and AAAA
+	// records would intermittently fail.
+	ResolverIPv6 bool
 }
 
 // CertDir is where certificate files for a certificate id live.

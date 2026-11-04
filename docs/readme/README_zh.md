@@ -214,6 +214,7 @@ docker compose -f docker-compose.hardened.yml up -d
 | `CORVUS_REDIS_PORT` | 内置访问队列存储在 127.0.0.1 上的端口（默认 `6379`）；使用 `network_mode: host` 且主机已占用 6379 时请修改 |
 | `CORVUS_RESOLVER` | 用于解析转发目标主机的 DNS 服务器。默认：Docker 的 DNS；使用主机网络时为 `/etc/resolv.conf` 中的第一个 `nameserver` |
 | `CORVUS_LOOPBACK=container` | 让 `127.0.0.1`/`localhost` 转发目标指向容器自身，而不是 Docker 主机 |
+| `CORVUS_IPV6` | `auto`（默认）：系统支持 IPv6 时同时监听 IPv6 · `off`：仅 IPv4 · `on`：始终监听 IPv6，并将转发目标也解析为 IPv6 地址（仅 IPv6 的上游） |
 | `PUID` / `PGID` | 运行容器并拥有 `./data` 的用户和组（默认 `10001`），例如你的 NAS 用户 |
 | `CORVUS_ACME_DIRECTORY` | 使用其他 CA 代替 Let's Encrypt 时的 ACME 目录 URL，例如私有 step-ca `https://ca.internal/acme/acme/directory` |
 | `LEGO_CA_CERTIFICATES` | ACME 客户端应信任的私有 CA 的 PEM 文件（需挂载到容器中），例如 `/data/ca.pem` |

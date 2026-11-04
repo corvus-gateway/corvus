@@ -235,6 +235,7 @@ docker compose -f docker-compose.hardened.yml up -d
 | `CORVUS_REDIS_PORT` | 127.0.0.1 で動作する内蔵アクセスキューストアのポート(デフォルト `6379`)。`network_mode: host` でホストがすでに 6379 を使っている場合に変更 |
 | `CORVUS_RESOLVER` | 転送先ホストの名前解決に使う DNS サーバー。デフォルト: Docker の DNS、ホストネットワークでは `/etc/resolv.conf` の最初の `nameserver` |
 | `CORVUS_LOOPBACK=container` | `127.0.0.1`/`localhost` の転送先ホストが Docker ホストではなくコンテナ自身を指すようにする |
+| `CORVUS_IPV6` | `auto`(既定): システムに IPv6 があれば IPv6 でも待ち受け · `off`: IPv4 のみ · `on`: 常に IPv6 で待ち受け、転送先ホストも IPv6 アドレスで解決(IPv6 専用アップストリーム) |
 | `PUID` / `PGID` | コンテナを実行し `./data` を所有するユーザーとグループ(デフォルト `10001`)。例: NAS のユーザー |
 | `CORVUS_ACME_DIRECTORY` | Let's Encrypt の代わりに使う別の CA の ACME ディレクトリ URL。例: プライベート step-ca の `https://ca.internal/acme/acme/directory` |
 | `LEGO_CA_CERTIFICATES` | ACME クライアントが信頼するプライベート CA の PEM ファイル(コンテナにマウント)。例: `/data/ca.pem` |

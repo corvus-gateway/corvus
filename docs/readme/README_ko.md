@@ -234,6 +234,7 @@ docker compose -f docker-compose.hardened.yml up -d
 | `CORVUS_REDIS_PORT` | 127.0.0.1에서 동작하는 내장 접속 대기열 저장소의 포트(기본값 `6379`). `network_mode: host`에서 호스트가 이미 6379를 쓰고 있다면 변경 |
 | `CORVUS_RESOLVER` | 포워드 호스트 이름 확인에 쓸 DNS 서버. 기본값: Docker DNS, 호스트 네트워킹에서는 `/etc/resolv.conf`의 첫 번째 `nameserver` |
 | `CORVUS_LOOPBACK=container` | `127.0.0.1`/`localhost` 포워드 호스트가 Docker 호스트 대신 컨테이너 자신을 가리키도록 설정 |
+| `CORVUS_IPV6` | `auto`(기본): 시스템에 IPv6가 있으면 IPv6로도 수신 · `off`: IPv4만 · `on`: 항상 IPv6로 수신하고 포워드 호스트를 IPv6 주소로도 조회(IPv6 전용 업스트림) |
 | `PUID` / `PGID` | 컨테이너를 실행하고 `./data`를 소유할 사용자와 그룹(기본값 `10001`). 예: NAS 사용자 |
 | `CORVUS_ACME_DIRECTORY` | Let's Encrypt 대신 사용할 다른 CA의 ACME 디렉터리 URL. 예: 사설 step-ca `https://ca.internal/acme/acme/directory` |
 | `LEGO_CA_CERTIFICATES` | ACME 클라이언트가 신뢰할 사설 CA의 PEM 파일(컨테이너에 마운트). 예: `/data/ca.pem` |

@@ -583,6 +583,18 @@ put_host ',"waitroom_id":null' >/dev/null
 c -o /dev/null -X DELETE $A/api/waitrooms/$WR
 rm -f "$WQ"
 
+echo "[ipv6]"
+# IPv4 keeps working whatever CORVUS_IPV6 decided; IPv6 is checked only when the server
+# has an IPv6 address reachable from here (CORVUS_HOST6, e.g. 2001:db8::10).
+chk "$(code "$G/__corvus/healthz" -H 'Host: unknown.corvus.test')" 200 "IPv4 listener serves"
+chk "$(code -H "Host: $H" "$G/")" 200 "proxy host serves over IPv4"
+if [ -n "${CORVUS_HOST6:-}" ]; then
+  chk "$(code -g -H "Host: $H" "http://[$CORVUS_HOST6]:8081/")" 200 "proxy host serves over IPv6"
+  chk "$(code -g "http://[$CORVUS_HOST6]:8081/__corvus/healthz")" 200 "default server listens on IPv6"
+else
+  ok "ipv6 not available (set CORVUS_HOST6 to test IPv6 listeners)"
+fi
+
 echo "[backup]"
 BK=$(mktemp)
 chk "$(curl -sk -b "$J" -o "$BK" -w '%{http_code}' "$A/api/backup")" 200 "backup download"
