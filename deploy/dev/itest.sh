@@ -567,6 +567,28 @@ c -o /dev/null -X DELETE $A/api/proxy-hosts/$NH
 PORTS=$(for i in $(seq 1 20); do curl -s -H "Host: $H" "$G/pool-$i" | sed -n 's/^RemoteAddr: //p'; done | sort -u | wc -l)
 [ "$PORTS" -ge 1 ] && [ "$PORTS" -lt 20 ] && ok "upstream connections reused ($PORTS connections for 20 requests)" || bad "no upstream connection reuse ($PORTS connections for 20 requests)"
 
+echo "[custom locations]"
+# The host's own forward target is unreachable (demo:1); the locations route to demo:80.
+# whoami echoes the request line, so the forward path is visible.
+LH=$(c -X POST $A/api/proxy-hosts -d '{"domains":["loc.corvus.test"],"forward_host":"demo","forward_port":1,"block_exploits":true,"locations":[{"path":"/loc-path","forward_host":"demo","forward_port":80,"forward_path":"/path"},{"path":"/keep/","forward_host":"demo","forward_port":80}]}' | js "d.get('id') or d.get('proxy_host',{}).get('id')")
+[ -n "$LH" ] && [ "$LH" != None ] && ok "host with custom locations deploys" || bad "host with custom locations rejected"
+sleep 2
+lget() { curl -s -H 'Host: loc.corvus.test' "$G$1"; }
+lcode() { curl -s -o /dev/null -w '%{http_code}' -H 'Host: loc.corvus.test' "$@"; }
+lget '/loc-path/x?a=1' | grep -q '^GET /path/x?a=1 HTTP/1.1' && ok "location forwards with its forward path (/loc-path/x -> /path/x)" || bad "forward path not applied: $(lget '/loc-path/x?a=1' | grep '^GET ')"
+lget /keep/y | grep -q '^GET /keep/y HTTP/1.1' && ok "location without forward path keeps the URI" || bad "location URI changed: $(lget /keep/y | grep '^GET ')"
+chk "$(lcode "$G/other")" 502 "other paths still go to the host's forward target"
+chk "$(lcode "$G/loc-path/.env")" 403 "host protections apply inside a location (exploit blocking)"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$LH -d '{"domains":["loc.corvus.test"],"forward_host":"demo","forward_port":1,"basic_auth":{"enabled":true,"users":[{"username":"locu","password":"loc-pass-123"}]}}')" 200 "enable password protection (locations kept when omitted)"
+sleep 1
+chk "$(lcode "$G/loc-path/x")" 401 "password required inside a location"
+chk "$(lcode -u locu:loc-pass-123 "$G/loc-path/x")" 200 "correct password accepted inside a location"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$LH -d '{"domains":["loc.corvus.test"],"forward_host":"demo","forward_port":1,"basic_auth":{"enabled":false,"users":[]},"locations":[{"path":"/","forward_host":"demo","forward_port":80}]}')" 200 "location / replaces the forward target"
+sleep 1
+chk "$(lcode "$G/anything")" 200 "root location answers from its upstream"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$LH -d '{"domains":["loc.corvus.test"],"forward_host":"demo","forward_port":1,"locations":[{"path":"/__corvus/x","forward_host":"demo","forward_port":80}]}')" 422 "reserved location path rejected"
+c -o /dev/null -X DELETE $A/api/proxy-hosts/$LH
+
 echo "[backup]"
 BK=$(mktemp)
 chk "$(curl -sk -b "$J" -o "$BK" -w '%{http_code}' "$A/api/backup")" 200 "backup download"

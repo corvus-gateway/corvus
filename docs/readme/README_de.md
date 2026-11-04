@@ -53,6 +53,7 @@ Go-Steuerungsebene, React-Konsole), die ein **bestehendes NPM-Setup importieren*
 
 **Proxy & TLS**
 - Proxy-Hosts mit Wildcards, WebSocket, HTTP/2, erzwungenem HTTPS und benutzerdefinierten Nginx-Snippets
+- Eigene Locations: Pfade (z. B. `/api`) an einen eigenen Upstream weiterleiten, mit dem Schutz des Hosts
 - Weiterleitungs-Hosts: Domains auf eine andere Domain umleiten (301/302/303/307/308, optional mit Beibehaltung des Pfads), mit demselben TLS und Schutz
 - Kostenlose Let's-Encrypt-Zertifikate (HTTP-01 oder DNS-01 über Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) mit automatischer Erneuerung oder eigene Zertifikate per Upload
 - Echte Client-IP hinter Cloudflare oder vertrauenswürdigen Proxys; optionaler Passwortschutz pro Host
@@ -267,8 +268,8 @@ und eigene, einschließlich Cloudflare-DNS-Tokens) und **Zugriffslisten** (Benut
 bestehenden NPM-Installation. Dabei werden nur die Dateien und die Datenbank von NPM gelesen – NPM selbst
 bleibt unverändert, Sie können also jederzeit zurückwechseln.
 
-Nicht importiert werden: Streams (TCP/UDP), 404-Hosts, benutzerdefinierte Locations und erweiterte
-Konfiguration mit NPM-spezifischen Variablen. Die Vorschau listet alles auf, was übersprungen wird.
+Nicht importiert werden: Streams (TCP/UDP), 404-Hosts und erweiterte Konfiguration (auch von
+benutzerdefinierten Locations) mit NPM-spezifischen Variablen. Die Vorschau listet alles auf, was übersprungen wird.
 
 **Prüfen Sie, welche Datenbank Ihr NPM verwendet.** Öffnen Sie die `docker-compose.yml` von NPM:
 

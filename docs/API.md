@@ -119,8 +119,29 @@ Proxy host fields: `domains` (array), `forward_scheme` (`http`/`https`), `forwar
 `client_ip` (`direct`, `cloudflare`, `trusted_proxies`), `waitroom_id`, `waitroom_path`,
 `rate_limit_id`, `access_list_id` or `basic_auth`, `block_exploits`, `body_inspection`
 (`off`, `log`, `block`), `body_max_kb`, `security_headers`, `under_attack`, `under_attack_config`,
-`advanced_config`, `enabled`. `under_attack` and `under_attack_config` keep their stored value when
-omitted from a `PUT`.
+`advanced_config`, `locations`, `enabled`. `under_attack`, `under_attack_config` and `locations`
+keep their stored value when omitted from a `PUT` (`"locations": []` removes all locations).
+
+`locations` (custom locations, at most 50) route a path prefix to its own upstream:
+
+```json
+"locations": [
+  {"path": "/api", "forward_scheme": "http", "forward_host": "api", "forward_port": 8080,
+   "forward_path": "/v2/", "advanced_config": ""}
+]
+```
+
+| Field | Meaning |
+|---|---|
+| `path` | Path prefix (`/` followed by letters, digits, `._~/-`); `/__corvus` and `/.well-known/acme-challenge` are reserved. `/` replaces the host's forward target |
+| `forward_scheme`, `forward_host`, `forward_port` | Upstream of the location (default scheme `http`) |
+| `forward_path` | Optional; replaces the matched prefix (`/api/x` → `/v2/x` with `/v2/`). Not allowed for `/` |
+| `advanced_config` | Optional nginx directives inside the location (same restrictions as the host's `advanced_config`, no nested `location`); administrators only |
+
+A location keeps the host's protections: security rules, bans, exploit and body inspection,
+"under attack" mode, rate limit, Basic auth, and the access queue for requests under the
+protected path. It takes precedence over regular-expression locations in `advanced_config`.
+NPM imports map NPM custom locations (the path part of NPM's forward host becomes `forward_path`).
 
 `security_headers` (default `off`; NPM imports use `off`) adds browser security headers to the
 host's responses, including gateway error pages. A header the upstream already sends is never

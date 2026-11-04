@@ -53,6 +53,7 @@ OpenResty, plano de control en Go, consola en React) que puede **importar una co
 
 **Proxy y TLS**
 - Hosts proxy con comodines, WebSocket, HTTP/2, HTTPS forzado y fragmentos de Nginx personalizados
+- Ubicaciones personalizadas: rutas (p. ej. `/api`) hacia su propio upstream, con las protecciones del host
 - Hosts de redirección: envíe dominios a otro dominio (301/302/303/307/308, conservando opcionalmente la ruta), con el mismo TLS y la misma protección
 - Certificados gratuitos de Let's Encrypt (HTTP-01 o DNS-01 mediante Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) con renovación automática, o suba los suyos
 - IP real del cliente detrás de Cloudflare o de proxies de confianza; protección opcional con contraseña por host
@@ -264,8 +265,8 @@ de NPM que usaba `network_mode: host`, ejecute Corvus con red de host: sustituya
 una instalación existente de NPM. Solo lee los archivos y la base de datos de NPM; NPM no se modifica, así
 que puede volver a él en cualquier momento.
 
-No se importan: streams (TCP/UDP), hosts 404, ubicaciones personalizadas ni la configuración avanzada
-que usa variables propias de NPM. La vista previa enumera todo lo que se omite.
+No se importan: streams (TCP/UDP), hosts 404 ni la configuración avanzada (también la de las
+ubicaciones personalizadas) que usa variables propias de NPM. La vista previa enumera todo lo que se omite.
 
 **Compruebe qué base de datos usa su NPM.** Abra el `docker-compose.yml` de NPM:
 

@@ -3,6 +3,7 @@ import { AlertCircle, Loader2, ArrowRight, Copy, Globe, Lock, Pencil, Plus, Shie
 import { toast } from "sonner";
 import { api, type AccessList, type Certificate, type ClientIPMode, type ProxyHost, type RateLimit, type SecurityHeaders, type UnderAttackStatus, type Waitroom } from "../api";
 import { UnderAttackFields, uaConfig, UA_DEFAULTS } from "../components/UnderAttackFields";
+import { LocationsFields } from "../components/LocationsFields";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
 import { Button, IconButton } from "../components/ui/button";
 import { Badge, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
@@ -33,12 +34,12 @@ const blank: Form = {
   ssl_forced: false, http2: true, waitroom_id: null, waitroom_path: "/", advanced_config: "", enabled: true,
   client_ip: "direct", rate_limit_id: null, access_list_id: null, block_exploits: true,
   body_inspection: "log", body_max_kb: 1024, security_headers: "off",
-  under_attack: "off", under_attack_config: { ...UA_DEFAULTS },
+  under_attack: "off", under_attack_config: { ...UA_DEFAULTS }, locations: [],
 };
 
 function toForm(h: ProxyHost): Form {
   const { id: _i, created_at: _c, updated_at: _u, ...rest } = h;
-  return { ...blank, ...rest, under_attack: rest.under_attack ?? "off", under_attack_config: uaConfig(rest.under_attack_config) };
+  return { ...blank, ...rest, under_attack: rest.under_attack ?? "off", under_attack_config: uaConfig(rest.under_attack_config), locations: rest.locations ?? [] };
 }
 
 export default function ProxyHosts() {
@@ -74,6 +75,7 @@ export default function ProxyHosts() {
   const showBody = has("body_inspection");
   const showHeaders = has("security_headers");
   const showUA = has("under_attack");
+  const showLocations = has("locations");
   const showLimits = !limits.missing && has("rate_limit_id");
   const showLists = !lists.missing && has("access_list_id");
 
@@ -103,6 +105,7 @@ export default function ProxyHosts() {
     if (!showBody) { delete body.body_inspection; delete body.body_max_kb; }
     if (!showHeaders) { delete body.security_headers; }
     if (!showUA) { delete body.under_attack; delete body.under_attack_config; }
+    if (!showLocations) { delete body.locations; }
     if (!showLimits) { delete body.rate_limit_id; }
     if (!showLists) { delete body.basic_auth; }
     const r = await run(() => (id ? api.put(`/api/proxy-hosts/${id}`, body) : api.post("/api/proxy-hosts", body)), { success: req ? undefined : t("savedDeployed") });
@@ -234,6 +237,8 @@ export default function ProxyHosts() {
             </div>
             <SwitchRow label={t("websocket")} description={t("websocketDesc")} checked={f.websocket} onChange={(v) => set({ websocket: v })} />
           </FormSection>
+
+          {showLocations && <LocationsFields value={f.locations ?? []} onChange={(v) => set({ locations: v })} error={error} isAdmin={isAdmin} />}
 
           <FormSection title={t("secTls")}>
             <IdField label={t("certificate")} error={fieldErr(error, "certificate_id")}>

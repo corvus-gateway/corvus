@@ -52,6 +52,7 @@ Corvus는 Nginx Proxy Manager의 포크가 아닙니다. 기존 NPM 설정을 **
 
 **프록시 및 TLS**
 - 와일드카드, WebSocket, HTTP/2, HTTPS 강제 전환, 사용자 정의 Nginx 스니펫을 지원하는 프록시 호스트
+- 사용자 지정 위치: 경로(예: `/api`)별로 다른 업스트림으로 전달하며 호스트의 보호가 그대로 적용됩니다
 - 리디렉션 호스트: 도메인을 다른 도메인으로 보냅니다(301/302/303/307/308, 경로 유지 선택). TLS와 보호 기능도 똑같이 적용됩니다
 - 자동 갱신되는 무료 Let's Encrypt 인증서(HTTP-01, 또는 DNS-01: Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) 또는 직접 업로드한 인증서
 - Cloudflare 또는 신뢰할 수 있는 프록시 뒤에서도 실제 클라이언트 IP 확인, 호스트별 비밀번호 보호(선택)
@@ -260,8 +261,8 @@ docker compose -f docker-compose.hardened.yml up -d
 토큰을 포함한 Let's Encrypt 인증서와 사용자 지정 인증서), **접근 목록**(사용자와 IP 규칙)을 복사합니다.
 NPM의 파일과 데이터베이스를 읽기만 하고 NPM 자체는 변경하지 않으므로 언제든 되돌아갈 수 있습니다.
 
-가져오지 않는 항목: 스트림(TCP/UDP), 404 호스트, 사용자 지정 위치, NPM 전용 변수를
-사용하는 고급 설정. 건너뛰는 항목은 모두 미리보기에 표시됩니다.
+가져오지 않는 항목: 스트림(TCP/UDP), 404 호스트, NPM 전용 변수를 사용하는 고급 설정
+(사용자 지정 위치의 고급 설정 포함). 건너뛰는 항목은 모두 미리보기에 표시됩니다.
 
 **NPM이 어떤 데이터베이스를 쓰는지 확인하세요.** NPM의 `docker-compose.yml`을 열어 봅니다.
 

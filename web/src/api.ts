@@ -87,9 +87,16 @@ export interface ProxyHost {
   security_headers?: SecurityHeaders;
   under_attack?: UnderAttackMode;
   under_attack_config?: UnderAttackConfig;
+  locations?: ProxyLocation[];
   /** Read-only: usernames of the host's password protection (HTTP Basic auth). */
   basic_auth_users?: string[];
   created_at: string; updated_at: string;
+}
+
+/** Custom location of a proxy host: a path prefix routed to its own upstream. */
+export interface ProxyLocation {
+  path: string; forward_scheme: "http" | "https"; forward_host: string; forward_port: number;
+  forward_path: string; advanced_config: string;
 }
 
 /** "Under attack" mode of a proxy host (gateway/lua/corvus/underattack.lua). */
