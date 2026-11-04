@@ -30,7 +30,7 @@ export const enAlerts: Record<keyof typeof koAlerts, string> = {
   rule_exploit: "Exploit attempts", ruled_exploit: "Alerts when detected or blocked attack patterns per host exceed the threshold.",
   rule_security_events: "Security events", ruled_security_events: "Alerts when security-rule and body-inspection detections per host (including log-only) exceed the threshold.", rule_attack_source: "Repeated attack source", ruled_attack_source: "Alerts when one IP triggers security detections repeatedly, with the IP and detection types.", rule_scan_suspect: "Possible scanner", ruled_scan_suspect: "Alerts when one IP receives many 4xx responses in a short time (path scanning).",
   rule_waitroom_queue: "Access queue backlog", ruled_waitroom_queue: "Alerts when the number of waiting visitors reaches the threshold.",
-  rule_redis_down: "Redis disconnected", ruled_redis_down: "Alerts when Redis is unreachable.",
+  rule_redis_down: "Cache DB disconnected", ruled_redis_down: "Alerts when the cache DB is unreachable.",
   rule_cert_expiry: "Certificate expiring", ruled_cert_expiry: "Alerts when remaining days until expiry fall to the threshold.",
   rule_acme_failed: "Certificate issuance failed", ruled_acme_failed: "Alerts when ACME issuance or renewal fails.",
   rule_deploy_failed: "Deployment failed", ruled_deploy_failed: "Alerts when the gateway rejects the generated configuration.",

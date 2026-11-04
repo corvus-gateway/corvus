@@ -195,7 +195,7 @@ function StatusPills() {
   return (
     <div className="hidden items-center gap-1.5 md:flex" aria-label="status">
       {gw && <MastPill tone={gw.running ? "ok" : "danger"}>{t("gateway")} · {gw.running ? t("running") : t("stopped")}</MastPill>}
-      <MastPill tone={overview.redis ? "ok" : "warn"}>Redis · {overview.redis ? t("connected") : t("disconnected")}</MastPill>
+      <MastPill tone={overview.redis ? "ok" : "warn"}>{t("cacheDb")} · {overview.redis ? t("connected") : t("disconnected")}</MastPill>
       <MastPill tone={overview.active_version ? (overview.dirty ? "warn" : "neutral") : "neutral"}>
         {overview.active_version ? t("appliedVersion", { n: overview.active_version.id }) : t("noVersion")}
       </MastPill>

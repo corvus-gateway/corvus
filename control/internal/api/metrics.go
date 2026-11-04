@@ -106,7 +106,7 @@ func (s *Server) renderMetrics(ctx context.Context, now time.Time) []byte {
 	}
 	p.family("corvus_gateway_up", "gauge", "Whether the gateway (OpenResty) is running.")
 	p.sample("corvus_gateway_up", b2f(gw))
-	p.family("corvus_redis_up", "gauge", "Whether Redis (access queue state) is reachable.")
+	p.family("corvus_redis_up", "gauge", "Whether the cache DB (access queue state) is reachable.")
 	p.sample("corvus_redis_up", b2f(s.Live.Ping(ctx)))
 
 	if s.Traffic != nil {

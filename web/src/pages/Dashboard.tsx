@@ -154,7 +154,7 @@ export default function Dashboard() {
             {loadingOv ? <div className="space-y-3 py-3"><Skeleton /><Skeleton /><Skeleton /></div> : (<>
               <Row label={t("gateway")}>{overview?.gateway ? <Badge tone={overview.gateway.running ? "ok" : "danger"} dot>{overview.gateway.running ? t("running") : t("stopped")}</Badge> : <span className="text-fg-subtle">–</span>}
                 {overview?.gateway?.running && overview.gateway.uptime_s != null && <span className="ml-2 text-xs text-fg-subtle num">{fmtUptime(overview.gateway.uptime_s)}</span>}</Row>
-              <Row label="Redis"><Badge tone={overview?.redis ? "ok" : "warn"} dot>{overview?.redis ? t("connected") : t("disconnected")}</Badge></Row>
+              <Row label={t("cacheDb")}><Badge tone={overview?.redis ? "ok" : "warn"} dot>{overview?.redis ? t("connected") : t("disconnected")}</Badge></Row>
               <Row label={t("appliedVersionLabel")}>{overview?.active_version ? <><span className="num font-medium">#{overview.active_version.id}</span><span className="ml-2 text-xs text-fg-subtle">{relTime(overview.active_version.created_at, lang)}</span></> : <span className="text-fg-subtle">{t("noVersion")}</span>}</Row>
               <Row label={t("navHosts")}><span className="num font-medium">{overview?.proxy_hosts_enabled}</span><span className="text-fg-subtle num"> / {overview?.proxy_hosts}</span></Row>
               <Row label={t("controlPlane")}><span className="num text-fg-muted">v{overview?.version}</span></Row>
