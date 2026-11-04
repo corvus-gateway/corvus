@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { BellRing, Activity, AlertTriangle, ArrowRight, Clock, Gauge, Globe, History, Hourglass, ShieldAlert, ShieldCheck, Users, Zap, type LucideIcon } from "lucide-react";
-import type { AlertActive, AuditEntry, Certificate, Timeseries } from "../api";
+import { BellRing, Activity, AlertTriangle, ArrowRight, Clock, Gauge, Globe, History, Hourglass, ShieldAlert, ShieldCheck, Siren, Users, Zap, type LucideIcon } from "lucide-react";
+import type { AlertActive, AuditEntry, Certificate, Timeseries, UnderAttackStatus } from "../api";
 import { ChartLegend, RadialGauge, Sparkline, TimeChart, type ChartPoint, type Series } from "../components/charts";
 import { PageHeader } from "../components/common";
 import { Badge, Card, CardHeader, EmptyState, Skeleton, StatusDot, type Tone } from "../components/ui/display";
@@ -42,6 +42,7 @@ export default function Dashboard() {
   const audit = useResource<AuditEntry[]>("/api/audit?limit=8", { poll: 15000 });
   const certs = useResource<Certificate[]>("/api/certificates", { poll: 60000 });
   const alerts = useResource<AlertActive[]>("/api/alerts/active", { poll: 10000 });
+  const underAttack = (useResource<UnderAttackStatus[]>("/api/under-attack", { poll: 10000 }).data ?? []).filter((s) => s.active);
 
   // Client-side rolling history of queue length (overview is polled anyway).
   const [waitHist, setWaitHist] = useState<number[]>([]);
@@ -87,6 +88,15 @@ export default function Dashboard() {
           <BellRing className="h-4 w-4 shrink-0 text-danger" aria-hidden />
           <span className="text-sm font-semibold">{t("activeNowN", { n: alerts.data.length })}</span>
           <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">{alerts.data.map((x) => x.title).join(" · ")}</span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-fg-subtle" aria-hidden />
+        </Link>
+      )}
+
+      {underAttack.length > 0 && (
+        <Link to="/proxy-hosts" className="flex items-center gap-3 rounded-[3px] border border-danger/40 bg-danger/10 px-4 py-2.5 hover:border-danger">
+          <Siren className="h-4 w-4 shrink-0 text-danger" aria-hidden />
+          <span className="text-sm font-semibold">{t("uaDashTitle", { n: underAttack.length })}</span>
+          <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">{underAttack.map((s) => `${s.host} (${s.mode === "auto" ? t("uaAuto") : t("uaOn")})`).join(" · ")}</span>
           <ArrowRight className="h-4 w-4 shrink-0 text-fg-subtle" aria-hidden />
         </Link>
       )}

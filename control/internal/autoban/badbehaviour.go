@@ -175,13 +175,13 @@ func gatewayConfig(set Settings) map[string]any {
 	cfg["window"] = set.BadBehaviourWindowS
 	cfg["duration"] = set.DurationS
 	// loopback is never banned (same as Evaluate)
-	cfg["exempt"] = encodeNets(append([]string{"127.0.0.0/8", "::1/128"}, set.Exempt...))
+	cfg["exempt"] = EncodeNets(append([]string{"127.0.0.0/8", "::1/128"}, set.Exempt...))
 	return cfg
 }
 
-// encodeNets renders CIDRs as "<hex network bytes>/<prefix>" for the gateway's IP matcher
+// EncodeNets renders CIDRs as "<hex network bytes>/<prefix>" for the gateway's IP matcher
 // (same encoding as the security rules, see compiler/rules.go).
-func encodeNets(cidrs []string) []string {
+func EncodeNets(cidrs []string) []string {
 	out := []string{}
 	for _, c := range cidrs {
 		_, n, err := net.ParseCIDR(c)

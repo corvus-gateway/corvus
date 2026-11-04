@@ -14,6 +14,7 @@ import (
 	"corvus/control/internal/seal"
 	"corvus/control/internal/store"
 	"corvus/control/internal/traffic"
+	"corvus/control/internal/underattack"
 )
 
 // Sources are the signals the engine evaluates.
@@ -21,6 +22,9 @@ type Sources struct {
 	Traffic *traffic.Collector
 	RedisUp func(ctx context.Context) bool
 	Rooms   func(ctx context.Context) []live.Stats
+	// UnderAttack returns the automatic under-attack activations and deactivations
+	// since the last call (underattack.Service.Drain).
+	UnderAttack func() []underattack.Transition
 }
 
 type Engine struct {
@@ -161,6 +165,8 @@ func link(base, rule string) string {
 		return base + "/audit"
 	case "waitroom_queue", "redis_down":
 		return base + "/waitrooms"
+	case "under_attack":
+		return base + "/proxy-hosts"
 	}
 	return base + "/traffic"
 }
@@ -233,6 +239,13 @@ func (e *Engine) detect(ctx context.Context, set Settings, tr map[string]string,
 
 	if c := e.Src.Traffic; c != nil {
 		out = append(out, securityFindings(c, on, win, mins, tr, now)...)
+	}
+
+	if e.Src.UnderAttack != nil {
+		events := e.Src.UnderAttack() // drained every round, also while the rule is off
+		if _, ok := on("under_attack"); ok {
+			out = append(out, underAttackFindings(events, tr, set.Language)...)
+		}
 	}
 
 	if e.Src.Rooms != nil {

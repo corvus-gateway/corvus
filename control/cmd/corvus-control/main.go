@@ -39,6 +39,7 @@ import (
 	"corvus/control/internal/sigs"
 	"corvus/control/internal/store"
 	"corvus/control/internal/traffic"
+	"corvus/control/internal/underattack"
 	"corvus/control/internal/webui"
 )
 
@@ -348,6 +349,13 @@ func run() error {
 	}
 	go ban.Run(ctx)
 
+	// "Under attack" mode, automatic activations pushed to the gateway's shared memory.
+	ua := &underattack.Service{Store: st, Traffic: tc}
+	if withGateway {
+		ua.PushURL = "http://127.0.0.1:9180/under-attack"
+	}
+	go ua.Run(ctx)
+
 	// Lists fed from a URL (e.g. Tor exit nodes, bad-bot User-Agents).
 	listFeeds := &feeds.Service{Store: st, Apply: func(ctx context.Context, msg string, mutate func(tx *store.Store) error) error {
 		_, err := dep.Apply(ctx, nil, msg, mutate)
@@ -359,13 +367,14 @@ func run() error {
 	srv := &api.Server{Store: st, Deployer: dep, Paths: paths, Live: lv, Setup: setup,
 		Limiter: auth.NewLimiter(10, 10*time.Minute), UI: webui.Handler(), SecureCookie: tlsOn, Version: version,
 		AcctLimiter: auth.NewLimiter(10, 15*time.Minute),
-		Traffic:     tc, ACME: acmeSvc, NPMImportDir: env("CORVUS_IMPORT_DIR", "/import"), DataKey: dataKey, MFA: auth.NewMFAChallenges(), GeoIP: geo, AutoBan: ban, History: hist, Rules: rulesSvc, Feeds: listFeeds}
+		Traffic:     tc, ACME: acmeSvc, NPMImportDir: env("CORVUS_IMPORT_DIR", "/import"), DataKey: dataKey, MFA: auth.NewMFAChallenges(), GeoIP: geo, AutoBan: ban, UnderAttack: ua, History: hist, Rules: rulesSvc, Feeds: listFeeds}
 	if or != nil {
 		srv.Gateway = or.Status
 	}
 	srv.Alerts = &alerts.Engine{Store: st, Key: dataKey, Src: alerts.Sources{
-		Traffic: tc,
-		RedisUp: lv.Ping,
+		Traffic:     tc,
+		RedisUp:     lv.Ping,
+		UnderAttack: ua.Drain,
 		Rooms: func(ctx context.Context) []live.Stats {
 			rooms, err := st.ListWaitrooms(ctx)
 			if err != nil {

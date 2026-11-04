@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Loader2, ArrowRight, Copy, Globe, Lock, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2, Users, Zap, Gauge, KeyRound, ExternalLink, UserPlus, X } from "lucide-react";
+import { AlertCircle, Loader2, ArrowRight, Copy, Globe, Lock, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2, Users, Zap, Gauge, KeyRound, ExternalLink, UserPlus, X, Siren, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
-import { api, type AccessList, type Certificate, type ClientIPMode, type ProxyHost, type RateLimit, type SecurityHeaders, type Waitroom } from "../api";
+import { api, type AccessList, type Certificate, type ClientIPMode, type ProxyHost, type RateLimit, type SecurityHeaders, type UnderAttackStatus, type Waitroom } from "../api";
+import { UnderAttackFields, uaConfig, UA_DEFAULTS } from "../components/UnderAttackFields";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
 import { Button, IconButton } from "../components/ui/button";
 import { Badge, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
@@ -32,11 +33,12 @@ const blank: Form = {
   ssl_forced: false, http2: true, waitroom_id: null, waitroom_path: "/", advanced_config: "", enabled: true,
   client_ip: "direct", rate_limit_id: null, access_list_id: null, block_exploits: true,
   body_inspection: "log", body_max_kb: 1024, security_headers: "off",
+  under_attack: "off", under_attack_config: { ...UA_DEFAULTS },
 };
 
 function toForm(h: ProxyHost): Form {
   const { id: _i, created_at: _c, updated_at: _u, ...rest } = h;
-  return { ...blank, ...rest };
+  return { ...blank, ...rest, under_attack: rest.under_attack ?? "off", under_attack_config: uaConfig(rest.under_attack_config) };
 }
 
 export default function ProxyHosts() {
@@ -51,6 +53,8 @@ export default function ProxyHosts() {
   const rooms = useResource<Waitroom[]>("/api/waitrooms");
   const limits = useResource<RateLimit[]>("/api/rate-limits");
   const lists = useResource<AccessList[]>("/api/access-lists");
+  const ua = useResource<UnderAttackStatus[]>("/api/under-attack", { poll: 10000 });
+  const uaOf = (id: number | null | undefined) => ua.data?.find((s) => s.host_id === id);
 
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<{ id: number | null; form: Form; req: CertReq | null; auth: BasicAuthForm } | null>(null);
@@ -69,6 +73,7 @@ export default function ProxyHosts() {
   const showExploits = has("block_exploits");
   const showBody = has("body_inspection");
   const showHeaders = has("security_headers");
+  const showUA = has("under_attack");
   const showLimits = !limits.missing && has("rate_limit_id");
   const showLists = !lists.missing && has("access_list_id");
 
@@ -97,6 +102,7 @@ export default function ProxyHosts() {
     if (!showExploits) { delete body.block_exploits; }
     if (!showBody) { delete body.body_inspection; delete body.body_max_kb; }
     if (!showHeaders) { delete body.security_headers; }
+    if (!showUA) { delete body.under_attack; delete body.under_attack_config; }
     if (!showLimits) { delete body.rate_limit_id; }
     if (!showLists) { delete body.basic_auth; }
     const r = await run(() => (id ? api.put(`/api/proxy-hosts/${id}`, body) : api.post("/api/proxy-hosts", body)), { success: req ? undefined : t("savedDeployed") });
@@ -107,6 +113,11 @@ export default function ProxyHosts() {
     const body = { ...toForm(h), enabled };
     const r = await rowAction.run(() => api.put(`/api/proxy-hosts/${h.id}`, body), { success: enabled ? t("hostEnabled") : t("hostDisabled") });
     if (r !== undefined) { hosts.reload(); window.dispatchEvent(new Event("corvus:refresh")); }
+  };
+
+  const deactivate = async (id: number) => {
+    const r = await rowAction.run(() => api.post(`/api/proxy-hosts/${id}/under-attack/deactivate`), { success: t("uaDeactivated") });
+    if (r !== undefined) { ua.reload(); window.dispatchEvent(new Event("corvus:refresh")); }
   };
 
   const remove = async () => {
@@ -146,6 +157,7 @@ export default function ProxyHosts() {
               <tbody>
                 {filtered.map((h) => {
                   const cn_ = certName(h.certificate_id);
+                  const uaSt = uaOf(h.id);
                   return (
                     <Tr key={h.id}>
                       <Td>
@@ -154,6 +166,7 @@ export default function ProxyHosts() {
                             {h.domains[0]}<ExternalLink className="h-3 w-3 opacity-0 transition group-hover:opacity-70" aria-hidden />
                           </a>
                           {h.domains.length > 1 && <Tip label={h.domains.slice(1).join(", ")}><span><Badge>+{h.domains.length - 1}</Badge></span></Tip>}
+                          {uaSt?.active && <Tip label={uaSt.reason || t("uaOn")}><span><Badge tone="danger" icon={Siren}>{t("uaBadge")}</Badge></span></Tip>}
                         </div>
                         <div className="mt-0.5 flex items-center gap-2 text-xs text-fg-subtle">
                           {cn_ ? <span className="inline-flex items-center gap-1"><Lock className="h-3 w-3 text-ok" aria-hidden />{cn_}</span> : <span>{t("noTls")}</span>}
@@ -172,6 +185,7 @@ export default function ProxyHosts() {
                           {h.rate_limit_id != null && <Badge tone="info" icon={Gauge}>{limitName(h.rate_limit_id) ?? "Rate limit"}</Badge>}
                           {(h.basic_auth_users?.length ?? 0) > 0 && <Badge tone="info" icon={KeyRound}>{t("basicAuthBadge")}</Badge>}
                           {h.block_exploits && <Badge tone="warn" icon={ShieldAlert}>{t("exploitShort")}</Badge>}
+                          {h.under_attack === "auto" && !uaSt?.active && <Badge icon={Siren}>{t("uaAutoArmed")}</Badge>}
                           {h.security_headers && h.security_headers !== "off" && <Badge tone="ok" icon={ShieldCheck}>{t("headersShort")} · {h.security_headers === "strict" ? t("shStrict") : t("shBasic")}</Badge>}
                           {h.client_ip && h.client_ip !== "direct" && <Badge>{h.client_ip === "cloudflare" ? "Cloudflare" : t("trustedProxiesShort")}</Badge>}
                         </div>
@@ -186,6 +200,7 @@ export default function ProxyHosts() {
                         <RowMenu items={[
                           { label: t("edit"), icon: Pencil, onSelect: () => open(h) },
                           { label: t("copyDomain"), icon: Copy, onSelect: () => { navigator.clipboard?.writeText(h.domains[0]); toast.success(t("copied")); } },
+                          ...(can && uaSt?.active && uaSt.mode === "auto" ? [{ label: t("uaDeactivate"), icon: ShieldOff, onSelect: () => deactivate(h.id) }] : []),
                           { label: t("delete"), icon: Trash2, danger: true, separatorBefore: true, onSelect: () => setDeleting(h) },
                         ]} />
                       </Td>
@@ -328,6 +343,12 @@ export default function ProxyHosts() {
                 </IdField>
               )}
             </FormSection>
+          )}
+
+          {showUA && (
+            <UnderAttackFields mode={f.under_attack ?? "off"} cfg={uaConfig(f.under_attack_config)} error={error}
+              onChange={(mode, cfg) => set({ under_attack: mode, under_attack_config: cfg })}
+              status={editing?.id ? uaOf(editing.id) : undefined} onDeactivate={() => editing?.id && deactivate(editing.id)} busy={rowAction.busy} can={can} />
           )}
 
           <FormSection title={t("secWaitroom")}>

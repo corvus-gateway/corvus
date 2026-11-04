@@ -40,6 +40,7 @@ for id in $(c $A/api/bans | js "' '.join(str(b['id']) for b in d)"); do c -o /de
 
 HOST1=$(c $A/api/proxy-hosts | js "[h['id'] for h in d if '$H' in h['domains']][0]")
 put_host() { c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$HOST1 -d "{\"domains\":[\"$H\"],\"forward_host\":\"demo\",\"forward_port\":80$1}"; }
+put_host ',"under_attack":"off"' >/dev/null  # an aborted earlier run may have left it on
 
 echo "[rate limit]"
 RL=$(c -X POST $A/api/rate-limits -d '{"name":"itest-strict","requests_per_second":2,"burst":0}' | js "d['rate_limit']['id']")
@@ -307,6 +308,45 @@ chk "$(c "$A/api/security-rules/events?limit=500" | js "sorted({e['action'] for 
 chk "$(c "$A/api/traffic/events?limit=500" | js "sorted({e['kind'] for e in d if e['kind'].startswith('challenge')})")" "['challenge_failed', 'challenge_issued', 'challenge_passed']" "challenge traffic events"
 rm -f "$CJ" "$JJ"
 for id in $CHC $CHB $CHJ; do c -o /dev/null -X DELETE $A/api/security-rules/$id; done
+
+echo "[under attack]"
+chk "$(put_host ',"under_attack":"sometimes"')" 422 "invalid under attack mode rejected"
+chk "$(put_host ',"under_attack":"on","under_attack_config":{"mode":"cookie","ttl_s":600}')" 200 "under attack mode on (cookie check)"
+chk "$(c $A/api/proxy-hosts/$HOST1 | js "(d['under_attack'], d['under_attack_config']['mode'], d['under_attack_config']['difficulty'], d['under_attack_config']['ttl_s'], d['under_attack_config']['bind'], d['under_attack_config']['rps'], d['under_attack_config']['duration_s'])")" "('on', 'cookie', 16, 600, 'ip', 200, 900)" "under attack settings stored with defaults"
+chk "$(put_host '')" 200 "host saved without under attack fields"
+chk "$(c $A/api/proxy-hosts/$HOST1 | js "d['under_attack']")" on "omitted under attack fields keep the mode"
+chk "$(c $A/api/under-attack | js "[(s['mode'], s['active']) for s in d if s['host_id']==$HOST1]")" "[('on', True)]" "host listed as under attack"
+UAA=$(rule "$(cond itest-ua-allow allow '' '{"field":"http.path","operator":"starts_with","value":["/itest-ua-allowed"]}')")
+UAB=$(rule "$(cond itest-ua-block block '' '{"field":"http.path","operator":"starts_with","value":["/itest-ua-blocked"]}')")
+UJ=$(mktemp)
+R=$(curl -s -D - -c "$UJ" -b "$UJ" "$G/itest-ua/page?x=1")
+chk "$(echo "$R" | status)" 403 "under attack: request without a pass gets the challenge"
+echo "$R" | grep -qi '^x-corvus-challenge: cookie' && ok "under attack: cookie challenge page" || bad "under attack: no X-Corvus-Challenge header"
+TOK=$(echo "$R" | field t)
+chk "$(echo "$TOK" | cut -d. -f3)" 0 "under attack: challenge token names virtual rule 0"
+chk "$(code "$G/")" 403 "under attack: site root challenged too"
+chk "$(code "$G/itest-ua-allowed/x")" 200 "under attack: requests an allow rule matched are not challenged"
+chk "$(code "$G/itest-ua-blocked/x")" 403 "under attack: block rule still answers"
+curl -s "$G/itest-ua-blocked/x" | grep -q 'name="t"' && bad "block rule answered with a challenge" || ok "under attack: block rules come first (block page)"
+A1=$(curl -s -D - -o /dev/null "$G/.well-known/acme-challenge/itest-ua" | tr -d '\r')
+chk "$(echo "$A1" | status)" 404 "under attack: ACME path reaches the ACME responder"
+echo "$A1" | grep -qi '^x-corvus-challenge:' && bad "ACME path challenged" || ok "under attack: ACME path not challenged"
+V=$(verify "$UJ" "$TOK" "" "/itest-ua/page?x=1")
+chk "$(echo "$V" | status)" 303 "under attack: answer accepted (303)"
+echo "$V" | grep -qi '^location: .*/itest-ua/page?x=1' && ok "under attack: redirected back" || bad "under attack redirect: $(echo "$V" | grep -i '^location')"
+chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$UJ" "$G/itest-ua/page?x=1")" 200 "under attack: request with the pass reaches the backend"
+chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$UJ" "$G/itest-ua/other")" 200 "under attack: the pass covers the whole host"
+chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/proxy-hosts/$HOST1/under-attack/deactivate)" 409 "deactivate: nothing automatic to end"
+sleep 3
+chk "$(c "$A/api/traffic/events?limit=500" | js "sorted({e['kind'] for e in d if e['kind'].startswith('challenge') and e['path'].startswith('/itest-ua')})")" "['challenge_issued', 'challenge_passed']" "under attack challenges recorded as challenge events"
+chk "$(put_host ',"under_attack":"auto"')" 200 "under attack mode auto"
+chk "$(c $A/api/under-attack | js "[(s['mode'], s['active']) for s in d if s['host_id']==$HOST1]")" "[('auto', False)]" "auto: not active without an attack"
+chk "$(code "$G/itest-ua/auto")" 200 "auto: not active, no challenge"
+chk "$(put_host ',"under_attack":"off"')" 200 "under attack mode off"
+chk "$(code "$G/itest-ua/page")" 200 "under attack off: no challenge"
+chk "$(c $A/api/under-attack | js "[s for s in d if s['host_id']==$HOST1]")" "[]" "host no longer listed"
+rm -f "$UJ"
+for id in $UAA $UAB; do c -o /dev/null -X DELETE $A/api/security-rules/$id; done
 
 echo "[admin console allowlist]"
 chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/settings/network -d '{"trusted_proxies":[],"admin_allow":["10.255.255.0/24"]}')" 422 "allowlist without my address refused (lock-out guard)"

@@ -100,6 +100,9 @@ type proxyHostInput struct {
 	BodyMaxKB      int      `json:"body_max_kb"`
 
 	SecurityHeaders string `json:"security_headers"` // off | basic | strict
+	// Under attack mode; omitted = unchanged (new hosts: off, default parameters).
+	UnderAttack       *string                  `json:"under_attack"`
+	UnderAttackConfig *store.UnderAttackConfig `json:"under_attack_config"`
 
 	// BasicAuth edits the host's password protection; when present it replaces access_list_id.
 	BasicAuth      *basicAuthInput `json:"basic_auth"`
@@ -144,6 +147,12 @@ func (in proxyHostInput) apply(h *store.ProxyHost) {
 	h.Enabled = in.Enabled == nil || *in.Enabled
 	h.ClientIP, h.RateLimitID, h.AccessListID, h.BlockExploits = in.ClientIP, in.RateLimitID, in.AccessListID, in.BlockExploits
 	h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders = in.BodyInspection, in.BodyMaxKB, in.SecurityHeaders
+	if in.UnderAttack != nil {
+		h.UnderAttack = *in.UnderAttack
+	}
+	if in.UnderAttackConfig != nil {
+		h.UnderAttackConfig = *in.UnderAttackConfig
+	}
 }
 
 // checkProxyHost validates a host against the rest of the configuration (inside the tx).
@@ -294,6 +303,7 @@ func (s *Server) createProxyHost(w http.ResponseWriter, r *http.Request) {
 		s.ACME.Start(cert.ID)
 	}
 	s.audit(r, "proxy_host.create", fmt.Sprintf("proxy_host:%d", h.ID), h)
+	s.underAttackChanged()
 	writeJSON(w, 201, map[string]any{"proxy_host": h, "version": v, "certificate": cert})
 }
 
@@ -346,6 +356,7 @@ func (s *Server) updateProxyHost(w http.ResponseWriter, r *http.Request) {
 		s.ACME.Start(cert.ID)
 	}
 	s.audit(r, "proxy_host.update", fmt.Sprintf("proxy_host:%d", id), map[string]any{"before": before, "after": h})
+	s.underAttackChanged()
 	writeJSON(w, 200, map[string]any{"proxy_host": h, "version": v, "certificate": cert})
 }
 
@@ -375,6 +386,7 @@ func (s *Server) deleteProxyHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "proxy_host.delete", fmt.Sprintf("proxy_host:%d", id), before)
+	s.underAttackChanged()
 	writeJSON(w, 200, map[string]any{"version": v})
 }
 

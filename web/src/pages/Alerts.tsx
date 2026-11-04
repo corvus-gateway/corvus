@@ -30,7 +30,7 @@ const SEV: AlertSeverity[] = ["info", "warning", "critical"];
 const sevTone: Record<string, Tone> = { info: "info", warning: "warn", critical: "danger" };
 const sevKey: Record<AlertSeverity, Key> = { info: "sevInfo", warning: "sevWarning", critical: "sevCritical" };
 
-const RULE_IDS = ["error_rate", "latency_p95", "traffic_spike", "rate_limited", "exploit", "security_events", "attack_source", "scan_suspect", "waitroom_queue", "redis_down", "cert_expiry", "acme_failed", "deploy_failed", "login_failed"];
+const RULE_IDS = ["error_rate", "latency_p95", "traffic_spike", "rate_limited", "exploit", "security_events", "attack_source", "scan_suspect", "waitroom_queue", "redis_down", "cert_expiry", "acme_failed", "deploy_failed", "login_failed", "under_attack"];
 const THR_UNIT: Record<string, Key | ""> = {
   error_rate: "", latency_p95: "", traffic_spike: "unitTimes", rate_limited: "unitCount", exploit: "unitCount", waitroom_queue: "unitPeopleShort", cert_expiry: "unitDays", login_failed: "unitCount",
 };

@@ -96,6 +96,8 @@ Role: **public** = no authentication · **viewer** = any signed-in user or token
 | POST | `/api/proxy-hosts` | operator | Create (fields below) |
 | PUT | `/api/proxy-hosts/{id}` | operator | Replace |
 | DELETE | `/api/proxy-hosts/{id}` | operator | Delete |
+| GET | `/api/under-attack` | viewer | Hosts with under attack mode `on` or `auto` and whether it is active now |
+| POST | `/api/proxy-hosts/{id}/under-attack/deactivate` | operator | End an automatic activation now (`409` when none is running) |
 | GET | `/api/redirection-hosts` | viewer | List redirection hosts |
 | GET | `/api/redirection-hosts/{id}` | viewer | Get one redirection host |
 | POST | `/api/redirection-hosts` | operator | Create (fields below) |
@@ -116,7 +118,9 @@ Proxy host fields: `domains` (array), `forward_scheme` (`http`/`https`), `forwar
 `forward_port`, `websocket`, `ssl_forced`, `http2`, `certificate_id` or `certificate_request`,
 `client_ip` (`direct`, `cloudflare`, `trusted_proxies`), `waitroom_id`, `waitroom_path`,
 `rate_limit_id`, `access_list_id` or `basic_auth`, `block_exploits`, `body_inspection`
-(`off`, `log`, `block`), `body_max_kb`, `security_headers`, `advanced_config`, `enabled`.
+(`off`, `log`, `block`), `body_max_kb`, `security_headers`, `under_attack`, `under_attack_config`,
+`advanced_config`, `enabled`. `under_attack` and `under_attack_config` keep their stored value when
+omitted from a `PUT`.
 
 `security_headers` (default `off`; NPM imports use `off`) adds browser security headers to the
 host's responses, including gateway error pages. A header the upstream already sends is never
@@ -129,6 +133,46 @@ replaced:
 | `strict` | `basic` + `Content-Security-Policy-Report-Only: default-src 'self'; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'`, `Cross-Origin-Opener-Policy: same-origin`, and upstream `Set-Cookie` values get `HttpOnly`, `SameSite=Lax` and (on HTTPS) `Secure`, each only when the cookie does not set that attribute |
 
 `Strict-Transport-Security` is independent of the preset: it is sent whenever `ssl_forced` is on.
+
+`under_attack` ("under attack" mode, default `off`) challenges every visitor of the host:
+
+| Value | Effect |
+|---|---|
+| `off` | No host-wide challenge |
+| `on` | Every request without a valid pass gets the challenge page |
+| `auto` | Like `on`, but only while corvus-control detects an attack on the host (see below) |
+
+`under_attack_config` (missing values get the defaults):
+
+| Field | Default | Meaning |
+|---|---|---|
+| `mode` | `js` | Challenge type, as for security rules: `js` (proof of work) or `cookie` |
+| `difficulty` | `16` | Proof-of-work bits (12–24, `js` only) |
+| `ttl_s` | `3600` | Pass lifetime (300–604800 s) |
+| `bind` | `ip` | Pass bound to the client IP (`ip`) or IP and User-Agent (`ip_ua`) |
+| `rps` | `200` | `auto`: activate above this many requests per second … |
+| `blocked_pct` | `50` | … or when at least this share (%) of the requests was blocked or rate-limited (`0` = not used; needs at least 50 requests in the window) |
+| `window_s` | `30` | … measured over this window (10–600 s, complete 10-second intervals) |
+| `duration_s` | `900` | Activation period (60–86400 s) |
+
+The challenge is the security-rule challenge (same page, `/__corvus/challenge/verify` endpoint and
+`__corvus_ch` pass cookie, virtual rule id `0`; rule log field `ua:challenge`, `ua:challenge_pass`,
+`ua:challenge_fail`, shown as `challenge_*` traffic events). Order of evaluation: IP bans → security
+rules (block, allow, challenge) → exploit and body blocking → under attack challenge → rate limiting,
+Basic auth and the access queue. Never challenged: requests an allow rule matched, certificate
+validation (`/.well-known/acme-challenge/`), the gateway's own `/__corvus/` endpoints (challenge
+answers, access queue) and client addresses in the automatic-ban exemptions (`exempt` of
+`/api/settings/autoban`) and loopback.
+
+In `auto` mode corvus-control checks every 10 seconds; once a threshold is exceeded the mode is active for
+`duration_s`, and every round still over a threshold extends it to `duration_s` from then (it ends only after
+the traffic stayed below the thresholds for a whole period). Challenged requests count as traffic, so an
+ongoing flood keeps the mode active. Activations are pushed to the gateway's shared memory (no redeployment,
+each entry also expires on its own), stored so they survive restarts of corvus-control, reported by the
+`under_attack` alert rule (on and off) and listed by `GET /api/under-attack`:
+`[{ "host_id", "host", "mode", "active", "since", "until", "reason" }]` (`since`/`until`/`reason` for
+automatic activations). `deactivate` ends an activation early; the host is then not activated automatically
+again for one `duration_s`.
 
 Redirection host fields: `domains` (array), `forward_scheme` (`auto` keeps the request's scheme,
 `http`, `https`), `forward_domain` (target `host[:port][/path]`, without `http://`), `http_code`

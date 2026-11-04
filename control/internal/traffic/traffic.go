@@ -299,7 +299,7 @@ func classify(r *Record) (blocked bool, kinds []string) {
 			kinds = append(kinds, "body_detected")
 		}
 	}
-	if _, action, ok := parseRule(r.R); ok {
+	if action, ok := ruleAction(r.R); ok {
 		switch action {
 		case "block":
 			blocked = true
@@ -339,7 +339,7 @@ func classify(r *Record) (blocked bool, kinds []string) {
 // isChallenge reports whether the gateway answered with a challenge page (issued, or
 // re-issued after a failed answer) instead of the site's response.
 func isChallenge(r *Record) bool {
-	_, action, ok := parseRule(r.R)
+	action, ok := ruleAction(r.R)
 	return ok && (action == "challenge" || action == "challenge_fail")
 }
 
@@ -904,4 +904,32 @@ func (c *Collector) EventsByIP(since time.Time, kinds ...string) map[string]*Sou
 		a.Kinds[e.Kind] = true
 	}
 	return out
+}
+
+// Window sums the requests and blocked requests (blocks and rate limits) of host over
+// the complete 10-second buckets of the last d (rounded up to 10 s, at most 1 h); the
+// bucket still being filled is left out. secs is the time span covered.
+func (c *Collector) Window(host string, d time.Duration, now time.Time) (requests, blocked int64, secs int64) {
+	n := (int64(d.Seconds()) + fineStep - 1) / fineStep
+	if n < 1 {
+		n = 1
+	}
+	if n > fineSlots-1 {
+		n = fineSlots - 1
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	s := c.hosts[host]
+	if s == nil {
+		return 0, 0, n * fineStep
+	}
+	ts := now.Unix()
+	end := ts - ts%fineStep // start of the current, incomplete bucket
+	for start := end - n*fineStep; start < end; start += fineStep {
+		if b := &s.fine[(start/fineStep)%fineSlots]; b.start == start {
+			requests += b.count
+			blocked += b.blocked
+		}
+	}
+	return requests, blocked, n * fineStep
 }

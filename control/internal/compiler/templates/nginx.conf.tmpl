@@ -73,6 +73,7 @@ http {
     lua_shared_dict corvus_bans 16m;      # banned client addresses (pushed by corvus-control)
     lua_shared_dict corvus_bb 16m;        # bad-behaviour counters per client IP and host (TTL = window)
     lua_shared_dict corvus_bb_q 2m;       # bad-behaviour settings and gateway bans not yet recorded
+    lua_shared_dict corvus_ua 1m;         # "under attack" auto activations and exemptions (pushed by corvus-control)
     resolver {{.P.Resolver}} ipv6=off valid=30s;
     resolver_timeout 5s;
 
@@ -163,6 +164,13 @@ http {
             client_body_buffer_size 8m;
             default_type text/plain;
             content_by_lua_block { require("corvus.rules").set_bans() }
+        }
+        # "Under attack" auto activations from corvus-control (loopback listener only).
+        location = /under-attack {
+            client_max_body_size 1m;
+            client_body_buffer_size 1m;
+            default_type text/plain;
+            content_by_lua_block { require("corvus.rules").set_under_attack() }
         }
         # Bad-behaviour bans made by the gateway, polled by corvus-control (loopback only).
         location = /bad-behaviour {

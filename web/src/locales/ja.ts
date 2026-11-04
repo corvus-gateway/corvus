@@ -9,6 +9,7 @@ import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import { pagesStrings } from "./pages.i18n";
 import { challengeStrings } from "./challenge.i18n";
+import { underAttackStrings } from "./underattack.i18n";
 import type { ko } from "./ko";
 import type { RuleLabels } from "../lib/rules";
 import type { AuditLabels } from "../lib/audit";
@@ -314,6 +315,7 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   ...backupStrings.ja,
   ...pagesStrings.ja,
   ...challengeStrings.ja,
+  ...underAttackStrings.ja,
 };
 
 export const jaRuleLabels: RuleLabels | undefined = {

@@ -200,9 +200,9 @@ local function client()
   return ngx.var.remote_addr or "", ngx.var.host or "", ngx.var.http_user_agent or ""
 end
 
--- Whether the request carries a pass satisfying rule settings s. The cookie is
--- verified once per request (cache: the rule engine's per-request ctx table).
-function _M.passed(ctx, s)
+-- The request's valid pass (see parse_pass) or nil. The cookie is verified once per
+-- request (cache: the rule engine's per-request ctx table).
+function _M.pass(ctx)
   local p = ctx.__corvus_ch
   if p == nil then
     local tok = ngx.var["cookie_" .. _M.COOKIE]
@@ -213,7 +213,12 @@ function _M.passed(ctx, s)
     end
     ctx.__corvus_ch = p
   end
-  return _M.satisfies(p or nil, s)
+  return p or nil
+end
+
+-- Whether the request carries a pass satisfying rule settings s.
+function _M.passed(ctx, s)
+  return _M.satisfies(_M.pass(ctx), s)
 end
 
 -- Placeholder values for the challenge page (see corvus/rules.lua send_page).

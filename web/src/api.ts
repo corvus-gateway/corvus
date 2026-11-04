@@ -85,9 +85,22 @@ export interface ProxyHost {
   client_ip?: ClientIPMode; rate_limit_id?: number | null; access_list_id?: number | null; block_exploits?: boolean;
   body_inspection?: "off" | "log" | "block"; body_max_kb?: number;
   security_headers?: SecurityHeaders;
+  under_attack?: UnderAttackMode;
+  under_attack_config?: UnderAttackConfig;
   /** Read-only: usernames of the host's password protection (HTTP Basic auth). */
   basic_auth_users?: string[];
   created_at: string; updated_at: string;
+}
+
+/** "Under attack" mode of a proxy host (gateway/lua/corvus/underattack.lua). */
+export type UnderAttackMode = "off" | "on" | "auto";
+export interface UnderAttackConfig {
+  mode: "js" | "cookie"; difficulty: number; ttl_s: number; bind: "ip" | "ip_ua";
+  rps: number; blocked_pct: number; window_s: number; duration_s: number;
+}
+/** GET /api/under-attack */
+export interface UnderAttackStatus {
+  host_id: number; host: string; mode: "on" | "auto"; active: boolean; since?: string; until?: string; reason?: string;
 }
 
 /** Security header preset of a proxy host (gateway/lua/corvus/headers.lua). */

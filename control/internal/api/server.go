@@ -25,6 +25,7 @@ import (
 	"corvus/control/internal/live"
 	"corvus/control/internal/store"
 	"corvus/control/internal/traffic"
+	"corvus/control/internal/underattack"
 	"corvus/control/internal/validate"
 )
 
@@ -48,6 +49,7 @@ type Server struct {
 	Alerts       *alerts.Engine
 	GeoIP        GeoIPService // country database for security rules (nil = unavailable)
 	AutoBan      *autoban.Service
+	UnderAttack  *underattack.Service // automatic under-attack mode (nil = unavailable)
 	History      *history.Service
 	Rules        RulesService
 	Feeds        ListFeeds // URL-fed lists (nil = unavailable)
@@ -97,6 +99,8 @@ func (s *Server) Handler() http.Handler {
 	priv("GET /api/proxy-hosts/{id}", s.getProxyHost)
 	op("PUT /api/proxy-hosts/{id}", s.updateProxyHost)
 	op("DELETE /api/proxy-hosts/{id}", s.deleteProxyHost)
+	op("POST /api/proxy-hosts/{id}/under-attack/deactivate", s.deactivateUnderAttack)
+	priv("GET /api/under-attack", s.listUnderAttack)
 
 	priv("GET /api/redirection-hosts", s.listRedirectionHosts)
 	op("POST /api/redirection-hosts", s.createRedirectionHost)

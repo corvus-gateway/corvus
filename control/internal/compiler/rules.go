@@ -64,6 +64,15 @@ type hostJSON struct {
 	Exploits bool   `json:"exploits"`
 	Body     string `json:"body"`     // off | log | block
 	BodyMax  int    `json:"body_max"` // bytes
+	// "Under attack" challenge settings (proxy hosts whose mode is not off). On: always
+	// active; otherwise active while corvus-control has pushed an auto activation for
+	// the host (corvus/underattack.lua).
+	UnderAttack *underAttackJSON `json:"under_attack,omitempty"`
+}
+
+type underAttackJSON struct {
+	On bool `json:"on"`
+	challengeJSON
 }
 
 // GeoFile is where the country database lives (written by internal/geoip).
@@ -169,6 +178,12 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 			continue
 		}
 		hj := hostJSON{Rules: []int{}, CF: h.ClientIP == "cloudflare", Exploits: h.BlockExploits, Body: h.BodyInspection, BodyMax: h.BodyMaxKB * 1024}
+		if h.UnderAttack == "on" || h.UnderAttack == "auto" {
+			uc := h.UnderAttackConfig
+			validate.UnderAttackDefaults(&uc)
+			hj.UnderAttack = &underAttackJSON{On: h.UnderAttack == "on",
+				challengeJSON: challengeJSON{Mode: uc.Mode, Difficulty: uc.Difficulty, TTL: uc.TTL, Bind: uc.Bind}}
+		}
 		for i, sc := range scopes {
 			if sc.all || sc.hosts[h.ID] {
 				hj.Rules = append(hj.Rules, i+1)

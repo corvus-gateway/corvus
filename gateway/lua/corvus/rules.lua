@@ -9,7 +9,10 @@
 --   challenge → serve the challenge page (corvus/challenge.lua) and stop, unless the
 --           request carries a valid challenge pass: then continue with later rules
 -- After the rules, hosts with "block exploits" refuse requests that match the
--- attack-pattern map ($corvus_exploit).
+-- attack-pattern map ($corvus_exploit), body inspection runs, and hosts in "under
+-- attack" mode challenge every remaining visitor without a pass (corvus/underattack.lua).
+-- Precedence: bans → block / allow / challenge rules → exploit and body blocking →
+-- under-attack challenge → (later phases) rate limiting, Basic auth, access queue.
 --
 -- Expressions are in disjunctive normal form: any group whose conditions all match.
 
@@ -17,6 +20,7 @@ local cjson = require "cjson.safe"
 local body = require "corvus.body"
 local ualist = require "corvus.ualist"
 local challenge = require "corvus.challenge"
+local underattack = require "corvus.underattack"
 local ffi = require "ffi"
 local bit = require "bit"
 
@@ -198,8 +202,10 @@ function _M.init(path)
     local list = {}
     for _, idx in ipairs(h.rules or {}) do list[#list + 1] = compiled[idx] end
     -- keys: proxy host id (number) or "r<id>" for redirection hosts
+    local ua = underattack.settings(h.under_attack)
     HOSTS[tonumber(hid) or hid] = { rules = list, cf = h.cf and true or false, exploits = h.exploits and true or false,
-      body = h.body or "off", body_max = tonumber(h.body_max) or 1048576 }
+      body = h.body or "off", body_max = tonumber(h.body_max) or 1048576,
+      ua = ua, ua_rule = ua and { id = underattack.RULE, ch = ua.ch } or nil }
   end
   GEO = load_geo(cfg.geo)
   if cfg.body_signatures then body.set_signatures(cfg.body_signatures) end
@@ -213,6 +219,23 @@ function _M.init(path)
     CHALLENGE_PAGE = read_file(cfg.challenge_page) or CHALLENGE_PAGE
   end
   challenge.init()
+end
+
+-- ------------------------------------------------------------------ under attack
+
+local UA_V, UA_EX = nil, nil  -- per-worker exempt networks and their version
+
+local function ua_exempt()
+  local d = ngx.shared.corvus_ua
+  if not d then return nil end
+  local v = d:get("exempt_v")
+  if not v then return nil end
+  if v ~= UA_V then
+    local list = cjson.decode(d:get("exempt") or "")
+    UA_EX = ip_matcher(type(list) == "table" and list or {})
+    UA_V = v
+  end
+  return UA_EX
 end
 
 -- ------------------------------------------------------------------ evaluate
@@ -359,6 +382,7 @@ end
 
 local function challenge_rule(host, rid)
   if not host then return nil end
+  if rid == underattack.RULE then return host.ua_rule end
   for _, rule in ipairs(host.rules) do
     if rule.id == rid and rule.ch then return rule end
   end
@@ -417,6 +441,20 @@ function _M.rewrite(host_id)
       end
     end
   end
+  -- "Under attack" mode: challenge every visitor without a pass.
+  if host.ua then
+    local d = ngx.shared.corvus_ua
+    local until_ = d and d:get("h:" .. tostring(host_id))
+    local now = ngx.time()
+    if underattack.active(host.ua, until_, now) then
+      local ex, bin = ua_exempt(), ngx.var.binary_remote_addr
+      local ip_ex = (ex ~= nil and bin ~= nil and ip_in(ex, bin)) or false
+      if underattack.decide(host.ua, until_, now, uri, ip_ex, challenge.pass(ctx)) == "challenge" then
+        ngx.var.corvus_rule = underattack.TAG .. ":challenge"
+        return send_challenge(host.ua_rule, challenge.return_path())
+      end
+    end
+  end
 end
 
 -- content_by_lua of /__corvus/challenge/verify (every proxy and redirection host):
@@ -438,15 +476,16 @@ function _M.challenge_verify(host_id)
   local r = args.r
   if type(r) == "table" then r = r[1] end
   local ret = challenge.safe_return(r)
+  local tag = rid == underattack.RULE and underattack.TAG or rid
   if ok then
-    ngx.var.corvus_rule = rid .. ":challenge_pass"
+    ngx.var.corvus_rule = tag .. ":challenge_pass"
     ngx.header["Set-Cookie"] = res
     ngx.header["Cache-Control"] = "no-store"
     return ngx.redirect(ret, 303)
   end
   local rule = rid and challenge_rule(host, rid)
   if not rule then return deny(403) end
-  ngx.var.corvus_rule = rid .. ":challenge_fail"
+  ngx.var.corvus_rule = tag .. ":challenge_fail"
   return send_challenge(rule, ret)
 end
 
@@ -501,6 +540,48 @@ function _M.set_bans()
   for _, k in ipairs(d:get_keys(0)) do
     -- keep gateway-local bad-behaviour bans corvus-control has not recorded yet
     if d:get(k) ~= gen and not (q and q:get("p:" .. k)) then d:delete(k) end
+  end
+  ngx.say(n)
+end
+
+-- Status-port handler: replace the automatic under-attack activations. Body:
+-- {"hosts": {"<proxy host id>": <activation ends, unix>}, "exempt": ["<hex net>/<prefix>", ...]}.
+-- Entries expire on their own at the end of the activation, so a stopped
+-- corvus-control never leaves a host challenged for longer than announced.
+function _M.set_under_attack()
+  ngx.req.read_body()
+  local data = ngx.req.get_body_data()
+  local cfg = data and cjson.decode(data)
+  if type(cfg) ~= "table" or type(cfg.hosts) ~= "table" then
+    ngx.status = 400
+    ngx.say("bad request")
+    return
+  end
+  local d = ngx.shared.corvus_ua
+  if not d then
+    ngx.status = 503
+    ngx.say("no under-attack store")
+    return
+  end
+  if type(cfg.exempt) == "table" then
+    local raw = cjson.encode(cfg.exempt)
+    if raw and d:get("exempt") ~= raw then
+      d:set("exempt", raw)
+      d:incr("exempt_v", 1, 0)
+    end
+  end
+  local now = ngx.time()
+  local keep, n = {}, 0
+  for id, exp in pairs(cfg.hosts) do
+    exp = tonumber(exp) or 0
+    local key = "h:" .. tostring(id)
+    if exp > now and d:set(key, exp, exp - now) then
+      keep[key] = true
+      n = n + 1
+    end
+  end
+  for _, k in ipairs(d:get_keys(0)) do
+    if sub(k, 1, 2) == "h:" and not keep[k] then d:delete(k) end
   end
   ngx.say(n)
 end
