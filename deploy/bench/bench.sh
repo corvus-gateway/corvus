@@ -483,7 +483,7 @@ s_queue() {
   qj="$WORK/qjar"
   # 1st request: signed queue cookie (cookie check, no Redis); 2nd: enters the queue → admitted
   log "corvus-queue: obtaining an admission cookie"
-  for _ in $(seq 1 60); do [ "$(code -c "$qj" -b "$qj" "http://$H_QUEUE/")" = 503 ] && break; sleep 1; done
+  for _ in $(seq 1 60); do [ "$(code -c "$qj" -b "$qj" "http://$H_QUEUE/")" = 429 ] && break; sleep 1; done
   r=$("${CURL[@]}" -D - -o /dev/null -c "$qj" -b "$qj" "http://$H_QUEUE/" | tr -d '\r' || true)
   adm=$(echo "$r" | sed -n 's/^[Ss]et-[Cc]ookie: \(corvus_a_bench_queue=[^;]*\).*/\1/p' | head -1)
   [ -n "$adm" ] || die "no admission cookie (response: $(echo "$r" | head -1))"

@@ -667,6 +667,9 @@ local function bb_config()
   return BB_CFG
 end
 
+-- Access queue decisions that answer the client instead of the site (waitroom.lua).
+local WR_HELD = { ["cookie-check"] = true, queue = true, full = true }
+
 -- log_by_lua of every proxy host: access log record, then bad-behaviour counting. room: the host has an access queue (its decision is
 -- in ngx.ctx; ngx.ctx is not touched otherwise, creating it costs a table per request).
 function _M.log(host_id, room)
@@ -679,8 +682,10 @@ function _M.log(host_id, room)
   if not cfg then return end
   local status = tonumber(ngx.var.status)
   if not status or not cfg.codes[status] then return end
-  -- already banned, allowed by a security rule or answered with a challenge: not counted
+  -- already banned, allowed by a security rule, answered with a challenge or held by the
+  -- access queue (cookie check, waiting, queue full): not counted
   if ngx.var.corvus_ban == "1" or ngx.var.corvus_skip == "1" or ngx.ctx.corvus_ch then return end
+  if room and WR_HELD[ngx.ctx.corvus_wr] then return end
   local uri = ngx.var.uri or ""
   -- the gateway's own endpoints (certificate validation, access queue) never count
   if sub(uri, 1, 28) == "/.well-known/acme-challenge/" or sub(uri, 1, 10) == "/__corvus/" then return end

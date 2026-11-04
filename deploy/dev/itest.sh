@@ -567,6 +567,22 @@ c -o /dev/null -X DELETE $A/api/proxy-hosts/$NH
 PORTS=$(for i in $(seq 1 20); do curl -s -H "Host: $H" "$G/pool-$i" | sed -n 's/^RemoteAddr: //p'; done | sort -u | wc -l)
 [ "$PORTS" -ge 1 ] && [ "$PORTS" -lt 20 ] && ok "upstream connections reused ($PORTS connections for 20 requests)" || bad "no upstream connection reuse ($PORTS connections for 20 requests)"
 
+echo "[access queue]"
+WR=$(c -X POST $A/api/waitrooms -d '{"name":"itest-queue","capacity":1000,"max_new_per_ip":0}' | js "d['waitroom']['id']")
+chk "$(put_host ",\"waitroom_id\":$WR,\"waitroom_path\":\"/\"")" 200 "attach access queue"
+WQ=$(mktemp)
+r=$(curl -s -D - -o /dev/null -c "$WQ" -b "$WQ" -H 'Accept: application/json' "$G/wq-api" | tr -d '')
+chk "$(echo "$r" | head -1 | cut -d' ' -f2)" 429 "cookie check for an API request: 429, not a server error"
+echo "$r" | grep -qi '^retry-after: 1' && ok "cookie check sends Retry-After" || bad "cookie check without Retry-After"
+chk "$(code -c "$WQ" -b "$WQ" -H 'Accept: application/json' "$G/wq-api")" 200 "with the queue cookie: admitted"
+chk "$(code -H 'Accept: text/html' "$G/wq-page")" 302 "cookie check for a page: redirect to itself"
+sleep 2
+chk "$(c "$A/api/traffic/logs?range=1h&limit=50&q=/wq-api" | js "(429,'cookie-check') in [(l['status'],l.get('wr')) for l in d['items'] if l['path']=='/wq-api']")" True "cookie check logged as 429 cookie-check"
+chk "$(c "$A/api/traffic/events?range=1h" | js "any(e['kind'] in ('rate_limited','server_error') and e['path']=='/wq-api' for e in d)")" False "cookie check is neither a rate limit nor a server error event"
+put_host ',"waitroom_id":null' >/dev/null
+c -o /dev/null -X DELETE $A/api/waitrooms/$WR
+rm -f "$WQ"
+
 echo "[backup]"
 BK=$(mktemp)
 chk "$(curl -sk -b "$J" -o "$BK" -w '%{http_code}' "$A/api/backup")" 200 "backup download"
