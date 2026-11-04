@@ -189,6 +189,9 @@ Set these under `environment:` in `docker-compose.yml`.
 | `CORVUS_REDIS_PORT` | Port of the built-in access-queue store on 127.0.0.1 (default `6379`); change it with `network_mode: host` if the host already uses 6379 |
 | `CORVUS_RESOLVER` | DNS server for forward hosts. Default: Docker's DNS, or the first `nameserver` of `/etc/resolv.conf` with host networking |
 | `CORVUS_LOOPBACK=container` | Make `127.0.0.1`/`localhost` forward hosts point at the container itself instead of the Docker host |
+| `PUID` / `PGID` | User and group the container runs as and owns `./data` (default `10001`), e.g. your NAS user |
+| `CORVUS_ACME_DIRECTORY` | ACME directory URL of another CA instead of Let's Encrypt, e.g. a private step-ca `https://ca.internal/acme/acme/directory` |
+| `LEGO_CA_CERTIFICATES` | PEM file(s) of a private CA the ACME client should trust (mount it into the container), e.g. `/data/ca.pem` |
 
 ### Forward hosts
 

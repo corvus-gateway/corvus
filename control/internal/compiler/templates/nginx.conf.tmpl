@@ -36,6 +36,11 @@ http {
     keepalive_requests    1000;
     reset_timedout_connection on;
     large_client_header_buffers 4 16k;
+    # Upstream response headers: room for large cookies/tokens (SSO apps); nginx's
+    # 4k default answers 502 "upstream sent too big header". Overridable per host.
+    proxy_buffer_size       16k;
+    proxy_buffers           8 16k;
+    proxy_busy_buffers_size 32k;
     limit_conn_zone $binary_remote_addr zone=corvus_conn_ip:10m;
     limit_conn corvus_conn_ip 2048;        # simultaneous connections per client IP (NAT-friendly; slow clients are cut by the timeouts above)
     limit_conn_status 429;
