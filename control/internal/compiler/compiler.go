@@ -71,8 +71,11 @@ type hostView struct {
 	CertDir         string
 	HasRootLocation bool
 	Upstream        string // forward host address (see upstreamAddr)
-	UpstreamResolve bool   // Upstream is a name: resolved at run time (server … resolve)
-	OwnAccessLog    bool   // the advanced configuration sets access_log (keep it working)
+	Host            target // the host's forward host
+	Root            target // what `location /` (and the access queue location) proxies to
+	Locations       []target
+	LocUpstreams    []target // upstream blocks of the custom locations (including "/")
+	OwnAccessLog    bool     // the advanced configuration sets access_log (keep it working)
 	RateLimit       *store.RateLimit
 	Access          *store.AccessList
 	AccessFile      string
@@ -81,6 +84,48 @@ type hostView struct {
 	RealIPHeader    string
 	ErrorCodes      []int // upstream errors answered with the error page (see UpstreamErrorCodes)
 	P               Paths
+}
+
+// target is an upstream block and how a location proxies to it: the host's forward
+// host or a custom location.
+type target struct {
+	Prefix     string // custom location path ("" = the host's forward host)
+	Name       string // upstream block name
+	Scheme     string // http | https
+	Addr       string // server address (see upstreamAddr)
+	Port       int
+	Resolve    bool   // Addr is a name: resolved at run time (server … resolve)
+	Path       string // forward path replacing the location prefix ("" = URI unchanged)
+	Websocket  bool
+	ErrorCodes []int
+	RateLimit  *store.RateLimit
+	Advanced   string // location advanced configuration
+}
+
+// targets builds the host's upstream targets: its forward host, the custom locations,
+// and the target of the root location (a custom location "/" replaces the forward host).
+func (v *hostView) targets(static map[string]string, hostGW string) {
+	mk := func(name, scheme, host string, port int) target {
+		addr := upstreamAddr(host, static, hostGW)
+		return target{Name: name, Scheme: scheme, Addr: addr, Port: port, Resolve: !isIP(addr),
+			Websocket: v.Websocket, ErrorCodes: v.ErrorCodes, RateLimit: v.RateLimit}
+	}
+	v.Host = mk(fmt.Sprintf("corvus_up_%d", v.ID), v.ForwardScheme, v.ForwardHost, v.ForwardPort)
+	v.Upstream = v.Host.Addr
+	v.Root = v.Host
+	for i, l := range v.ProxyHost.Locations {
+		t := mk(fmt.Sprintf("corvus_up_%d_%d", v.ID, i+1), l.ForwardScheme, l.ForwardHost, l.ForwardPort)
+		t.Prefix, t.Path, t.Advanced = l.Path, l.ForwardPath, l.AdvancedConfig
+		if strings.Contains(l.AdvancedConfig, "error_page") {
+			t.ErrorCodes = nil // keep the operator's error_page (see the host's advanced config)
+		}
+		v.LocUpstreams = append(v.LocUpstreams, t)
+		if l.Path == "/" {
+			v.Root = t
+		} else {
+			v.Locations = append(v.Locations, t)
+		}
+	}
 }
 
 // UpstreamErrorCodes are the nginx-generated upstream errors (connection refused,
@@ -279,8 +324,7 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		if err := validate.ProxyHost(&hc); err != nil {
 			return fmt.Errorf("proxy host %d: %w", h.ID, err)
 		}
-		v := hostView{ProxyHost: hc, P: c.P, HasRootLocation: validate.HasRootLocation(hc.AdvancedConfig), Upstream: upstreamAddr(hc.ForwardHost, static, hostGW)}
-		v.UpstreamResolve = !isIP(v.Upstream)
+		v := hostView{ProxyHost: hc, P: c.P, HasRootLocation: validate.HasRootLocation(hc.AdvancedConfig)}
 		v.OwnAccessLog = strings.Contains(hc.AdvancedConfig, "access_log")
 		v.CertDir = c.certDir(hc.CertificateID)
 		if hc.WaitroomID != nil {
@@ -296,6 +340,7 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		if !strings.Contains(hc.AdvancedConfig, "error_page") {
 			v.ErrorCodes = errorCodes(v.RateLimit)
 		}
+		v.targets(static, hostGW)
 		if hc.AccessListID != nil {
 			if a := aclByID[*hc.AccessListID]; a != nil {
 				v.Access = a

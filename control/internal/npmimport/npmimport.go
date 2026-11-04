@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"corvus/control/internal/acme"
+	"corvus/control/internal/store"
+	"corvus/control/internal/validate"
 
 	"github.com/go-sql-driver/mysql"
 	_ "modernc.org/sqlite"
@@ -57,9 +59,11 @@ type Host struct {
 	BlockExploits  bool     `json:"block_exploits"`
 	Enabled        bool     `json:"enabled"`
 	AdvancedConfig string   `json:"-"`
-	Locations      int      `json:"locations"`
-	Conflict       string   `json:"conflict,omitempty"`
-	Warnings       []string `json:"warnings,omitempty"`
+	Locations      int      `json:"locations"` // custom locations in NPM
+	// CustomLocations are the NPM custom locations that are imported.
+	CustomLocations []store.Location `json:"custom_locations"`
+	Conflict        string           `json:"conflict,omitempty"`
+	Warnings        []string         `json:"warnings,omitempty"`
 }
 
 type Cert struct {
@@ -258,14 +262,9 @@ func Read(ctx context.Context, src Source) (*Snapshot, error) {
 			return nil, err
 		}
 		_ = json.Unmarshal([]byte(domains), &h.Domains)
-		var locs []json.RawMessage
-		_ = json.Unmarshal([]byte(locations), &locs)
-		h.Locations = len(locs)
+		npmLocations(&h, locations)
 		h.SSLForced, h.BlockExploits, h.Websocket, h.HTTP2, h.Enabled = ssl == 1, blk == 1, ws == 1, h2 == 1, en == 1
 		h.Forward = fmt.Sprintf("%s://%s:%d", h.ForwardScheme, h.ForwardHost, h.ForwardPort)
-		if h.Locations > 0 {
-			h.Warnings = append(h.Warnings, fmt.Sprintf("%d custom location(s) are not imported; recreate them as advanced configuration", h.Locations))
-		}
 		if strings.TrimSpace(h.AdvancedConfig) != "" && npmRefs.MatchString(h.AdvancedConfig) {
 			h.Warnings = append(h.Warnings, "advanced configuration references NPM-specific variables/includes and was not imported")
 			h.AdvancedConfig = ""
@@ -288,6 +287,43 @@ func Read(ctx context.Context, src Source) (*Snapshot, error) {
 		snap.Warnings = append(snap.Warnings, fmt.Sprintf("%d stream(s) (TCP/UDP) are not supported yet and were skipped", streams))
 	}
 	return snap, nil
+}
+
+// npmLocation is an entry of NPM's proxy_host.locations JSON. NPM keeps the forward
+// path in forward_host ("backend/api" = host "backend", path "/api").
+type npmLocation struct {
+	Path           string          `json:"path"`
+	ForwardScheme  string          `json:"forward_scheme"`
+	ForwardHost    string          `json:"forward_host"`
+	ForwardPort    json.RawMessage `json:"forward_port"` // number (or a string in some versions)
+	AdvancedConfig string          `json:"advanced_config"`
+}
+
+// npmLocations converts NPM custom locations into Corvus locations; entries Corvus
+// cannot express (regular-expression paths, NPM-specific snippets) are skipped or
+// trimmed with a warning.
+func npmLocations(h *Host, raw string) {
+	var locs []npmLocation
+	_ = json.Unmarshal([]byte(raw), &locs)
+	h.Locations = len(locs)
+	h.CustomLocations = []store.Location{}
+	for _, nl := range locs {
+		port, _ := strconv.Atoi(strings.Trim(string(nl.ForwardPort), `" `))
+		host, path, _ := strings.Cut(strings.TrimSpace(nl.ForwardHost), "/")
+		l := store.Location{Path: nl.Path, ForwardScheme: nl.ForwardScheme, ForwardHost: host, ForwardPort: port, AdvancedConfig: nl.AdvancedConfig}
+		if path != "" {
+			l.ForwardPath = "/" + path
+		}
+		if strings.TrimSpace(l.AdvancedConfig) != "" && npmRefs.MatchString(l.AdvancedConfig) {
+			h.Warnings = append(h.Warnings, fmt.Sprintf("location %s: advanced configuration references NPM-specific variables/includes and was not imported", nl.Path))
+			l.AdvancedConfig = ""
+		}
+		if err := validate.Location(&l); err != nil {
+			h.Warnings = append(h.Warnings, fmt.Sprintf("location %s was not imported: %v", nl.Path, err))
+			continue
+		}
+		h.CustomLocations = append(h.CustomLocations, l)
+	}
 }
 
 // readRedirects loads NPM's redirection_host table. forward_scheme and forward_http_code

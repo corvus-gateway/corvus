@@ -103,6 +103,8 @@ type proxyHostInput struct {
 	// Under attack mode; omitted = unchanged (new hosts: off, default parameters).
 	UnderAttack       *string                  `json:"under_attack"`
 	UnderAttackConfig *store.UnderAttackConfig `json:"under_attack_config"`
+	// Custom locations; omitted = unchanged (new hosts: none), [] removes them all.
+	Locations *[]store.Location `json:"locations"`
 
 	// BasicAuth edits the host's password protection; when present it replaces access_list_id.
 	BasicAuth      *basicAuthInput `json:"basic_auth"`
@@ -152,6 +154,9 @@ func (in proxyHostInput) apply(h *store.ProxyHost) {
 	}
 	if in.UnderAttackConfig != nil {
 		h.UnderAttackConfig = *in.UnderAttackConfig
+	}
+	if in.Locations != nil {
+		h.Locations = *in.Locations
 	}
 }
 
@@ -274,6 +279,10 @@ func (s *Server) createProxyHost(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	if err := locationsAdvancedAllowed(r, nil, h.Locations); err != nil {
+		fail(w, err)
+		return
+	}
 	v, err := s.Deployer.Apply(r.Context(), userID(r), "create proxy host "+strings.Join(in.Domains, ","), func(tx *store.Store) error {
 		if in.CertificateRequest != nil {
 			var err error
@@ -327,6 +336,9 @@ func (s *Server) updateProxyHost(w http.ResponseWriter, r *http.Request) {
 		h = &cp
 		in.apply(h)
 		if err := advancedAllowed(r, before.AdvancedConfig, h.AdvancedConfig); err != nil {
+			return err
+		}
+		if err := locationsAdvancedAllowed(r, before.Locations, h.Locations); err != nil {
 			return err
 		}
 		if in.CertificateRequest != nil {

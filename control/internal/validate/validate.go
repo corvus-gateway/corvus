@@ -87,14 +87,7 @@ func ProxyHost(h *store.ProxyHost) error {
 	if h.ForwardScheme != "http" && h.ForwardScheme != "https" {
 		errs.add("forward_scheme", "invalid", "scheme must be http or https")
 	}
-	h.ForwardHost = strings.ToLower(strings.TrimSpace(h.ForwardHost))
-	if ip := net.ParseIP(h.ForwardHost); ip != nil {
-		if ip.To4() == nil {
-			errs.add("forward_host", "ipv6_unsupported", "IPv6 upstreams are not supported yet")
-		}
-	} else if !upstreamRe.MatchString(h.ForwardHost) {
-		errs.add("forward_host", "invalid", "invalid upstream host %q", h.ForwardHost)
-	}
+	h.ForwardHost = forwardHost(&errs, "forward_host", h.ForwardHost)
 	if h.ForwardPort < 1 || h.ForwardPort > 65535 {
 		errs.add("forward_port", "invalid", "port must be 1-65535")
 	}
@@ -120,7 +113,21 @@ func ProxyHost(h *store.ProxyHost) error {
 	if err := AdvancedConfig(h.AdvancedConfig); err != nil {
 		errs.add("advanced_config", "invalid", "%s", err.Error())
 	}
+	locations(&errs, h)
 	return errs.OrNil()
+}
+
+// forwardHost normalizes and checks an upstream host name or IPv4 address.
+func forwardHost(errs *Errors, field, host string) string {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.To4() == nil {
+			errs.add(field, "ipv6_unsupported", "IPv6 upstreams are not supported yet")
+		}
+	} else if !upstreamRe.MatchString(host) {
+		errs.add(field, "invalid", "invalid upstream host %q", host)
+	}
+	return host
 }
 
 // hostDomains normalizes a host's server names (lower case, trimmed, deduplicated).

@@ -36,7 +36,8 @@ INSERT INTO access_list VALUES (1, 'office', 1, 1, 0);
 INSERT INTO access_list_client VALUES (1, 1, '192.168.0.0/24', 'allow');
 INSERT INTO access_list_auth VALUES (1, 1, 'alice', 'plain-secret');
 INSERT INTO proxy_host VALUES (1, '["shop.example.com"]', 'http', 'app', 8080, 1, 1, 1, 1, 1, 1, 1, 'client_max_body_size 20m;', '[]', 0);
-INSERT INTO proxy_host VALUES (2, '["b.example.com"]', 'http', 'b', 80, 0, 0, 0, 0, 0, 0, 1, 'proxy_pass $forward_scheme://$server:$port;', '[{"path":"/x"}]', 0);
+INSERT INTO proxy_host VALUES (2, '["b.example.com"]', 'http', 'b', 80, 0, 0, 0, 0, 0, 0, 1, 'proxy_pass $forward_scheme://$server:$port;',
+  '[{"path":"/x"},{"path":"/api","forward_scheme":"https","forward_host":"api/v2/","forward_port":8443,"advanced_config":"proxy_read_timeout 5s;"},{"path":"/s","forward_scheme":"http","forward_host":"s","forward_port":"81","advanced_config":"proxy_pass $forward_scheme://$server;"}]', 0);
 INSERT INTO proxy_host VALUES (3, '["deleted.example.com"]', 'http', 'c', 80, 0, 0, 0, 0, 0, 0, 1, '', '[]', 1);
 INSERT INTO stream VALUES (1, 0);
 `
@@ -70,8 +71,20 @@ func TestRead(t *testing.T) {
 	if !h1.SSLForced || !h1.Websocket || !h1.HTTP2 || h1.CertificateID != 1 || h1.AccessListID != 1 || h1.AdvancedConfig == "" {
 		t.Fatalf("host 1 mapping: %+v", h1)
 	}
-	if h2.AdvancedConfig != "" || h2.Locations != 1 || len(h2.Warnings) != 2 {
-		t.Fatalf("host 2 should drop NPM-specific config and warn about locations: %+v", h2)
+	// host 2: NPM-specific config dropped; location /x (no upstream) skipped, /api imported
+	// with the forward path from forward_host, /s imported without its NPM-specific snippet
+	if h2.AdvancedConfig != "" || h2.Locations != 3 || len(h2.Warnings) != 3 || len(h2.CustomLocations) != 2 {
+		t.Fatalf("host 2 should drop NPM-specific config and import valid locations: %+v", h2)
+	}
+	if l := h2.CustomLocations[0]; l.Path != "/api" || l.ForwardScheme != "https" || l.ForwardHost != "api" || l.ForwardPort != 8443 ||
+		l.ForwardPath != "/v2/" || l.AdvancedConfig != "proxy_read_timeout 5s;" {
+		t.Fatalf("location /api: %+v", l)
+	}
+	if l := h2.CustomLocations[1]; l.Path != "/s" || l.ForwardHost != "s" || l.ForwardPort != 81 || l.AdvancedConfig != "" {
+		t.Fatalf("location /s: %+v", l)
+	}
+	if h1.CustomLocations == nil || len(h1.CustomLocations) != 0 {
+		t.Fatalf("host 1 locations: %+v", h1.CustomLocations)
 	}
 	le := snap.Certificates[0]
 	if le.DNSCredentials == nil || le.DNSCredentials.APIToken != "cf-token-123" || le.Email != "ops@example.com" || !le.FilesFound {

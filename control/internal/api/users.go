@@ -204,3 +204,23 @@ func advancedAllowed(r *http.Request, before, after string) error {
 	}
 	return validate.Errors{{Field: "advanced_config", Code: "forbidden", Message: fmt.Sprintf("only administrators can change the advanced configuration")}}
 }
+
+// locationsAdvancedAllowed: the same for the advanced configuration of custom locations
+// (compared by path; other location fields may be changed by operators).
+func locationsAdvancedAllowed(r *http.Request, before, after []store.Location) error {
+	if store.RoleAtLeast(userFrom(r).Role, "admin") {
+		return nil
+	}
+	was := map[string]string{}
+	for _, l := range before {
+		was[strings.TrimSpace(l.Path)] = strings.TrimSpace(l.AdvancedConfig)
+	}
+	var errs validate.Errors
+	for i, l := range after {
+		if snip := strings.TrimSpace(l.AdvancedConfig); snip != "" && snip != was[strings.TrimSpace(l.Path)] {
+			errs = append(errs, validate.FieldError{Field: fmt.Sprintf("locations[%d].advanced_config", i), Code: "forbidden",
+				Message: "only administrators can change the advanced configuration"})
+		}
+	}
+	return errs.OrNil()
+}

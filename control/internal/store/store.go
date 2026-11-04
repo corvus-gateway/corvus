@@ -494,6 +494,20 @@ type ProxyHost struct {
 	// control plane sees an attack, see internal/underattack).
 	UnderAttack       string            `json:"under_attack"`
 	UnderAttackConfig UnderAttackConfig `json:"under_attack_config"`
+
+	// Custom locations: path prefixes routed to their own upstream (NPM "custom locations").
+	Locations []Location `json:"locations"`
+}
+
+// Location routes a path prefix of a proxy host to its own upstream. It keeps the host's
+// protections (security rules, bans, rate limit, Basic auth, access queue).
+type Location struct {
+	Path           string `json:"path"` // prefix, e.g. /api; "/" replaces the host's forward host
+	ForwardScheme  string `json:"forward_scheme"`
+	ForwardHost    string `json:"forward_host"`
+	ForwardPort    int    `json:"forward_port"`
+	ForwardPath    string `json:"forward_path"`    // optional: replaces the matched prefix
+	AdvancedConfig string `json:"advanced_config"` // optional nginx directives for this location
 }
 
 // UnderAttackConfig holds the parameters of a host's "under attack" mode. Zero values
@@ -513,15 +527,15 @@ type UnderAttackConfig struct {
 	DurationS  int      `json:"duration_s"`
 }
 
-const phCols = `id, domains, forward_scheme, forward_host, forward_port, websocket, certificate_id, ssl_forced, http2, waitroom_id, waitroom_path, advanced_config, enabled, client_ip, rate_limit_id, access_list_id, block_exploits, body_inspection, body_max_kb, security_headers, under_attack, under_attack_config, created_at, updated_at`
+const phCols = `id, domains, forward_scheme, forward_host, forward_port, websocket, certificate_id, ssl_forced, http2, waitroom_id, waitroom_path, advanced_config, enabled, client_ip, rate_limit_id, access_list_id, block_exploits, body_inspection, body_max_kb, security_headers, under_attack, under_attack_config, locations, created_at, updated_at`
 
 func scanProxyHost(row interface{ Scan(...any) error }) (*ProxyHost, error) {
 	h := &ProxyHost{}
-	var domains, uaCfg string
+	var domains, uaCfg, locs string
 	var ws, ssl, h2, en, be int
 	var cert, wr, rl, al sql.NullInt64
 	if err := row.Scan(&h.ID, &domains, &h.ForwardScheme, &h.ForwardHost, &h.ForwardPort, &ws, &cert, &ssl, &h2, &wr, &h.WaitroomPath, &h.AdvancedConfig, &en,
-		&h.ClientIP, &rl, &al, &be, &h.BodyInspection, &h.BodyMaxKB, &h.SecurityHeaders, &h.UnderAttack, &uaCfg, &h.CreatedAt, &h.UpdatedAt); err != nil {
+		&h.ClientIP, &rl, &al, &be, &h.BodyInspection, &h.BodyMaxKB, &h.SecurityHeaders, &h.UnderAttack, &uaCfg, &locs, &h.CreatedAt, &h.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -529,6 +543,10 @@ func scanProxyHost(row interface{ Scan(...any) error }) (*ProxyHost, error) {
 	}
 	_ = json.Unmarshal([]byte(domains), &h.Domains)
 	_ = json.Unmarshal([]byte(uaCfg), &h.UnderAttackConfig)
+	_ = json.Unmarshal([]byte(locs), &h.Locations)
+	if h.Locations == nil {
+		h.Locations = []Location{}
+	}
 	h.Websocket, h.SSLForced, h.HTTP2, h.Enabled = ws == 1, ssl == 1, h2 == 1, en == 1
 	if cert.Valid {
 		h.CertificateID = &cert.Int64
@@ -576,11 +594,15 @@ func (s *Store) SaveProxyHost(ctx context.Context, h *ProxyHost) error {
 		h.UnderAttack = "off"
 	}
 	uaCfg := toJSON(h.UnderAttackConfig)
+	if h.Locations == nil {
+		h.Locations = []Location{}
+	}
+	locs := toJSON(h.Locations)
 	if h.ID == 0 {
-		res, err := s.q.ExecContext(ctx, `INSERT INTO proxy_hosts(domains, forward_scheme, forward_host, forward_port, websocket, certificate_id, ssl_forced, http2, waitroom_id, waitroom_path, advanced_config, enabled, client_ip, rate_limit_id, access_list_id, block_exploits, body_inspection, body_max_kb, security_headers, under_attack, under_attack_config, created_at, updated_at)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		res, err := s.q.ExecContext(ctx, `INSERT INTO proxy_hosts(domains, forward_scheme, forward_host, forward_port, websocket, certificate_id, ssl_forced, http2, waitroom_id, waitroom_path, advanced_config, enabled, client_ip, rate_limit_id, access_list_id, block_exploits, body_inspection, body_max_kb, security_headers, under_attack, under_attack_config, locations, created_at, updated_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			toJSON(h.Domains), h.ForwardScheme, h.ForwardHost, h.ForwardPort, b2i(h.Websocket), h.CertificateID, b2i(h.SSLForced), b2i(h.HTTP2),
-			h.WaitroomID, h.WaitroomPath, h.AdvancedConfig, b2i(h.Enabled), h.ClientIP, h.RateLimitID, h.AccessListID, b2i(h.BlockExploits), h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders, h.UnderAttack, uaCfg, t, t)
+			h.WaitroomID, h.WaitroomPath, h.AdvancedConfig, b2i(h.Enabled), h.ClientIP, h.RateLimitID, h.AccessListID, b2i(h.BlockExploits), h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders, h.UnderAttack, uaCfg, locs, t, t)
 		if err != nil {
 			return err
 		}
@@ -588,9 +610,9 @@ func (s *Store) SaveProxyHost(ctx context.Context, h *ProxyHost) error {
 		h.CreatedAt, h.UpdatedAt = t, t
 		return nil
 	}
-	res, err := s.q.ExecContext(ctx, `UPDATE proxy_hosts SET domains=?, forward_scheme=?, forward_host=?, forward_port=?, websocket=?, certificate_id=?, ssl_forced=?, http2=?, waitroom_id=?, waitroom_path=?, advanced_config=?, enabled=?, client_ip=?, rate_limit_id=?, access_list_id=?, block_exploits=?, body_inspection=?, body_max_kb=?, security_headers=?, under_attack=?, under_attack_config=?, updated_at=? WHERE id=?`,
+	res, err := s.q.ExecContext(ctx, `UPDATE proxy_hosts SET domains=?, forward_scheme=?, forward_host=?, forward_port=?, websocket=?, certificate_id=?, ssl_forced=?, http2=?, waitroom_id=?, waitroom_path=?, advanced_config=?, enabled=?, client_ip=?, rate_limit_id=?, access_list_id=?, block_exploits=?, body_inspection=?, body_max_kb=?, security_headers=?, under_attack=?, under_attack_config=?, locations=?, updated_at=? WHERE id=?`,
 		toJSON(h.Domains), h.ForwardScheme, h.ForwardHost, h.ForwardPort, b2i(h.Websocket), h.CertificateID, b2i(h.SSLForced), b2i(h.HTTP2),
-		h.WaitroomID, h.WaitroomPath, h.AdvancedConfig, b2i(h.Enabled), h.ClientIP, h.RateLimitID, h.AccessListID, b2i(h.BlockExploits), h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders, h.UnderAttack, uaCfg, t, h.ID)
+		h.WaitroomID, h.WaitroomPath, h.AdvancedConfig, b2i(h.Enabled), h.ClientIP, h.RateLimitID, h.AccessListID, b2i(h.BlockExploits), h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders, h.UnderAttack, uaCfg, locs, t, h.ID)
 	if err != nil {
 		return err
 	}
