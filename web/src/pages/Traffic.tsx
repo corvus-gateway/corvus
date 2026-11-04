@@ -1,5 +1,5 @@
 import { useSearchParams } from "react-router-dom";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Activity, AlertOctagon, Ban, BadgeCheck, Download, Gauge, Hourglass, ListFilter, Puzzle, Radio, ScrollText, ServerCrash, TimerReset, type LucideIcon } from "lucide-react";
 import { getText, type EventKind, type HostTraffic, type LogLine, type PathTraffic, type Timeseries, type TrafficEvent, type TrafficSummary } from "../api";
 import { ChartLegend, StackBar, TimeChart, type Series } from "../components/charts";
@@ -192,6 +192,7 @@ function Logs({ qs, poll, initialQ = "" }: { qs: string; poll: number; initialQ?
   const [status, setStatus] = useState("");
   const [q, setQ] = useState(initialQ);
   const [limit, setLimit] = useState(200);
+  const [open, setOpen] = useState("");
   const dq = useDebounced(q);
   const query = `${qs}&limit=${limit}${status ? `&status=${status}` : ""}${dq ? `&q=${encodeURIComponent(dq)}` : ""}`;
   const res = useResource<{ items: LogLine[] }>(`/api/traffic/logs?${query}`, { poll });
@@ -221,8 +222,12 @@ function Logs({ qs, poll, initialQ = "" }: { qs: string; poll: number; initialQ?
         <Table>
           <THead><tr><Th>{t("when")}</Th><Th>{t("request")}</Th><Th>{t("status")}</Th><Th className="hidden text-right sm:table-cell">{t("responseTime")}</Th><Th className="hidden text-right md:table-cell">{t("size")}</Th><Th className="hidden lg:table-cell">IP</Th><Th className="hidden xl:table-cell">{t("waitroom")}</Th></tr></THead>
           <tbody>
-            {items.map((l, i) => (
-              <Tr key={i}>
+            {items.map((l, i) => {
+              const id = `${l.ts}|${l.ip}|${l.method}|${l.path}`;
+              const isOpen = open === id;
+              return (
+              <Fragment key={i}>
+              <Tr className="cursor-pointer" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? "" : id)}>
                 <Td className="whitespace-nowrap font-mono text-xs text-fg-muted" title={fmtDateTime(toMs(l.ts), lang)}>{fmtClock(toMs(l.ts))}</Td>
                 <Td className="max-w-[28rem]"><div className="flex items-baseline gap-1"><span className={methodCls}>{l.method}</span><span className="truncate font-mono text-xs" title={l.path}>{l.path}</span></div><div className="text-xs text-fg-subtle">{l.host}</div></Td>
                 <Td><Badge tone={statusTone(l.status)}>{l.status}</Badge></Td>
@@ -231,11 +236,36 @@ function Logs({ qs, poll, initialQ = "" }: { qs: string; poll: number; initialQ?
                 <Td className="hidden font-mono text-xs text-fg-muted lg:table-cell">{l.ip}</Td>
                 <Td className="hidden text-xs xl:table-cell">{l.wr ? <Badge tone="brand">{l.wr}</Badge> : <span className="text-fg-subtle">–</span>}</Td>
               </Tr>
-            ))}
+              {isOpen && (
+                <tr className="bg-surface-2/50">
+                  <td colSpan={7} className="px-4 py-3">
+                    <dl className="grid gap-x-6 gap-y-1.5 text-xs sm:grid-cols-[max-content_1fr]">
+                      <LogField label={t("when")}>{fmtDateTime(toMs(l.ts), lang)}</LogField>
+                      <LogField label={t("request")}>{l.method} {l.host}{l.path}</LogField>
+                      <LogField label="IP">{l.ip}</LogField>
+                      {l.wr && <LogField label={t("waitroom")}>{l.wr}</LogField>}
+                      {l.rule && <LogField label={t("rule")}>{l.rule}</LogField>}
+                      <LogField label="User-Agent">{l.ua || "–"}</LogField>
+                    </dl>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
+              );
+            })}
           </tbody>
         </Table>
       )}
     </Card>
+  );
+}
+
+function LogField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <>
+      <dt className="text-fg-subtle">{label}</dt>
+      <dd className="break-all font-mono text-fg-muted">{children}</dd>
+    </>
   );
 }
 
