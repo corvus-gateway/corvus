@@ -13,9 +13,12 @@ import (
 // reflection; the older JSON format (log_format corvus_json) is still accepted, e.g. from
 // a gateway that still runs the previous configuration during an upgrade.
 //
-//	c1 \t $msec \t $corvus_host \t $request_method \t $uri \t $status \t $body_bytes_sent \t
+//	c1 \t $msec \t $corvus_host \t $request_method \t $status \t $body_bytes_sent \t
 //	$request_time \t $remote_addr \t $corvus_wr \t $corvus_exploit \t $limit_req_status \t
-//	$corvus_rule \t $corvus_cc \t $corvus_body \t $corvus_ban \t $http_user_agent
+//	$corvus_rule \t $corvus_cc \t $corvus_body \t $corvus_ban \t $uri \t $http_user_agent
+//
+// Proxy hosts send the same records from Lua (gateway/lua/corvus/accesslog.lua), several
+// per datagram.
 const logTag = "c1\t"
 
 const logFields = 17 // including the tag
@@ -81,28 +84,28 @@ func parseTSV(b []byte, r *Record) bool {
 	}
 	r.H = unescape(f[1])
 	r.M = unescape(f[2])
-	r.U = unescape(f[3])
-	s, err := strconv.Atoi(string(f[4]))
+	s, err := strconv.Atoi(string(f[3]))
 	if err != nil {
 		return false
 	}
 	r.S = s
-	if len(f[5]) > 0 {
-		if r.B, err = strconv.ParseInt(string(f[5]), 10, 64); err != nil {
+	if len(f[4]) > 0 {
+		if r.B, err = strconv.ParseInt(string(f[4]), 10, 64); err != nil {
 			return false
 		}
 	}
-	if r.RT, err = parseFloat(f[6]); err != nil {
+	if r.RT, err = parseFloat(f[5]); err != nil {
 		return false
 	}
-	r.IP = unescape(f[7])
-	r.WR = unescape(f[8])
-	r.X = unescape(f[9])
-	r.RL = unescape(f[10])
-	r.R = unescape(f[11])
-	r.CC = unescape(f[12])
-	r.BD = unescape(f[13])
-	r.BN = unescape(f[14])
+	r.IP = unescape(f[6])
+	r.WR = unescape(f[7])
+	r.X = unescape(f[8])
+	r.RL = unescape(f[9])
+	r.R = unescape(f[10])
+	r.CC = unescape(f[11])
+	r.BD = unescape(f[12])
+	r.BN = unescape(f[13])
+	r.U = unescape(f[14])
 	r.UA = unescape(f[15])
 	return true
 }

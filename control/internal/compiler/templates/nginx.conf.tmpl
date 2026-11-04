@@ -146,9 +146,15 @@ http {
     # Tab-separated, every value JSON-escaped (no raw tabs or newlines); parsed without
     # reflection by corvus-control (control/internal/traffic/parse.go: keep the field order).
     log_format corvus_log escape=json
-        'c1\t$msec\t$corvus_host\t$request_method\t$uri\t$status\t$body_bytes_sent\t$request_time\t'
+        'c1\t$msec\t$corvus_host\t$request_method\t$status\t$body_bytes_sent\t$request_time\t'
         '$remote_addr\t$corvus_wr\t$corvus_exploit\t$limit_req_status\t$corvus_rule\t$corvus_cc\t'
-        '$corvus_body\t$corvus_ban\t$http_user_agent';
+        '$corvus_body\t$corvus_ban\t$uri\t$http_user_agent';
+    # The same fields up to $corvus_ban, composed in C for the Lua access log (one variable
+    # read instead of fourteen). None of them can contain a tab or newline: method and
+    # address are validated by nginx, the others are set by Corvus.
+    map $request_method $corvus_log_fields {
+        default "$msec\t$corvus_host\t$request_method\t$status\t$body_bytes_sent\t$request_time\t$remote_addr\t$corvus_wr\t$corvus_exploit\t$limit_req_status\t$corvus_rule\t$corvus_cc\t$corvus_body\t$corvus_ban";
+    }
     access_log syslog:server=unix:{{.P.DataDir}}/run/corvus-access.sock,nohostname,tag=corvus corvus_log;
 
     # HTTP-01 challenge answers from corvus-control (loopback), with a small keep-alive pool.

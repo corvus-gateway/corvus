@@ -38,10 +38,10 @@ func nginxEscape(s string) string {
 
 // tsvLine renders a record as nginx would with log_format corvus_log.
 func tsvLine(r *Record) string {
-	f := []string{"c1", strconv.FormatFloat(r.T, 'f', 3, 64), r.H, r.M, r.U, strconv.Itoa(r.S), strconv.FormatInt(r.B, 10),
-		strconv.FormatFloat(r.RT, 'f', 3, 64), r.IP, r.WR, r.X, r.RL, r.R, r.CC, r.BD, r.BN, r.UA}
+	f := []string{"c1", strconv.FormatFloat(r.T, 'f', 3, 64), r.H, r.M, strconv.Itoa(r.S), strconv.FormatInt(r.B, 10),
+		strconv.FormatFloat(r.RT, 'f', 3, 64), r.IP, r.WR, r.X, r.RL, r.R, r.CC, r.BD, r.BN, r.U, r.UA}
 	for i := 2; i < len(f); i++ {
-		if i != 5 && i != 6 && i != 7 {
+		if i != 4 && i != 5 && i != 6 {
 			f[i] = nginxEscape(f[i])
 		}
 	}
@@ -77,7 +77,7 @@ func TestParseDatagram(t *testing.T) {
 	}
 	// empty numeric fields ($body_bytes_sent, $request_time can be empty for some requests)
 	var r Record
-	if !parseRecord([]byte("c1\t1.5\th\tGET\t/\t400\t\t\t1.2.3.4\t-\t\t\t\t\t\t\t"), &r) || r.S != 400 || r.B != 0 || r.IP != "1.2.3.4" {
+	if !parseRecord([]byte("c1\t1.5\th\tGET\t400\t\t\t1.2.3.4\t-\t\t\t\t\t\t\t/\t"), &r) || r.S != 400 || r.B != 0 || r.IP != "1.2.3.4" || r.U != "/" {
 		t.Errorf("empty fields: %+v", r)
 	}
 	for _, bad := range []string{"garbage", "c1\t1\th", "c1\tx\th\tGET\t/\t200\t0\t0\tip\t\t\t\t\t\t\t\t\tua", "<190>corvus: {not json"} {
@@ -90,9 +90,9 @@ func TestParseDatagram(t *testing.T) {
 // Records as corvus/accesslog.lua writes them (the same lines as in
 // gateway/test/accesslog_test.lua; "|" stands for a tab).
 func TestParseLuaRecord(t *testing.T) {
-	msg := strings.ReplaceAll(`c1|1762243516.123|shop.example.com|GET|/a\"b\\c\td|403|1234|0.012|203.0.113.9|queue|`+
-		`sqli|REJECTED_DRY_RUN|7:block|KR|sig:log|1|Mozilla/5.0 \u0001 ünïcode`+"\n"+
-		`c1|1762243516.123|h|GET|/|200|0|0|1.1.1.1|-|||||||`+"\n", "|", "\t")
+	msg := strings.ReplaceAll(`c1|1762243516.123|shop.example.com|GET|403|1234|0.012|203.0.113.9|queue|`+
+		`sqli|REJECTED_DRY_RUN|7:block|KR|sig:log|1|/a\"b\\c\td|Mozilla/5.0 \u0001 ünïcode`+"\n"+
+		`c1|1762243516.123|h|GET|200|0|0|1.1.1.1|-|||||||/|`+"\n", "|", "\t")
 	want := []Record{
 		{T: 1762243516.123, H: "shop.example.com", M: "GET", U: "/a\"b\\c\td", S: 403, B: 1234, RT: 0.012, IP: "203.0.113.9",
 			WR: "queue", X: "sqli", RL: "REJECTED_DRY_RUN", R: "7:block", CC: "KR", BD: "sig:log", BN: "1", UA: "Mozilla/5.0 \x01 ünïcode"},
@@ -129,7 +129,7 @@ func FuzzParseTSV(f *testing.F) {
 	})
 }
 
-var benchLine = []byte("<190>Nov  4 08:05:16 corvus: c1\t1762243516.123\tbench-plain.test\tGET\t/\t200\t3\t0.001\t127.0.0.1\t-\t\t\t\t\t\t\twrk/4.2.0 (Linux) some longer user agent string Mozilla/5.0")
+var benchLine = []byte("<190>Nov  4 08:05:16 corvus: c1\t1762243516.123\tbench-plain.test\tGET\t200\t3\t0.001\t127.0.0.1\t-\t\t\t\t\t\t\t/\twrk/4.2.0 (Linux) some longer user agent string Mozilla/5.0")
 var benchJSON = []byte(`<190>Nov  4 08:05:16 corvus: {"t":1762243516.123,"h":"bench-plain.test","m":"GET","u":"/","s":200,"b":3,"rt":0.001,"ip":"127.0.0.1","wr":"-","x":"","rl":"","r":"","cc":"","bd":"","bn":"","ua":"wrk/4.2.0 (Linux) some longer user agent string Mozilla/5.0"}`)
 
 func BenchmarkParse(b *testing.B) {

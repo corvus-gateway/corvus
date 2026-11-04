@@ -8,16 +8,18 @@
 --
 -- Record format (same as log_format corvus_log in nginx.conf; parsed by
 -- control/internal/traffic/parse.go — keep the field order):
---   c1 \t msec \t host \t method \t uri \t status \t body_bytes \t request_time \t ip \t wr \t
---   exploit \t limit_req \t rule \t country \t body \t ban \t user_agent
--- Values are escaped like nginx's escape=json, so they never contain a raw tab or newline.
+--   c1 TAB msec TAB host TAB method TAB status TAB body_bytes TAB request_time TAB ip TAB wr TAB
+--   exploit TAB limit_req TAB rule TAB country TAB body TAB ban TAB uri TAB user_agent
+-- The fields up to "ban" come from one variable, $corvus_log_fields (a map in nginx.conf
+-- that composes them in C: one variable read instead of fourteen); none of them can hold
+-- client-chosen bytes. uri and user_agent are escaped here like nginx's escape=json, so
+-- no value contains a raw tab or newline.
 --
 -- Lossy by design, like the syslog output: when corvus-control is not listening or cannot
 -- keep up (the send would block), records are dropped; requests are never delayed.
 
 local find, gsub, sub, char, format = string.find, string.gsub, string.sub, string.char, string.format
 local concat = table.concat
-local tostring = tostring
 
 local _M = {}
 
@@ -85,19 +87,15 @@ function _M.init(path)
   PATH = path
 end
 
--- Appends the current request (log phase). wr: access queue decision ("-" if none).
-function _M.record(wr)
+-- Appends the current request (log phase).
+function _M.record()
   if not PATH then return end
   if not started then
     started = true
     ngx.timer.every(INTERVAL, tick)
   end
   local var = ngx.var
-  local line = "c1\t" .. tostring(ngx.now()) .. "\t" .. (var.corvus_host or "") .. "\t" .. ngx.req.get_method()
-    .. "\t" .. esc(var.uri, MAX_URI) .. "\t" .. (var.status or "0") .. "\t" .. (var.body_bytes_sent or "0")
-    .. "\t" .. (var.request_time or "0") .. "\t" .. (var.remote_addr or "") .. "\t" .. wr
-    .. "\t" .. (var.corvus_exploit or "") .. "\t" .. (var.limit_req_status or "") .. "\t" .. (var.corvus_rule or "")
-    .. "\t" .. (var.corvus_cc or "") .. "\t" .. (var.corvus_body or "") .. "\t" .. (var.corvus_ban or "")
+  local line = "c1\t" .. (var.corvus_log_fields or "") .. "\t" .. esc(var.uri, MAX_URI)
     .. "\t" .. esc(var.http_user_agent, MAX_UA) .. "\n"
   nbuf = nbuf + 1
   buf[nbuf] = line
