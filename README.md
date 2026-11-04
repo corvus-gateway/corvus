@@ -59,7 +59,8 @@ Go control plane, React console) that can **import an existing NPM setup**.
 - Every change is validated with `openresty -t`, applied atomically and can be rolled back
 
 **Corvus Sentinel — security engine**
-- Security rules: match IP, IP list, country, path, query, method or header → block, allow or log, globally or per host
+- Security rules: match IP, IP list, country, path, query, method, header or User-Agent list → block, allow or log, globally or per host
+- IP and User-Agent lists kept up to date from a URL (e.g. Tor exit nodes, bad-bot lists; presets included), refreshed in the background and redeployed only when they change
 - Request body inspection for JSON, form and multipart bodies (log or block)
 - One-click **virtual patches** for recent CVEs (React2Shell, wp2shell, PHP-CGI, Vite, n8n …)
 - Managed signature updates, accepted only when signed and newer (no tampering, no downgrade)

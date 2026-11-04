@@ -50,6 +50,7 @@ type Server struct {
 	AutoBan      *autoban.Service
 	History      *history.Service
 	Rules        RulesService
+	Feeds        ListFeeds // URL-fed lists (nil = unavailable)
 	allow        allowCache
 	ssoRT        ssoRuntime // OIDC sign-in flows + provider cache (sso.go)
 }
@@ -161,6 +162,7 @@ func (s *Server) Handler() http.Handler {
 	priv("GET /api/ip-lists", s.listIPLists)
 	op("POST /api/ip-lists", s.createIPList)
 	op("PUT /api/ip-lists/{id}", s.updateIPList)
+	op("POST /api/ip-lists/{id}/refresh", s.refreshIPList)
 	op("DELETE /api/ip-lists/{id}", s.deleteIPList)
 
 	priv("GET /api/access-lists", s.listAccessLists)

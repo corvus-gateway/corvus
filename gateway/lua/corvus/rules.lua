@@ -13,6 +13,7 @@
 
 local cjson = require "cjson.safe"
 local body = require "corvus.body"
+local ualist = require "corvus.ualist"
 local ffi = require "ffi"
 local bit = require "bit"
 
@@ -146,6 +147,8 @@ local function compile_cond(c)
   local v = c.v or {}
   if c.f == "ip.src" then
     cc.ip = ip_matcher(v)
+  elseif c.f == "http.user_agent_list" then
+    cc.ua = ualist.new(v)
   elseif c.op == "in" or c.op == "not_in" then
     cc.set = {}
     for _, x in ipairs(v) do cc.set[cc.ci and lower(x) or x] = true end
@@ -229,6 +232,10 @@ local function field(ctx, c, host)
   elseif f == "http.method" then v = ngx.req.get_method()
   elseif f == "http.scheme" then v = ngx.var.scheme
   elseif f == "http.user_agent" then v = ngx.var.http_user_agent
+  elseif f == "http.user_agent_list" then  -- lower-cased once for all list conditions
+    v = ngx.var.http_user_agent
+    if type(v) == "table" then v = v[1] end
+    if v then v = lower(v) end
   elseif f == "http.referer" then v = ngx.var.http_referer
   elseif f == "http.header" then v = ngx.var[c.var]
   elseif f == "http.body" then v = body.text(host.body_max)  -- normalised (see corvus/body.lua)
@@ -245,6 +252,11 @@ local function test(ctx, c, host)
   if op == "not_exists" then return v == nil or v == "" end
   if c.f == "ip.src" then
     local hit = v ~= nil and ip_in(c.ip, v)
+    if op == "in" then return hit end
+    return not hit
+  end
+  if c.f == "http.user_agent_list" then
+    local hit = ualist.match(c.ua, v)  -- absent User-Agent: never "in" a list
     if op == "in" then return hit end
     return not hit
   end

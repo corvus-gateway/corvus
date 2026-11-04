@@ -4,7 +4,7 @@ import type { IpList, RuleField, RuleOperator } from "../api";
 import { useI18n } from "../i18n";
 import {
   COUNTRIES, FIELDS, LIMITS, METHODS, SCHEMES, changeField, changeOperator, countryName, fieldLabelFor, fieldMeta, flag, isExistsOp,
-  isIpOrCidr, isListRef, isSetOp, isStringField, listName, newRow, opLabelFor, operatorsFor, toGroups, type CondRow, type RuleErrors,
+  isIpOrCidr, isListRef, isSetOp, isStringField, listKind, listName, newRow, opLabelFor, operatorsFor, toGroups, type CondRow, type RuleErrors,
 } from "../lib/rules";
 import { cn } from "../lib/utils";
 import { Button, IconButton } from "./ui/button";
@@ -80,6 +80,20 @@ function Connector({ index, rows, onChange, or, disabled }: { index: number; row
   );
 }
 
+function ListChips({ refs, lists, disabled, onRemove }: { refs: string[]; lists: IpList[] | null; disabled?: boolean; onRemove: (ref: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {refs.map((r) => (
+        <span key={r} className="inline-flex items-center gap-1 rounded-[3px] border border-brand/30 bg-brand/10 py-0.5 pl-2 pr-1 text-xs text-brand">
+          <ListChecks className="h-3 w-3" aria-hidden />${listName(r, lists)}
+          {!disabled && <button type="button" aria-label={`remove ${listName(r, lists)}`} onClick={() => onRemove(r)}
+            className="grid h-4 w-4 place-items-center rounded hover:bg-brand/15"><X className="h-3 w-3" /></button>}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function CondEditor({ row, index, onPatch, onRemove, error, nameError, lists, geoipAvailable, disabled }: {
   row: CondRow; index: number; onPatch: (p: Partial<CondRow>) => void; onRemove: () => void; error?: string; nameError?: string;
   lists: IpList[] | null; geoipAvailable: boolean | null; disabled?: boolean;
@@ -95,30 +109,40 @@ function CondEditor({ row, index, onPatch, onRemove, error, nameError, lists, ge
   const valueEditor = () => {
     if (isExistsOp(c.operator)) return null;
     switch (meta.kind) {
+      case "ualist": {
+        const refs = c.value.filter(isListRef);
+        const uaLists = (lists ?? []).filter((l) => listKind(l) === "user_agent");
+        const avail = uaLists.filter((l) => !refs.includes(`list:${l.id}`));
+        return (
+          <div className="space-y-2">
+            {refs.length > 0 && <ListChips refs={refs} lists={lists} disabled={disabled} onRemove={(r) => setC({ value: c.value.filter((x) => x !== r) })} />}
+            {!disabled && (
+              <div className="w-full sm:w-64">
+                <Select aria-label={t("addUaList")} value="" disabled={!avail.length} invalid={!!error && !refs.length} className="!h-8 text-xs"
+                  onChange={(e) => e.target.value && setC({ value: [...refs, `list:${e.target.value}`] })}>
+                  <option value="">{uaLists.length ? t("addUaList") : t("noUaListsYet")}</option>
+                  {avail.map((l) => <option key={l.id} value={l.id}>{l.name} ({t("nItems", { n: l.items?.length ?? 0 })})</option>)}
+                </Select>
+              </div>
+            )}
+          </div>
+        );
+      }
       case "ip": {
         const refs = c.value.filter(isListRef);
         const ips = c.value.filter((v) => !isListRef(v));
-        const avail = (lists ?? []).filter((l) => !refs.includes(`list:${l.id}`));
+        const ipLists = (lists ?? []).filter((l) => listKind(l) === "ip");
+        const avail = ipLists.filter((l) => !refs.includes(`list:${l.id}`));
         return (
           <div className="space-y-2">
-            {refs.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {refs.map((r) => (
-                  <span key={r} className="inline-flex items-center gap-1 rounded-[3px] border border-brand/30 bg-brand/10 py-0.5 pl-2 pr-1 text-xs text-brand">
-                    <ListChecks className="h-3 w-3" aria-hidden />${listName(r, lists)}
-                    {!disabled && <button type="button" aria-label={`remove ${listName(r, lists)}`} onClick={() => setC({ value: c.value.filter((x) => x !== r) })}
-                      className="grid h-4 w-4 place-items-center rounded hover:bg-brand/15"><X className="h-3 w-3" /></button>}
-                  </span>
-                ))}
-              </div>
-            )}
+            {refs.length > 0 && <ListChips refs={refs} lists={lists} disabled={disabled} onRemove={(r) => setC({ value: c.value.filter((x) => x !== r) })} />}
             <TagInput label={valueLabel} value={ips} onChange={(v) => setC({ value: [...refs, ...v] })} validate={isIpOrCidr} invalid={!!error} disabled={disabled}
               placeholder="203.0.113.7, 10.0.0.0/8, 2001:db8::/32" />
             {!disabled && (
               <div className="w-full sm:w-64">
                 <Select aria-label={t("addIpList")} value="" disabled={!avail.length} className="!h-8 text-xs"
                   onChange={(e) => e.target.value && setC({ value: [...refs, `list:${e.target.value}`, ...ips] })}>
-                  <option value="">{lists?.length ? t("addIpList") : t("noIpListsYet")}</option>
+                  <option value="">{ipLists.length ? t("addIpList") : t("noIpListsYet")}</option>
                   {avail.map((l) => <option key={l.id} value={l.id}>{l.name} ({t("nItems", { n: l.items?.length ?? 0 })})</option>)}
                 </Select>
               </div>

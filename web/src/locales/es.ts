@@ -4,6 +4,7 @@ import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
 import { headersStrings } from "./headers.i18n";
+import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import { pagesStrings } from "./pages.i18n";
@@ -304,6 +305,7 @@ export const es: Partial<Record<keyof typeof ko, string>> = {
   ...tokensStrings.es,
   ...redirectsStrings.es,
   ...headersStrings.es,
+  ...listFeedsStrings.es,
   ...ssoStrings.es,
   ...retentionStrings.es,
   ...templatesStrings.es,
@@ -314,7 +316,7 @@ export const es: Partial<Record<keyof typeof ko, string>> = {
 export const esRuleLabels: RuleLabels | undefined = {
   field: {
     "ip.src": "Dirección IP", "ip.country": "País", "http.host": "Host", "http.path": "Ruta", "http.query": "Cadena de consulta",
-    "http.method": "Método", "http.user_agent": "User-Agent", "http.referer": "Referer", "http.header": "Cabecera de solicitud", "http.body": "Cuerpo de la solicitud", "http.scheme": "Esquema",
+    "http.method": "Método", "http.user_agent": "User-Agent", "http.user_agent_list": "Lista de User-Agent", "http.referer": "Referer", "http.header": "Cabecera de solicitud", "http.body": "Cuerpo de la solicitud", "http.scheme": "Esquema",
   },
   op: {
     in: "está en", not_in: "no está en", eq: "es igual a", ne: "no es igual a", contains: "contiene", not_contains: "no contiene",

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -188,18 +189,35 @@ func (s *Store) ReorderSecurityRules(ctx context.Context, ids []int64) error {
 
 // ------------------------------------------------------------------ IP lists
 
+// List kinds.
+const (
+	ListKindIP        = "ip"
+	ListKindUserAgent = "user_agent"
+)
+
+// IPList is a named list referenced by security rules ("list:<id>"): IP addresses/CIDRs
+// (kind "ip") or User-Agent substrings (kind "user_agent"). With SourceURL set, Items are
+// fetched periodically by the feeds service and are read-only.
 type IPList struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Items       []string  `json:"items"`
-	Rules       int       `json:"rules"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID           int64      `json:"id"`
+	Name         string     `json:"name"`
+	Description  string     `json:"description"`
+	Kind         string     `json:"kind"`
+	Items        []string   `json:"items"`
+	SourceURL    string     `json:"source_url"`
+	RefreshS     int        `json:"refresh_s"`
+	FetchedAt    *time.Time `json:"fetched_at"`
+	CheckedAt    *time.Time `json:"checked_at"`
+	FetchError   string     `json:"fetch_error"`
+	FetchWarning string     `json:"fetch_warning"`
+	Rules        int        `json:"rules"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 func (s *Store) ListIPLists(ctx context.Context) ([]IPList, error) {
-	rows, err := s.q.QueryContext(ctx, `SELECT id, name, description, items, created_at, updated_at FROM ip_lists ORDER BY name`)
+	rows, err := s.q.QueryContext(ctx, `SELECT id, name, description, kind, items, source_url, refresh_s, fetched_at, checked_at, fetch_error, fetch_warning, created_at, updated_at
+		FROM ip_lists ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -207,9 +225,18 @@ func (s *Store) ListIPLists(ctx context.Context) ([]IPList, error) {
 	for rows.Next() {
 		var l IPList
 		var items string
-		if err := rows.Scan(&l.ID, &l.Name, &l.Description, &items, &l.CreatedAt, &l.UpdatedAt); err != nil {
+		var fetched, checked sql.NullTime
+		if err := rows.Scan(&l.ID, &l.Name, &l.Description, &l.Kind, &items, &l.SourceURL, &l.RefreshS, &fetched, &checked, &l.FetchError, &l.FetchWarning, &l.CreatedAt, &l.UpdatedAt); err != nil {
 			rows.Close()
 			return nil, err
+		}
+		if fetched.Valid {
+			t := fetched.Time
+			l.FetchedAt = &t
+		}
+		if checked.Valid {
+			t := checked.Time
+			l.CheckedAt = &t
 		}
 		_ = json.Unmarshal([]byte(items), &l.Items)
 		if l.Items == nil {
@@ -277,10 +304,16 @@ func (s *Store) IPListByID(ctx context.Context, id int64) (*IPList, error) {
 	return nil, ErrNotFound
 }
 
+// SaveIPList inserts or updates a list's definition and items (the fetch status is
+// kept; see SetIPListFetch).
 func (s *Store) SaveIPList(ctx context.Context, l *IPList) error {
 	t := now()
+	if l.Kind == "" {
+		l.Kind = ListKindIP
+	}
 	if l.ID == 0 {
-		res, err := s.q.ExecContext(ctx, `INSERT INTO ip_lists(name, description, items, created_at, updated_at) VALUES (?,?,?,?,?)`, l.Name, l.Description, toJSON(l.Items), t, t)
+		res, err := s.q.ExecContext(ctx, `INSERT INTO ip_lists(name, description, kind, items, source_url, refresh_s, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)`,
+			l.Name, l.Description, l.Kind, toJSON(l.Items), l.SourceURL, l.RefreshS, t, t)
 		if err != nil {
 			return err
 		}
@@ -288,7 +321,8 @@ func (s *Store) SaveIPList(ctx context.Context, l *IPList) error {
 		l.CreatedAt, l.UpdatedAt = t, t
 		return nil
 	}
-	res, err := s.q.ExecContext(ctx, `UPDATE ip_lists SET name=?, description=?, items=?, updated_at=? WHERE id=?`, l.Name, l.Description, toJSON(l.Items), t, l.ID)
+	res, err := s.q.ExecContext(ctx, `UPDATE ip_lists SET name=?, description=?, kind=?, items=?, source_url=?, refresh_s=?, updated_at=? WHERE id=?`,
+		l.Name, l.Description, l.Kind, toJSON(l.Items), l.SourceURL, l.RefreshS, t, l.ID)
 	if err != nil {
 		return err
 	}
@@ -299,13 +333,52 @@ func (s *Store) SaveIPList(ctx context.Context, l *IPList) error {
 	return nil
 }
 
+// ListFetch is the outcome of one feed fetch.
+type ListFetch struct {
+	Items     []string // new entries; nil keeps the stored ones
+	CheckedAt time.Time
+	FetchedAt *time.Time // set on success
+	Error     string
+	Warning   string
+}
+
+// SetIPListFetch records a feed fetch (and, when f.Items is set, the new entries).
+// A failed fetch (FetchedAt nil) keeps the entries, the last success time and warning.
+func (s *Store) SetIPListFetch(ctx context.Context, id int64, f ListFetch) error {
+	var res sql.Result
+	var err error
+	switch {
+	case f.Items != nil:
+		res, err = s.q.ExecContext(ctx, `UPDATE ip_lists SET items=?, fetched_at=?, checked_at=?, fetch_error=?, fetch_warning=? WHERE id=?`,
+			toJSON(f.Items), f.FetchedAt, f.CheckedAt, f.Error, f.Warning, id)
+	case f.FetchedAt != nil:
+		res, err = s.q.ExecContext(ctx, `UPDATE ip_lists SET fetched_at=?, checked_at=?, fetch_error=?, fetch_warning=? WHERE id=?`,
+			f.FetchedAt, f.CheckedAt, f.Error, f.Warning, id)
+	default:
+		res, err = s.q.ExecContext(ctx, `UPDATE ip_lists SET checked_at=?, fetch_error=? WHERE id=?`, f.CheckedAt, f.Error, id)
+	}
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ResetIPListFetch clears the fetch status (the feed URL changed or was removed).
+func (s *Store) ResetIPListFetch(ctx context.Context, id int64) error {
+	_, err := s.q.ExecContext(ctx, `UPDATE ip_lists SET fetched_at=NULL, checked_at=NULL, fetch_error='', fetch_warning='' WHERE id=?`, id)
+	return err
+}
+
 func (s *Store) DeleteIPList(ctx context.Context, id int64) error {
 	rules, err := s.ListSecurityRules(ctx)
 	if err != nil {
 		return err
 	}
 	if n := ListUsage(rules)[id]; n > 0 {
-		return fmt.Errorf("IP list is used by %d security rule(s)", n)
+		return fmt.Errorf("list is used by %d security rule(s)", n)
 	}
 	res, err := s.q.ExecContext(ctx, `DELETE FROM ip_lists WHERE id = ?`, id)
 	if err != nil {

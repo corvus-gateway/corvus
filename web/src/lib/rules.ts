@@ -8,9 +8,9 @@ import { frRuleLabels } from "../locales/fr";
 import { deRuleLabels } from "../locales/de";
 import { esRuleLabels } from "../locales/es";
 
-export const LIMITS = { rules: 200, groups: 10, conds: 10, valueLen: 1024, values: 1000, regex: 512, listItems: 50000 } as const;
+export const LIMITS = { rules: 200, groups: 10, conds: 10, valueLen: 1024, values: 1000, regex: 512, listItems: 50000, uaItems: 10000, uaEntryMin: 3, uaEntryMax: 256 } as const;
 
-export type FieldKind = "ip" | "country" | "method" | "scheme" | "string" | "header";
+export type FieldKind = "ip" | "country" | "method" | "scheme" | "string" | "header" | "ualist";
 
 export const FIELDS: { id: RuleField; kind: FieldKind; exists?: boolean }[] = [
   { id: "ip.src", kind: "ip" },
@@ -20,6 +20,7 @@ export const FIELDS: { id: RuleField; kind: FieldKind; exists?: boolean }[] = [
   { id: "http.query", kind: "string" },
   { id: "http.method", kind: "method" },
   { id: "http.user_agent", kind: "string", exists: true },
+  { id: "http.user_agent_list", kind: "ualist" },
   { id: "http.referer", kind: "string", exists: true },
   { id: "http.header", kind: "header", exists: true },
   { id: "http.scheme", kind: "scheme" },
@@ -32,7 +33,7 @@ const STRING_OPS: RuleOperator[] = ["eq", "ne", "contains", "not_contains", "sta
 
 export function operatorsFor(f: RuleField): RuleOperator[] {
   const m = fieldMeta(f);
-  if (m.kind === "ip" || m.kind === "country" || m.kind === "method" || m.kind === "scheme") return SET_OPS;
+  if (m.kind === "ip" || m.kind === "country" || m.kind === "method" || m.kind === "scheme" || m.kind === "ualist") return SET_OPS;
   if (f === "http.body") return ["contains", "not_contains", "matches", "not_matches"];
   return m.exists ? [...STRING_OPS, "exists", "not_exists"] : STRING_OPS;
 }
@@ -45,11 +46,11 @@ export const isStringField = (f: RuleField) => { const k = fieldMeta(f).kind; re
 const fieldLabels: Partial<Record<Lang, Record<RuleField, string>>> = {
   ko: {
     "ip.src": "IP 주소", "ip.country": "국가", "http.host": "호스트", "http.path": "경로", "http.query": "쿼리 문자열",
-    "http.method": "메서드", "http.user_agent": "User-Agent", "http.referer": "Referer", "http.header": "요청 헤더", "http.body": "요청 본문", "http.scheme": "스킴",
+    "http.method": "메서드", "http.user_agent": "User-Agent", "http.user_agent_list": "User-Agent 목록", "http.referer": "Referer", "http.header": "요청 헤더", "http.body": "요청 본문", "http.scheme": "스킴",
   },
   en: {
     "ip.src": "IP address", "ip.country": "Country", "http.host": "Host", "http.path": "Path", "http.query": "Query string",
-    "http.method": "Method", "http.user_agent": "User-Agent", "http.referer": "Referer", "http.header": "Request header", "http.body": "Request body", "http.scheme": "Scheme",
+    "http.method": "Method", "http.user_agent": "User-Agent", "http.user_agent_list": "User-Agent list", "http.referer": "Referer", "http.header": "Request header", "http.body": "Request body", "http.scheme": "Scheme",
   },
 };
 
@@ -66,8 +67,8 @@ const opLabels: Partial<Record<Lang, Record<RuleOperator, string>>> = {
 
 /** Short field/operator labels for the compact table summary. */
 const shortFields: Partial<Record<Lang, Partial<Record<RuleField, string>>>> = {
-  ko: { "ip.src": "IP", "http.query": "쿼리", "http.user_agent": "UA", "http.header": "헤더" },
-  en: { "ip.src": "IP", "http.query": "Query", "http.user_agent": "UA", "http.header": "Header" },
+  ko: { "ip.src": "IP", "http.query": "쿼리", "http.user_agent": "UA", "http.user_agent_list": "UA", "http.header": "헤더" },
+  en: { "ip.src": "IP", "http.query": "Query", "http.user_agent": "UA", "http.user_agent_list": "UA", "http.header": "Header" },
 };
 const shortOps: Partial<Record<Lang, Record<RuleOperator, string>>> = {
   ko: { in: "∈", not_in: "∉", eq: "=", ne: "≠", contains: "포함", not_contains: "미포함", starts_with: "시작", ends_with: "끝", matches: "~", not_matches: "!~", exists: "있음", not_exists: "없음" },
@@ -144,6 +145,9 @@ export function isIpOrCidr(raw: string): boolean {
   return Number(bits) <= (six ? 128 : 32);
 }
 export const isListRef = (v: string) => /^list:\d+$/.test(v);
+export const listKind = (l: IpList) => l.kind ?? "ip";
+/** User-Agent list entry: plain substring (no patterns), 3-256 bytes, no control characters. */
+export const isUaEntry = (v: string) => { const n = new TextEncoder().encode(v).length; return n >= LIMITS.uaEntryMin && n <= LIMITS.uaEntryMax && !/[\u0000-\u001f\u007f]/.test(v); };
 
 // ---- editor model --------------------------------------------------------
 /** Flat editor row; `or` = this row starts a new OR group (ignored for the first row). */
@@ -210,6 +214,7 @@ export function validateRule(form: { name: string; scope: string; host_ids: numb
     else if (c.value.length > LIMITS.values) msg = m.tooManyValues;
     else if (c.value.some((v) => v.length > LIMITS.valueLen)) msg = m.valueTooLong;
     else if (c.field === "ip.src" && c.value.some((v) => !isListRef(v) && !isIpOrCidr(v))) msg = m.badIp;
+    else if (c.field === "http.user_agent_list" && c.value.some((v) => !isListRef(v))) msg = m.valueRequired;
     else if (isRegexOp(c.operator)) {
       if (c.value[0].length > LIMITS.regex) msg = m.regexTooLong;
       else { try { new RegExp(c.value[0].replace(/^\(\?i\)/, "")); } catch { msg = m.badRegex; } }
@@ -243,7 +248,7 @@ export function mapServerErrors(fields: { field: string; message: string }[], ro
 // ---- rendering -----------------------------------------------------------
 const cfField: Record<RuleField, string> = {
   "ip.src": "ip.src", "ip.country": "ip.src.country", "http.host": "http.host", "http.path": "http.request.uri.path",
-  "http.query": "http.request.uri.query", "http.method": "http.request.method", "http.user_agent": "http.user_agent",
+  "http.query": "http.request.uri.query", "http.method": "http.request.method", "http.user_agent": "http.user_agent", "http.user_agent_list": "http.user_agent",
   "http.referer": "http.referer", "http.header": "http.request.headers", "http.body": "http.request.body.raw", "http.scheme": "http.request.scheme",
 };
 const q = (s: string) => JSON.stringify(s);
@@ -252,6 +257,12 @@ function exprCond(c: RuleCondition, lists: IpList[] | null | undefined): string 
   let f = cfField[c.field];
   if (c.field === "http.header") f = `${f}[${q((c.name || "…").toLowerCase())}]`;
   if (isExistsOp(c.operator)) return c.operator === "exists" ? `exists(${f})` : `not exists(${f})`;
+  if (c.field === "http.user_agent_list") {
+    // any entry is a case-insensitive substring of the User-Agent
+    const refs = c.value.map((v) => `$${listName(v, lists)}`).join(" ");
+    const e = `any(lower(${f}) contains {${refs}})`;
+    return c.operator === "not_in" ? `not ${e}` : e;
+  }
   const ci = !!c.ci && isStringField(c.field);
   const fv = ci && !isRegexOp(c.operator) ? `lower(${f})` : f;
   const val = (v: string) => (c.field === "ip.src" ? (isListRef(v) ? `$${listName(v, lists)}` : v) : q(ci && !isRegexOp(c.operator) ? v.toLowerCase() : v));
@@ -288,7 +299,7 @@ export function listName(v: string, lists: IpList[] | null | undefined): string 
 }
 
 function summaryVal(c: RuleCondition, lists: IpList[] | null | undefined): string {
-  const show = c.value.slice(0, 2).map((v) => (c.field === "ip.src" && isListRef(v) ? listName(v, lists) : v));
+  const show = c.value.slice(0, 2).map((v) => ((c.field === "ip.src" || c.field === "http.user_agent_list") && isListRef(v) ? listName(v, lists) : v));
   return show.join(", ") + (c.value.length > 2 ? ` +${c.value.length - 2}` : "");
 }
 

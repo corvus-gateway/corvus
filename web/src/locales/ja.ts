@@ -4,6 +4,7 @@ import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
 import { headersStrings } from "./headers.i18n";
+import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import { pagesStrings } from "./pages.i18n";
@@ -305,6 +306,7 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   ...tokensStrings.ja,
   ...redirectsStrings.ja,
   ...headersStrings.ja,
+  ...listFeedsStrings.ja,
   ...ssoStrings.ja,
   ...retentionStrings.ja,
   ...templatesStrings.ja,
@@ -315,7 +317,7 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
 export const jaRuleLabels: RuleLabels | undefined = {
   field: {
     "ip.src": "IP アドレス", "ip.country": "国", "http.host": "ホスト", "http.path": "パス", "http.query": "クエリ文字列",
-    "http.method": "メソッド", "http.user_agent": "User-Agent", "http.referer": "Referer", "http.header": "リクエストヘッダー", "http.body": "リクエストボディ", "http.scheme": "スキーム",
+    "http.method": "メソッド", "http.user_agent": "User-Agent", "http.user_agent_list": "User-Agent リスト", "http.referer": "Referer", "http.header": "リクエストヘッダー", "http.body": "リクエストボディ", "http.scheme": "スキーム",
   },
   op: {
     in: "次のいずれか", not_in: "次のいずれでもない", eq: "等しい", ne: "等しくない", contains: "含む", not_contains: "含まない",

@@ -154,7 +154,7 @@ export interface AccessList {
 
 export type RuleField =
   | "ip.src" | "ip.country" | "http.host" | "http.path" | "http.query" | "http.method"
-  | "http.user_agent" | "http.referer" | "http.header" | "http.scheme" | "http.body";
+  | "http.user_agent" | "http.user_agent_list" | "http.referer" | "http.header" | "http.scheme" | "http.body";
 export type RuleOperator =
   | "in" | "not_in" | "eq" | "ne" | "contains" | "not_contains" | "starts_with" | "ends_with"
   | "matches" | "not_matches" | "exists" | "not_exists";
@@ -172,7 +172,12 @@ export interface RuleEvent {
   country?: string; method?: string; path?: string; ua?: string; status?: number;
 }
 export interface GeoipStatus { available: boolean; source?: string; updated_at?: string | null; ranges?: number; error?: string; attribution?: string }
-export interface IpList { id: number; name: string; description: string; items: string[]; rules?: number; created_at?: string; updated_at?: string }
+export type ListKind = "ip" | "user_agent";
+/** A list for security rules: IPs/CIDRs or User-Agent substrings; optionally fed from a URL (then read-only). */
+export interface IpList {
+  id: number; name: string; description: string; kind?: ListKind; items: string[]; rules?: number; created_at?: string; updated_at?: string;
+  source_url?: string; refresh_s?: number; fetched_at?: string | null; checked_at?: string | null; fetch_error?: string; fetch_warning?: string;
+}
 
 export interface TimePoint {
   t: number | string; requests: number; s2xx: number; s3xx: number; s4xx: number; s5xx: number; blocked: number;

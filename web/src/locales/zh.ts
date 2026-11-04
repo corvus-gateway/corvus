@@ -4,6 +4,7 @@ import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
 import { headersStrings } from "./headers.i18n";
+import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import { pagesStrings } from "./pages.i18n";
@@ -305,6 +306,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   ...tokensStrings.zh,
   ...redirectsStrings.zh,
   ...headersStrings.zh,
+  ...listFeedsStrings.zh,
   ...ssoStrings.zh,
   ...retentionStrings.zh,
   ...templatesStrings.zh,
@@ -315,7 +317,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
 export const zhRuleLabels: RuleLabels | undefined = {
   field: {
     "ip.src": "IP 地址", "ip.country": "国家/地区", "http.host": "主机", "http.path": "路径", "http.query": "查询字符串",
-    "http.method": "方法", "http.user_agent": "User-Agent", "http.referer": "Referer", "http.header": "请求头", "http.body": "请求体", "http.scheme": "协议",
+    "http.method": "方法", "http.user_agent": "User-Agent", "http.user_agent_list": "User-Agent 列表", "http.referer": "Referer", "http.header": "请求头", "http.body": "请求体", "http.scheme": "协议",
   },
   op: {
     in: "属于", not_in: "不属于", eq: "等于", ne: "不等于", contains: "包含", not_contains: "不包含",

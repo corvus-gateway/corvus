@@ -7,6 +7,7 @@ import (
 	"net"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"corvus/control/internal/netcfg"
 	"corvus/control/internal/store"
@@ -72,12 +73,13 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 		return nil, err
 	}
 	listByID := map[int64][]string{}
+	listKind := map[int64]string{}
 	for _, l := range lists {
 		lc := l
 		if err := validate.IPList(&lc); err != nil {
-			return nil, fmt.Errorf("IP list %d: %w", l.ID, err)
+			return nil, fmt.Errorf("list %d: %w", l.ID, err)
 		}
-		listByID[l.ID] = lc.Items
+		listByID[l.ID], listKind[l.ID] = lc.Items, lc.Kind
 	}
 	hostIDs := map[int64]bool{}
 	for _, h := range hosts {
@@ -118,7 +120,7 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 		}
 		rc := r
 		// Defense in depth: never render a rule that would not pass validation.
-		if err := validate.SecurityRule(&rc, func(id int64) bool { _, ok := listByID[id]; return ok }, func(id int64) bool { return hostIDs[id] }); err != nil {
+		if err := validate.SecurityRule(&rc, func(id int64) string { return listKind[id] }, func(id int64) bool { return hostIDs[id] }); err != nil {
 			return nil, fmt.Errorf("security rule %d: %w", r.ID, err)
 		}
 		rj := ruleJSON{ID: rc.ID, Action: rc.Action, Status: rc.StatusCode, SkipAuth: rc.SkipBasicAuth}
@@ -132,6 +134,9 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 						return nil, fmt.Errorf("security rule %d: %w", r.ID, err)
 					}
 					cj.V = nets
+				}
+				if cond.Field == "http.user_agent_list" {
+					cj.V = uaEntries(cond.Value, listByID)
 				}
 				cg = append(cg, cj)
 			}
@@ -171,6 +176,27 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 		out.Hosts[redirectRuleKey(h.ID)] = hj
 	}
 	return out, nil
+}
+
+// uaEntries expands User-Agent list references into lower-cased, de-duplicated
+// substrings (matched case-insensitively by the gateway, see corvus/ualist.lua).
+func uaEntries(values []string, lists map[int64][]string) []string {
+	out := []string{}
+	seen := map[string]bool{}
+	for _, v := range values {
+		id, ok := store.ListRef(v)
+		if !ok {
+			continue
+		}
+		for _, e := range lists[id] {
+			e = strings.ToLower(e)
+			if !seen[e] {
+				seen[e] = true
+				out = append(out, e)
+			}
+		}
+	}
+	return out
 }
 
 // encodeNets expands IP list references and encodes every network as

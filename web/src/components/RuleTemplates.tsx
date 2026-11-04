@@ -93,7 +93,7 @@ export function TemplateSheet({ open, onClose, hosts, lists, onCreated }: {
             <IdField label={t("tplExemptList")} hint={t("tplExemptHint")}>{(id) => (
               <Select id={id} value={exempt} onChange={(e) => setExempt(e.target.value)}>
                 <option value="">{t("tplExemptNone")}</option>
-                {(lists ?? []).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                {(lists ?? []).filter((l) => (l.kind ?? "ip") === "ip").map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </Select>
             )}</IdField>
           )}

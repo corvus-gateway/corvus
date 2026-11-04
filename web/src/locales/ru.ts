@@ -4,6 +4,7 @@ import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
 import { headersStrings } from "./headers.i18n";
+import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import { pagesStrings } from "./pages.i18n";
@@ -304,6 +305,7 @@ export const ru: Partial<Record<keyof typeof ko, string>> = {
   ...tokensStrings.ru,
   ...redirectsStrings.ru,
   ...headersStrings.ru,
+  ...listFeedsStrings.ru,
   ...ssoStrings.ru,
   ...retentionStrings.ru,
   ...templatesStrings.ru,
@@ -314,7 +316,7 @@ export const ru: Partial<Record<keyof typeof ko, string>> = {
 export const ruRuleLabels: RuleLabels | undefined = {
   field: {
     "ip.src": "IP-адрес", "ip.country": "Страна", "http.host": "Хост", "http.path": "Путь", "http.query": "Строка запроса",
-    "http.method": "Метод", "http.user_agent": "User-Agent", "http.referer": "Referer", "http.header": "Заголовок запроса", "http.body": "Тело запроса", "http.scheme": "Схема",
+    "http.method": "Метод", "http.user_agent": "User-Agent", "http.user_agent_list": "Список User-Agent", "http.referer": "Referer", "http.header": "Заголовок запроса", "http.body": "Тело запроса", "http.scheme": "Схема",
   },
   op: {
     in: "входит в", not_in: "не входит в", eq: "равно", ne: "не равно", contains: "содержит", not_contains: "не содержит",

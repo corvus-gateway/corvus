@@ -30,6 +30,7 @@ import (
 	"corvus/control/internal/certs"
 	"corvus/control/internal/compiler"
 	"corvus/control/internal/deploy"
+	"corvus/control/internal/feeds"
 	"corvus/control/internal/gateway"
 	"corvus/control/internal/geoip"
 	"corvus/control/internal/history"
@@ -347,11 +348,18 @@ func run() error {
 	}
 	go ban.Run(ctx)
 
+	// Lists fed from a URL (e.g. Tor exit nodes, bad-bot User-Agents).
+	listFeeds := &feeds.Service{Store: st, Apply: func(ctx context.Context, msg string, mutate func(tx *store.Store) error) error {
+		_, err := dep.Apply(ctx, nil, msg, mutate)
+		return err
+	}}
+	go listFeeds.Run(ctx)
+
 	tlsOn := envBool("CORVUS_ADMIN_TLS", true)
 	srv := &api.Server{Store: st, Deployer: dep, Paths: paths, Live: lv, Setup: setup,
 		Limiter: auth.NewLimiter(10, 10*time.Minute), UI: webui.Handler(), SecureCookie: tlsOn, Version: version,
 		AcctLimiter: auth.NewLimiter(10, 15*time.Minute),
-		Traffic:     tc, ACME: acmeSvc, NPMImportDir: env("CORVUS_IMPORT_DIR", "/import"), DataKey: dataKey, MFA: auth.NewMFAChallenges(), GeoIP: geo, AutoBan: ban, History: hist, Rules: rulesSvc}
+		Traffic:     tc, ACME: acmeSvc, NPMImportDir: env("CORVUS_IMPORT_DIR", "/import"), DataKey: dataKey, MFA: auth.NewMFAChallenges(), GeoIP: geo, AutoBan: ban, History: hist, Rules: rulesSvc, Feeds: listFeeds}
 	if or != nil {
 		srv.Gateway = or.Status
 	}

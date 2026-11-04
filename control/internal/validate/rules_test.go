@@ -21,7 +21,12 @@ func TestSecurityRuleValidation(t *testing.T) {
 		{Field: "http.body", Operator: "matches", Value: []string{`resolved_model`}, CI: true},
 	}
 	r := rule(ok...)
-	if err := SecurityRule(r, func(id int64) bool { return id == 1 }, nil); err != nil {
+	if err := SecurityRule(r, func(id int64) string {
+		if id == 1 {
+			return store.ListKindIP
+		}
+		return ""
+	}, nil); err != nil {
 		t.Fatalf("valid rule rejected: %v", err)
 	}
 	if r.StatusCode != 403 || r.Scope != "all" || r.Expression.Groups[0][1].Value[0] != "KR" || r.Expression.Groups[0][3].Name != "x-api-key" {
@@ -42,7 +47,7 @@ func TestSecurityRuleValidation(t *testing.T) {
 		{Field: "http.query", Operator: "exists"},
 	}
 	for i, c := range bad {
-		if err := SecurityRule(rule(c), func(int64) bool { return false }, nil); err == nil {
+		if err := SecurityRule(rule(c), func(int64) string { return "" }, nil); err == nil {
 			t.Errorf("bad condition %d accepted: %+v", i, c)
 		}
 	}

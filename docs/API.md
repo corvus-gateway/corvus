@@ -156,8 +156,9 @@ redirection hosts too; rules scoped to specific hosts target proxy hosts only.
 | GET | `/api/managed-rules` | viewer | Active managed rule bundle |
 | PUT | `/api/settings/managed-rules` | admin | Managed-rule update settings |
 | POST | `/api/managed-rules/check`, `/upload` | admin | Check for / upload a signed bundle |
-| GET / POST | `/api/ip-lists` | viewer / operator | IP lists |
+| GET / POST | `/api/ip-lists` | viewer / operator | IP and User-Agent lists |
 | PUT / DELETE | `/api/ip-lists/{id}` | operator | Update / delete |
+| POST | `/api/ip-lists/{id}/refresh` | operator | Fetch a URL-fed list now; returns `{ "ip_list" }` (a failed fetch is reported in `fetch_error`) |
 | GET / POST | `/api/bans` | viewer / operator | IP bans |
 | DELETE | `/api/bans/{id}` | operator | Remove a ban |
 | POST | `/api/bans/{id}/permanent` | operator | Make a ban permanent |
@@ -190,6 +191,33 @@ requests a security rule allowed and the gateway's own endpoints (ACME challenge
 not counted. corvus-control then records the ban (source `auto`, reason like
 `bad behaviour: 12×404 on example.com in 60s`, audit action `ban.auto`) with the usual escalation;
 the first gateway-local ban lasts `duration_s`.
+
+**Lists** (`/api/ip-lists`) are referenced from security rules as `list:<id>`. Fields: `name`,
+`description`, `kind` (`ip`, default, or `user_agent`; cannot change while rules use the list),
+`items`, `source_url`, `refresh_s`; read-only: `rules` (number of rules using it), `fetched_at`
+(last successful fetch), `checked_at` (last attempt), `fetch_error`, `fetch_warning`.
+
+- `ip` lists hold IPv4/IPv6 addresses and CIDRs (at most 50,000) and are used with
+  `{"field": "ip.src", "operator": "in" | "not_in", "value": ["list:<id>", …]}`.
+- `user_agent` lists hold plain substrings (3–256 bytes each, at most 10,000), matched
+  case-insensitively against the User-Agent — no wildcards or regular expressions, so a list cannot
+  cause catastrophic backtracking. They are used with
+  `{"field": "http.user_agent_list", "operator": "in" | "not_in", "value": ["list:<id>", …]}`;
+  `in` matches when the User-Agent contains any entry, a request without a User-Agent never does.
+  The gateway scans entries linearly (stopping at the first hit), which is cheap for the few
+  thousand entries typical lists have.
+- With `source_url` set, the list is fetched by corvus-control and `items` in requests are ignored.
+  Only `https://` URLs are accepted, without credentials; the address is checked again after DNS
+  resolution at connect time and loopback, private, link-local, CGNAT and other non-public
+  addresses are refused (redirects are followed only under the same rules, environment proxies
+  are not used). `refresh_s` is 300–604800 seconds (default 3600; failed fetches are retried after
+  at most 15 minutes). The body (at most 5 MB) has one entry per line; empty lines and lines
+  starting with `#` or `;` are ignored. For IP feeds the first word of each line is used, so
+  `203.0.113.0/24 ; SBL123` and `198.51.100.7 # comment` work; for User-Agent feeds the whole line
+  is used and backslash escapes (`Indy\ Library`) are removed. Invalid lines are skipped
+  (`fetch_warning`), entries beyond the limit are dropped. A failed fetch, or a body without any
+  valid entry, keeps the previous entries and sets `fetch_error`. The configuration is redeployed
+  only when the set of entries changes. Saving a list with a new URL fetches it in the background.
 
 The **block page** is shown when a security rule, a ban or attack-pattern blocking refuses a
 request; the **error page** when a proxy host's upstream cannot be reached or times out (nginx's

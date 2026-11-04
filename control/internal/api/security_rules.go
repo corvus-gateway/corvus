@@ -3,11 +3,13 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
+	"corvus/control/internal/feeds"
 	"corvus/control/internal/geoip"
 	"corvus/control/internal/store"
 	"corvus/control/internal/validate"
@@ -50,9 +52,9 @@ func (in ruleInput) build(ctx context.Context, tx *store.Store, r *store.Securit
 	if err != nil {
 		return err
 	}
-	listIDs := map[int64]bool{}
+	listKind := map[int64]string{}
 	for _, l := range lists {
-		listIDs[l.ID] = true
+		listKind[l.ID] = l.Kind
 	}
 	hosts, err := tx.ListProxyHosts(ctx)
 	if err != nil {
@@ -62,7 +64,7 @@ func (in ruleInput) build(ctx context.Context, tx *store.Store, r *store.Securit
 	for _, h := range hosts {
 		hostIDs[h.ID] = true
 	}
-	return validate.SecurityRule(r, func(id int64) bool { return listIDs[id] }, func(id int64) bool { return hostIDs[id] })
+	return validate.SecurityRule(r, func(id int64) string { return listKind[id] }, func(id int64) bool { return hostIDs[id] })
 }
 
 func (s *Server) withHits(list []store.SecurityRule) {
@@ -235,13 +237,27 @@ func (s *Server) geoipRefresh(w http.ResponseWriter, r *http.Request) {
 // ------------------------------------------------------------------ IP lists
 
 type ipListInput struct {
-	Name        string     `json:"name"`
-	Description string     `json:"description"`
-	Items       []string   `json:"items"`
-	ID          int64      `json:"id"`
-	Rules       int        `json:"rules"`
-	CreatedAt   *time.Time `json:"created_at"`
-	UpdatedAt   *time.Time `json:"updated_at"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Kind        string   `json:"kind"`
+	Items       []string `json:"items"` // ignored for lists with a source URL
+	SourceURL   string   `json:"source_url"`
+	RefreshS    int      `json:"refresh_s"`
+	// read-only fields the UI may send back unchanged
+	ID           int64      `json:"id"`
+	Rules        int        `json:"rules"`
+	FetchedAt    *time.Time `json:"fetched_at"`
+	CheckedAt    *time.Time `json:"checked_at"`
+	FetchError   string     `json:"fetch_error"`
+	FetchWarning string     `json:"fetch_warning"`
+	CreatedAt    *time.Time `json:"created_at"`
+	UpdatedAt    *time.Time `json:"updated_at"`
+}
+
+// ListFeeds refreshes lists that have a source URL (internal/feeds).
+type ListFeeds interface {
+	Refresh(ctx context.Context, id int64) (*store.IPList, error)
+	Kick(id int64)
 }
 
 // decodeLarge is decode with a larger body limit (IP lists may hold 50,000 entries).
@@ -270,28 +286,51 @@ func (s *Server) saveIPList(w http.ResponseWriter, r *http.Request, id int64) {
 	if !decodeLarge(w, r, &in) {
 		return
 	}
-	l := &store.IPList{ID: id, Name: in.Name, Description: in.Description, Items: in.Items}
-	if l.Items == nil {
-		l.Items = []string{}
+	l := &store.IPList{ID: id, Name: in.Name, Description: in.Description, Kind: in.Kind, Items: in.Items,
+		SourceURL: in.SourceURL, RefreshS: in.RefreshS}
+	if l.Items == nil || l.SourceURL != "" {
+		l.Items = []string{} // feed lists keep their fetched entries (below)
 	}
-	msg := "create IP list " + in.Name
+	msg := "create list " + in.Name
 	if id != 0 {
-		msg = fmt.Sprintf("update IP list #%d", id)
+		msg = fmt.Sprintf("update list #%d", id)
 	}
+	fetch := false
 	v, err := s.Deployer.Apply(r.Context(), userID(r), msg, func(tx *store.Store) error {
+		var old *store.IPList
 		if id != 0 {
-			if _, err := tx.IPListByID(r.Context(), id); err != nil {
+			var err error
+			if old, err = tx.IPListByID(r.Context(), id); err != nil {
 				return err
+			}
+			if l.Kind == "" {
+				l.Kind = old.Kind
+			}
+			if l.Kind != old.Kind && old.Rules > 0 {
+				return validate.Errors{{Field: "kind", Code: "in_use", Message: "the kind of a list used by security rules cannot be changed"}}
 			}
 		}
 		if err := validate.IPList(l); err != nil {
 			return err
 		}
+		reset := false
+		if l.SourceURL != "" {
+			if old != nil && old.SourceURL == l.SourceURL && old.Kind == l.Kind {
+				l.Items = old.Items
+			} else {
+				reset, fetch = old != nil, true
+			}
+		} else if old != nil && old.SourceURL != "" {
+			reset = true
+		}
 		if err := tx.SaveIPList(r.Context(), l); err != nil {
 			if store.IsUnique(err) {
-				return validate.Errors{{Field: "name", Code: "duplicate", Message: "an IP list with this name already exists"}}
+				return validate.Errors{{Field: "name", Code: "duplicate", Message: "a list with this name already exists"}}
 			}
 			return err
+		}
+		if reset {
+			return tx.ResetIPListFetch(r.Context(), l.ID)
 		}
 		return nil
 	})
@@ -299,11 +338,17 @@ func (s *Server) saveIPList(w http.ResponseWriter, r *http.Request, id int64) {
 		fail(w, err)
 		return
 	}
+	if fetch && s.Feeds != nil {
+		s.Feeds.Kick(l.ID) // first fetch in the background
+	}
+	if cur, err := s.Store.IPListByID(r.Context(), l.ID); err == nil {
+		l = cur
+	}
 	code, action := 201, "ip_list.create"
 	if id != 0 {
 		code, action = 200, "ip_list.update"
 	}
-	s.audit(r, action, fmt.Sprintf("ip_list:%d", l.ID), map[string]any{"name": l.Name, "items": len(l.Items)})
+	s.audit(r, action, fmt.Sprintf("ip_list:%d", l.ID), map[string]any{"name": l.Name, "kind": l.Kind, "items": len(l.Items), "source_url": l.SourceURL})
 	writeJSON(w, code, map[string]any{"ip_list": l, "version": v})
 }
 
@@ -313,6 +358,30 @@ func (s *Server) updateIPList(w http.ResponseWriter, r *http.Request) {
 	if id, ok := pathID(w, r); ok {
 		s.saveIPList(w, r, id)
 	}
+}
+
+// refreshIPList fetches a feed list now. A failed fetch is reported in fetch_error
+// (the previous entries stay in effect).
+func (s *Server) refreshIPList(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	if s.Feeds == nil {
+		writeErr(w, http.StatusServiceUnavailable, "unavailable", "list feeds are not available")
+		return
+	}
+	l, err := s.Feeds.Refresh(r.Context(), id)
+	if l == nil {
+		fail(w, err)
+		return
+	}
+	if errors.Is(err, feeds.ErrNoFeed) {
+		writeErr(w, http.StatusConflict, "conflict", err.Error())
+		return
+	}
+	s.audit(r, "ip_list.refresh", fmt.Sprintf("ip_list:%d", id), map[string]any{"items": len(l.Items), "error": l.FetchError})
+	writeJSON(w, 200, map[string]any{"ip_list": l})
 }
 
 func (s *Server) deleteIPList(w http.ResponseWriter, r *http.Request) {
