@@ -66,7 +66,7 @@ func TestListFeedsAPI(t *testing.T) {
 		t.Fatalf("items after edit: %v kicked=%v", it, ff.kicked)
 	}
 	// Private targets are refused.
-	if w, _ := e.do("POST", "/api/ip-lists", map[string]any{"name": "x", "source_url": "https://127.0.0.1/list"}, withCookie(op), withCSRF()); w.Code != 400 {
+	if w, _ := e.do("POST", "/api/ip-lists", map[string]any{"name": "x", "source_url": "https://127.0.0.1/list"}, withCookie(op), withCSRF()); w.Code != 422 {
 		t.Fatalf("private URL: %d %s", w.Code, w.Body)
 	}
 	// Refresh reports the fetch error in the list.
@@ -85,7 +85,7 @@ func TestListFeedsAPI(t *testing.T) {
 	if w, _ := e.do("POST", "/api/security-rules", rule, withCookie(op), withCSRF()); w.Code != 201 {
 		t.Fatalf("UA rule: %d %s", w.Code, w.Body)
 	}
-	if w, _ := e.do("PUT", fmt.Sprintf("/api/ip-lists/%d", ua), map[string]any{"name": "bots", "kind": "ip", "items": []string{}}, withCookie(op), withCSRF()); w.Code != 400 {
+	if w, _ := e.do("PUT", fmt.Sprintf("/api/ip-lists/%d", ua), map[string]any{"name": "bots", "kind": "ip", "items": []string{}}, withCookie(op), withCSRF()); w.Code != 422 {
 		t.Fatalf("kind change of a used list: %d %s", w.Code, w.Body)
 	}
 }
