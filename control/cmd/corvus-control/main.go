@@ -49,6 +49,41 @@ func env(key, def string) string {
 	return def
 }
 
+// defaultResolver picks the DNS server nginx uses for forward hosts: Docker's embedded
+// DNS (127.0.0.11) when the container is on a Docker network, otherwise the first
+// nameserver of resolv.conf (e.g. 127.0.0.53 with network_mode: host).
+func defaultResolver(resolvConf string) string {
+	b, err := os.ReadFile(resolvConf)
+	if err != nil {
+		return "127.0.0.11"
+	}
+	first := ""
+	for _, line := range strings.Split(string(b), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 2 || f[0] != "nameserver" {
+			continue
+		}
+		ip := net.ParseIP(f[1])
+		if ip == nil {
+			continue
+		}
+		if f[1] == "127.0.0.11" {
+			return f[1]
+		}
+		if first == "" {
+			if ip.To4() == nil {
+				first = "[" + ip.String() + "]"
+			} else {
+				first = ip.String()
+			}
+		}
+	}
+	if first == "" {
+		return "127.0.0.11"
+	}
+	return first
+}
+
 func envBool(key string, def bool) bool {
 	v, err := strconv.ParseBool(env(key, strconv.FormatBool(def)))
 	if err != nil {
@@ -107,7 +142,7 @@ func run() error {
 		LuaDir:      env("CORVUS_LUA_DIR", "/opt/corvus/lua"),
 		HTMLDir:     env("CORVUS_HTML_DIR", "/opt/corvus/html"),
 		MimeTypes:   env("CORVUS_MIME_TYPES", "/usr/local/openresty/nginx/conf/mime.types"),
-		Resolver:    env("CORVUS_RESOLVER", "127.0.0.11"),
+		Resolver:    env("CORVUS_RESOLVER", defaultResolver("/etc/resolv.conf")),
 		HTTPPort:    80,
 		HTTPSPort:   443,
 		StatusPort:  9180,
@@ -188,7 +223,15 @@ func run() error {
 	comp := &compiler.Compiler{P: paths, Bundle: rulesSvc.Bundle, Cloudflare: func(ctx context.Context, s *store.Store) []string {
 		cf := netcfg.Cloudflare(ctx, s)
 		return append(append([]string{}, cf.IPv4...), cf.IPv6...)
-	}}
+	}, Hosts: func() map[string]string { return compiler.StaticHosts(env("CORVUS_HOSTS_FILE", "/etc/hosts")) },
+		// 127.0.0.1/localhost forward hosts mean the Docker host (as with NPM in host mode);
+		// CORVUS_LOOPBACK=container keeps them pointing at the container itself.
+		HostGateway: func() string {
+			if env("CORVUS_LOOPBACK", "host") == "container" {
+				return ""
+			}
+			return compiler.HostGateway(env("CORVUS_HOSTS_FILE", "/etc/hosts"), "/proc/net/dev", "/proc/net/route")
+		}}
 	var runner gateway.Runner = gateway.Noop{}
 	var or *gateway.OpenResty
 	dep := &deploy.Deployer{Store: st, Compiler: comp, Dir: filepath.Join(dataDir, "nginx"), Keep: 20}

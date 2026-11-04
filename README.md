@@ -186,6 +186,25 @@ Set these under `environment:` in `docker-compose.yml`.
 | `CORVUS_IMPORT_DIR` | Directory with read-only NPM volumes for *Import from NPM* |
 | `CORVUS_RULES_URL` | Optional URL of a signed managed-rules bundle |
 | `CORVUS_ADMIN_ALLOW_ANY=1` | Recovery switch if you locked yourself out with the admin allowlist |
+| `CORVUS_REDIS_PORT` | Port of the built-in access-queue store on 127.0.0.1 (default `6379`); change it with `network_mode: host` if the host already uses 6379 |
+| `CORVUS_RESOLVER` | DNS server for forward hosts. Default: Docker's DNS, or the first `nameserver` of `/etc/resolv.conf` with host networking |
+| `CORVUS_LOOPBACK=container` | Make `127.0.0.1`/`localhost` forward hosts point at the container itself instead of the Docker host |
+
+### Forward hosts
+
+A proxy host can forward to:
+
+- **another container** by name, e.g. `xoshop-web` port `80` — Corvus must share a Docker network
+  with it (add that network to the `corvus` service);
+- **a private or public IP**, e.g. `10.3.2.39` port `8084`;
+- **a service on the Docker host itself** as `127.0.0.1` or `localhost`, like in NPM. Inside a
+  container these mean the Docker host, so no `host.docker.internal` is needed. The service must
+  listen on an address the container can reach (`0.0.0.0` or the Docker bridge, not only
+  `127.0.0.1`), and a host firewall must allow connections from Docker networks.
+
+To reach services that listen only on the host's `127.0.0.1`, or to keep an NPM setup that used
+`network_mode: host` unchanged, run Corvus with host networking: replace `ports:` and `networks:`
+with `network_mode: host` (and set `CORVUS_REDIS_PORT` if 6379 is taken on the host).
 
 ### Migrating from Nginx Proxy Manager
 

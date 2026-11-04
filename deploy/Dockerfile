@@ -27,7 +27,7 @@ RUN CGO_ENABLED=0 GOAMD64=v1 go build -trimpath -ldflags "-s -w -X main.version=
 
 FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
 # Latest Alpine security updates + minimal runtime (OpenSSL/PCRE2/zlib are linked statically).
-RUN apk upgrade --no-cache && apk add --no-cache libgcc ca-certificates tzdata su-exec valkey
+RUN apk upgrade --no-cache && apk add --no-cache libgcc ca-certificates tzdata su-exec setpriv valkey
 COPY --from=openresty /usr/local/openresty /usr/local/openresty
 COPY gateway/lua/   /opt/corvus/lua/
 COPY gateway/redis/ /opt/corvus/redis/

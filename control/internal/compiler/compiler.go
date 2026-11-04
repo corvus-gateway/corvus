@@ -57,6 +57,12 @@ type Compiler struct {
 	Cloudflare func(ctx context.Context, s *store.Store) []string
 	// Bundle returns the active managed rule bundle (body signatures); nil = built-in.
 	Bundle func() *sigs.Bundle
+	// Hosts returns static name → IP entries (e.g. StaticHosts("/etc/hosts")); forward
+	// hosts found there are rendered as their address. nil = none.
+	Hosts func() map[string]string
+	// HostGateway returns the Docker host's address (see HostGateway); loopback forward
+	// hosts are rendered with it. "" or nil = loopback stays loopback.
+	HostGateway func() string
 }
 
 type hostView struct {
@@ -184,6 +190,15 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		return err
 	}
 
+	var static map[string]string
+	if c.Hosts != nil {
+		static = c.Hosts()
+	}
+	hostGW := ""
+	if c.HostGateway != nil {
+		hostGW = c.HostGateway()
+	}
+
 	n := 0
 	for _, h := range hosts {
 		if !h.Enabled {
@@ -194,7 +209,7 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		if err := validate.ProxyHost(&hc); err != nil {
 			return fmt.Errorf("proxy host %d: %w", h.ID, err)
 		}
-		v := hostView{ProxyHost: hc, P: c.P, HasRootLocation: validate.HasRootLocation(hc.AdvancedConfig), Upstream: hc.ForwardHost}
+		v := hostView{ProxyHost: hc, P: c.P, HasRootLocation: validate.HasRootLocation(hc.AdvancedConfig), Upstream: upstreamAddr(hc.ForwardHost, static, hostGW)}
 		// TLS is enabled once the certificate files exist (an ACME order may still be pending).
 		if hc.CertificateID != nil {
 			dir := c.P.CertDir(*hc.CertificateID)

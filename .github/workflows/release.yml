@@ -65,6 +65,20 @@ jobs:
           echo "$procs"
           test -z "$(echo "$procs" | awk '{print $1}' | grep -v -x corvus)"
           docker rm -f smoke
+      - name: Smoke test (network_mode host, ports below 1024 without root)
+        run: |
+          mkdir -p data-host
+          docker run -d --name smoke-host --network host -v "$PWD/data-host:/data" -e CORVUS_REDIS_PORT=6390 corvus:smoke
+          for i in $(seq 1 60); do
+            s=$(docker inspect -f '{{.State.Health.Status}}' smoke-host 2>/dev/null || true)
+            [ "$s" = "healthy" ] && break
+            sleep 2
+          done
+          docker logs smoke-host 2>&1 | grep -v setup_token | tail -20
+          test "$(docker inspect -f '{{.State.Health.Status}}' smoke-host)" = "healthy"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/)" = "404"
+          ! docker logs smoke-host 2>&1 | grep -q "Permission denied"
+          docker rm -f smoke-host
       - name: Log in to GHCR
         if: env.PUBLISH == 'true'
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
