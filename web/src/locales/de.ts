@@ -173,6 +173,7 @@ export const de: Partial<Record<keyof typeof ko, string>> = {
   auditDesc: "Jede administrative Aktion wird protokolliert: wer was wann geändert hat.", searchAudit: "Akteur, Ziel oder IP suchen", noAudit: "Keine Audit-Einträge", noAuditDesc: "Administrative Aktionen werden hier protokolliert.",
   // import
   importDesc: "Einen Datenordner von Nginx Proxy Manager einlesen und Proxy-Hosts, Zertifikate und Zugriffslisten importieren. Die Quelle wird nie verändert.",
+  npmDb: "NPM-Datenbank", npmDbSqlite: "SQLite (Standard)", npmDbMysql: "MySQL / MariaDB", npmDbHost: "Host", npmDbHostHint: "Corvus muss die NPM-Datenbank erreichen können, z. B. Corvus dem Docker-Netzwerk von NPM hinzufügen und den Dienstnamen (db) verwenden.", npmDbPort: "Port", npmDbName: "Datenbank", npmDbUser: "Benutzer", npmDbPassword: "Passwort", npmDbPasswordHint: "Wird nur für diesen Import verwendet und nicht gespeichert. Zertifikatsdateien werden weiterhin aus den eingebundenen NPM-Volumes gelesen.",
   npmPath: "NPM-Datenpfad", npmPathHint: "Der schreibgeschützt in den Container eingebundene NPM-Pfad /data.", preview: "Vorschau",
   importEmptyTitle: "Pfad für den Import eingeben", importEmptyDesc: "Prüfen Sie Konflikte in der Vorschau und wählen Sie dann genau aus, was importiert werden soll.", importNothing: "Nichts zu importieren.",
   conflict: "Konflikt", importable: "Bereit", warningsN: "{n} Warnungen", importSelected: "{n} ausgewählt", importNow: "Auswahl importieren",

@@ -5,7 +5,7 @@ import { api, deployedVersion, isMissing, type NpmPreview } from "../api";
 import { ErrorBox, PageHeader, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Badge, Callout, Card, CardHeader, EmptyState } from "../components/ui/display";
-import { Field, Input, fieldErr } from "../components/ui/form";
+import { Field, Input, Segmented, fieldErr } from "../components/ui/form";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
 import { useCan } from "../lib/rbac";
 import { useI18n } from "../i18n";
@@ -41,6 +41,9 @@ export default function ImportNpm() {
 function ImportNpmInner() {
   const { t } = useI18n();
   const [path, setPath] = useState(DEFAULT_PATH);
+  const [dbKind, setDbKind] = useState<"sqlite" | "mysql">("sqlite");
+  const [my, setMy] = useState({ host: "db", port: "3306", database: "npm", user: "npm", password: "" });
+  const source = () => dbKind === "mysql" ? { path, mysql: { ...my, port: Number(my.port) || 3306 } } : { path };
   const [pv, setPv] = useState<NpmPreview | null>(null);
   const [sel, setSel] = useState<{ h: Set<number>; c: Set<number>; a: Set<number> }>({ h: new Set(), c: new Set(), a: new Set() });
   const [result, setResult] = useState<{ imported: Record<string, number>; skipped: unknown[]; version: number | null } | null>(null);
@@ -50,7 +53,7 @@ function ImportNpmInner() {
 
   const preview = async () => {
     setResult(null);
-    const r = await prev.run(() => api.post<NpmPreview>("/api/import/npm/preview", { path }), { deployed: false });
+    const r = await prev.run(() => api.post<NpmPreview>("/api/import/npm/preview", source()), { deployed: false });
     if (!r) return;
     const norm: NpmPreview = { proxy_hosts: r.proxy_hosts ?? [], certificates: r.certificates ?? [], access_lists: r.access_lists ?? [], warnings: r.warnings ?? [] };
     setPv(norm);
@@ -58,7 +61,7 @@ function ImportNpmInner() {
   };
   const apply = async () => {
     const r = await app.run(() => api.post<{ imported: Record<string, number>; skipped: unknown[]; version: unknown }>("/api/import/npm/apply", {
-      path, proxy_host_ids: [...sel.h], certificate_ids: [...sel.c], access_list_ids: [...sel.a],
+      ...source(), proxy_host_ids: [...sel.h], certificate_ids: [...sel.c], access_list_ids: [...sel.a],
     }), { deployed: false });
     if (!r) return;
     const v = deployedVersion(r);
@@ -76,11 +79,26 @@ function ImportNpmInner() {
       <PageHeader title={t("navImport")} description={t("importDesc")} />
       <Card className="mb-5">
         <div className="space-y-4 p-4">
-          <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={(e) => { e.preventDefault(); preview(); }}>
+          <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); preview(); }}>
+            <Field label={t("npmDb")}>
+              <Segmented label={t("npmDb")} value={dbKind} onChange={setDbKind} className="sm:w-auto"
+                options={[{ value: "sqlite", label: t("npmDbSqlite") }, { value: "mysql", label: t("npmDbMysql") }]} />
+            </Field>
+            {dbKind === "mysql" && (
+              <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
+                <Field label={t("npmDbHost")} hint={t("npmDbHostHint")} htmlFor="npm-db-host"><Input id="npm-db-host" className="font-mono" value={my.host} onChange={(e) => setMy({ ...my, host: e.target.value })} /></Field>
+                <Field label={t("npmDbPort")} htmlFor="npm-db-port"><Input id="npm-db-port" className="font-mono" inputMode="numeric" value={my.port} onChange={(e) => setMy({ ...my, port: e.target.value })} /></Field>
+                <Field label={t("npmDbName")} htmlFor="npm-db-name"><Input id="npm-db-name" className="font-mono" value={my.database} onChange={(e) => setMy({ ...my, database: e.target.value })} /></Field>
+                <Field label={t("npmDbUser")} htmlFor="npm-db-user"><Input id="npm-db-user" className="font-mono" autoComplete="off" value={my.user} onChange={(e) => setMy({ ...my, user: e.target.value })} /></Field>
+                <Field label={t("npmDbPassword")} hint={t("npmDbPasswordHint")} htmlFor="npm-db-pass" className="sm:col-span-2"><Input id="npm-db-pass" type="password" autoComplete="new-password" value={my.password} onChange={(e) => setMy({ ...my, password: e.target.value })} /></Field>
+              </div>
+            )}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <Field label={t("npmPath")} hint={t("npmPathHint")} error={fieldErr(prev.error, "path")} className="flex-1" htmlFor="npm-path">
               <Input id="npm-path" className="font-mono" value={path} onChange={(e) => setPath(e.target.value)} placeholder={DEFAULT_PATH} />
             </Field>
             <Button type="submit" variant="primary" loading={prev.busy} disabled={!path.trim()} className="sm:mb-[22px]"><FolderSearch className="h-4 w-4" />{t("preview")}</Button>
+            </div>
           </form>
           {missing ? <Callout tone="warn" title={t("comingSoon")}>{t("comingSoonDesc")}</Callout> : !fieldErr(prev.error, "path") && <ErrorBox error={prev.error} />}
         </div>

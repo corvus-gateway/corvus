@@ -173,6 +173,7 @@ export const ru: Partial<Record<keyof typeof ko, string>> = {
   auditDesc: "Все административные действия фиксируются: кто, что и когда изменил.", searchAudit: "Поиск по пользователю, объекту или IP", noAudit: "Нет записей аудита", noAuditDesc: "Здесь будут фиксироваться административные действия.",
   // import
   importDesc: "Считайте папку данных Nginx Proxy Manager и импортируйте прокси-хосты, сертификаты и списки доступа. Исходные данные не изменяются.",
+  npmDb: "База данных NPM", npmDbSqlite: "SQLite (по умолчанию)", npmDbMysql: "MySQL / MariaDB", npmDbHost: "Хост", npmDbHostHint: "Corvus должен иметь доступ к базе данных NPM, например подключите Corvus к Docker-сети NPM и укажите имя сервиса (db).", npmDbPort: "Порт", npmDbName: "База данных", npmDbUser: "Пользователь", npmDbPassword: "Пароль", npmDbPasswordHint: "Используется только для этого импорта и не сохраняется. Файлы сертификатов по-прежнему читаются из подключённых томов NPM.",
   npmPath: "Путь к данным NPM", npmPathHint: "Путь /data NPM, смонтированный в контейнер только для чтения.", preview: "Предпросмотр",
   importEmptyTitle: "Укажите путь для импорта", importEmptyDesc: "Проверьте конфликты в предпросмотре и выберите, что именно импортировать.", importNothing: "Нечего импортировать.",
   conflict: "Конфликт", importable: "Готово", warningsN: "Предупреждений: {n}", importSelected: "Выбрано: {n}", importNow: "Импортировать выбранное",

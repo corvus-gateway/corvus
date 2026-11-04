@@ -172,6 +172,7 @@ export const ko = {
   auditDesc: "누가 언제 무엇을 바꿨는지 모든 관리 작업이 기록됩니다.", searchAudit: "작업자·대상·IP 검색", noAudit: "감사 기록이 없습니다", noAuditDesc: "관리 작업이 수행되면 이곳에 기록됩니다.",
   // import
   importDesc: "Nginx Proxy Manager의 데이터 폴더를 읽어 프록시 호스트·인증서·접근 목록을 가져옵니다. 원본은 변경되지 않습니다.",
+  npmDb: "NPM 데이터베이스", npmDbSqlite: "SQLite (기본)", npmDbMysql: "MySQL / MariaDB", npmDbHost: "호스트", npmDbHostHint: "Corvus가 NPM 데이터베이스에 접속할 수 있어야 합니다. 예: Corvus를 NPM의 Docker 네트워크에 연결하고 서비스 이름(db)을 입력하세요.", npmDbPort: "포트", npmDbName: "데이터베이스", npmDbUser: "사용자", npmDbPassword: "비밀번호", npmDbPasswordHint: "이번 가져오기에만 사용되며 저장되지 않습니다. 인증서 파일은 마운트한 NPM 볼륨에서 읽습니다.",
   npmPath: "NPM 데이터 경로", npmPathHint: "컨테이너에 읽기 전용으로 마운트한 NPM /data 경로입니다.", preview: "미리보기",
   importEmptyTitle: "가져올 경로를 입력하세요", importEmptyDesc: "미리보기에서 충돌 여부를 확인한 뒤 원하는 항목만 선택해 가져올 수 있습니다.", importNothing: "가져올 항목이 없습니다.",
   conflict: "충돌", importable: "가져올 수 있음", warningsN: "경고 {n}건", importSelected: "{n}개 항목 선택됨", importNow: "선택 항목 가져오기",

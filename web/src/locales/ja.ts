@@ -174,6 +174,7 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   auditDesc: "すべての管理操作を記録します。誰が、いつ、何を変更したかを確認できます。", searchAudit: "実行者、対象、IP を検索", noAudit: "監査ログはありません", noAuditDesc: "管理操作がここに記録されます。",
   // import
   importDesc: "Nginx Proxy Manager のデータフォルダーを読み込み、プロキシホスト、証明書、アクセスリストをインポートします。移行元は変更されません。",
+  npmDb: "NPM データベース", npmDbSqlite: "SQLite（既定）", npmDbMysql: "MySQL / MariaDB", npmDbHost: "ホスト", npmDbHostHint: "Corvus から NPM のデータベースに接続できる必要があります。例: Corvus を NPM の Docker ネットワークに参加させ、サービス名（db）を指定します。", npmDbPort: "ポート", npmDbName: "データベース", npmDbUser: "ユーザー", npmDbPassword: "パスワード", npmDbPasswordHint: "今回のインポートにのみ使用され、保存されません。証明書ファイルはマウントした NPM ボリュームから読み込みます。",
   npmPath: "NPM データパス", npmPathHint: "コンテナに読み取り専用でマウントした NPM の /data パスです。", preview: "プレビュー",
   importEmptyTitle: "インポート元のパスを入力してください", importEmptyDesc: "プレビューで競合を確認し、インポートする項目を選択してください。", importNothing: "インポートする項目はありません。",
   conflict: "競合", importable: "インポート可能", warningsN: "警告 {n} 件", importSelected: "{n} 件を選択中", importNow: "選択項目をインポート",

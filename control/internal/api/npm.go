@@ -17,11 +17,14 @@ import (
 )
 
 type npmRequest struct {
-	Path           string  `json:"path"`             // NPM /data mounted inside the container
-	LetsEncrypt    string  `json:"letsencrypt_path"` // NPM /etc/letsencrypt (default: sibling "letsencrypt")
-	ProxyHostIDs   []int64 `json:"proxy_host_ids"`
-	CertificateIDs []int64 `json:"certificate_ids"`
-	AccessListIDs  []int64 `json:"access_list_ids"`
+	Path        string `json:"path"`             // NPM /data mounted inside the container
+	LetsEncrypt string `json:"letsencrypt_path"` // NPM /etc/letsencrypt (default: sibling "letsencrypt")
+	// MySQL reads NPM's settings from a MySQL/MariaDB server (NPM's DB_MYSQL_*) instead of
+	// Path/database.sqlite. The password is used for this request only and never stored.
+	MySQL          *npmimport.MySQL `json:"mysql"`
+	ProxyHostIDs   []int64          `json:"proxy_host_ids"`
+	CertificateIDs []int64          `json:"certificate_ids"`
+	AccessListIDs  []int64          `json:"access_list_ids"`
 }
 
 // source resolves and confines the requested paths to the import root.
@@ -44,7 +47,7 @@ func (s *Server) npmSource(in npmRequest) (npmimport.Source, error) {
 			return npmimport.Source{}, fmt.Errorf("paths must be inside %s (mount the NPM volumes there read-only)", root)
 		}
 	}
-	return npmimport.Source{DataDir: filepath.Clean(data), LetsEncryptDir: filepath.Clean(le)}, nil
+	return npmimport.Source{DataDir: filepath.Clean(data), LetsEncryptDir: filepath.Clean(le), MySQL: in.MySQL}, nil
 }
 
 func (s *Server) npmRead(w http.ResponseWriter, r *http.Request) (*npmimport.Snapshot, npmRequest, bool) {

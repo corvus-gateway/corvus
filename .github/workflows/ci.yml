@@ -10,6 +10,20 @@ permissions:
 jobs:
   go:
     runs-on: ubuntu-latest
+    # NPM import from MySQL/MariaDB is tested against real servers
+    services:
+      mysql:
+        image: mysql:8.4
+        env: { MYSQL_ROOT_PASSWORD: test }
+        ports: ["3306:3306"]
+        options: --health-cmd "mysqladmin ping -ptest" --health-interval 5s --health-retries 20
+      mariadb:
+        image: mariadb:11.4
+        env: { MARIADB_ROOT_PASSWORD: test }
+        ports: ["3307:3306"]
+        options: --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 5s --health-retries 20
+    env:
+      CORVUS_TEST_MYSQL: mysql=127.0.0.1:3306,mariadb=127.0.0.1:3307
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }

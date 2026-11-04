@@ -174,6 +174,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   auditDesc: "记录所有管理操作：谁在何时更改了什么。", searchAudit: "搜索操作人、对象或 IP", noAudit: "暂无审计记录", noAuditDesc: "管理操作将记录在此处。",
   // import
   importDesc: "读取 Nginx Proxy Manager 数据目录，导入代理主机、证书和访问列表。不会修改源数据。",
+  npmDb: "NPM 数据库", npmDbSqlite: "SQLite（默认）", npmDbMysql: "MySQL / MariaDB", npmDbHost: "主机", npmDbHostHint: "Corvus 必须能够访问 NPM 的数据库，例如将 Corvus 加入 NPM 的 Docker 网络并使用服务名（db）。", npmDbPort: "端口", npmDbName: "数据库", npmDbUser: "用户", npmDbPassword: "密码", npmDbPasswordHint: "仅用于本次导入，不会保存。证书文件仍从挂载的 NPM 卷中读取。",
   npmPath: "NPM 数据路径", npmPathHint: "以只读方式挂载到容器中的 NPM /data 路径。", preview: "预览",
   importEmptyTitle: "请输入要导入的路径", importEmptyDesc: "在预览中检查冲突，然后精确选择要导入的内容。", importNothing: "没有可导入的内容。",
   conflict: "冲突", importable: "可导入", warningsN: "{n} 个警告", importSelected: "已选 {n} 项", importNow: "导入所选项",
