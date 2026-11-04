@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Archive, Download, Save } from "lucide-react";
 import { api } from "../api";
+import { BackupCard } from "../components/BackupCard";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Callout, Card, EmptyState, TableSkeleton } from "../components/ui/display";
@@ -91,6 +92,8 @@ export default function Retention() {
             </Table>
           )}
         </Card>
+
+        {isAdmin && <BackupCard />}
       </div>
     </>
   );

@@ -26,6 +26,7 @@ import (
 	"corvus/control/internal/api"
 	"corvus/control/internal/auth"
 	"corvus/control/internal/autoban"
+	"corvus/control/internal/backup"
 	"corvus/control/internal/certs"
 	"corvus/control/internal/compiler"
 	"corvus/control/internal/deploy"
@@ -115,6 +116,13 @@ func secret(path string) (string, error) {
 func run() error {
 	dataDir := env("CORVUS_DATA_DIR", "/data")
 	withGateway := envBool("CORVUS_GATEWAY", true)
+	// A restore confirmed in the console is applied now, before anything opens the data.
+	// On failure the previous state stays in place and startup continues with it.
+	if rb, err := backup.ApplyPending(dataDir, slog.Default(), time.Now()); err != nil {
+		slog.Error("staged restore was not applied", "err", err)
+	} else if rb != "" {
+		slog.Warn("configuration restored from backup; the replaced files are kept for a manual rollback", "dir", rb)
+	}
 	// The image runs as the unprivileged "corvus" user (H9); nginx master and workers
 	// share it. certs/ and secrets/ stay owner-only.
 	for d, mode := range map[string]os.FileMode{"nginx": 0o755, "run": 0o755, "certs": 0o750, "secrets": 0o700} {

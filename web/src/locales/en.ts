@@ -3,6 +3,7 @@ import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { bansStrings } from "./bans.i18n";
+import { backupStrings } from "./backup.i18n";
 import { enSecurity } from "./security.en";
 import { enUsers } from "./users.en";
 import type { ko } from "./ko";
@@ -201,4 +202,5 @@ export const en: Record<keyof typeof ko, string> = {
   ...ssoStrings.en,
   ...retentionStrings.en,
   ...templatesStrings.en,
+  ...backupStrings.en,
 };

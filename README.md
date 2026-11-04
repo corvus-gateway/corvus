@@ -163,6 +163,48 @@ certificates, traffic history and `secrets/`. **Back up `secrets/`** — it hold
 encrypt MFA secrets and DNS tokens in the database. The container runs as the unprivileged user
 `10001` and takes ownership of `./data` on first start.
 
+**Backup from the console:** *Data retention → Backup & restore → Download backup* (administrators,
+signed-in session only — API tokens cannot download backups) creates
+`corvus-backup-<version>-<timestamp>.tar.gz` with:
+
+- `corvus.db` — a consistent snapshot of the SQLite settings database (taken with `VACUUM INTO`
+  while Corvus keeps running),
+- `secrets/`, `certs/` and `rules/` (installed managed-rule bundle),
+- `manifest.json` — format version, Corvus version, creation time, database engine and the
+  SHA-256 of every file.
+
+Generated configuration versions (`nginx/`), traffic history and request logs (`history/`), the
+country database (`geoip/`) and `run/` are left out: they are regenerated or downloaded again.
+With PostgreSQL (`CORVUS_DB_URL`) the archive holds no database, only a `README.txt` — back the
+database up with `pg_dump` and keep the dump together with the archive (its encrypted fields need
+`secrets/data_key`). **The archive contains private keys and the data key: store it encrypted.**
+Every download is recorded in the audit log.
+
+**Restore from the console:** *Restore from a backup* uploads an archive (at most 200 MB). It is
+checked — format version, SHA-256 of every file, no absolute paths, `..`, links or unknown entries,
+same database engine — and its summary (version, date, file and certificate counts) is shown.
+*Restore on next restart* stages it in `./data/restore-pending/`; nothing changes until you restart
+the container:
+
+```bash
+docker compose restart
+```
+
+On start, before the database is opened, Corvus moves the current `corvus.db`, `secrets/`,
+`certs/`, `rules/` and `nginx/` to `./data/restore-backup-<timestamp>/` and puts the backup in
+their place (the configuration is then re-rendered from the restored database). To roll back, stop
+the container and move those files back. If the staged files fail their checks the restore is not
+applied, the current state is kept and the staged files are moved to `./data/restore-failed-<timestamp>/`
+(see `docker compose logs`). Traffic history is not touched by a restore.
+
+**Restore by hand:** the archive layout is the data directory layout. Before the first start,
+extract it into an empty `./data` (the extra `manifest.json` is harmless):
+
+```bash
+mkdir data && tar -xzf corvus-backup-….tar.gz -C data
+docker compose up -d
+```
+
 ### Hardened install
 
 [`deploy/docker-compose.hardened.yml`](deploy/docker-compose.hardened.yml) runs the same image

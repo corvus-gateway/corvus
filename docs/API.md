@@ -15,7 +15,8 @@ Authorization: Bearer cvs_…
 - A token has a role (`viewer`, `operator` or `admin`) and never more than its creator's current
   role. Disabling or deleting the creator invalidates the token.
 - Tokens cannot call session-only endpoints: sign-in, password and MFA (`/api/auth/*`, except
-  `GET /api/auth/me`), user management (`/api/users`) and token management (`/api/tokens`).
+  `GET /api/auth/me`), user management (`/api/users`), token management (`/api/tokens`) and backup/restore
+  (`/api/backup`).
 - Only a hash of the token is stored; the value is shown once when it is created.
 
 **Browser sessions** (used by the console): `POST /api/auth/login` sets a session cookie.
@@ -41,6 +42,8 @@ Bearer requests don't need it.
   | 409 | `conflict` | Conflicts with existing data (e.g. a domain already in use) |
   | 429 | `rate_limited` | Too many attempts (sign-in, MFA) |
   | 422 | `validation` | Invalid fields (see `fields`) |
+  | 413 | `too_large` | Upload larger than allowed (backup restore: 200 MB) |
+  | 422 | `invalid_backup` | Uploaded backup failed its checks (`message` says why) |
   | 422 | `config_rejected` | The gateway rejected the generated configuration; nothing was changed (`output` contains the message) |
 
 - Every configuration change is validated, written as a new configuration version, tested with
@@ -177,6 +180,23 @@ Proxy host fields: `domains` (array), `forward_scheme` (`http`/`https`), `forwar
 | GET / POST | `/api/tokens` | session | API tokens (`{ "name", "role", "expires_days" }`) |
 | DELETE | `/api/tokens/{id}` | session | Revoke a token |
 | POST | `/api/import/npm/preview`, `/apply` | admin | Import from Nginx Proxy Manager |
+
+### Backup and restore
+
+Admin with a signed-in session only (API tokens get `403 session_required`): the archive contains
+the secrets. See *Data and backups* in the README for what is included.
+
+| Method | Path | Role | Description |
+|---|---|---|---|
+| GET | `/api/backup` | admin (session) | Download `corvus-backup-<version>-<timestamp>.tar.gz` (`Cache-Control: no-store`, audited as `backup.download`) |
+| GET | `/api/backup/restore` | admin (session) | Staged restore: `{ "state": "" \| "uploaded" \| "pending", "summary", "current_engine", "current_version", "restart_command" }` |
+| POST | `/api/backup/restore` | admin (session) | Upload a backup (`multipart/form-data`, field `file`, at most 200 MB); validates it and returns the status with `summary` (`version`, `created_at`, `db_engine`, `has_db`, `files`, `bytes`, `secrets`, `certs`) and `state: "uploaded"` |
+| POST | `/api/backup/restore/confirm` | admin (session) | Apply the uploaded backup on the next restart (`state: "pending"`) |
+| DELETE | `/api/backup/restore` | admin (session) | Discard an uploaded or pending restore |
+
+The archive is a `.tar.gz` of the data directory layout: `manifest.json`
+(`{ "format": 1, "version", "created_at", "db_engine", "files": [{ "path", "size", "sha256" }] }`),
+`corvus.db` (SQLite only; with PostgreSQL a `README.txt` instead), `secrets/`, `certs/` and `rules/`.
 
 ## Prometheus metrics
 

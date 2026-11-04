@@ -200,6 +200,13 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("DELETE /api/tokens/{id}", s.admSession(s.deleteToken))
 	mux.Handle("GET /metrics", http.HandlerFunc(s.handleMetrics))
 
+	// Backup & restore (contains secrets: admin with a real session only).
+	mux.Handle("GET /api/backup", s.admSession(s.downloadBackup))
+	mux.Handle("GET /api/backup/restore", s.admSession(s.getRestore))
+	mux.Handle("POST /api/backup/restore", s.admSession(s.uploadRestore))
+	mux.Handle("POST /api/backup/restore/confirm", s.admSession(s.confirmRestore))
+	mux.Handle("DELETE /api/backup/restore", s.admSession(s.discardRestore))
+
 	mux.Handle("/api/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not_found", "unknown API endpoint")
 	}))

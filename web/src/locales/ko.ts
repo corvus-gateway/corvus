@@ -3,6 +3,7 @@ import { koRetention } from "./retention.i18n";
 import { koSso } from "./sso.i18n";
 import { koTokens } from "./tokens.i18n";
 import { koBans } from "./bans.i18n";
+import { koBackup } from "./backup.i18n";
 import { koSecurity } from "./security";
 import { koUsers } from "./users";
 import { koAlerts } from "./alerts";
@@ -199,4 +200,5 @@ export const ko = {
   ...koSso,
   ...koRetention,
   ...koTemplates,
+  ...koBackup,
 } as const;

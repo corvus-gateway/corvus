@@ -3,6 +3,7 @@ import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { bansStrings } from "./bans.i18n";
+import { backupStrings } from "./backup.i18n";
 import type { ko } from "./ko";
 import type { RuleLabels } from "../lib/rules";
 import type { AuditLabels } from "../lib/audit";
@@ -301,6 +302,7 @@ export const fr: Partial<Record<keyof typeof ko, string>> = {
   ...ssoStrings.fr,
   ...retentionStrings.fr,
   ...templatesStrings.fr,
+  ...backupStrings.fr,
 };
 
 export const frRuleLabels: RuleLabels | undefined = {

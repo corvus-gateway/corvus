@@ -24,7 +24,8 @@ import (
 //   - Bearer requests are exempt from the CSRF header (browsers never attach them
 //     automatically); cookie requests keep the check
 //   - tokens can never reach session-only endpoints: sign-in/password/MFA, users and
-//     token management (a leaked token cannot mint more tokens or escalate)
+//     token management (a leaked token cannot mint more tokens or escalate), and
+//     backup/restore (the archive contains the secrets)
 
 const tokenPrefix = "cvs_"
 
@@ -70,7 +71,8 @@ func sessionOnly(r *http.Request) bool {
 		return false
 	}
 	return strings.HasPrefix(p, "/api/auth/") || p == "/api/users" || strings.HasPrefix(p, "/api/users/") ||
-		p == "/api/tokens" || strings.HasPrefix(p, "/api/tokens/")
+		p == "/api/tokens" || strings.HasPrefix(p, "/api/tokens/") ||
+		p == "/api/backup" || strings.HasPrefix(p, "/api/backup/")
 }
 
 // tokenTouched limits last_used_at writes to once a minute per token.
