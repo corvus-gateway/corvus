@@ -387,6 +387,25 @@ function _M.set_bans()
     return
   end
   local now = ngx.time()
+  local q = ngx.shared.corvus_bb_q
+  if q then
+    -- bad-behaviour settings (applied by every worker on its next request)
+    if type(cfg.bb) == "table" then
+      local raw = cjson.encode(cfg.bb)
+      if raw and q:get("cfg") ~= raw then
+        q:set("cfg", raw)
+        q:incr("cfg_v", 1, 0)
+      end
+    end
+    -- gateway bans corvus-control has processed: drop their pending records
+    if type(cfg.ack) == "table" then
+      for ip, id in pairs(cfg.ack) do
+        local key = "p:" .. tostring(ip)
+        local h = cjson.decode(q:get(key) or "")
+        if type(h) == "table" and h.id == id then q:delete(key) end
+      end
+    end
+  end
   local gen = tostring(now) .. "-" .. tostring(math.random(1, 1000000000))
   local n = 0
   for ip, exp in pairs(cfg.ips) do
@@ -398,9 +417,102 @@ function _M.set_bans()
     end
   end
   for _, k in ipairs(d:get_keys(0)) do
-    if d:get(k) ~= gen then d:delete(k) end
+    -- keep gateway-local bad-behaviour bans corvus-control has not recorded yet
+    if d:get(k) ~= gen and not (q and q:get("p:" .. k)) then d:delete(k) end
   end
   ngx.say(n)
+end
+
+-- ------------------------------------------------------------------ bad behaviour
+--
+-- BunkerWeb-style: responses with one of the configured status codes are counted per
+-- client IP and proxy host (corvus_bb, TTL = window). When the threshold is reached the
+-- IP is banned here immediately (corvus_bans, first-ban duration) and a pending record
+-- is queued (corvus_bb_q "p:<ip>"); corvus-control polls the records, stores the ban
+-- with its escalation and acknowledges them with the next ban-list push.
+
+local BB_V, BB_CFG = nil, nil  -- per-worker compiled settings and their version
+
+local function bb_config()
+  local q = ngx.shared.corvus_bb_q
+  if not q then return nil end
+  local v = q:get("cfg_v")
+  if not v then return nil end
+  if v ~= BB_V then
+    local c = cjson.decode(q:get("cfg") or "")
+    local cfg
+    if type(c) == "table" and c.enabled == true and type(c.codes) == "table" then
+      local codes, list = {}, {}
+      for _, x in ipairs(c.codes) do
+        x = tonumber(x)
+        if x then codes[x] = true; list[#list + 1] = x end
+      end
+      cfg = {
+        codes = codes, list = list,
+        threshold = math.max(tonumber(c.threshold) or 10, 1),
+        window = math.max(tonumber(c.window) or 60, 1),
+        duration = math.max(tonumber(c.duration) or 900, 1),
+        exempt = ip_matcher(type(c.exempt) == "table" and c.exempt or {}),
+      }
+    end
+    BB_V, BB_CFG = v, cfg
+  end
+  return BB_CFG
+end
+
+-- log_by_lua of every proxy host.
+function _M.log(host_id)
+  if ngx.ctx.corvus_wr then ngx.var.corvus_wr = ngx.ctx.corvus_wr end
+  local cfg = bb_config()
+  if not cfg then return end
+  local status = tonumber(ngx.var.status)
+  if not status or not cfg.codes[status] then return end
+  -- already banned, or allowed by a security rule: not counted
+  if ngx.var.corvus_ban == "1" or ngx.var.corvus_skip == "1" then return end
+  local uri = ngx.var.uri or ""
+  -- the gateway's own endpoints (certificate validation, access queue) never count
+  if sub(uri, 1, 28) == "/.well-known/acme-challenge/" or sub(uri, 1, 10) == "/__corvus/" then return end
+  local bin = ngx.var.binary_remote_addr
+  if not bin or ip_in(cfg.exempt, bin) then return end
+  local ip = ngx.var.remote_addr
+  local bans, d, q = ngx.shared.corvus_bans, ngx.shared.corvus_bb, ngx.shared.corvus_bb_q
+  if not bans or not d or not q or bans:get(ip) then return end
+
+  local base = ip .. "|" .. tostring(host_id)
+  local n = d:incr(base, 1, 0, cfg.window)
+  d:incr(base .. "|" .. status, 1, 0, cfg.window)
+  if not n or n < cfg.threshold then return end
+
+  local counts = {}
+  for _, code in ipairs(cfg.list) do
+    local k = base .. "|" .. code
+    local c = d:get(k)
+    if c then counts[tostring(code)] = c; d:delete(k) end
+  end
+  d:delete(base)
+  local id = tostring(ngx.now()) .. "-" .. tostring(math.random(1, 1000000000))
+  local rec = cjson.encode({ id = id, ip = ip, host = ngx.var.corvus_host, counts = counts,
+    window = cfg.window, t = ngx.time() })
+  -- pending record first: a concurrent ban-list push then keeps the local ban
+  q:set("p:" .. ip, rec, cfg.duration)
+  bans:set(ip, "bb", cfg.duration)
+  ngx.log(ngx.WARN, "corvus: bad behaviour ban ", ip, " on ", ngx.var.corvus_host,
+    " (", n, " responses in ", cfg.window, "s)")
+end
+
+-- Status-port handler: pending gateway bans, {"hits": [<record>, ...]}.
+function _M.bad_behaviour_hits()
+  local q = ngx.shared.corvus_bb_q
+  local out = {}
+  if q then
+    for _, k in ipairs(q:get_keys(0)) do
+      if sub(k, 1, 2) == "p:" then
+        local v = q:get(k)
+        if v then out[#out + 1] = v end
+      end
+    end
+  end
+  ngx.say('{"hits":[', table.concat(out, ","), ']}')
 end
 
 return _M

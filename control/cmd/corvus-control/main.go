@@ -343,6 +343,7 @@ func run() error {
 	ban := &autoban.Service{Store: st, Traffic: tc}
 	if withGateway {
 		ban.PushURL = "http://127.0.0.1:9180/bans"
+		ban.HitsURL = "http://127.0.0.1:9180/bad-behaviour"
 	}
 	go ban.Run(ctx)
 

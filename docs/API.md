@@ -161,7 +161,7 @@ redirection hosts too; rules scoped to specific hosts target proxy hosts only.
 | GET / POST | `/api/bans` | viewer / operator | IP bans |
 | DELETE | `/api/bans/{id}` | operator | Remove a ban |
 | POST | `/api/bans/{id}/permanent` | operator | Make a ban permanent |
-| GET / PUT | `/api/settings/autoban` | viewer / operator | Automatic ban settings (threshold, first and longest ban, permanent ban from offense N) |
+| GET / PUT | `/api/settings/autoban` | viewer / operator | Automatic ban settings (threshold, first and longest ban, permanent ban from offense N, bad behaviour; see below) |
 | GET | `/api/settings/pages` | viewer | Block and error pages: `{ "pages": { "block" \| "error": { "custom", "html", "default_html" } }, "max_bytes", "placeholders" }` |
 | PUT | `/api/settings/pages/{page}` | operator | Set a custom page (`page` = `block` or `error`, body `{ "html" }`, at most 64 KB of UTF-8) and deploy |
 | POST | `/api/settings/pages/{page}/reset` | operator | Restore the built-in page and deploy |
@@ -169,6 +169,27 @@ redirection hosts too; rules scoped to specific hosts target proxy hosts only.
 | PUT / DELETE | `/api/rate-limits/{id}` | operator | Update / delete |
 | GET / POST | `/api/access-lists` | viewer / operator | Password protection lists |
 | PUT / DELETE | `/api/access-lists/{id}` | operator | Update / delete |
+
+**Automatic ban settings** (`/api/settings/autoban`):
+
+| Field | Default | Description |
+|---|---|---|
+| `enabled` | `true` | Automatic bans (security detections, scanners and bad behaviour) |
+| `threshold`, `window_s` | `20`, `600` | Security detections from one IP within the window (3–100000, 60–86400 s) |
+| `duration_s`, `max_duration_s` | `900`, `604800` | First ban; doubles for each repeat offense up to the longest ban (at most 30 days) |
+| `permanent_after` | `0` | Ban permanently from this offense on (2–100, `0` = never) |
+| `include_scans`, `scan_threshold` | `false`, `200` | Also ban IPs with many 4xx responses (at least half of their requests) within the window |
+| `exempt` | `[]` | CIDRs never banned automatically (loopback is always exempt) |
+| `bad_behaviour` | `false` | Ban on bad behaviour immediately (requires `enabled`) |
+| `bad_behaviour_codes` | `[400, 401, 403, 404, 405, 429, 444]` | Response status codes counted (400–599) |
+| `bad_behaviour_threshold`, `bad_behaviour_window_s` | `10`, `60` | Counted responses per client IP **and proxy host** within the window (3–100000, 10–3600 s) |
+
+Bad behaviour is counted in the gateway, so the IP is refused from the next request on, without
+waiting for corvus-control's 15-second evaluation. Requests from banned IPs, from exempt networks,
+requests a security rule allowed and the gateway's own endpoints (ACME challenges, access queue) are
+not counted. corvus-control then records the ban (source `auto`, reason like
+`bad behaviour: 12×404 on example.com in 60s`, audit action `ban.auto`) with the usual escalation;
+the first gateway-local ban lasts `duration_s`.
 
 The **block page** is shown when a security rule, a ban or attack-pattern blocking refuses a
 request; the **error page** when a proxy host's upstream cannot be reached or times out (nginx's

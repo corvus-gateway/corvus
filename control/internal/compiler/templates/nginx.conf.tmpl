@@ -68,6 +68,8 @@ http {
     lua_shared_dict corvus_wr_state 1m;   # waiting room Redis circuit breaker
     lua_shared_dict corvus_wr_ip 10m;     # waiting room per-IP new-entry limiter
     lua_shared_dict corvus_bans 16m;      # banned client addresses (pushed by corvus-control)
+    lua_shared_dict corvus_bb 16m;        # bad-behaviour counters per client IP and host (TTL = window)
+    lua_shared_dict corvus_bb_q 2m;       # bad-behaviour settings and gateway bans not yet recorded
     resolver {{.P.Resolver}} ipv6=off valid=30s;
     resolver_timeout 5s;
 
@@ -158,6 +160,11 @@ http {
             client_body_buffer_size 8m;
             default_type text/plain;
             content_by_lua_block { require("corvus.rules").set_bans() }
+        }
+        # Bad-behaviour bans made by the gateway, polled by corvus-control (loopback only).
+        location = /bad-behaviour {
+            default_type application/json;
+            content_by_lua_block { require("corvus.rules").bad_behaviour_hits() }
         }
         location / { return 404; }
     }

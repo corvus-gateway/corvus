@@ -82,6 +82,8 @@ server {
     # Security rules and attack-pattern blocking run in the rewrite phase — before
     # rate limiting, Basic auth and the access queue (corvus/rules.lua).
     rewrite_by_lua_block { require("corvus.rules").rewrite({{.ID}}) }
+    # Bad-behaviour counting (error responses per client IP) and access queue log fields.
+    log_by_lua_block { require("corvus.rules").log({{.ID}}) }
 {{- if eq .ClientIP "cloudflare"}}
 
     # Client IP: trust CF-Connecting-IP only from Cloudflare edge addresses.
@@ -144,7 +146,6 @@ server {
 
     # Waiting room "{{.Room.Name}}" (capacity {{.Room.Capacity}}, fail-{{.Room.FailMode}})
     set $corvus_host_room "{{.Room.Name}}";
-    log_by_lua_block { if ngx.ctx.corvus_wr then ngx.var.corvus_wr = ngx.ctx.corvus_wr end }
 
     # Waiting room endpoints get the same access list / exploit / rate-limit guard as
     # the site, plus a dedicated per-IP limit for the status API (F2).

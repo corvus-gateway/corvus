@@ -63,7 +63,7 @@ Go control plane, React console) that can **import an existing NPM setup**.
 - Request body inspection for JSON, form and multipart bodies (log or block)
 - One-click **virtual patches** for recent CVEs (React2Shell, wp2shell, PHP-CGI, Vite, n8n …)
 - Managed signature updates, accepted only when signed and newer (no tampering, no downgrade)
-- Automatic IP bans for repeat offenders, with escalation and exemptions
+- Automatic IP bans for repeat offenders, with escalation and exemptions; optional immediate bans on bad behaviour (too many 4xx responses per IP and site)
 - Rate limits with a dry-run mode; exploit-path blocking out of the box
 
 **Access Queue**

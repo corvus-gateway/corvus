@@ -228,6 +228,26 @@ c -o /dev/null -X DELETE $A/api/bans/$ABID
 sleep 2
 chk "$(code "$G/after-unban")" 200 "automatic ban lifted"
 
+echo "[bad behaviour]"
+# the demo origin answers 200 everywhere: a rule answering 404 stands in for missing paths
+BBR=$(rule "$(cond itest-bb-404 block ',"status_code":404' '{"field":"http.path","operator":"starts_with","value":["/itest-bb-missing"]}')")
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/settings/autoban -d '{"enabled":true,"threshold":20,"window_s":600,"duration_s":120,"include_scans":false,"scan_threshold":200,"exempt":[],"bad_behaviour":true,"bad_behaviour_codes":[404],"bad_behaviour_threshold":5,"bad_behaviour_window_s":60}')" 200 "bad behaviour: five 404s in 60 s"
+sleep 3
+chk "$(code "$G/bb-before")" 200 "client allowed before misbehaving"
+codes=$(for i in 1 2 3 4 5 6; do code "$G/itest-bb-missing/$i"; echo; done | tr '\n' ' ')
+chk "$codes" "404 404 404 404 404 403 " "request after five 404s refused immediately"
+chk "$(code "$G/bb-after")" 403 "banned by the gateway without waiting for corvus-control"
+listed=""; r=""
+for i in $(seq 1 15); do sleep 2; r=$(c $A/api/bans | js "[b['reason'] for b in d if b['ip']=='$ip' and b['source']=='auto']"); case "$r" in *"bad behaviour: 5×404 on "*) listed=1; break;; esac; done
+[ -n "$listed" ] && ok "bad-behaviour ban recorded by corvus-control ($r)" || bad "bad-behaviour ban not listed (got $r)"
+sleep 2
+chk "$(code "$G/bb-after-push")" 403 "still banned after the authoritative push"
+c -o /dev/null -X PUT $A/api/settings/autoban -d '{"enabled":false,"threshold":20,"window_s":600,"duration_s":900,"include_scans":false,"scan_threshold":200,"exempt":[],"bad_behaviour":false}'
+for id in $(c $A/api/bans | js "' '.join(str(b['id']) for b in d if b['ip']=='$ip')"); do c -o /dev/null -X DELETE $A/api/bans/$id; done
+c -o /dev/null -X DELETE $A/api/security-rules/$BBR
+sleep 2
+chk "$(code "$G/bb-after-unban")" 200 "bad-behaviour ban lifted"
+
 echo "[admin console allowlist]"
 chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/settings/network -d '{"trusted_proxies":[],"admin_allow":["10.255.255.0/24"]}')" 422 "allowlist without my address refused (lock-out guard)"
 chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/settings/network -d "{\"trusted_proxies\":[],\"admin_allow\":[\"$ip/32\"]}")" 200 "allowlist with my address saved"
