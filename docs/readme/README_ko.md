@@ -186,6 +186,25 @@ docker compose -f docker-compose.hardened.yml up -d
 | `CORVUS_IMPORT_DIR` | *NPM 가져오기*에 사용할 읽기 전용 NPM 볼륨이 있는 디렉터리 |
 | `CORVUS_RULES_URL` | 서명된 관리형 규칙 번들의 URL(선택) |
 | `CORVUS_ADMIN_ALLOW_ANY=1` | 관리자 허용 목록 설정 때문에 접속할 수 없게 되었을 때 쓰는 복구 스위치 |
+| `CORVUS_REDIS_PORT` | 127.0.0.1에서 동작하는 내장 접속 대기열 저장소의 포트(기본값 `6379`). `network_mode: host`에서 호스트가 이미 6379를 쓰고 있다면 변경 |
+| `CORVUS_RESOLVER` | 포워드 호스트 이름 확인에 쓸 DNS 서버. 기본값: Docker DNS, 호스트 네트워킹에서는 `/etc/resolv.conf`의 첫 번째 `nameserver` |
+| `CORVUS_LOOPBACK=container` | `127.0.0.1`/`localhost` 포워드 호스트가 Docker 호스트 대신 컨테이너 자신을 가리키도록 설정 |
+
+### 포워드 호스트
+
+프록시 호스트는 다음 대상으로 전달할 수 있습니다.
+
+- **다른 컨테이너**를 이름으로 지정. 예: `xoshop-web` 포트 `80`. Corvus가 그 컨테이너와 같은 Docker
+  네트워크에 있어야 합니다(`corvus` 서비스에 해당 네트워크를 추가).
+- **사설 또는 공인 IP**. 예: `10.3.2.39` 포트 `8084`.
+- **Docker 호스트 자체의 서비스**를 NPM과 마찬가지로 `127.0.0.1` 또는 `localhost`로 지정. 컨테이너
+  안에서 이 주소는 Docker 호스트를 뜻하므로 `host.docker.internal`이 필요 없습니다. 단, 서비스가
+  컨테이너에서 접근할 수 있는 주소(`127.0.0.1`만이 아니라 `0.0.0.0` 또는 Docker 브리지)에서 수신해야
+  하며, 호스트 방화벽이 Docker 네트워크에서 오는 연결을 허용해야 합니다.
+
+호스트의 `127.0.0.1`에서만 수신하는 서비스에 연결하거나 `network_mode: host`를 쓰던 NPM 구성을 그대로
+유지하려면 Corvus를 호스트 네트워킹으로 실행하세요. `ports:`와 `networks:`를 `network_mode: host`로
+바꾸면 됩니다(호스트에서 6379를 이미 쓰고 있다면 `CORVUS_REDIS_PORT`도 설정).
 
 ### Nginx Proxy Manager에서 마이그레이션
 

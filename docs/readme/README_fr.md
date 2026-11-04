@@ -189,6 +189,25 @@ Définissez ces variables sous `environment:` dans `docker-compose.yml`.
 | `CORVUS_IMPORT_DIR` | Répertoire contenant les volumes NPM en lecture seule pour *Importer depuis NPM* |
 | `CORVUS_RULES_URL` | URL facultative d'un lot de règles gérées signé |
 | `CORVUS_ADMIN_ALLOW_ANY=1` | Interrupteur de secours si vous vous êtes verrouillé avec la liste d'autorisation d'administration |
+| `CORVUS_REDIS_PORT` | Port du stockage intégré de la file d'attente d'accès sur 127.0.0.1 (par défaut `6379`) ; à modifier avec `network_mode: host` si l'hôte utilise déjà 6379 |
+| `CORVUS_RESOLVER` | Serveur DNS pour les hôtes de destination. Par défaut : le DNS de Docker, ou le premier `nameserver` de `/etc/resolv.conf` en réseau hôte |
+| `CORVUS_LOOPBACK=container` | Faire pointer les hôtes de destination `127.0.0.1`/`localhost` vers le conteneur lui-même plutôt que vers l'hôte Docker |
+
+### Hôtes de destination
+
+Un hôte proxy peut transférer vers :
+
+- **un autre conteneur** par son nom, p. ex. `xoshop-web` port `80` — Corvus doit partager un réseau Docker
+  avec lui (ajoutez ce réseau au service `corvus`) ;
+- **une IP privée ou publique**, p. ex. `10.3.2.39` port `8084` ;
+- **un service sur l'hôte Docker lui-même** via `127.0.0.1` ou `localhost`, comme dans NPM. Dans un
+  conteneur, ces adresses désignent l'hôte Docker : `host.docker.internal` n'est donc pas nécessaire. Le service
+  doit écouter sur une adresse joignable depuis le conteneur (`0.0.0.0` ou le pont Docker, pas seulement
+  `127.0.0.1`), et le pare-feu de l'hôte doit autoriser les connexions provenant des réseaux Docker.
+
+Pour atteindre des services qui n'écoutent que sur `127.0.0.1` de l'hôte, ou pour conserver tel quel un
+déploiement NPM qui utilisait `network_mode: host`, exécutez Corvus en réseau hôte : remplacez `ports:` et
+`networks:` par `network_mode: host` (et définissez `CORVUS_REDIS_PORT` si le port 6379 est déjà pris sur l'hôte).
 
 ### Migrer depuis Nginx Proxy Manager
 

@@ -185,6 +185,25 @@ docker compose -f docker-compose.hardened.yml up -d
 | `CORVUS_IMPORT_DIR` | *NPM からインポート*で使用する、読み取り専用の NPM ボリュームを置いたディレクトリ |
 | `CORVUS_RULES_URL` | 署名付きマネージドルールバンドルの URL(任意) |
 | `CORVUS_ADMIN_ALLOW_ANY=1` | 管理者の許可リストが原因でアクセスできなくなった場合の復旧用スイッチ |
+| `CORVUS_REDIS_PORT` | 127.0.0.1 で動作する内蔵アクセスキューストアのポート(デフォルト `6379`)。`network_mode: host` でホストがすでに 6379 を使っている場合に変更 |
+| `CORVUS_RESOLVER` | 転送先ホストの名前解決に使う DNS サーバー。デフォルト: Docker の DNS、ホストネットワークでは `/etc/resolv.conf` の最初の `nameserver` |
+| `CORVUS_LOOPBACK=container` | `127.0.0.1`/`localhost` の転送先ホストが Docker ホストではなくコンテナ自身を指すようにする |
+
+### 転送先ホスト
+
+プロキシホストの転送先には次を指定できます。
+
+- **別のコンテナ**を名前で指定。例: `xoshop-web` ポート `80`。Corvus がそのコンテナと Docker
+  ネットワークを共有している必要があります(`corvus` サービスにそのネットワークを追加)。
+- **プライベートまたはパブリック IP**。例: `10.3.2.39` ポート `8084`。
+- **Docker ホスト自体のサービス**を、NPM と同様に `127.0.0.1` または `localhost` で指定。コンテナ内では
+  これらは Docker ホストを意味するため、`host.docker.internal` は不要です。サービスはコンテナから到達できる
+  アドレス(`127.0.0.1` だけでなく `0.0.0.0` または Docker ブリッジ)で待ち受ける必要があり、ホストの
+  ファイアウォールで Docker ネットワークからの接続を許可する必要があります。
+
+ホストの `127.0.0.1` でのみ待ち受けるサービスに接続する場合や、`network_mode: host` を使っていた NPM の
+構成をそのまま使う場合は、Corvus をホストネットワークで実行します。`ports:` と `networks:` を
+`network_mode: host` に置き換えてください(ホストで 6379 が使用中なら `CORVUS_REDIS_PORT` も設定)。
 
 ### Nginx Proxy Manager からの移行
 

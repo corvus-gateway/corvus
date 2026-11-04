@@ -188,6 +188,26 @@ Setzen Sie diese Variablen unter `environment:` in `docker-compose.yml`.
 | `CORVUS_IMPORT_DIR` | Verzeichnis mit schreibgeschützten NPM-Volumes für *Import aus NPM* |
 | `CORVUS_RULES_URL` | Optionale URL eines signierten Bundles mit verwalteten Regeln |
 | `CORVUS_ADMIN_ALLOW_ANY=1` | Notfallschalter, falls Sie sich mit der Admin-Zulassungsliste ausgesperrt haben |
+| `CORVUS_REDIS_PORT` | Port des integrierten Speichers der Zugriffswarteschlange auf 127.0.0.1 (Standard `6379`); bei `network_mode: host` ändern, wenn der Host 6379 bereits belegt |
+| `CORVUS_RESOLVER` | DNS-Server für Ziel-Hosts. Standard: der DNS von Docker bzw. bei Host-Networking der erste `nameserver` aus `/etc/resolv.conf` |
+| `CORVUS_LOOPBACK=container` | Ziel-Hosts `127.0.0.1`/`localhost` zeigen auf den Container selbst statt auf den Docker-Host |
+
+### Ziel-Hosts
+
+Ein Proxy-Host kann weiterleiten an:
+
+- **einen anderen Container** über seinen Namen, z. B. `xoshop-web` Port `80` — Corvus muss sich mit ihm
+  ein Docker-Netzwerk teilen (fügen Sie dieses Netzwerk dem Dienst `corvus` hinzu);
+- **eine private oder öffentliche IP**, z. B. `10.3.2.39` Port `8084`;
+- **einen Dienst auf dem Docker-Host selbst** als `127.0.0.1` oder `localhost`, wie in NPM. Innerhalb eines
+  Containers bezeichnen diese Adressen den Docker-Host, `host.docker.internal` ist also nicht nötig. Der Dienst
+  muss auf einer für den Container erreichbaren Adresse lauschen (`0.0.0.0` oder die Docker-Bridge, nicht nur
+  `127.0.0.1`), und eine Host-Firewall muss Verbindungen aus Docker-Netzwerken zulassen.
+
+Um Dienste zu erreichen, die nur auf `127.0.0.1` des Hosts lauschen, oder um ein NPM-Setup mit
+`network_mode: host` unverändert zu übernehmen, betreiben Sie Corvus mit Host-Networking: Ersetzen Sie
+`ports:` und `networks:` durch `network_mode: host` (und setzen Sie `CORVUS_REDIS_PORT`, falls 6379 auf dem
+Host belegt ist).
 
 ### Migration von Nginx Proxy Manager
 

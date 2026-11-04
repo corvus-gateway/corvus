@@ -173,6 +173,24 @@ docker compose -f docker-compose.hardened.yml up -d
 | `CORVUS_IMPORT_DIR` | 包含只读 NPM 卷的目录，用于 *从 NPM 导入* |
 | `CORVUS_RULES_URL` | 已签名托管规则包的 URL（可选） |
 | `CORVUS_ADMIN_ALLOW_ANY=1` | 因管理员允许列表而无法访问时使用的恢复开关 |
+| `CORVUS_REDIS_PORT` | 内置访问队列存储在 127.0.0.1 上的端口（默认 `6379`）；使用 `network_mode: host` 且主机已占用 6379 时请修改 |
+| `CORVUS_RESOLVER` | 用于解析转发目标主机的 DNS 服务器。默认：Docker 的 DNS；使用主机网络时为 `/etc/resolv.conf` 中的第一个 `nameserver` |
+| `CORVUS_LOOPBACK=container` | 让 `127.0.0.1`/`localhost` 转发目标指向容器自身，而不是 Docker 主机 |
+
+### 转发目标主机
+
+代理主机可以转发到：
+
+- **另一个容器**，按名称指定，例如 `xoshop-web` 端口 `80`——Corvus 必须与其共享一个 Docker 网络
+  （将该网络添加到 `corvus` 服务）；
+- **私有或公网 IP**，例如 `10.3.2.39` 端口 `8084`；
+- **Docker 主机本身上的服务**，与 NPM 一样使用 `127.0.0.1` 或 `localhost`。在容器内，这些地址指的是
+  Docker 主机，因此无需 `host.docker.internal`。该服务必须监听容器可访问的地址（`0.0.0.0` 或 Docker
+  网桥，而不仅仅是 `127.0.0.1`），并且主机防火墙必须允许来自 Docker 网络的连接。
+
+如需访问只监听主机 `127.0.0.1` 的服务，或希望原样保留使用 `network_mode: host` 的 NPM 配置，请以主机网络
+运行 Corvus：将 `ports:` 和 `networks:` 替换为 `network_mode: host`（如果主机上 6379 已被占用，还需设置
+`CORVUS_REDIS_PORT`）。
 
 ### 从 Nginx Proxy Manager 迁移
 
