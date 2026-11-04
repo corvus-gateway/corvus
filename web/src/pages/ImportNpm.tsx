@@ -5,7 +5,7 @@ import { api, deployedVersion, isMissing, type NpmPreview } from "../api";
 import { ErrorBox, PageHeader, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Badge, Callout, Card, CardHeader, EmptyState } from "../components/ui/display";
-import { Field, Input } from "../components/ui/form";
+import { Field, Input, fieldErr } from "../components/ui/form";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
 import { useCan } from "../lib/rbac";
 import { useI18n } from "../i18n";
@@ -77,12 +77,12 @@ function ImportNpmInner() {
       <Card className="mb-5">
         <div className="space-y-4 p-4">
           <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={(e) => { e.preventDefault(); preview(); }}>
-            <Field label={t("npmPath")} hint={t("npmPathHint")} className="flex-1" htmlFor="npm-path">
+            <Field label={t("npmPath")} hint={t("npmPathHint")} error={fieldErr(prev.error, "path")} className="flex-1" htmlFor="npm-path">
               <Input id="npm-path" className="font-mono" value={path} onChange={(e) => setPath(e.target.value)} placeholder={DEFAULT_PATH} />
             </Field>
             <Button type="submit" variant="primary" loading={prev.busy} disabled={!path.trim()} className="sm:mb-[22px]"><FolderSearch className="h-4 w-4" />{t("preview")}</Button>
           </form>
-          {missing ? <Callout tone="warn" title={t("comingSoon")}>{t("comingSoonDesc")}</Callout> : <ErrorBox error={prev.error} />}
+          {missing ? <Callout tone="warn" title={t("comingSoon")}>{t("comingSoonDesc")}</Callout> : !fieldErr(prev.error, "path") && <ErrorBox error={prev.error} />}
         </div>
       </Card>
 
@@ -147,7 +147,7 @@ function ImportNpmInner() {
             </Table>
           </Section>
 
-          <ErrorBox error={app.error} />
+          {fieldErr(app.error, "path") ? <ErrorBox error={new Error(fieldErr(app.error, "path"))} /> : <ErrorBox error={app.error} />}
           <div className="sticky bottom-0 -mx-4 flex items-center justify-between gap-3 border-t border-line bg-surface px-4 py-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
             <span className="text-sm text-fg-muted">{t("importSelected", { n: total })}</span>
             <Button variant="primary" loading={app.busy} disabled={total === 0} onClick={apply}><FileInput className="h-4 w-4" />{t("importNow")}</Button>

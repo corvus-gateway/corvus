@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -90,8 +91,20 @@ var npmRefs = regexp.MustCompile(`\$(server|port|forward_scheme|hsts_header|x_fo
 // Read loads the NPM installation. Only rows with is_deleted = 0 are considered.
 func Read(ctx context.Context, src Source) (*Snapshot, error) {
 	dbPath := filepath.Join(src.DataDir, "database.sqlite")
-	if _, err := os.Stat(dbPath); err != nil {
-		return nil, fmt.Errorf("NPM database not found at %s (only the default SQLite database is supported)", dbPath)
+	if f, err := os.Open(dbPath); err != nil {
+		switch {
+		case errors.Is(err, fs.ErrPermission):
+			return nil, fmt.Errorf("cannot read %s: permission denied (corvus runs as uid %d; make the NPM data directory and database.sqlite readable, e.g. chmod o+rx on the directory and o+r on the file)", dbPath, os.Getuid())
+		case errors.Is(err, fs.ErrNotExist):
+			if _, derr := os.Stat(src.DataDir); derr != nil {
+				return nil, fmt.Errorf("%s is not accessible: %v (check the volume mount)", src.DataDir, derr)
+			}
+			return nil, fmt.Errorf("NPM database not found at %s (only NPM's default SQLite database is supported, not MySQL/MariaDB)", dbPath)
+		default:
+			return nil, fmt.Errorf("cannot read %s: %v", dbPath, err)
+		}
+	} else {
+		f.Close()
 	}
 	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(dbPath)+"?mode=ro&immutable=1")
 	if err != nil {

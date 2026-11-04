@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -77,5 +78,17 @@ func TestRead(t *testing.T) {
 	}
 	if len(snap.Warnings) != 1 {
 		t.Fatalf("expected stream warning, got %v", snap.Warnings)
+	}
+}
+
+func TestReadExplainsMissingDatabase(t *testing.T) {
+	dir := t.TempDir()
+	_, err := Read(context.Background(), Source{DataDir: dir})
+	if err == nil || !strings.Contains(err.Error(), "not found") || !strings.Contains(err.Error(), "MariaDB") {
+		t.Fatalf("empty data dir: got %v", err)
+	}
+	_, err = Read(context.Background(), Source{DataDir: filepath.Join(dir, "missing")})
+	if err == nil || !strings.Contains(err.Error(), "not accessible") {
+		t.Fatalf("missing data dir: got %v", err)
 	}
 }
