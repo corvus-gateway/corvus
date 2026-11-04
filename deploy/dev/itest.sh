@@ -338,7 +338,7 @@ chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$UJ" "$G/itest-ua/page?x=1")" 
 chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$UJ" "$G/itest-ua/other")" 200 "under attack: the pass covers the whole host"
 chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/proxy-hosts/$HOST1/under-attack/deactivate)" 409 "deactivate: nothing automatic to end"
 sleep 3
-chk "$(c "$A/api/traffic/events?limit=500" | js "sorted({e['kind'] for e in d if e['kind'].startswith('challenge') and e['path'].startswith('/itest-ua')})")" "['challenge_issued', 'challenge_passed']" "under attack challenges recorded as challenge events"
+chk "$(c "$A/api/traffic/events?limit=500" | js "sorted({e['kind'] for e in d if (e['kind']=='challenge_issued' and e['path'].startswith('/itest-ua')) or (e['kind']=='challenge_passed' and e['path']=='/__corvus/challenge/verify')})")" "['challenge_issued', 'challenge_passed']" "under attack challenges recorded as challenge events (passes are logged on the verify path)"
 chk "$(put_host ',"under_attack":"auto"')" 200 "under attack mode auto"
 chk "$(c $A/api/under-attack | js "[(s['mode'], s['active']) for s in d if s['host_id']==$HOST1]")" "[('auto', False)]" "auto: not active without an attack"
 chk "$(code "$G/itest-ua/auto")" 200 "auto: not active, no challenge"
@@ -534,12 +534,37 @@ for id in $(c $A/api/proxy-hosts | js "' '.join(str(h['id']) for h in d if any(x
 chk "$(c -o /dev/null -w '%{http_code}' -X DELETE $A/api/users/$OID)" 200 "delete user"
 c -o /dev/null -X DELETE $A/api/users/$VID; rm -f "$JO" "$JV"
 
+echo "[redirection hosts]"
+for id in $(c $A/api/redirection-hosts | js "' '.join(str(h['id']) for h in d if any(x.endswith('.corvus.test') for x in h['domains']))"); do c -o /dev/null -X DELETE $A/api/redirection-hosts/$id; done
+RD=$(c -X POST $A/api/redirection-hosts -d '{"domains":["redir.corvus.test"],"forward_scheme":"https","forward_domain":"example.org","http_code":308,"preserve_path":true,"enabled":true}')
+RDID=$(echo "$RD" | js "d.get('id') or d.get('redirection_host',{}).get('id')")
+sleep 2
+R=$(curl -s -D - -o /dev/null -H 'Host: redir.corvus.test' "$G/some/path?x=1" | tr -d '\r')
+chk "$(echo "$R" | awk 'NR==1{print $2}')" 308 "redirection host answers with its status code"
+chk "$(echo "$R" | awk -F': ' 'tolower($1)=="location"{print $2}')" "https://example.org/some/path?x=1" "redirect keeps path and query"
+c -o /dev/null -X DELETE $A/api/redirection-hosts/$RDID
+
+echo "[error pages]"
+EH=$(c -X POST $A/api/proxy-hosts -d '{"domains":["err.corvus.test"],"forward_scheme":"http","forward_host":"demo","forward_port":1}' | js "d.get('id') or d.get('proxy_host',{}).get('id')")
+sleep 2
+EB=$(curl -s -w '\n%{http_code}' -H 'Host: err.corvus.test' "$G/")
+chk "$(echo "$EB" | tail -1)" 502 "unreachable backend answers 502"
+echo "$EB" | grep -q 'Temporarily unavailable' && ok "502 uses the Corvus error page" || bad "502 without the Corvus error page"
+echo "$EB" | grep -q 'err.corvus.test' && ok "error page shows the host" || bad "error page without host"
+c -o /dev/null -X DELETE $A/api/proxy-hosts/$EH
+
+echo "[backup]"
+BK=$(mktemp)
+chk "$(curl -sk -b "$J" -o "$BK" -w '%{http_code}' "$A/api/backup")" 200 "backup download"
+chk "$($PY -c "import tarfile,sys; n=tarfile.open(sys.argv[1]).getnames(); print('manifest.json' in n and any(x.endswith('.db') for x in n) and any(x.startswith('secrets/') for x in n) and not any(x.startswith('nginx/') for x in n))" "$BK")" True "backup contains manifest, database and secrets but no generated config"
+rm -f "$BK"
+
 echo "[NPM import]"
 P=$(c -X POST $A/api/import/npm/preview -d '{}')
 chk "$(echo "$P" | js "(len(d['proxy_hosts']),len(d['certificates']),len(d['access_lists']))")" "(3, 2, 1)" "preview hosts/certs/acls (soft-deleted excluded)"
 chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/import/npm/preview -d '{"path":"/data"}')" 422 "paths outside /import rejected"
 R=$(c -X POST $A/api/import/npm/apply -d '{}')
-chk "$(echo "$R" | js "sorted((k,v) for k,v in d['imported'].items() if k!='security_rules')")" "[('access_lists', 1), ('certificates', 2), ('proxy_hosts', 3)]" "import applied"
+chk "$(echo "$R" | js "sorted((k,v) for k,v in d['imported'].items() if k not in ('security_rules','redirection_hosts'))")" "[('access_lists', 1), ('certificates', 2), ('proxy_hosts', 3)]" "import applied"
 chk "$(code -H 'Host: npm-shop.corvus.test' "$G/")" 301 "imported host forces HTTPS"
 chk "$(curl -sk -o /dev/null -w '%{http_code}' --resolve npm-shop.corvus.test:8443:$H https://npm-shop.corvus.test:8443/)" 200 "imported certificate serves HTTPS"
 chk "$(code -H 'Host: npm-custom.corvus.test' -u alice:alice-secret-1 "$G/")" 200 "imported access list password works"
