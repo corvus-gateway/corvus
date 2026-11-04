@@ -197,4 +197,4 @@ export interface AlertHistoryItem {
   id: number; ts: number | string; rule: string; severity: AlertSeverity; status: "firing" | "resolved" | "test"; key: string; title: string; message: string;
   results?: { channel_id: number; channel: string; ok: boolean; error?: string }[];
 }
-export interface AlertActive { rule: string; key: string; severity: AlertSeverity; title: string; since: number | string }
+export interface AlertActive { rule: string; key: string; severity: AlertSeverity; title: string; text?: string; since: number | string }

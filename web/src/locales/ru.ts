@@ -213,7 +213,7 @@ export const ru: Partial<Record<keyof typeof ko, string>> = {
   unitMin: "мин", unitCount: "", unitPeopleShort: "", unitDays: "дн.", unitTimes: "×", severity: "Важность", windowMin: "Окно", minRequests: "Мин. запросов", minRps: "Мин. RPS", threshold: "Порог",
   noParams: "Дополнительных настроек нет", rulesUnavailable: "Не удалось загрузить список правил",
   history: "История оповещений", noHistory: "Истории оповещений нет", noHistoryDesc: "Здесь фиксируются события, соответствующие правилам обнаружения.",
-  stFiring: "Активно", stResolved: "Устранено", stTest: "Тест", activeNow: "Активные сейчас", activeNowN: "Активных оповещений: {n}", noActive: "Активных оповещений нет", since: "с {t}",
+  stFiring: "Активно", stResolved: "Устранено", stTest: "Тест", activeNow: "Активные сейчас", activeNowN: "Активных оповещений: {n}", alViewLogs: "Показать запросы", alBanIp: "Заблокировать на 24 ч", alBanned: "{ip} заблокирован на 24 часа", alViewTraffic: "Показать трафик", alOpen: "Открыть", noActive: "Активных оповещений нет", since: "с {t}",
   delivery: "Доставка", noDelivery: "Нет получателей", showMessage: "Показать сообщение",
   rule_error_rate: "Доля ошибок 5xx", ruled_error_rate: "Оповещение, когда доля ответов 5xx хоста превышает порог.",
   rule_latency_p95: "Задержка (p95)", ruled_latency_p95: "Оповещение, когда время ответа p95 хоста превышает порог.",

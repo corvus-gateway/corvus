@@ -19,7 +19,7 @@ export const koAlerts = {
   unitMin: "분", unitCount: "건", unitPeopleShort: "명", unitDays: "일", unitTimes: "배", severity: "등급", windowMin: "집계 구간", minRequests: "최소 요청 수", minRps: "최소 RPS", threshold: "임계값",
   noParams: "추가 설정 없음", rulesUnavailable: "규칙 목록을 불러올 수 없습니다",
   history: "알림 이력", noHistory: "알림 이력이 없습니다", noHistoryDesc: "탐지 규칙에 해당하는 이벤트가 발생하면 이곳에 기록됩니다.",
-  stFiring: "발생", stResolved: "해제", stTest: "테스트", activeNow: "현재 발생 중", activeNowN: "발생 중인 알림 {n}", noActive: "현재 발생 중인 알림이 없습니다", since: "{t}부터",
+  stFiring: "발생", stResolved: "해제", stTest: "테스트", activeNow: "현재 발생 중", activeNowN: "발생 중인 알림 {n}", alViewLogs: "요청 로그 보기", alBanIp: "24시간 차단", alBanned: "{ip}을(를) 24시간 차단했습니다", alViewTraffic: "트래픽 보기", alOpen: "열기", noActive: "현재 발생 중인 알림이 없습니다", since: "{t}부터",
   delivery: "전송 결과", noDelivery: "전송 대상 없음", showMessage: "메시지 보기",
   rule_error_rate: "5xx 오류율", ruled_error_rate: "호스트별 5xx 응답 비율이 기준을 넘으면 알립니다.",
   rule_latency_p95: "응답 지연 (p95)", ruled_latency_p95: "호스트별 p95 응답 시간이 기준을 넘으면 알립니다.",

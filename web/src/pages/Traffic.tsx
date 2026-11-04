@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Activity, AlertOctagon, Ban, Download, Gauge, Hourglass, ListFilter, Radio, ScrollText, ServerCrash, TimerReset, type LucideIcon } from "lucide-react";
 import { getText, type EventKind, type HostTraffic, type LogLine, type PathTraffic, type Timeseries, type TrafficEvent, type TrafficSummary } from "../api";
@@ -36,9 +37,12 @@ function Stat({ icon: Icon, label, value, sub, tone }: { icon: LucideIcon; label
 
 export default function Traffic() {
   const { t, lang } = useI18n();
-  const [range, setRange] = useState<Range>("15m");
-  const [host, setHost] = useState("");
-  const [tab, setTab] = useState<Tab>("overview");
+  // Links (e.g. from an alert) may preselect ?tab=logs&range=1h&host=…&q=…
+  const [params] = useSearchParams();
+  const [range, setRange] = useState<Range>(() => (RANGES as readonly string[]).includes(params.get("range") ?? "") ? (params.get("range") as Range) : "15m");
+  const [host, setHost] = useState(() => params.get("host") ?? "");
+  const [tab, setTab] = useState<Tab>(() => (params.get("tab") === "logs" || params.get("tab") === "events" ? params.get("tab") as Tab : "overview"));
+  const initialQ = params.get("q") ?? "";
   const [live, setLive] = useState(true);
   const poll = live ? 5000 : 0;
   const qs = `range=${range}${host ? `&host=${encodeURIComponent(host)}` : ""}`;
@@ -73,7 +77,7 @@ export default function Traffic() {
       </div>
 
       {tab === "overview" && <Overview qs={qs} poll={poll} summary={summary.data} loading={summary.loading} error={summary.error} hosts={hostsRes.data} hostsLoading={hostsRes.loading} onHost={setHost} />}
-      {tab === "logs" && <Logs qs={qs} poll={poll} />}
+      {tab === "logs" && <Logs qs={qs} poll={poll} initialQ={initialQ} />}
       {tab === "events" && <Events qs={qs} poll={poll} />}
       <span className="sr-only">{lang}</span>
     </>
@@ -183,10 +187,10 @@ function Overview({ qs, poll, summary, loading, error, hosts, hostsLoading, onHo
 
 const STATUS_FILTERS = ["", "2xx", "3xx", "4xx", "5xx", "429"];
 
-function Logs({ qs, poll }: { qs: string; poll: number }) {
+function Logs({ qs, poll, initialQ = "" }: { qs: string; poll: number; initialQ?: string }) {
   const { t, lang } = useI18n();
   const [status, setStatus] = useState("");
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(initialQ);
   const [limit, setLimit] = useState(200);
   const dq = useDebounced(q);
   const query = `${qs}&limit=${limit}${status ? `&status=${status}` : ""}${dq ? `&q=${encodeURIComponent(dq)}` : ""}`;

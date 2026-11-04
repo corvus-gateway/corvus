@@ -214,7 +214,7 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   unitMin: "分", unitCount: "件", unitPeopleShort: "人", unitDays: "日", unitTimes: "倍", severity: "重大度", windowMin: "集計期間", minRequests: "最小リクエスト数", minRps: "最小 RPS", threshold: "しきい値",
   noParams: "追加設定はありません", rulesUnavailable: "ルール一覧を読み込めませんでした",
   history: "アラート履歴", noHistory: "アラート履歴はありません", noHistoryDesc: "検知ルールに一致したイベントがここに記録されます。",
-  stFiring: "発生中", stResolved: "解決済み", stTest: "テスト", activeNow: "発生中のアラート", activeNowN: "発生中のアラート {n} 件", noActive: "発生中のアラートはありません", since: "{t} から",
+  stFiring: "発生中", stResolved: "解決済み", stTest: "テスト", activeNow: "発生中のアラート", activeNowN: "発生中のアラート {n} 件", alViewLogs: "リクエストを表示", alBanIp: "24時間ブロック", alBanned: "{ip} を24時間ブロックしました", alViewTraffic: "トラフィックを表示", alOpen: "開く", noActive: "発生中のアラートはありません", since: "{t} から",
   delivery: "配信", noDelivery: "受信者なし", showMessage: "メッセージを表示",
   rule_error_rate: "5xx エラー率", ruled_error_rate: "ホストの 5xx の割合がしきい値を超えたときに通知します。",
   rule_latency_p95: "レイテンシ（p95）", ruled_latency_p95: "ホストの p95 応答時間がしきい値を超えたときに通知します。",

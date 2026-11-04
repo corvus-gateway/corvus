@@ -21,7 +21,7 @@ export const enAlerts: Record<keyof typeof koAlerts, string> = {
   unitMin: "min", unitCount: "", unitPeopleShort: "", unitDays: "days", unitTimes: "×", severity: "Severity", windowMin: "Window", minRequests: "Min requests", minRps: "Min RPS", threshold: "Threshold",
   noParams: "No extra settings", rulesUnavailable: "Could not load the rule list",
   history: "Alert history", noHistory: "No alert history", noHistoryDesc: "Events matching a detection rule are recorded here.",
-  stFiring: "Firing", stResolved: "Resolved", stTest: "Test", activeNow: "Currently firing", activeNowN: "{n} active alerts", noActive: "No alerts are firing", since: "since {t}",
+  stFiring: "Firing", stResolved: "Resolved", stTest: "Test", activeNow: "Currently firing", activeNowN: "{n} active alerts", alViewLogs: "View requests", alBanIp: "Ban for 24 h", alBanned: "Banned {ip} for 24 hours", alViewTraffic: "View traffic", alOpen: "Open", noActive: "No alerts are firing", since: "since {t}",
   delivery: "Delivery", noDelivery: "No recipients", showMessage: "Show message",
   rule_error_rate: "5xx error rate", ruled_error_rate: "Alerts when a host's 5xx ratio exceeds the threshold.",
   rule_latency_p95: "Latency (p95)", ruled_latency_p95: "Alerts when a host's p95 response time exceeds the threshold.",

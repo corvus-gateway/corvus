@@ -213,7 +213,7 @@ export const fr: Partial<Record<keyof typeof ko, string>> = {
   unitMin: "min", unitCount: "", unitPeopleShort: "", unitDays: "jours", unitTimes: "×", severity: "Gravité", windowMin: "Fenêtre", minRequests: "Requêtes min.", minRps: "RPS min.", threshold: "Seuil",
   noParams: "Aucun paramètre supplémentaire", rulesUnavailable: "Impossible de charger la liste des règles",
   history: "Historique des alertes", noHistory: "Aucun historique d'alertes", noHistoryDesc: "Les événements correspondant à une règle de détection sont enregistrés ici.",
-  stFiring: "Déclenchée", stResolved: "Résolue", stTest: "Test", activeNow: "Déclenchées actuellement", activeNowN: "{n} alertes actives", noActive: "Aucune alerte déclenchée", since: "depuis {t}",
+  stFiring: "Déclenchée", stResolved: "Résolue", stTest: "Test", activeNow: "Déclenchées actuellement", activeNowN: "{n} alertes actives", alViewLogs: "Voir les requêtes", alBanIp: "Bannir 24 h", alBanned: "{ip} banni pour 24 heures", alViewTraffic: "Voir le trafic", alOpen: "Ouvrir", noActive: "Aucune alerte déclenchée", since: "depuis {t}",
   delivery: "Envoi", noDelivery: "Aucun destinataire", showMessage: "Afficher le message",
   rule_error_rate: "Taux d'erreurs 5xx", ruled_error_rate: "Alerte lorsque le taux de réponses 5xx d'un hôte dépasse le seuil.",
   rule_latency_p95: "Latence (p95)", ruled_latency_p95: "Alerte lorsque le temps de réponse p95 d'un hôte dépasse le seuil.",

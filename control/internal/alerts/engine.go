@@ -40,6 +40,7 @@ type active struct {
 	Key      string    `json:"key"`
 	Severity string    `json:"severity"`
 	Title    string    `json:"title"`
+	Text     string    `json:"text"`
 	Since    time.Time `json:"since"`
 	lastSent time.Time
 	msg      Message
@@ -116,15 +117,15 @@ func (e *Engine) Evaluate(ctx context.Context, now time.Time) {
 		switch {
 		case !ok:
 			if !f.oneShot {
-				e.state[id] = &active{Rule: f.rule, Key: f.key, Severity: r.Severity, Title: f.title, Since: now, lastSent: now, msg: m}
+				e.state[id] = &active{Rule: f.rule, Key: f.key, Severity: r.Severity, Title: f.title, Text: f.text, Since: now, lastSent: now, msg: m}
 			}
 			send = append(send, m)
 		case now.Sub(a.lastSent) >= cooldown:
 			m.Title = tr["ongoing"] + " · " + m.Title
-			a.lastSent, a.msg, a.Title = now, m, f.title
+			a.lastSent, a.msg, a.Title, a.Text = now, m, f.title, f.text
 			send = append(send, m)
 		default:
-			a.msg = m
+			a.msg, a.Title, a.Text = m, f.title, f.text
 		}
 	}
 	for id, a := range e.state {

@@ -213,7 +213,7 @@ export const de: Partial<Record<keyof typeof ko, string>> = {
   unitMin: "min", unitCount: "", unitPeopleShort: "", unitDays: "Tage", unitTimes: "×", severity: "Schweregrad", windowMin: "Zeitfenster", minRequests: "Min. Anfragen", minRps: "Min. RPS", threshold: "Schwellenwert",
   noParams: "Keine weiteren Einstellungen", rulesUnavailable: "Regelliste konnte nicht geladen werden",
   history: "Warnungsverlauf", noHistory: "Kein Warnungsverlauf", noHistoryDesc: "Ereignisse, die einer Erkennungsregel entsprechen, werden hier erfasst.",
-  stFiring: "Ausgelöst", stResolved: "Behoben", stTest: "Test", activeNow: "Derzeit ausgelöst", activeNowN: "{n} aktive Warnungen", noActive: "Keine Warnungen ausgelöst", since: "seit {t}",
+  stFiring: "Ausgelöst", stResolved: "Behoben", stTest: "Test", activeNow: "Derzeit ausgelöst", activeNowN: "{n} aktive Warnungen", alViewLogs: "Anfragen anzeigen", alBanIp: "24 h sperren", alBanned: "{ip} für 24 Stunden gesperrt", alViewTraffic: "Traffic anzeigen", alOpen: "Öffnen", noActive: "Keine Warnungen ausgelöst", since: "seit {t}",
   delivery: "Zustellung", noDelivery: "Keine Empfänger", showMessage: "Nachricht anzeigen",
   rule_error_rate: "5xx-Fehlerrate", ruled_error_rate: "Warnt, wenn der 5xx-Anteil eines Hosts den Schwellenwert überschreitet.",
   rule_latency_p95: "Latenz (p95)", ruled_latency_p95: "Warnt, wenn die p95-Antwortzeit eines Hosts den Schwellenwert überschreitet.",

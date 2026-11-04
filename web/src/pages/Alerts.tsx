@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Bell, BellRing, Check, ChevronDown, FlaskConical, Hash, MessageSquare, MessagesSquare, Pencil, Plus, Save, Send, Trash2, Users, Webhook, X, type LucideIcon } from "lucide-react";
+import { Activity, AlertTriangle, Ban, Bell, BellRing, Check, ChevronDown, FlaskConical, Hash, MessageSquare, MessagesSquare, Pencil, Plus, Save, Send, Trash2, Search, Users, Webhook, X, type LucideIcon } from "lucide-react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   api, type AlertActive, type AlertChannel, type AlertHistoryItem, type AlertKind, type AlertRuleCfg, type AlertRuleInfo, type AlertSettings, type AlertSeverity,
@@ -65,21 +66,43 @@ export default function Alerts() {
   );
 }
 
+const IP_RULES = new Set(["attack_source", "scan_suspect"]);
+const HOST_RULES = new Set(["error_rate", "latency_p95", "rate_limited", "exploit"]);
+const PAGE_FOR: Record<string, string> = { cert_expiry: "/certificates", acme_failed: "/certificates", waitroom_queue: "/waitrooms", deploy_failed: "/deployments", login_failed: "/audit" };
+
 function ActiveStrip({ items }: { items: AlertActive[] | null }) {
   const { t, lang } = useI18n();
+  const { can } = useCan();
+  const ban = useSubmit();
   if (!items?.length) return null;
+  const banIP = (a: AlertActive) => ban.run(async () => {
+    await api.post("/api/bans", { ip: a.key, duration_s: 86400, reason: a.title });
+    toast.success(t("alBanned", { ip: a.key }));
+  }, { deployed: false });
   return (
     <div className="mb-4 rounded-[3px] border border-danger/40 bg-danger/10 p-3.5">
       <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><BellRing className="h-4 w-4 text-danger" aria-hidden />{t("activeNowN", { n: items.length })}</div>
-      <ul className="flex flex-wrap gap-2">
+      <ul className="space-y-2">
         {items.map((a) => (
-          <li key={a.rule + a.key} className="flex items-center gap-2 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs">
-            <Badge tone={sevTone[a.severity]} dot>{t(sevKey[a.severity])}</Badge>
-            <span className="font-medium">{a.title}</span>
-            <span className="text-fg-subtle">{t("since", { t: relTime(new Date(toMs(a.since)).toISOString(), lang) })}</span>
+          <li key={a.rule + a.key} className="rounded-lg border border-line bg-surface px-3 py-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={sevTone[a.severity]} dot>{t(sevKey[a.severity])}</Badge>
+              <span className="font-medium">{a.title}</span>
+              <span className="text-fg-subtle">{t("since", { t: relTime(new Date(toMs(a.since)).toISOString(), lang) })}</span>
+              <span className="ml-auto flex flex-wrap gap-1.5">
+                {IP_RULES.has(a.rule) && <>
+                  <Link to={`/traffic?tab=logs&range=1h&q=${encodeURIComponent(a.key)}`}><Button size="sm" variant="ghost"><Search className="h-3.5 w-3.5" />{t("alViewLogs")}</Button></Link>
+                  {can && <Button size="sm" variant="danger" loading={ban.busy} onClick={() => banIP(a)}><Ban className="h-3.5 w-3.5" />{t("alBanIp")}</Button>}
+                </>}
+                {HOST_RULES.has(a.rule) && <Link to={`/traffic?host=${encodeURIComponent(a.key)}`}><Button size="sm" variant="ghost"><Activity className="h-3.5 w-3.5" />{t("alViewTraffic")}</Button></Link>}
+                {PAGE_FOR[a.rule] && <Link to={PAGE_FOR[a.rule]}><Button size="sm" variant="ghost">{t("alOpen")}</Button></Link>}
+              </span>
+            </div>
+            {a.text && <p className="mt-1.5 text-fg-muted">{a.text}</p>}
           </li>
         ))}
       </ul>
+      <ErrorBox error={ban.error} className="mt-2" />
     </div>
   );
 }

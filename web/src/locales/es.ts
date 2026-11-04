@@ -213,7 +213,7 @@ export const es: Partial<Record<keyof typeof ko, string>> = {
   unitMin: "min", unitCount: "", unitPeopleShort: "", unitDays: "días", unitTimes: "×", severity: "Gravedad", windowMin: "Ventana", minRequests: "Mín. solicitudes", minRps: "Mín. RPS", threshold: "Umbral",
   noParams: "Sin ajustes adicionales", rulesUnavailable: "No se pudo cargar la lista de reglas",
   history: "Historial de alertas", noHistory: "No hay historial de alertas", noHistoryDesc: "Aquí se registran los eventos que coinciden con una regla de detección.",
-  stFiring: "Activa", stResolved: "Resuelta", stTest: "Prueba", activeNow: "Activas ahora", activeNowN: "{n} alertas activas", noActive: "No hay alertas activas", since: "desde {t}",
+  stFiring: "Activa", stResolved: "Resuelta", stTest: "Prueba", activeNow: "Activas ahora", activeNowN: "{n} alertas activas", alViewLogs: "Ver solicitudes", alBanIp: "Bloquear 24 h", alBanned: "{ip} bloqueada durante 24 horas", alViewTraffic: "Ver tráfico", alOpen: "Abrir", noActive: "No hay alertas activas", since: "desde {t}",
   delivery: "Entrega", noDelivery: "Sin destinatarios", showMessage: "Mostrar mensaje",
   rule_error_rate: "Tasa de errores 5xx", ruled_error_rate: "Alerta cuando la proporción de 5xx de un host supera el umbral.",
   rule_latency_p95: "Latencia (p95)", ruled_latency_p95: "Alerta cuando el tiempo de respuesta p95 de un host supera el umbral.",

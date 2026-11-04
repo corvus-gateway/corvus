@@ -214,7 +214,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   unitMin: "分钟", unitCount: "次", unitPeopleShort: "人", unitDays: "天", unitTimes: "倍", severity: "级别", windowMin: "统计窗口", minRequests: "最少请求数", minRps: "最低 RPS", threshold: "阈值",
   noParams: "无其他设置", rulesUnavailable: "无法加载规则列表",
   history: "告警历史", noHistory: "暂无告警历史", noHistoryDesc: "匹配检测规则的事件将记录在此处。",
-  stFiring: "告警中", stResolved: "已恢复", stTest: "测试", activeNow: "当前告警", activeNowN: "{n} 条活动告警", noActive: "当前无告警", since: "自 {t} 起",
+  stFiring: "告警中", stResolved: "已恢复", stTest: "测试", activeNow: "当前告警", activeNowN: "{n} 条活动告警", alViewLogs: "查看请求", alBanIp: "封禁 24 小时", alBanned: "已封禁 {ip} 24 小时", alViewTraffic: "查看流量", alOpen: "打开", noActive: "当前无告警", since: "自 {t} 起",
   delivery: "发送状态", noDelivery: "无接收方", showMessage: "查看消息",
   rule_error_rate: "5xx 错误率", ruled_error_rate: "主机的 5xx 比例超过阈值时告警。",
   rule_latency_p95: "延迟（p95）", ruled_latency_p95: "主机的 p95 响应时间超过阈值时告警。",
