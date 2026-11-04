@@ -300,6 +300,43 @@ chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/auth/login/mfa -d "{\"mfa
 sleep $((31 - $(date +%s) % 30))
 chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/auth/mfa/disable -d "{\"password\":\"$PASS\",\"code\":\"$(totp)\"}")" 200 "MFA disabled"
 
+echo "[security headers]"
+# The demo backend cannot set cookies, so a second host plays the origin: its advanced
+# config answers /itest-cookies with Set-Cookie, X-Frame-Options and X-Powered-By, and the
+# host under test proxies to it through the gateway itself.
+hdr_host() { $PY -c 'import json,sys; print(json.dumps({"domains":[sys.argv[1]],"forward_host":"demo","forward_port":80,"block_exploits":True,"security_headers":sys.argv[2],"advanced_config":sys.argv[3]}))' "$@"; }
+ORIGIN_CONF='location = /itest-cookies {
+    add_header Set-Cookie "sid=abc; Path=/" always;
+    add_header Set-Cookie "pref=1; Path=/; secure; HttpOnly; SameSite=Strict" always;
+    add_header X-Frame-Options DENY always;
+    add_header X-Powered-By itest always;
+    return 200 "ok";
+}'
+FRONT_CONF='location / {
+    proxy_set_header Host hdr-origin.corvus.test;
+    proxy_pass http://127.0.0.1:80;
+}'
+hdrs() { curl -s -D - -o /dev/null -H "Host: $1" "$G$2" | tr -d '\r'; }
+has()  { echo "$1" | grep -ciE "$2"; }
+chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/proxy-hosts -d "$(hdr_host hdr-origin.corvus.test off "$ORIGIN_CONF")")" 201 "origin host (security headers off)"
+HID=$(c -X POST $A/api/proxy-hosts -d "$(hdr_host hdr-front.corvus.test strict "$FRONT_CONF")" | js "d['proxy_host']['id']")
+R=$(hdrs hdr-origin.corvus.test /itest-cookies)
+chk "$(has "$R" '^x-content-type-options:')/$(has "$R" '^x-powered-by: itest')" "0/1" "off: responses unchanged"
+R=$(hdrs hdr-front.corvus.test /itest-cookies)
+chk "$(has "$R" '^x-content-type-options: nosniff$')/$(has "$R" '^referrer-policy: strict-origin-when-cross-origin$')/$(has "$R" '^permissions-policy:')" "1/1/1" "strict: basic headers added"
+chk "$(has "$R" '^x-frame-options:')/$(has "$R" '^x-frame-options: DENY$')" "1/1" "strict: upstream X-Frame-Options kept, not duplicated"
+chk "$(has "$R" '^x-powered-by:')" 0 "strict: X-Powered-By hidden"
+chk "$(has "$R" "^content-security-policy-report-only: default-src 'self'")/$(has "$R" '^cross-origin-opener-policy: same-origin$')" "1/1" "strict: report-only CSP and COOP"
+chk "$(has "$R" '^set-cookie: sid=abc; Path=/; HttpOnly; SameSite=Lax$')" 1 "strict: missing cookie flags added (HTTP: no Secure)"
+chk "$(has "$R" '^set-cookie: pref=1; Path=/; secure; HttpOnly; SameSite=Strict$')" 1 "strict: cookie with its own flags untouched"
+R=$(curl -s -D - -o /dev/null -H 'Host: hdr-front.corvus.test' "$G/.env" | tr -d '\r')
+chk "$(echo "$R" | head -1 | cut -d' ' -f2)/$(has "$R" '^x-content-type-options: nosniff$')" "403/1" "headers on gateway error responses"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$HID -d "$(hdr_host hdr-front.corvus.test basic "$FRONT_CONF")")" 200 "switch to basic"
+R=$(hdrs hdr-front.corvus.test /itest-cookies)
+chk "$(has "$R" '^x-content-type-options: nosniff$')/$(has "$R" '^content-security-policy-report-only:')/$(has "$R" '^set-cookie: sid=abc; Path=/$')" "1/0/1" "basic: no CSP, cookies untouched"
+c -o /dev/null -X DELETE $A/api/proxy-hosts/$HID
+for id in $(c $A/api/proxy-hosts | js "' '.join(str(h['id']) for h in d if 'hdr-origin.corvus.test' in h['domains'])"); do c -o /dev/null -X DELETE $A/api/proxy-hosts/$id; done
+
 echo "[ACME (Pebble test CA)]"
 CID=$(c -X POST $A/api/certificates/acme -d '{"domains":["acme1.corvus.test"],"email":"ops@corvus.test","challenge":"http-01"}' | js "d['id']")
 st=pending; for i in $(seq 1 40); do st=$(c $A/api/certificates | js "[x['status'] for x in d if x['id']==$CID][0]"); [ "$st" != pending ] && break; sleep 2; done

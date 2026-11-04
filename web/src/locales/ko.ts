@@ -3,6 +3,7 @@ import { koRetention } from "./retention.i18n";
 import { koSso } from "./sso.i18n";
 import { koTokens } from "./tokens.i18n";
 import { koRedirects } from "./redirects.i18n";
+import { koHeaders } from "./headers.i18n";
 import { koBans } from "./bans.i18n";
 import { koBackup } from "./backup.i18n";
 import { koPages } from "./pages.i18n";
@@ -200,6 +201,7 @@ export const ko = {
   ...koBans,
   ...koTokens,
   ...koRedirects,
+  ...koHeaders,
   ...koSso,
   ...koRetention,
   ...koTemplates,

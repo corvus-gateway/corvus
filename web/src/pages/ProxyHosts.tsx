@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Loader2, ArrowRight, Copy, Globe, Lock, Pencil, Plus, ShieldAlert, Trash2, Users, Zap, Gauge, KeyRound, ExternalLink, UserPlus, X } from "lucide-react";
+import { AlertCircle, Loader2, ArrowRight, Copy, Globe, Lock, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2, Users, Zap, Gauge, KeyRound, ExternalLink, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
-import { api, type AccessList, type Certificate, type ClientIPMode, type ProxyHost, type RateLimit, type Waitroom } from "../api";
+import { api, type AccessList, type Certificate, type ClientIPMode, type ProxyHost, type RateLimit, type SecurityHeaders, type Waitroom } from "../api";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
 import { Button, IconButton } from "../components/ui/button";
 import { Badge, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
@@ -31,7 +31,7 @@ const blank: Form = {
   domains: [], forward_scheme: "http", forward_host: "", forward_port: 80, websocket: false, certificate_id: null,
   ssl_forced: false, http2: true, waitroom_id: null, waitroom_path: "/", advanced_config: "", enabled: true,
   client_ip: "direct", rate_limit_id: null, access_list_id: null, block_exploits: true,
-  body_inspection: "log", body_max_kb: 1024,
+  body_inspection: "log", body_max_kb: 1024, security_headers: "off",
 };
 
 function toForm(h: ProxyHost): Form {
@@ -68,6 +68,7 @@ export default function ProxyHosts() {
   const showClientIp = has("client_ip");
   const showExploits = has("block_exploits");
   const showBody = has("body_inspection");
+  const showHeaders = has("security_headers");
   const showLimits = !limits.missing && has("rate_limit_id");
   const showLists = !lists.missing && has("access_list_id");
 
@@ -95,6 +96,7 @@ export default function ProxyHosts() {
     if (!showClientIp) { delete body.client_ip; }
     if (!showExploits) { delete body.block_exploits; }
     if (!showBody) { delete body.body_inspection; delete body.body_max_kb; }
+    if (!showHeaders) { delete body.security_headers; }
     if (!showLimits) { delete body.rate_limit_id; }
     if (!showLists) { delete body.basic_auth; }
     const r = await run(() => (id ? api.put(`/api/proxy-hosts/${id}`, body) : api.post("/api/proxy-hosts", body)), { success: req ? undefined : t("savedDeployed") });
@@ -170,6 +172,7 @@ export default function ProxyHosts() {
                           {h.rate_limit_id != null && <Badge tone="info" icon={Gauge}>{limitName(h.rate_limit_id) ?? "Rate limit"}</Badge>}
                           {(h.basic_auth_users?.length ?? 0) > 0 && <Badge tone="info" icon={KeyRound}>{t("basicAuthBadge")}</Badge>}
                           {h.block_exploits && <Badge tone="warn" icon={ShieldAlert}>{t("exploitShort")}</Badge>}
+                          {h.security_headers && h.security_headers !== "off" && <Badge tone="ok" icon={ShieldCheck}>{t("headersShort")} · {h.security_headers === "strict" ? t("shStrict") : t("shBasic")}</Badge>}
                           {h.client_ip && h.client_ip !== "direct" && <Badge>{h.client_ip === "cloudflare" ? "Cloudflare" : t("trustedProxiesShort")}</Badge>}
                         </div>
                       </Td>
@@ -251,6 +254,20 @@ export default function ProxyHosts() {
               <SwitchRow label={t("sslForced")} description={t("sslForcedDesc")} checked={f.ssl_forced} disabled={!hasCert} onChange={(v) => set({ ssl_forced: v })} />
               <SwitchRow label="HTTP/2" description={t("http2Desc")} checked={f.http2} disabled={!hasCert} onChange={(v) => set({ http2: v })} />
             </div>
+            {showHeaders && (
+              <IdField label={t("secHeaders")} hint={t("secHeadersHint")} error={fieldErr(error, "security_headers")}>
+                {(id) => (
+                  <div className="space-y-2">
+                    <Select id={id} value={f.security_headers ?? "off"} onChange={(e) => set({ security_headers: e.target.value as SecurityHeaders })}>
+                      <option value="off">{t("shOff")}</option>
+                      <option value="basic">{t("shBasic")}</option>
+                      <option value="strict">{t("shStrict")}</option>
+                    </Select>
+                    <p className="text-xs leading-5 text-fg-subtle">{f.security_headers === "strict" ? t("shStrictDesc") : f.security_headers === "basic" ? t("shBasicDesc") : t("shOffDesc")}</p>
+                  </div>
+                )}
+              </IdField>
+            )}
           </FormSection>
 
           {showClientIp && (

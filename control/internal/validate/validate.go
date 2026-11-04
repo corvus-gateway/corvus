@@ -64,6 +64,13 @@ func ProxyHost(h *store.ProxyHost) error {
 	default:
 		errs.add("body_inspection", "invalid", "body inspection must be off, log or block")
 	}
+	switch h.SecurityHeaders {
+	case "":
+		h.SecurityHeaders = "off" // never changes responses unless explicitly chosen
+	case "off", "basic", "strict":
+	default:
+		errs.add("security_headers", "invalid", "security headers must be off, basic or strict")
+	}
 	if h.BodyMaxKB == 0 {
 		h.BodyMaxKB = 1024
 	}

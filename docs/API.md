@@ -116,7 +116,19 @@ Proxy host fields: `domains` (array), `forward_scheme` (`http`/`https`), `forwar
 `forward_port`, `websocket`, `ssl_forced`, `http2`, `certificate_id` or `certificate_request`,
 `client_ip` (`direct`, `cloudflare`, `trusted_proxies`), `waitroom_id`, `waitroom_path`,
 `rate_limit_id`, `access_list_id` or `basic_auth`, `block_exploits`, `body_inspection`
-(`off`, `log`, `block`), `body_max_kb`, `advanced_config`, `enabled`.
+(`off`, `log`, `block`), `body_max_kb`, `security_headers`, `advanced_config`, `enabled`.
+
+`security_headers` (default `off`; NPM imports use `off`) adds browser security headers to the
+host's responses, including gateway error pages. A header the upstream already sends is never
+replaced:
+
+| Value | Effect |
+|---|---|
+| `off` | Responses are not changed |
+| `basic` | `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: browsing-topics=()`; the upstream's `X-Powered-By` is removed |
+| `strict` | `basic` + `Content-Security-Policy-Report-Only: default-src 'self'; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'`, `Cross-Origin-Opener-Policy: same-origin`, and upstream `Set-Cookie` values get `HttpOnly`, `SameSite=Lax` and (on HTTPS) `Secure`, each only when the cookie does not set that attribute |
+
+`Strict-Transport-Security` is independent of the preset: it is sent whenever `ssl_forced` is on.
 
 Redirection host fields: `domains` (array), `forward_scheme` (`auto` keeps the request's scheme,
 `http`, `https`), `forward_domain` (target `host[:port][/path]`, without `http://`), `http_code`

@@ -44,4 +44,6 @@ jobs:
       - name: LuaJIT syntax check (gateway modules)
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq luajit
-          for f in gateway/lua/corvus/*.lua gateway/redis/*.lua; do luajit -bl "$f" > /dev/null || exit 1; done
+          for f in gateway/lua/corvus/*.lua gateway/redis/*.lua gateway/test/*.lua; do luajit -bl "$f" > /dev/null || exit 1; done
+      - name: Lua unit tests (pure helpers)
+        run: for f in gateway/test/*_test.lua; do luajit "$f" || exit 1; done

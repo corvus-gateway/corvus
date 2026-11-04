@@ -114,6 +114,20 @@ server {
     }
 {{- end}}
 
+{{- if or .Room (ne .SecurityHeaders "off")}}
+
+    # Response headers: one header_filter for the server, inherited by every location
+    # (security header preset: corvus/headers.lua; waiting room cookies: corvus/waitroom.lua).
+    header_filter_by_lua_block {
+{{- if ne .SecurityHeaders "off"}}
+        require("corvus.headers").header_filter("{{.SecurityHeaders}}")
+{{- end}}
+{{- if .Room}}
+        require("corvus.waitroom").header_filter()
+{{- end}}
+    }
+{{- end}}
+
     location ^~ /.well-known/acme-challenge/ {
         proxy_pass http://127.0.0.1:{{.P.ACMEPort}};
     }
@@ -130,7 +144,6 @@ server {
 
     # Waiting room "{{.Room.Name}}" (capacity {{.Room.Capacity}}, fail-{{.Room.FailMode}})
     set $corvus_host_room "{{.Room.Name}}";
-    header_filter_by_lua_block { require("corvus.waitroom").header_filter() }
     log_by_lua_block { if ngx.ctx.corvus_wr then ngx.var.corvus_wr = ngx.ctx.corvus_wr end }
 
     # Waiting room endpoints get the same access list / exploit / rate-limit guard as

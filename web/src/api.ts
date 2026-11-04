@@ -84,10 +84,14 @@ export interface ProxyHost {
   waitroom_id: number | null; waitroom_path: string; advanced_config: string; enabled: boolean;
   client_ip?: ClientIPMode; rate_limit_id?: number | null; access_list_id?: number | null; block_exploits?: boolean;
   body_inspection?: "off" | "log" | "block"; body_max_kb?: number;
+  security_headers?: SecurityHeaders;
   /** Read-only: usernames of the host's password protection (HTTP Basic auth). */
   basic_auth_users?: string[];
   created_at: string; updated_at: string;
 }
+
+/** Security header preset of a proxy host (gateway/lua/corvus/headers.lua). */
+export type SecurityHeaders = "off" | "basic" | "strict";
 
 export type RedirectScheme = "auto" | "http" | "https";
 export interface RedirectionHost {

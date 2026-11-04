@@ -46,6 +46,7 @@ Requirements: Go (version from `go.mod`), Node.js 22+, Docker.
 ```bash
 npm --prefix web ci && npm --prefix web run build      # admin UI → embedded into the Go binary
 go test ./control/...                                   # unit tests
+for f in gateway/test/*_test.lua; do luajit "$f"; done # Lua unit tests (pure helpers)
 go build -o bin/corvus-control ./control/cmd/corvus-control
 CORVUS_GATEWAY=0 CORVUS_ADMIN_TLS=0 CORVUS_DATA_DIR=./tmp bin/corvus-control   # console only
 ```

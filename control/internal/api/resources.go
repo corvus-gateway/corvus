@@ -98,6 +98,9 @@ type proxyHostInput struct {
 	BlockExploits  bool     `json:"block_exploits"`
 	BodyInspection string   `json:"body_inspection"`
 	BodyMaxKB      int      `json:"body_max_kb"`
+
+	SecurityHeaders string `json:"security_headers"` // off | basic | strict
+
 	// BasicAuth edits the host's password protection; when present it replaces access_list_id.
 	BasicAuth      *basicAuthInput `json:"basic_auth"`
 	BasicAuthUsers []string        `json:"basic_auth_users"` // read-only; accepted and ignored
@@ -140,7 +143,7 @@ func (in proxyHostInput) apply(h *store.ProxyHost) {
 	h.HTTP2 = in.HTTP2 == nil || *in.HTTP2
 	h.Enabled = in.Enabled == nil || *in.Enabled
 	h.ClientIP, h.RateLimitID, h.AccessListID, h.BlockExploits = in.ClientIP, in.RateLimitID, in.AccessListID, in.BlockExploits
-	h.BodyInspection, h.BodyMaxKB = in.BodyInspection, in.BodyMaxKB
+	h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders = in.BodyInspection, in.BodyMaxKB, in.SecurityHeaders
 }
 
 // checkProxyHost validates a host against the rest of the configuration (inside the tx).

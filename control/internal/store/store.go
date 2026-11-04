@@ -487,9 +487,11 @@ type ProxyHost struct {
 	BasicAuthUsers []string  `json:"basic_auth_users,omitempty"` // read-only, filled by the API
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+
+	SecurityHeaders string `json:"security_headers"` // off | basic | strict
 }
 
-const phCols = `id, domains, forward_scheme, forward_host, forward_port, websocket, certificate_id, ssl_forced, http2, waitroom_id, waitroom_path, advanced_config, enabled, client_ip, rate_limit_id, access_list_id, block_exploits, body_inspection, body_max_kb, created_at, updated_at`
+const phCols = `id, domains, forward_scheme, forward_host, forward_port, websocket, certificate_id, ssl_forced, http2, waitroom_id, waitroom_path, advanced_config, enabled, client_ip, rate_limit_id, access_list_id, block_exploits, body_inspection, body_max_kb, security_headers, created_at, updated_at`
 
 func scanProxyHost(row interface{ Scan(...any) error }) (*ProxyHost, error) {
 	h := &ProxyHost{}
@@ -497,7 +499,7 @@ func scanProxyHost(row interface{ Scan(...any) error }) (*ProxyHost, error) {
 	var ws, ssl, h2, en, be int
 	var cert, wr, rl, al sql.NullInt64
 	if err := row.Scan(&h.ID, &domains, &h.ForwardScheme, &h.ForwardHost, &h.ForwardPort, &ws, &cert, &ssl, &h2, &wr, &h.WaitroomPath, &h.AdvancedConfig, &en,
-		&h.ClientIP, &rl, &al, &be, &h.BodyInspection, &h.BodyMaxKB, &h.CreatedAt, &h.UpdatedAt); err != nil {
+		&h.ClientIP, &rl, &al, &be, &h.BodyInspection, &h.BodyMaxKB, &h.SecurityHeaders, &h.CreatedAt, &h.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -544,11 +546,14 @@ func (s *Store) ProxyHostByID(ctx context.Context, id int64) (*ProxyHost, error)
 
 func (s *Store) SaveProxyHost(ctx context.Context, h *ProxyHost) error {
 	t := now()
+	if h.SecurityHeaders == "" {
+		h.SecurityHeaders = "off"
+	}
 	if h.ID == 0 {
-		res, err := s.q.ExecContext(ctx, `INSERT INTO proxy_hosts(domains, forward_scheme, forward_host, forward_port, websocket, certificate_id, ssl_forced, http2, waitroom_id, waitroom_path, advanced_config, enabled, client_ip, rate_limit_id, access_list_id, block_exploits, body_inspection, body_max_kb, created_at, updated_at)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		res, err := s.q.ExecContext(ctx, `INSERT INTO proxy_hosts(domains, forward_scheme, forward_host, forward_port, websocket, certificate_id, ssl_forced, http2, waitroom_id, waitroom_path, advanced_config, enabled, client_ip, rate_limit_id, access_list_id, block_exploits, body_inspection, body_max_kb, security_headers, created_at, updated_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			toJSON(h.Domains), h.ForwardScheme, h.ForwardHost, h.ForwardPort, b2i(h.Websocket), h.CertificateID, b2i(h.SSLForced), b2i(h.HTTP2),
-			h.WaitroomID, h.WaitroomPath, h.AdvancedConfig, b2i(h.Enabled), h.ClientIP, h.RateLimitID, h.AccessListID, b2i(h.BlockExploits), h.BodyInspection, h.BodyMaxKB, t, t)
+			h.WaitroomID, h.WaitroomPath, h.AdvancedConfig, b2i(h.Enabled), h.ClientIP, h.RateLimitID, h.AccessListID, b2i(h.BlockExploits), h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders, t, t)
 		if err != nil {
 			return err
 		}
@@ -556,9 +561,9 @@ func (s *Store) SaveProxyHost(ctx context.Context, h *ProxyHost) error {
 		h.CreatedAt, h.UpdatedAt = t, t
 		return nil
 	}
-	res, err := s.q.ExecContext(ctx, `UPDATE proxy_hosts SET domains=?, forward_scheme=?, forward_host=?, forward_port=?, websocket=?, certificate_id=?, ssl_forced=?, http2=?, waitroom_id=?, waitroom_path=?, advanced_config=?, enabled=?, client_ip=?, rate_limit_id=?, access_list_id=?, block_exploits=?, body_inspection=?, body_max_kb=?, updated_at=? WHERE id=?`,
+	res, err := s.q.ExecContext(ctx, `UPDATE proxy_hosts SET domains=?, forward_scheme=?, forward_host=?, forward_port=?, websocket=?, certificate_id=?, ssl_forced=?, http2=?, waitroom_id=?, waitroom_path=?, advanced_config=?, enabled=?, client_ip=?, rate_limit_id=?, access_list_id=?, block_exploits=?, body_inspection=?, body_max_kb=?, security_headers=?, updated_at=? WHERE id=?`,
 		toJSON(h.Domains), h.ForwardScheme, h.ForwardHost, h.ForwardPort, b2i(h.Websocket), h.CertificateID, b2i(h.SSLForced), b2i(h.HTTP2),
-		h.WaitroomID, h.WaitroomPath, h.AdvancedConfig, b2i(h.Enabled), h.ClientIP, h.RateLimitID, h.AccessListID, b2i(h.BlockExploits), h.BodyInspection, h.BodyMaxKB, t, h.ID)
+		h.WaitroomID, h.WaitroomPath, h.AdvancedConfig, b2i(h.Enabled), h.ClientIP, h.RateLimitID, h.AccessListID, b2i(h.BlockExploits), h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders, t, h.ID)
 	if err != nil {
 		return err
 	}

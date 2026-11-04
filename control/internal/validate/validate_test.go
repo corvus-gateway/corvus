@@ -35,6 +35,28 @@ func TestProxyHostNormalizes(t *testing.T) {
 	}
 }
 
+func TestProxyHostSecurityHeaders(t *testing.T) {
+	h := validHost()
+	if err := ProxyHost(&h); err != nil || h.SecurityHeaders != "off" {
+		t.Fatalf("default: %q %v", h.SecurityHeaders, err)
+	}
+	for _, v := range []string{"off", "basic", "strict"} {
+		h := validHost()
+		h.SecurityHeaders = v
+		if err := ProxyHost(&h); err != nil || h.SecurityHeaders != v {
+			t.Errorf("%s: %q %v", v, h.SecurityHeaders, err)
+		}
+	}
+	for _, v := range []string{"STRICT", "on", `basic")`, "strict; }"} {
+		h := validHost()
+		h.SecurityHeaders = v
+		err := ProxyHost(&h)
+		if fe, ok := err.(Errors); !ok || len(fe) != 1 || fe[0].Field != "security_headers" {
+			t.Errorf("%q: expected a security_headers error, got %v", v, err)
+		}
+	}
+}
+
 func TestProxyHostRejectsInjection(t *testing.T) {
 	cases := map[string]func(h *store.ProxyHost){
 		"upstream injection": func(h *store.ProxyHost) { h.ForwardHost = "app;\n include /etc/passwd" },
