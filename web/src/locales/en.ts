@@ -2,6 +2,7 @@ import { templatesStrings } from "./templates.i18n";
 import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
+import { redirectsStrings } from "./redirects.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import { enSecurity } from "./security.en";
@@ -175,7 +176,7 @@ export const en: Record<keyof typeof ko, string> = {
   // audit
   auditDesc: "Every administrative action is recorded: who changed what, and when.", searchAudit: "Search actor, target or IP", noAudit: "No audit entries", noAuditDesc: "Administrative actions will be recorded here.",
   // import
-  importDesc: "Read an Nginx Proxy Manager data folder and import proxy hosts, certificates and access lists. The source is never modified.",
+  importDesc: "Read an Nginx Proxy Manager data folder and import proxy hosts, redirection hosts, certificates and access lists. The source is never modified.",
   npmDb: "NPM database", npmDbSqlite: "SQLite (default)", npmDbMysql: "MySQL / MariaDB", npmDbHost: "Host", npmDbHostHint: "Corvus must be able to reach NPM's database, e.g. join Corvus to NPM's Docker network and use the service name (db).", npmDbPort: "Port", npmDbName: "Database", npmDbUser: "User", npmDbPassword: "Password", npmDbPasswordHint: "Used only for this import and never stored. Certificate files are still read from the mounted NPM volumes.",
   npmPath: "NPM data path", npmPathHint: "The NPM /data path mounted read-only into the container.", preview: "Preview",
   importEmptyTitle: "Enter a path to import from", importEmptyDesc: "Review conflicts in the preview, then pick exactly what to import.", importNothing: "Nothing to import.",
@@ -199,6 +200,7 @@ export const en: Record<keyof typeof ko, string> = {
   ...enSecurity,
   ...bansStrings.en,
   ...tokensStrings.en,
+  ...redirectsStrings.en,
   ...ssoStrings.en,
   ...retentionStrings.en,
   ...templatesStrings.en,

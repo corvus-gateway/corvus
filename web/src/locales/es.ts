@@ -2,6 +2,7 @@ import { templatesStrings } from "./templates.i18n";
 import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
+import { redirectsStrings } from "./redirects.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import type { ko } from "./ko";
@@ -174,7 +175,7 @@ export const es: Partial<Record<keyof typeof ko, string>> = {
   // audit
   auditDesc: "Se registra cada acción administrativa: quién cambió qué y cuándo.", searchAudit: "Buscar actor, destino o IP", noAudit: "No hay entradas de auditoría", noAuditDesc: "Las acciones administrativas se registrarán aquí.",
   // import
-  importDesc: "Lea una carpeta de datos de Nginx Proxy Manager e importe hosts proxy, certificados y listas de acceso. El origen nunca se modifica.",
+  importDesc: "Lea una carpeta de datos de Nginx Proxy Manager e importe hosts proxy, hosts de redirección, certificados y listas de acceso. El origen nunca se modifica.",
   npmDb: "Base de datos de NPM", npmDbSqlite: "SQLite (predeterminada)", npmDbMysql: "MySQL / MariaDB", npmDbHost: "Host", npmDbHostHint: "Corvus debe poder acceder a la base de datos de NPM, por ejemplo uniendo Corvus a la red Docker de NPM y usando el nombre del servicio (db).", npmDbPort: "Puerto", npmDbName: "Base de datos", npmDbUser: "Usuario", npmDbPassword: "Contraseña", npmDbPasswordHint: "Solo se usa para esta importación y no se guarda. Los archivos de certificados se siguen leyendo de los volúmenes de NPM montados.",
   npmPath: "Ruta de datos de NPM", npmPathHint: "Ruta /data de NPM montada en el contenedor en modo de solo lectura.", preview: "Vista previa",
   importEmptyTitle: "Introduzca una ruta desde la que importar", importEmptyDesc: "Revise los conflictos en la vista previa y elija exactamente qué importar.", importNothing: "No hay nada que importar.",
@@ -299,6 +300,7 @@ export const es: Partial<Record<keyof typeof ko, string>> = {
   pagination: "Paginación", pageSize: "Por página", pageRange: "{from}–{to} de {total}", pageNofM: "Página {n} de {m}", prevPage: "Página anterior", nextPage: "Página siguiente",
   ...bansStrings.es,
   ...tokensStrings.es,
+  ...redirectsStrings.es,
   ...ssoStrings.es,
   ...retentionStrings.es,
   ...templatesStrings.es,
@@ -322,7 +324,7 @@ export const esRuleLabels: RuleLabels | undefined = {
 
 export const esAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "Host proxy", waitroom: "Cola de acceso", certificate: "Certificado", deploy: "Implementación", auth: "Autenticación", setup: "Configuración inicial",
+    proxy_host: "Host proxy", redirection_host: "Host de redirección", waitroom: "Cola de acceso", certificate: "Certificado", deploy: "Implementación", auth: "Autenticación", setup: "Configuración inicial",
     rate_limit: "Límite de tasa", access_list: "Autenticación Basic", security_rule: "Regla de seguridad", ip_list: "Lista de IP", geoip: "Base de datos de países", settings: "Configuración", network: "Red", import: "Importación", mfa: "MFA", user: "Cuenta",
   },
   verb: {

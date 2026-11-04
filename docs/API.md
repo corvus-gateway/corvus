@@ -87,7 +87,7 @@ Role: **public** = no authentication · **viewer** = any signed-in user or token
 | GET | `/api/overview` | viewer | Dashboard summary |
 | GET | `/api/audit` | viewer | Audit log |
 
-### Proxy hosts, certificates, deployments
+### Proxy hosts, redirection hosts, certificates, deployments
 
 | Method | Path | Role | Description |
 |---|---|---|---|
@@ -96,6 +96,11 @@ Role: **public** = no authentication · **viewer** = any signed-in user or token
 | POST | `/api/proxy-hosts` | operator | Create (fields below) |
 | PUT | `/api/proxy-hosts/{id}` | operator | Replace |
 | DELETE | `/api/proxy-hosts/{id}` | operator | Delete |
+| GET | `/api/redirection-hosts` | viewer | List redirection hosts |
+| GET | `/api/redirection-hosts/{id}` | viewer | Get one redirection host |
+| POST | `/api/redirection-hosts` | operator | Create (fields below) |
+| PUT | `/api/redirection-hosts/{id}` | operator | Replace |
+| DELETE | `/api/redirection-hosts/{id}` | operator | Delete |
 | GET | `/api/certificates` | viewer | List certificates |
 | POST | `/api/certificates` | operator | Upload a custom certificate |
 | POST | `/api/certificates/acme` | operator | Order a Let's Encrypt certificate (HTTP-01 or DNS-01) |
@@ -112,6 +117,14 @@ Proxy host fields: `domains` (array), `forward_scheme` (`http`/`https`), `forwar
 `client_ip` (`direct`, `cloudflare`, `trusted_proxies`), `waitroom_id`, `waitroom_path`,
 `rate_limit_id`, `access_list_id` or `basic_auth`, `block_exploits`, `body_inspection`
 (`off`, `log`, `block`), `body_max_kb`, `advanced_config`, `enabled`.
+
+Redirection host fields: `domains` (array), `forward_scheme` (`auto` keeps the request's scheme,
+`http`, `https`), `forward_domain` (target `host[:port][/path]`, without `http://`), `http_code`
+(`301`, `302`, `303`, `307`, `308`; default `301`), `preserve_path` (append the request path and
+query; default `true`), `ssl_forced`, `http2`, `certificate_id` or `certificate_request`,
+`block_exploits` (default `true`), `advanced_config`, `enabled`. Domains must not be used by another
+proxy or redirection host. IP bans, security rules with scope "all" and exploit blocking apply to
+redirection hosts too; rules scoped to specific hosts target proxy hosts only.
 
 `certificate_request` orders a Let's Encrypt certificate for the host's domains: `email`, `challenge`
 (`http-01` or `dns-01`), `dns_provider`, `dns_credentials` (e.g. `{"api_token": "…"}` for Cloudflare), `staging`.
@@ -179,7 +192,7 @@ Proxy host fields: `domains` (array), `forward_scheme` (`http`/`https`), `forwar
 | POST | `/api/users/{id}/reset-mfa` | admin (session) | Reset a user's MFA |
 | GET / POST | `/api/tokens` | session | API tokens (`{ "name", "role", "expires_days" }`) |
 | DELETE | `/api/tokens/{id}` | session | Revoke a token |
-| POST | `/api/import/npm/preview`, `/apply` | admin | Import from Nginx Proxy Manager |
+| POST | `/api/import/npm/preview`, `/apply` | admin | Import from Nginx Proxy Manager (`/apply` takes `proxy_host_ids`, `redirection_host_ids`, `certificate_ids`, `access_list_ids`; omitted = all) |
 
 ### Backup and restore
 

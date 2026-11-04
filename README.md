@@ -52,6 +52,7 @@ Go control plane, React console) that can **import an existing NPM setup**.
 
 **Proxy & TLS**
 - Proxy hosts with wildcards, WebSocket, HTTP/2, forced HTTPS and custom Nginx snippets
+- Redirection hosts: send domains to another domain (301/302/303/307/308, optionally keeping the path), with the same TLS and protection
 - Free Let's Encrypt certificates (HTTP-01, or DNS-01 via Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) with automatic renewal, or upload your own
 - Real client IP behind Cloudflare or trusted proxies; optional password protection per host
 - Every change is validated with `openresty -t`, applied atomically and can be rolled back
@@ -253,12 +254,12 @@ with `network_mode: host` (and set `CORVUS_REDIS_PORT` if 6379 is taken on the h
 
 ### Migrating from Nginx Proxy Manager
 
-*Import from NPM* in the console copies **proxy hosts, certificates** (Let's Encrypt and custom,
-including Cloudflare DNS tokens) and **access lists** (users and IP rules) from an existing NPM
-installation. It only reads NPM's files and database — NPM itself is not changed, so you can go
-back at any time.
+*Import from NPM* in the console copies **proxy hosts, redirection hosts, certificates** (Let's
+Encrypt and custom, including Cloudflare DNS tokens) and **access lists** (users and IP rules) from
+an existing NPM installation. It only reads NPM's files and database — NPM itself is not changed,
+so you can go back at any time.
 
-Not imported: streams (TCP/UDP), redirection hosts, 404 hosts, custom locations and advanced
+Not imported: streams (TCP/UDP), 404 hosts, custom locations and advanced
 configuration that uses NPM-specific variables. The preview lists everything it skips.
 
 **Check which database your NPM uses.** Open NPM's `docker-compose.yml`:

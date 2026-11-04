@@ -58,7 +58,10 @@ func (p Paths) GeoFile() string {
 	return filepath.ToSlash(filepath.Join(p.DataDir, "geoip", "country.bin"))
 }
 
-func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store.ProxyHost) (*rulesFile, error) {
+// redirectRuleKey is the rules.json key of a redirection host (proxy hosts use their id).
+func redirectRuleKey(id int64) string { return "r" + strconv.FormatInt(id, 10) }
+
+func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store.ProxyHost, redirects []store.RedirectionHost) (*rulesFile, error) {
 	rules, err := s.ListSecurityRules(ctx)
 	if err != nil {
 		return nil, err
@@ -150,6 +153,20 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 			}
 		}
 		out.Hosts[strconv.FormatInt(h.ID, 10)] = hj
+	}
+	// Redirection hosts get bans, rules that apply to all hosts and exploit blocking;
+	// host-scoped rules target proxy hosts only.
+	for _, h := range redirects {
+		if !h.Enabled {
+			continue
+		}
+		hj := hostJSON{Rules: []int{}, Exploits: h.BlockExploits, Body: "off", BodyMax: 1 << 20}
+		for i, sc := range scopes {
+			if sc.all {
+				hj.Rules = append(hj.Rules, i+1)
+			}
+		}
+		out.Hosts[redirectRuleKey(h.ID)] = hj
 	}
 	return out, nil
 }

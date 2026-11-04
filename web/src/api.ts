@@ -89,6 +89,13 @@ export interface ProxyHost {
   created_at: string; updated_at: string;
 }
 
+export type RedirectScheme = "auto" | "http" | "https";
+export interface RedirectionHost {
+  id: number; domains: string[]; forward_scheme: RedirectScheme; forward_domain: string; http_code: number; preserve_path: boolean;
+  certificate_id: number | null; ssl_forced: boolean; http2: boolean; block_exploits: boolean; advanced_config: string; enabled: boolean;
+  created_at: string; updated_at: string;
+}
+
 export interface LiveStats { name: string; available: boolean; active: number; waiting: number; capacity: number }
 
 export interface Waitroom {
@@ -177,6 +184,7 @@ export interface TrafficEvent { ts: number | string; kind: EventKind; host: stri
 
 export interface NpmPreview {
   proxy_hosts: { npm_id: number; domains: string[]; forward?: string; conflict?: string | boolean }[];
+  redirection_hosts?: { npm_id: number; domains: string[]; forward?: string; conflict?: string | boolean }[];
   certificates: { npm_id: number; name?: string; nice_name?: string; domains?: string[] }[];
   access_lists: { npm_id: number; name?: string }[];
   warnings: string[];

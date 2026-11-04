@@ -2,6 +2,7 @@ import { templatesStrings } from "./templates.i18n";
 import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
+import { redirectsStrings } from "./redirects.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import type { ko } from "./ko";
@@ -175,7 +176,7 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   // audit
   auditDesc: "すべての管理操作を記録します。誰が、いつ、何を変更したかを確認できます。", searchAudit: "実行者、対象、IP を検索", noAudit: "監査ログはありません", noAuditDesc: "管理操作がここに記録されます。",
   // import
-  importDesc: "Nginx Proxy Manager のデータフォルダーを読み込み、プロキシホスト、証明書、アクセスリストをインポートします。移行元は変更されません。",
+  importDesc: "Nginx Proxy Manager のデータフォルダーを読み込み、プロキシホスト、リダイレクトホスト、証明書、アクセスリストをインポートします。移行元は変更されません。",
   npmDb: "NPM データベース", npmDbSqlite: "SQLite（既定）", npmDbMysql: "MySQL / MariaDB", npmDbHost: "ホスト", npmDbHostHint: "Corvus から NPM のデータベースに接続できる必要があります。例: Corvus を NPM の Docker ネットワークに参加させ、サービス名（db）を指定します。", npmDbPort: "ポート", npmDbName: "データベース", npmDbUser: "ユーザー", npmDbPassword: "パスワード", npmDbPasswordHint: "今回のインポートにのみ使用され、保存されません。証明書ファイルはマウントした NPM ボリュームから読み込みます。",
   npmPath: "NPM データパス", npmPathHint: "コンテナに読み取り専用でマウントした NPM の /data パスです。", preview: "プレビュー",
   importEmptyTitle: "インポート元のパスを入力してください", importEmptyDesc: "プレビューで競合を確認し、インポートする項目を選択してください。", importNothing: "インポートする項目はありません。",
@@ -300,6 +301,7 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   pagination: "ページネーション", pageSize: "表示件数", pageRange: "{total} 件中 {from}–{to} 件", pageNofM: "{n} / {m} ページ", prevPage: "前のページ", nextPage: "次のページ",
   ...bansStrings.ja,
   ...tokensStrings.ja,
+  ...redirectsStrings.ja,
   ...ssoStrings.ja,
   ...retentionStrings.ja,
   ...templatesStrings.ja,
@@ -323,7 +325,7 @@ export const jaRuleLabels: RuleLabels | undefined = {
 
 export const jaAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "プロキシホスト", waitroom: "アクセスキュー", certificate: "証明書", deploy: "デプロイ", auth: "認証", setup: "初期設定",
+    proxy_host: "プロキシホスト", redirection_host: "リダイレクトホスト", waitroom: "アクセスキュー", certificate: "証明書", deploy: "デプロイ", auth: "認証", setup: "初期設定",
     rate_limit: "レート制限", access_list: "Basic 認証", security_rule: "セキュリティルール", ip_list: "IP リスト", geoip: "国データベース", settings: "設定", network: "ネットワーク", import: "インポート", mfa: "MFA", user: "アカウント",
   },
   verb: {

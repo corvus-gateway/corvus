@@ -2,6 +2,7 @@ import { templatesStrings } from "./templates.i18n";
 import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
+import { redirectsStrings } from "./redirects.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import type { ko } from "./ko";
@@ -174,7 +175,7 @@ export const fr: Partial<Record<keyof typeof ko, string>> = {
   // audit
   auditDesc: "Chaque action d'administration est enregistrée : qui a modifié quoi, et quand.", searchAudit: "Rechercher un auteur, une cible ou une IP", noAudit: "Aucune entrée d'audit", noAuditDesc: "Les actions d'administration seront enregistrées ici.",
   // import
-  importDesc: "Lisez un dossier de données Nginx Proxy Manager et importez les hôtes proxy, certificats et listes d'accès. La source n'est jamais modifiée.",
+  importDesc: "Lisez un dossier de données Nginx Proxy Manager et importez les hôtes proxy, hôtes de redirection, certificats et listes d'accès. La source n'est jamais modifiée.",
   npmDb: "Base de données NPM", npmDbSqlite: "SQLite (par défaut)", npmDbMysql: "MySQL / MariaDB", npmDbHost: "Hôte", npmDbHostHint: "Corvus doit pouvoir joindre la base de données de NPM, par exemple en rejoignant le réseau Docker de NPM et en utilisant le nom du service (db).", npmDbPort: "Port", npmDbName: "Base de données", npmDbUser: "Utilisateur", npmDbPassword: "Mot de passe", npmDbPasswordHint: "Utilisé uniquement pour cette importation, jamais enregistré. Les fichiers de certificats sont toujours lus depuis les volumes NPM montés.",
   npmPath: "Chemin des données NPM", npmPathHint: "Le chemin /data de NPM monté en lecture seule dans le conteneur.", preview: "Aperçu",
   importEmptyTitle: "Saisissez un chemin d'importation", importEmptyDesc: "Examinez les conflits dans l'aperçu, puis choisissez précisément ce qu'il faut importer.", importNothing: "Rien à importer.",
@@ -299,6 +300,7 @@ export const fr: Partial<Record<keyof typeof ko, string>> = {
   pagination: "Pagination", pageSize: "Par page", pageRange: "{from}–{to} sur {total}", pageNofM: "Page {n} sur {m}", prevPage: "Page précédente", nextPage: "Page suivante",
   ...bansStrings.fr,
   ...tokensStrings.fr,
+  ...redirectsStrings.fr,
   ...ssoStrings.fr,
   ...retentionStrings.fr,
   ...templatesStrings.fr,
@@ -322,7 +324,7 @@ export const frRuleLabels: RuleLabels | undefined = {
 
 export const frAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "Hôte proxy", waitroom: "File d'accès", certificate: "Certificat", deploy: "Déploiement", auth: "Authentification", setup: "Configuration",
+    proxy_host: "Hôte proxy", redirection_host: "Hôte de redirection", waitroom: "File d'accès", certificate: "Certificat", deploy: "Déploiement", auth: "Authentification", setup: "Configuration",
     rate_limit: "Limitation de débit", access_list: "Authentification Basic", security_rule: "Règle de sécurité", ip_list: "Liste d'IP", geoip: "Base des pays", settings: "Paramètres", network: "Réseau", import: "Importation", mfa: "MFA", user: "Compte",
   },
   verb: {

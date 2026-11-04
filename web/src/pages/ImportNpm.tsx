@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Lock, AlertTriangle, ArrowRight, CheckCircle2, FileInput, FolderSearch, ListChecks, ShieldCheck, Globe } from "lucide-react";
+import { Lock, AlertTriangle, ArrowRight, CheckCircle2, FileInput, FolderSearch, ListChecks, ShieldCheck, Globe, Signpost } from "lucide-react";
 import { toast } from "sonner";
 import { api, deployedVersion, isMissing, type NpmPreview } from "../api";
 import { ErrorBox, PageHeader, useSubmit } from "../components/common";
@@ -45,7 +45,7 @@ function ImportNpmInner() {
   const [my, setMy] = useState({ host: "db", port: "3306", database: "npm", user: "npm", password: "" });
   const source = () => dbKind === "mysql" ? { path, mysql: { ...my, port: Number(my.port) || 3306 } } : { path };
   const [pv, setPv] = useState<NpmPreview | null>(null);
-  const [sel, setSel] = useState<{ h: Set<number>; c: Set<number>; a: Set<number> }>({ h: new Set(), c: new Set(), a: new Set() });
+  const [sel, setSel] = useState<{ h: Set<number>; r: Set<number>; c: Set<number>; a: Set<number> }>({ h: new Set(), r: new Set(), c: new Set(), a: new Set() });
   const [result, setResult] = useState<{ imported: Record<string, number>; skipped: unknown[]; version: number | null } | null>(null);
   const prev = useSubmit();
   const app = useSubmit();
@@ -55,13 +55,13 @@ function ImportNpmInner() {
     setResult(null);
     const r = await prev.run(() => api.post<NpmPreview>("/api/import/npm/preview", source()), { deployed: false });
     if (!r) return;
-    const norm: NpmPreview = { proxy_hosts: r.proxy_hosts ?? [], certificates: r.certificates ?? [], access_lists: r.access_lists ?? [], warnings: r.warnings ?? [] };
+    const norm: NpmPreview = { proxy_hosts: r.proxy_hosts ?? [], redirection_hosts: r.redirection_hosts ?? [], certificates: r.certificates ?? [], access_lists: r.access_lists ?? [], warnings: r.warnings ?? [] };
     setPv(norm);
-    setSel({ h: new Set(norm.proxy_hosts.filter((x) => !x.conflict).map((x) => x.npm_id)), c: new Set(norm.certificates.map((x) => x.npm_id)), a: new Set(norm.access_lists.map((x) => x.npm_id)) });
+    setSel({ h: new Set(norm.proxy_hosts.filter((x) => !x.conflict).map((x) => x.npm_id)), r: new Set((norm.redirection_hosts ?? []).filter((x) => !x.conflict).map((x) => x.npm_id)), c: new Set(norm.certificates.map((x) => x.npm_id)), a: new Set(norm.access_lists.map((x) => x.npm_id)) });
   };
   const apply = async () => {
     const r = await app.run(() => api.post<{ imported: Record<string, number>; skipped: unknown[]; version: unknown }>("/api/import/npm/apply", {
-      ...source(), proxy_host_ids: [...sel.h], certificate_ids: [...sel.c], access_list_ids: [...sel.a],
+      ...source(), proxy_host_ids: [...sel.h], redirection_host_ids: [...sel.r], certificate_ids: [...sel.c], access_list_ids: [...sel.a],
     }), { deployed: false });
     if (!r) return;
     const v = deployedVersion(r);
@@ -71,8 +71,8 @@ function ImportNpmInner() {
     window.dispatchEvent(new Event("corvus:refresh"));
   };
 
-  const toggle = (k: "h" | "c" | "a", id: number, v: boolean) => setSel((s) => { const n = new Set(s[k]); if (v) n.add(id); else n.delete(id); return { ...s, [k]: n }; });
-  const total = sel.h.size + sel.c.size + sel.a.size;
+  const toggle = (k: "h" | "r" | "c" | "a", id: number, v: boolean) => setSel((s) => { const n = new Set(s[k]); if (v) n.add(id); else n.delete(id); return { ...s, [k]: n }; });
+  const total = sel.h.size + sel.r.size + sel.c.size + sel.a.size;
 
   return (
     <>
@@ -109,8 +109,8 @@ function ImportNpmInner() {
           <div className="p-5">
             <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-full bg-ok/15 text-ok"><CheckCircle2 className="h-5 w-5" /></span>
               <div><div className="font-semibold">{t("importDone")}{result.version != null && ` · ${t("versionN", { n: result.version })}`}</div><div className="text-sm text-fg-subtle">{t("importDoneDesc")}</div></div></div>
-            <dl className="mt-4 grid grid-cols-3 gap-3 text-center">
-              {([["proxy_hosts", t("navHosts")], ["certificates", t("navCerts")], ["access_lists", t("navAccessLists")]] as const).map(([k, l]) => (
+            <dl className="mt-4 grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
+              {([["proxy_hosts", t("navHosts")], ["redirection_hosts", t("navRedirects")], ["certificates", t("navCerts")], ["access_lists", t("navAccessLists")]] as const).map(([k, l]) => (
                 <div key={k} className="rounded-lg border border-line bg-surface-2/50 p-3"><dd className="num text-2xl font-semibold">{result.imported[k] ?? 0}</dd><dt className="text-xs text-fg-subtle">{l}</dt></div>
               ))}
             </dl>
@@ -135,6 +135,22 @@ function ImportNpmInner() {
                 {pv.proxy_hosts.map((h) => (
                   <Tr key={h.npm_id} className={cn(h.conflict && "bg-warn/5")}>
                     <Td><Check label={h.domains.join(", ")} checked={sel.h.has(h.npm_id)} onChange={(v) => toggle("h", h.npm_id, v)} /></Td>
+                    <Td><div className="font-medium">{h.domains[0]}</div>{h.domains.length > 1 && <div className="text-xs text-fg-subtle">{h.domains.slice(1).join(", ")}</div>}</Td>
+                    <Td className="hidden font-mono text-xs text-fg-muted md:table-cell"><span className="inline-flex items-center gap-1.5"><ArrowRight className="h-3 w-3" />{h.forward ?? "–"}</span></Td>
+                    <Td>{h.conflict ? <Badge tone="warn" icon={AlertTriangle}>{typeof h.conflict === "string" ? h.conflict : t("conflict")}</Badge> : <Badge tone="ok" dot>{t("importable")}</Badge>}</Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </Table>
+          </Section>
+
+          <Section icon={Signpost} title={t("navRedirects")} count={pv.redirection_hosts?.length ?? 0} selected={sel.r.size} onAll={(v) => setSel((s) => ({ ...s, r: new Set(v ? (pv.redirection_hosts ?? []).filter((x) => !x.conflict).map((x) => x.npm_id) : []) }))}>
+            <Table>
+              <THead><tr><Th className="w-10"><span className="sr-only">{t("select")}</span></Th><Th>{t("domains")}</Th><Th className="hidden md:table-cell">{t("redirectTo")}</Th><Th>{t("status")}</Th></tr></THead>
+              <tbody>
+                {(pv.redirection_hosts ?? []).map((h) => (
+                  <Tr key={h.npm_id} className={cn(h.conflict && "bg-warn/5")}>
+                    <Td><Check label={h.domains.join(", ")} checked={sel.r.has(h.npm_id)} onChange={(v) => toggle("r", h.npm_id, v)} /></Td>
                     <Td><div className="font-medium">{h.domains[0]}</div>{h.domains.length > 1 && <div className="text-xs text-fg-subtle">{h.domains.slice(1).join(", ")}</div>}</Td>
                     <Td className="hidden font-mono text-xs text-fg-muted md:table-cell"><span className="inline-flex items-center gap-1.5"><ArrowRight className="h-3 w-3" />{h.forward ?? "–"}</span></Td>
                     <Td>{h.conflict ? <Badge tone="warn" icon={AlertTriangle}>{typeof h.conflict === "string" ? h.conflict : t("conflict")}</Badge> : <Badge tone="ok" dot>{t("importable")}</Badge>}</Td>

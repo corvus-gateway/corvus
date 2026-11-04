@@ -97,6 +97,12 @@ func (s *Server) Handler() http.Handler {
 	op("PUT /api/proxy-hosts/{id}", s.updateProxyHost)
 	op("DELETE /api/proxy-hosts/{id}", s.deleteProxyHost)
 
+	priv("GET /api/redirection-hosts", s.listRedirectionHosts)
+	op("POST /api/redirection-hosts", s.createRedirectionHost)
+	priv("GET /api/redirection-hosts/{id}", s.getRedirectionHost)
+	op("PUT /api/redirection-hosts/{id}", s.updateRedirectionHost)
+	op("DELETE /api/redirection-hosts/{id}", s.deleteRedirectionHost)
+
 	priv("GET /api/waitrooms", s.listWaitrooms)
 	op("POST /api/waitrooms", s.createWaitroom)
 	op("PUT /api/waitrooms/{id}", s.updateWaitroom)

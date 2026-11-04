@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"corvus/control/internal/store"
@@ -69,26 +70,7 @@ func ProxyHost(h *store.ProxyHost) error {
 	if h.BodyMaxKB < 16 || h.BodyMaxKB > 8192 {
 		errs.add("body_max_kb", "invalid", "body inspection limit must be 16-8192 KiB")
 	}
-	seen := map[string]bool{}
-	var domains []string
-	for _, d := range h.Domains {
-		d = strings.ToLower(strings.TrimSpace(d))
-		if d == "" || seen[d] {
-			continue
-		}
-		seen[d] = true
-		if !Domain(d) {
-			errs.add("domains", "invalid_domain", "invalid domain name %q", d)
-		}
-		domains = append(domains, d)
-	}
-	h.Domains = domains
-	if len(domains) == 0 {
-		errs.add("domains", "required", "at least one domain is required")
-	}
-	if len(domains) > 50 {
-		errs.add("domains", "too_many", "at most 50 domains per host")
-	}
+	h.Domains = hostDomains(&errs, h.Domains)
 
 	h.ForwardScheme = strings.ToLower(strings.TrimSpace(h.ForwardScheme))
 	if h.ForwardScheme == "" {
@@ -126,6 +108,87 @@ func ProxyHost(h *store.ProxyHost) error {
 	}
 	if !ClientIPMode(h.ClientIP) {
 		errs.add("client_ip", "invalid", "client_ip must be direct, cloudflare or trusted_proxies")
+	}
+	if err := AdvancedConfig(h.AdvancedConfig); err != nil {
+		errs.add("advanced_config", "invalid", "%s", err.Error())
+	}
+	return errs.OrNil()
+}
+
+// hostDomains normalizes a host's server names (lower case, trimmed, deduplicated).
+func hostDomains(errs *Errors, in []string) []string {
+	seen := map[string]bool{}
+	var domains []string
+	for _, d := range in {
+		d = strings.ToLower(strings.TrimSpace(d))
+		if d == "" || seen[d] {
+			continue
+		}
+		seen[d] = true
+		if !Domain(d) {
+			errs.add("domains", "invalid_domain", "invalid domain name %q", d)
+		}
+		domains = append(domains, d)
+	}
+	if len(domains) == 0 {
+		errs.add("domains", "required", "at least one domain is required")
+	}
+	if len(domains) > 50 {
+		errs.add("domains", "too_many", "at most 50 domains per host")
+	}
+	return domains
+}
+
+// RedirectCodes are the HTTP status codes a redirection host may answer with.
+var RedirectCodes = []int{301, 302, 303, 307, 308}
+
+// redirectTargetRe: host (DNS name or IPv4), optional port, optional path/query. The
+// target is rendered unquoted into `return`, so whitespace, quotes, ';', '{', '}', '$',
+// '\' and '#' are never allowed.
+var redirectTargetRe = regexp.MustCompile(`^(` + labelRe + `\.)*` + labelRe + `(:[0-9]{1,5})?(/[A-Za-z0-9._~/%+=&?,:@!*()-]*)?$`)
+
+// RedirectionHost normalizes and validates a redirection host in place.
+func RedirectionHost(h *store.RedirectionHost) error {
+	var errs Errors
+	h.Domains = hostDomains(&errs, h.Domains)
+	h.ForwardScheme = strings.ToLower(strings.TrimSpace(h.ForwardScheme))
+	if h.ForwardScheme == "" || h.ForwardScheme == "$scheme" {
+		h.ForwardScheme = "auto"
+	}
+	if h.ForwardScheme != "auto" && h.ForwardScheme != "http" && h.ForwardScheme != "https" {
+		errs.add("forward_scheme", "invalid", "scheme must be auto, http or https")
+	}
+	fd := strings.TrimSpace(h.ForwardDomain)
+	host, rest := fd, ""
+	if i := strings.IndexAny(fd, ":/"); i >= 0 {
+		host, rest = fd[:i], fd[i:]
+	}
+	h.ForwardDomain = strings.ToLower(host) + rest
+	switch {
+	case h.ForwardDomain == "":
+		errs.add("forward_domain", "required", "a target domain is required")
+	case strings.Contains(h.ForwardDomain, "://"):
+		errs.add("forward_domain", "invalid", "enter the domain without http:// or https:// (choose the scheme separately)")
+	case len(h.ForwardDomain) > 500 || !redirectTargetRe.MatchString(h.ForwardDomain):
+		errs.add("forward_domain", "invalid", "invalid target %q (domain, optional :port and /path)", h.ForwardDomain)
+	case strings.HasPrefix(rest, ":"):
+		port, _, _ := strings.Cut(rest[1:], "/")
+		if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
+			errs.add("forward_domain", "invalid", "port must be 1-65535")
+		}
+	}
+	if h.HTTPCode == 0 {
+		h.HTTPCode = 301
+	}
+	okCode := false
+	for _, c := range RedirectCodes {
+		okCode = okCode || c == h.HTTPCode
+	}
+	if !okCode {
+		errs.add("http_code", "invalid", "status code must be 301, 302, 303, 307 or 308")
+	}
+	if h.SSLForced && h.CertificateID == nil {
+		errs.add("ssl_forced", "needs_certificate", "HTTPS redirect requires a certificate")
 	}
 	if err := AdvancedConfig(h.AdvancedConfig); err != nil {
 		errs.add("advanced_config", "invalid", "%s", err.Error())

@@ -23,6 +23,7 @@ type npmRequest struct {
 	// Path/database.sqlite. The password is used for this request only and never stored.
 	MySQL          *npmimport.MySQL `json:"mysql"`
 	ProxyHostIDs   []int64          `json:"proxy_host_ids"`
+	RedirectIDs    []int64          `json:"redirection_host_ids"`
 	CertificateIDs []int64          `json:"certificate_ids"`
 	AccessListIDs  []int64          `json:"access_list_ids"`
 }
@@ -71,19 +72,38 @@ func (s *Server) npmRead(w http.ResponseWriter, r *http.Request) (*npmimport.Sna
 		fail(w, err)
 		return nil, in, false
 	}
-	used := map[string]int64{}
+	redirects, err := s.Store.ListRedirectionHosts(r.Context())
+	if err != nil {
+		fail(w, err)
+		return nil, in, false
+	}
+	used := map[string]string{}
 	for _, h := range existing {
 		for _, d := range h.Domains {
-			used[d] = h.ID
+			used[d] = fmt.Sprintf("proxy host #%d", h.ID)
 		}
 	}
-	for i := range snap.ProxyHosts {
-		for _, d := range snap.ProxyHosts[i].Domains {
-			if id, ok := used[strings.ToLower(d)]; ok {
-				snap.ProxyHosts[i].Conflict = fmt.Sprintf("%s is already used by Corvus proxy host #%d", d, id)
-				break
+	for _, h := range redirects {
+		for _, d := range h.Domains {
+			used[d] = fmt.Sprintf("redirection host #%d", h.ID)
+		}
+	}
+	conflict := func(domains []string) string {
+		for _, d := range domains {
+			if what, ok := used[strings.ToLower(strings.TrimSpace(d))]; ok {
+				return fmt.Sprintf("%s is already used by Corvus %s", d, what)
 			}
 		}
+		return ""
+	}
+	for i := range snap.ProxyHosts {
+		snap.ProxyHosts[i].Conflict = conflict(snap.ProxyHosts[i].Domains)
+	}
+	for i := range snap.Redirects {
+		snap.Redirects[i].Conflict = conflict(snap.Redirects[i].Domains)
+	}
+	if snap.Redirects == nil {
+		snap.Redirects = []npmimport.Redirect{}
 	}
 	return snap, in, true
 }
@@ -121,7 +141,7 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	var skips []skipped
-	counts := map[string]int{"proxy_hosts": 0, "certificates": 0, "access_lists": 0}
+	counts := map[string]int{"proxy_hosts": 0, "redirection_hosts": 0, "certificates": 0, "access_lists": 0}
 	type pendingFiles struct {
 		id        int64
 		cert, key []byte
@@ -278,6 +298,24 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 			}
 			counts["proxy_hosts"]++
 		}
+		for _, h := range snap.Redirects {
+			if !selected(in.RedirectIDs, h.NPMID) {
+				continue
+			}
+			if h.Conflict != "" {
+				skips = append(skips, skipped{"redirection_host", h.NPMID, h.Conflict})
+				continue
+			}
+			xh := npmRedirect(h, certMap)
+			if err := checkRedirectionHost(r, tx, xh); err != nil {
+				skips = append(skips, skipped{"redirection_host", h.NPMID, err.Error()})
+				continue
+			}
+			if err := tx.SaveRedirectionHost(ctx, xh); err != nil {
+				return err
+			}
+			counts["redirection_hosts"]++
+		}
 		for _, ir := range ipRules {
 			if len(ir.hosts) == 0 {
 				continue
@@ -301,6 +339,17 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "import.npm", "npm", map[string]any{"imported": counts, "skipped": len(skips)})
 	writeJSON(w, 200, map[string]any{"imported": counts, "skipped": skips, "version": v, "at": time.Now().UTC()})
+}
+
+// npmRedirect maps an NPM redirection host to a Corvus one; certMap maps NPM
+// certificate ids to imported Corvus certificates (unmapped: no TLS, no forced HTTPS).
+func npmRedirect(h npmimport.Redirect, certMap map[int64]int64) *store.RedirectionHost {
+	xh := &store.RedirectionHost{Domains: h.Domains, ForwardScheme: h.ForwardScheme, ForwardDomain: h.ForwardDomain, HTTPCode: h.HTTPCode,
+		PreservePath: h.PreservePath, HTTP2: h.HTTP2, BlockExploits: h.BlockExploits, Enabled: h.Enabled, AdvancedConfig: h.AdvancedConfig}
+	if id, ok := certMap[h.CertificateID]; ok && h.CertificateID != 0 {
+		xh.CertificateID, xh.SSLForced = &id, h.SSLForced
+	}
+	return xh
 }
 
 func contains(list []string, v string) bool {

@@ -22,7 +22,12 @@ CREATE TABLE proxy_host (id INTEGER PRIMARY KEY, domain_names TEXT, forward_sche
   access_list_id INTEGER DEFAULT 0, certificate_id INTEGER DEFAULT 0, ssl_forced INTEGER, block_exploits INTEGER, allow_websocket_upgrade INTEGER,
   http2_support INTEGER, enabled INTEGER, advanced_config TEXT, locations TEXT, is_deleted INTEGER DEFAULT 0);
 CREATE TABLE stream (id INTEGER PRIMARY KEY, is_deleted INTEGER DEFAULT 0);
-CREATE TABLE redirection_host (id INTEGER PRIMARY KEY, is_deleted INTEGER DEFAULT 0);
+CREATE TABLE redirection_host (id INTEGER PRIMARY KEY, domain_names TEXT, forward_scheme TEXT DEFAULT 'auto', forward_domain_name TEXT,
+  forward_http_code INTEGER DEFAULT 302, preserve_path INTEGER, certificate_id INTEGER DEFAULT 0, ssl_forced INTEGER, http2_support INTEGER,
+  block_exploits INTEGER, enabled INTEGER, advanced_config TEXT, is_deleted INTEGER DEFAULT 0);
+INSERT INTO redirection_host VALUES (1, '["old.example.com","www.old.example.com"]', 'https', 'new.example.com', 301, 1, 2, 1, 1, 1, 1, '', 0);
+INSERT INTO redirection_host VALUES (2, '["legacy.example.com"]', '$scheme', 'https://example.com/landing', 300, 0, 0, 0, 0, 0, 0, 'return 410 $server;', 0);
+INSERT INTO redirection_host VALUES (3, '["deleted-redirect.example.com"]', 'http', 'example.com', 302, 0, 0, 0, 0, 0, 1, '', 1);
 INSERT INTO user VALUES (1, 'ops@example.com', 0);
 INSERT INTO certificate VALUES (1, 1, 'letsencrypt', 'shop', '["shop.example.com"]', '{"dns_challenge":true,"dns_provider":"cloudflare","dns_provider_credentials":"# Cloudflare API token\ndns_cloudflare_api_token = cf-token-123"}', 0);
 INSERT INTO certificate VALUES (2, 1, 'other', 'custom', '["a.example.com"]', '{}', 0);
@@ -78,6 +83,50 @@ func TestRead(t *testing.T) {
 	}
 	if len(snap.Warnings) != 1 {
 		t.Fatalf("expected stream warning, got %v", snap.Warnings)
+	}
+	if len(snap.Redirects) != 2 {
+		t.Fatalf("redirection hosts: %+v", snap.Redirects)
+	}
+	r1, r2 := snap.Redirects[0], snap.Redirects[1]
+	if r1.NPMID != 1 || len(r1.Domains) != 2 || r1.ForwardScheme != "https" || r1.ForwardDomain != "new.example.com" || r1.HTTPCode != 301 ||
+		!r1.PreservePath || r1.CertificateID != 2 || !r1.SSLForced || !r1.HTTP2 || !r1.BlockExploits || !r1.Enabled || len(r1.Warnings) != 0 ||
+		r1.Forward != "301 https://new.example.com$request_uri" {
+		t.Fatalf("redirect 1 mapping: %+v", r1)
+	}
+	// "$scheme" (older NPM) is auto, a scheme typed into the target is kept, 300 becomes 302,
+	// NPM-specific advanced config is dropped.
+	if r2.ForwardScheme != "https" || r2.ForwardDomain != "example.com/landing" || r2.HTTPCode != 302 || r2.PreservePath || r2.Enabled ||
+		r2.AdvancedConfig != "" || len(r2.Warnings) != 2 {
+		t.Fatalf("redirect 2 mapping: %+v", r2)
+	}
+}
+
+func TestReadLegacyRedirects(t *testing.T) {
+	data := t.TempDir()
+	db, err := sql.Open("sqlite", filepath.Join(data, "database.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// NPM before 2.8: no forward_scheme / forward_http_code columns.
+	if _, err := db.Exec(`
+CREATE TABLE proxy_host (id INTEGER PRIMARY KEY, domain_names TEXT, forward_scheme TEXT, forward_host TEXT, forward_port INTEGER,
+  access_list_id INTEGER DEFAULT 0, certificate_id INTEGER DEFAULT 0, ssl_forced INTEGER, block_exploits INTEGER, allow_websocket_upgrade INTEGER,
+  http2_support INTEGER, enabled INTEGER, advanced_config TEXT, locations TEXT, is_deleted INTEGER DEFAULT 0);
+CREATE TABLE certificate (id INTEGER PRIMARY KEY, owner_user_id INTEGER, provider TEXT, nice_name TEXT, domain_names TEXT, meta TEXT, is_deleted INTEGER DEFAULT 0);
+CREATE TABLE access_list (id INTEGER PRIMARY KEY, name TEXT, satisfy_any INTEGER, is_deleted INTEGER DEFAULT 0);
+CREATE TABLE redirection_host (id INTEGER PRIMARY KEY, domain_names TEXT, forward_domain_name TEXT, preserve_path INTEGER, certificate_id INTEGER DEFAULT 0,
+  ssl_forced INTEGER, http2_support INTEGER, block_exploits INTEGER, enabled INTEGER, advanced_config TEXT, is_deleted INTEGER DEFAULT 0);
+INSERT INTO redirection_host VALUES (1, '["a.example.com"]', 'b.example.com', 1, 0, 0, 0, 1, 1, NULL, 0);
+`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	snap, err := Read(context.Background(), Source{DataDir: data})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.Redirects) != 1 || snap.Redirects[0].ForwardScheme != "auto" || snap.Redirects[0].HTTPCode != 302 || snap.Redirects[0].ForwardDomain != "b.example.com" {
+		t.Fatalf("legacy redirect: %+v", snap.Redirects)
 	}
 }
 

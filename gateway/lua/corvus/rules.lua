@@ -186,7 +186,8 @@ function _M.init(path)
   for hid, h in pairs(cfg.hosts or {}) do
     local list = {}
     for _, idx in ipairs(h.rules or {}) do list[#list + 1] = compiled[idx] end
-    HOSTS[tonumber(hid)] = { rules = list, cf = h.cf and true or false, exploits = h.exploits and true or false,
+    -- keys: proxy host id (number) or "r<id>" for redirection hosts
+    HOSTS[tonumber(hid) or hid] = { rules = list, cf = h.cf and true or false, exploits = h.exploits and true or false,
       body = h.body or "off", body_max = tonumber(h.body_max) or 1048576 }
   end
   GEO = load_geo(cfg.geo)

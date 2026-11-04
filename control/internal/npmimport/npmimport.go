@@ -1,6 +1,6 @@
 // Package npmimport reads an existing Nginx Proxy Manager installation (SQLite file or
 // MySQL/MariaDB database, plus certificate files mounted read-only) and converts proxy hosts,
-// certificates and access lists into Corvus objects.
+// redirection hosts, certificates and access lists into Corvus objects.
 package npmimport
 
 import (
@@ -96,8 +96,28 @@ type AccessList struct {
 	RuleCount  int         `json:"rules"`
 }
 
+// Redirect is an NPM redirection host.
+type Redirect struct {
+	NPMID          int64    `json:"npm_id"`
+	Domains        []string `json:"domains"`
+	ForwardScheme  string   `json:"forward_scheme"` // auto | http | https
+	ForwardDomain  string   `json:"forward_domain"`
+	HTTPCode       int      `json:"http_code"`
+	PreservePath   bool     `json:"preserve_path"`
+	Forward        string   `json:"forward"`                  // display: "301 https://example.com$request_uri"
+	CertificateID  int64    `json:"certificate_id,omitempty"` // NPM id
+	SSLForced      bool     `json:"ssl_forced"`
+	HTTP2          bool     `json:"http2"`
+	BlockExploits  bool     `json:"block_exploits"`
+	Enabled        bool     `json:"enabled"`
+	AdvancedConfig string   `json:"-"`
+	Conflict       string   `json:"conflict,omitempty"`
+	Warnings       []string `json:"warnings,omitempty"`
+}
+
 type Snapshot struct {
 	ProxyHosts   []Host       `json:"proxy_hosts"`
+	Redirects    []Redirect   `json:"redirection_hosts"`
 	Certificates []Cert       `json:"certificates"`
 	AccessLists  []AccessList `json:"access_lists"`
 	Warnings     []string     `json:"warnings"`
@@ -258,16 +278,83 @@ func Read(ctx context.Context, src Source) (*Snapshot, error) {
 	}
 	rows.Close()
 
-	var streams, redirs int
+	if err := readRedirects(ctx, db, snap); err != nil {
+		return nil, err
+	}
+
+	var streams int
 	_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM stream WHERE is_deleted = 0`).Scan(&streams)
-	_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM redirection_host WHERE is_deleted = 0`).Scan(&redirs)
 	if streams > 0 {
 		snap.Warnings = append(snap.Warnings, fmt.Sprintf("%d stream(s) (TCP/UDP) are not supported yet and were skipped", streams))
 	}
-	if redirs > 0 {
-		snap.Warnings = append(snap.Warnings, fmt.Sprintf("%d redirection host(s) are not supported yet and were skipped", redirs))
-	}
 	return snap, nil
+}
+
+// readRedirects loads NPM's redirection_host table. forward_scheme and forward_http_code
+// were added in NPM 2.8 (2021); older databases redirect with $scheme and 302.
+func readRedirects(ctx context.Context, db *sql.DB, snap *Snapshot) error {
+	const cols = `id, domain_names, forward_domain_name, preserve_path, certificate_id, ssl_forced, http2_support, block_exploits, enabled, COALESCE(advanced_config, '')`
+	rows, err := db.QueryContext(ctx, `SELECT `+cols+`, forward_scheme, forward_http_code FROM redirection_host WHERE is_deleted = 0 ORDER BY id`)
+	legacy := false
+	if err != nil {
+		if rows, err = db.QueryContext(ctx, `SELECT `+cols+` FROM redirection_host WHERE is_deleted = 0 ORDER BY id`); err != nil {
+			snap.Warnings = append(snap.Warnings, fmt.Sprintf("redirection hosts could not be read and were skipped: %v", err))
+			return nil
+		}
+		legacy = true
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var h Redirect
+		var domains string
+		var pp, ssl, h2, blk, en int
+		dest := []any{&h.NPMID, &domains, &h.ForwardDomain, &pp, &h.CertificateID, &ssl, &h2, &blk, &en, &h.AdvancedConfig}
+		if !legacy {
+			dest = append(dest, &h.ForwardScheme, &h.HTTPCode)
+		}
+		if err := rows.Scan(dest...); err != nil {
+			return fmt.Errorf("read redirection hosts: %w", err)
+		}
+		_ = json.Unmarshal([]byte(domains), &h.Domains)
+		h.PreservePath, h.SSLForced, h.HTTP2, h.BlockExploits, h.Enabled = pp == 1, ssl == 1, h2 == 1, blk == 1, en == 1
+		if h.ForwardScheme == "" || h.ForwardScheme == "$scheme" {
+			h.ForwardScheme = "auto"
+		}
+		if h.HTTPCode == 0 {
+			h.HTTPCode = 302
+		}
+		switch h.HTTPCode {
+		case 301, 302, 303, 307, 308:
+		default:
+			h.Warnings = append(h.Warnings, fmt.Sprintf("status code %d is not supported; imported as 302", h.HTTPCode))
+			h.HTTPCode = 302
+		}
+		// Targets entered with a scheme ("https://example.com") keep it.
+		fd := strings.TrimSpace(h.ForwardDomain)
+		for _, sch := range []string{"http", "https"} {
+			if len(fd) > len(sch)+3 && strings.EqualFold(fd[:len(sch)+3], sch+"://") {
+				fd = fd[len(sch)+3:]
+				if h.ForwardScheme == "auto" {
+					h.ForwardScheme = sch
+				}
+			}
+		}
+		h.ForwardDomain = fd
+		scheme := h.ForwardScheme
+		if scheme == "auto" {
+			scheme = "$scheme"
+		}
+		h.Forward = fmt.Sprintf("%d %s://%s", h.HTTPCode, scheme, h.ForwardDomain)
+		if h.PreservePath {
+			h.Forward += "$request_uri"
+		}
+		if strings.TrimSpace(h.AdvancedConfig) != "" && npmRefs.MatchString(h.AdvancedConfig) {
+			h.Warnings = append(h.Warnings, "advanced configuration references NPM-specific variables/includes and was not imported")
+			h.AdvancedConfig = ""
+		}
+		snap.Redirects = append(snap.Redirects, h)
+	}
+	return rows.Err()
 }
 
 // open connects read-only to NPM's SQLite file or MySQL/MariaDB server.

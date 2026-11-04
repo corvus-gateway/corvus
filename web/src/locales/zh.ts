@@ -2,6 +2,7 @@ import { templatesStrings } from "./templates.i18n";
 import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
+import { redirectsStrings } from "./redirects.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import type { ko } from "./ko";
@@ -175,7 +176,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   // audit
   auditDesc: "记录所有管理操作：谁在何时更改了什么。", searchAudit: "搜索操作人、对象或 IP", noAudit: "暂无审计记录", noAuditDesc: "管理操作将记录在此处。",
   // import
-  importDesc: "读取 Nginx Proxy Manager 数据目录，导入代理主机、证书和访问列表。不会修改源数据。",
+  importDesc: "读取 Nginx Proxy Manager 数据目录，导入代理主机、重定向主机、证书和访问列表。不会修改源数据。",
   npmDb: "NPM 数据库", npmDbSqlite: "SQLite（默认）", npmDbMysql: "MySQL / MariaDB", npmDbHost: "主机", npmDbHostHint: "Corvus 必须能够访问 NPM 的数据库，例如将 Corvus 加入 NPM 的 Docker 网络并使用服务名（db）。", npmDbPort: "端口", npmDbName: "数据库", npmDbUser: "用户", npmDbPassword: "密码", npmDbPasswordHint: "仅用于本次导入，不会保存。证书文件仍从挂载的 NPM 卷中读取。",
   npmPath: "NPM 数据路径", npmPathHint: "以只读方式挂载到容器中的 NPM /data 路径。", preview: "预览",
   importEmptyTitle: "请输入要导入的路径", importEmptyDesc: "在预览中检查冲突，然后精确选择要导入的内容。", importNothing: "没有可导入的内容。",
@@ -300,6 +301,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   pagination: "分页", pageSize: "每页", pageRange: "第 {from}–{to} 条，共 {total} 条", pageNofM: "第 {n} / {m} 页", prevPage: "上一页", nextPage: "下一页",
   ...bansStrings.zh,
   ...tokensStrings.zh,
+  ...redirectsStrings.zh,
   ...ssoStrings.zh,
   ...retentionStrings.zh,
   ...templatesStrings.zh,
@@ -323,7 +325,7 @@ export const zhRuleLabels: RuleLabels | undefined = {
 
 export const zhAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "代理主机", waitroom: "访问排队", certificate: "证书", deploy: "部署", auth: "认证", setup: "初始设置",
+    proxy_host: "代理主机", redirection_host: "重定向主机", waitroom: "访问排队", certificate: "证书", deploy: "部署", auth: "认证", setup: "初始设置",
     rate_limit: "速率限制", access_list: "Basic 认证", security_rule: "安全规则", ip_list: "IP 列表", geoip: "国家/地区数据库", settings: "设置", network: "网络", import: "导入", mfa: "MFA", user: "账号",
   },
   verb: {

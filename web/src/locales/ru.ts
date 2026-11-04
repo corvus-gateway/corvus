@@ -2,6 +2,7 @@ import { templatesStrings } from "./templates.i18n";
 import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
+import { redirectsStrings } from "./redirects.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import type { ko } from "./ko";
@@ -174,7 +175,7 @@ export const ru: Partial<Record<keyof typeof ko, string>> = {
   // audit
   auditDesc: "Все административные действия фиксируются: кто, что и когда изменил.", searchAudit: "Поиск по пользователю, объекту или IP", noAudit: "Нет записей аудита", noAuditDesc: "Здесь будут фиксироваться административные действия.",
   // import
-  importDesc: "Считайте папку данных Nginx Proxy Manager и импортируйте прокси-хосты, сертификаты и списки доступа. Исходные данные не изменяются.",
+  importDesc: "Считайте папку данных Nginx Proxy Manager и импортируйте прокси-хосты, хосты перенаправления, сертификаты и списки доступа. Исходные данные не изменяются.",
   npmDb: "База данных NPM", npmDbSqlite: "SQLite (по умолчанию)", npmDbMysql: "MySQL / MariaDB", npmDbHost: "Хост", npmDbHostHint: "Corvus должен иметь доступ к базе данных NPM, например подключите Corvus к Docker-сети NPM и укажите имя сервиса (db).", npmDbPort: "Порт", npmDbName: "База данных", npmDbUser: "Пользователь", npmDbPassword: "Пароль", npmDbPasswordHint: "Используется только для этого импорта и не сохраняется. Файлы сертификатов по-прежнему читаются из подключённых томов NPM.",
   npmPath: "Путь к данным NPM", npmPathHint: "Путь /data NPM, смонтированный в контейнер только для чтения.", preview: "Предпросмотр",
   importEmptyTitle: "Укажите путь для импорта", importEmptyDesc: "Проверьте конфликты в предпросмотре и выберите, что именно импортировать.", importNothing: "Нечего импортировать.",
@@ -299,6 +300,7 @@ export const ru: Partial<Record<keyof typeof ko, string>> = {
   pagination: "Постраничная навигация", pageSize: "На странице", pageRange: "{from}–{to} из {total}", pageNofM: "Страница {n} из {m}", prevPage: "Предыдущая страница", nextPage: "Следующая страница",
   ...bansStrings.ru,
   ...tokensStrings.ru,
+  ...redirectsStrings.ru,
   ...ssoStrings.ru,
   ...retentionStrings.ru,
   ...templatesStrings.ru,
@@ -322,7 +324,7 @@ export const ruRuleLabels: RuleLabels | undefined = {
 
 export const ruAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "Прокси-хост", waitroom: "Очередь доступа", certificate: "Сертификат", deploy: "Развёртывание", auth: "Аутентификация", setup: "Настройка",
+    proxy_host: "Прокси-хост", redirection_host: "Хост перенаправления", waitroom: "Очередь доступа", certificate: "Сертификат", deploy: "Развёртывание", auth: "Аутентификация", setup: "Настройка",
     rate_limit: "Ограничение запросов", access_list: "Basic-аутентификация", security_rule: "Правило безопасности", ip_list: "Список IP", geoip: "База стран", settings: "Настройки", network: "Сеть", import: "Импорт", mfa: "MFA", user: "Учётная запись",
   },
   verb: {

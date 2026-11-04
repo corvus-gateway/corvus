@@ -85,7 +85,17 @@ type mainView struct {
 	Name       string // version directory name, served on the status port
 	P          Paths
 	Hosts      int
+	Redirects  int
 	RateLimits []store.RateLimit
+}
+
+type redirectView struct {
+	store.RedirectionHost
+	CertDir         string
+	HasRootLocation bool
+	RuleKey         string
+	Target          string
+	P               Paths
 }
 
 type policyRoom struct {
@@ -185,7 +195,11 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 	}
 	slash := filepath.ToSlash(dir)
 
-	rules, err := c.rulePolicy(ctx, s, hosts)
+	redirects, err := s.ListRedirectionHosts(ctx)
+	if err != nil {
+		return err
+	}
+	rules, err := c.rulePolicy(ctx, s, hosts, redirects)
 	if err != nil {
 		return err
 	}
@@ -210,13 +224,7 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 			return fmt.Errorf("proxy host %d: %w", h.ID, err)
 		}
 		v := hostView{ProxyHost: hc, P: c.P, HasRootLocation: validate.HasRootLocation(hc.AdvancedConfig), Upstream: upstreamAddr(hc.ForwardHost, static, hostGW)}
-		// TLS is enabled once the certificate files exist (an ACME order may still be pending).
-		if hc.CertificateID != nil {
-			dir := c.P.CertDir(*hc.CertificateID)
-			if _, err := os.Stat(filepath.Join(filepath.FromSlash(dir), "fullchain.pem")); err == nil {
-				v.CertDir = dir
-			}
-		}
+		v.CertDir = c.certDir(hc.CertificateID)
 		if hc.WaitroomID != nil {
 			if r := byID[*hc.WaitroomID]; r != nil && r.Enabled {
 				v.Room = r
@@ -249,6 +257,23 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		n++
 	}
 
+	nr := 0
+	for _, h := range redirects {
+		if !h.Enabled {
+			continue
+		}
+		hc := h
+		if err := validate.RedirectionHost(&hc); err != nil {
+			return fmt.Errorf("redirection host %d: %w", h.ID, err)
+		}
+		v := redirectView{RedirectionHost: hc, P: c.P, HasRootLocation: validate.HasRootLocation(hc.AdvancedConfig),
+			RuleKey: redirectRuleKey(hc.ID), Target: redirectTarget(hc), CertDir: c.certDir(hc.CertificateID)}
+		if err := writeTemplate(filepath.Join(dir, "hosts", fmt.Sprintf("redirect-%d.conf", h.ID)), "redirect.conf.tmpl", v); err != nil {
+			return err
+		}
+		nr++
+	}
+
 	rj, _ := json.Marshal(rules)
 	if err := os.WriteFile(filepath.Join(dir, "rules.json"), rj, 0o644); err != nil {
 		return err
@@ -257,7 +282,34 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 	if err := os.WriteFile(filepath.Join(dir, "policy.json"), pj, 0o644); err != nil {
 		return err
 	}
-	return writeTemplate(filepath.Join(dir, "nginx.conf"), "nginx.conf.tmpl", mainView{Dir: slash, Name: filepath.Base(dir), P: c.P, Hosts: n, RateLimits: enabledLimits})
+	return writeTemplate(filepath.Join(dir, "nginx.conf"), "nginx.conf.tmpl", mainView{Dir: slash, Name: filepath.Base(dir), P: c.P, Hosts: n, Redirects: nr, RateLimits: enabledLimits})
+}
+
+// certDir returns the certificate directory for id, or "" while its files don't exist
+// yet (an ACME order may still be pending): TLS is enabled once they do.
+func (c *Compiler) certDir(id *int64) string {
+	if id == nil {
+		return ""
+	}
+	dir := c.P.CertDir(*id)
+	if _, err := os.Stat(filepath.Join(filepath.FromSlash(dir), "fullchain.pem")); err != nil {
+		return ""
+	}
+	return dir
+}
+
+// redirectTarget is the URL a redirection host answers with ($scheme keeps the
+// request's scheme; $request_uri keeps path and query).
+func redirectTarget(h store.RedirectionHost) string {
+	scheme := h.ForwardScheme
+	if scheme == "auto" {
+		scheme = "$scheme"
+	}
+	t := scheme + "://" + h.ForwardDomain
+	if h.PreservePath {
+		t = strings.TrimRight(t, "/") + "$request_uri"
+	}
+	return t
 }
 
 func writeTemplate(path, name string, data any) error {

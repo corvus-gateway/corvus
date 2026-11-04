@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -107,10 +108,20 @@ type proxyHostInput struct {
 
 // requestCertificate creates a pending ACME certificate for h inside tx.
 func (s *Server) requestCertificate(r *http.Request, tx *store.Store, h *store.ProxyHost, req *certRequest) (*store.Certificate, error) {
+	c, err := s.orderCertificate(r, tx, h.Domains, req)
+	if err != nil {
+		return nil, err
+	}
+	h.CertificateID = &c.ID
+	return c, nil
+}
+
+// orderCertificate creates a pending ACME certificate for domains inside tx.
+func (s *Server) orderCertificate(r *http.Request, tx *store.Store, hostDomains []string, req *certRequest) (*store.Certificate, error) {
 	if s.ACME == nil {
 		return nil, validate.Errors{{Field: "certificate_request", Code: "unavailable", Message: "ACME is not available"}}
 	}
-	info, domains, errs := s.buildACME(h.Domains, *req, "certificate_request.")
+	info, domains, errs := s.buildACME(hostDomains, *req, "certificate_request.")
 	if len(errs) > 0 {
 		return nil, errs
 	}
@@ -119,7 +130,6 @@ func (s *Server) requestCertificate(r *http.Request, tx *store.Store, h *store.P
 		return nil, err
 	}
 	c.Challenge = info.Challenge
-	h.CertificateID = &c.ID
 	return c, nil
 }
 
@@ -166,25 +176,53 @@ func checkProxyHost(r *http.Request, tx *store.Store, h *store.ProxyHost) error 
 			errs = append(errs, validate.FieldError{Field: "client_ip", Code: "no_trusted_proxies", Message: "configure trusted proxies in network settings first"})
 		}
 	}
-	others, err := tx.ListProxyHosts(ctx)
+	dup, err := domainConflicts(ctx, tx, h.Domains, h.ID, 0)
 	if err != nil {
 		return err
 	}
+	return append(errs, dup...).OrNil()
+}
+
+// domainConflicts reports domains already used by another proxy host or redirection
+// host (skipProxy / skipRedirect: the host being edited, 0 = none).
+func domainConflicts(ctx context.Context, tx *store.Store, domains []string, skipProxy, skipRedirect int64) (validate.Errors, error) {
 	mine := map[string]bool{}
-	for _, d := range h.Domains {
+	for _, d := range domains {
 		mine[d] = true
 	}
-	for _, o := range others {
-		if o.ID == h.ID {
+	var errs validate.Errors
+	dup := func(d, kind string, id int64) {
+		errs = append(errs, validate.FieldError{Field: "domains", Code: "duplicate", Message: fmt.Sprintf("%s is already used by %s #%d", d, kind, id)})
+	}
+	proxies, err := tx.ListProxyHosts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, o := range proxies {
+		if o.ID == skipProxy {
 			continue
 		}
 		for _, d := range o.Domains {
 			if mine[d] {
-				errs = append(errs, validate.FieldError{Field: "domains", Code: "duplicate", Message: fmt.Sprintf("%s is already used by proxy host #%d", d, o.ID)})
+				dup(d, "proxy host", o.ID)
 			}
 		}
 	}
-	return errs.OrNil()
+	redirects, err := tx.ListRedirectionHosts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, o := range redirects {
+		if o.ID == skipRedirect {
+			continue
+		}
+		for _, d := range o.Domains {
+			if mine[d] {
+				dup(d, "redirection host", o.ID)
+			}
+		}
+	}
+	return errs, nil
 }
 
 func (s *Server) listProxyHosts(w http.ResponseWriter, r *http.Request) {
