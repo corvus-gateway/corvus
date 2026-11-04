@@ -6,8 +6,6 @@
 package traffic
 
 import (
-	"bytes"
-	"encoding/json"
 	"log/slog"
 	"math"
 	"net"
@@ -19,7 +17,7 @@ import (
 	"time"
 )
 
-// Record is one access log entry as emitted by the gateway (log_format corvus_json).
+// Record is one access log entry as emitted by the gateway (log_format corvus_log, parse.go).
 type Record struct {
 	T  float64 `json:"t"`  // $msec
 	H  string  `json:"h"`  // configured host name ($corvus_host)
@@ -242,7 +240,7 @@ func (c *Collector) Listen(path string, stop <-chan struct{}) error {
 	go func() {
 		buf := make([]byte, 64<<10)
 		for {
-			n, _, err := conn.ReadFromUnix(buf)
+			n, err := conn.Read(buf)
 			if err != nil {
 				select {
 				case <-stop:
@@ -259,20 +257,13 @@ func (c *Collector) Listen(path string, stop <-chan struct{}) error {
 	return nil
 }
 
-// Ingest parses one syslog datagram ("<pri>... tag: {json}") and records it.
+// Ingest parses one datagram (see parseDatagram) and records its entries.
 func (c *Collector) Ingest(msg []byte) {
-	i := bytes.IndexByte(msg, '{')
-	if i < 0 {
-		return
-	}
-	var r Record
-	if err := json.Unmarshal(msg[i:], &r); err != nil {
+	if bad := parseDatagram(msg, c.Add); bad > 0 {
 		c.mu.Lock()
-		c.dropped++
+		c.dropped += int64(bad)
 		c.mu.Unlock()
-		return
 	}
-	c.Add(&r)
 }
 
 // classify returns whether the gateway blocked the request and every notable
