@@ -70,7 +70,9 @@ type hostView struct {
 	Room            *store.Waitroom
 	CertDir         string
 	HasRootLocation bool
-	Upstream        string
+	Upstream        string // forward host address (see upstreamAddr)
+	UpstreamResolve bool   // Upstream is a name: resolved at run time (server … resolve)
+	OwnAccessLog    bool   // the advanced configuration sets access_log (keep it working)
 	RateLimit       *store.RateLimit
 	Access          *store.AccessList
 	AccessFile      string
@@ -278,6 +280,8 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 			return fmt.Errorf("proxy host %d: %w", h.ID, err)
 		}
 		v := hostView{ProxyHost: hc, P: c.P, HasRootLocation: validate.HasRootLocation(hc.AdvancedConfig), Upstream: upstreamAddr(hc.ForwardHost, static, hostGW)}
+		v.UpstreamResolve = !isIP(v.Upstream)
+		v.OwnAccessLog = strings.Contains(hc.AdvancedConfig, "access_log")
 		v.CertDir = c.certDir(hc.CertificateID)
 		if hc.WaitroomID != nil {
 			if r := byID[*hc.WaitroomID]; r != nil && r.Enabled {

@@ -21,6 +21,7 @@ local body = require "corvus.body"
 local ualist = require "corvus.ualist"
 local challenge = require "corvus.challenge"
 local underattack = require "corvus.underattack"
+local accesslog = require "corvus.accesslog"
 local ffi = require "ffi"
 local bit = require "bit"
 
@@ -393,7 +394,8 @@ function _M.rewrite(host_id)
   local host = HOSTS[host_id]
   if not host then return end
   local uri = ngx.var.uri
-  if sub(uri, 1, 28) == "/.well-known/acme-challenge/" then return end  -- never block certificate validation
+  -- never block certificate validation (byte test first: no substring on every request)
+  if byte(uri, 2) == 46 and sub(uri, 1, 28) == "/.well-known/acme-challenge/" then return end
 
   -- Banned client addresses (automatic or manual bans pushed by corvus-control).
   local bans = ngx.shared.corvus_bans
@@ -595,12 +597,21 @@ end
 -- with its escalation and acknowledges them with the next ban-list push.
 
 local BB_V, BB_CFG = nil, nil  -- per-worker compiled settings and their version
+local BB_AT = -1               -- when this worker last checked the version (ngx.now())
 
+-- Settings pushed by corvus-control; each worker looks for a new version at most once a
+-- second (a shared-dict read per request is measurable on the hot path).
 local function bb_config()
+  local now = ngx.now()
+  if now - BB_AT < 1 then return BB_CFG end
+  BB_AT = now
   local q = ngx.shared.corvus_bb_q
   if not q then return nil end
   local v = q:get("cfg_v")
-  if not v then return nil end
+  if not v then
+    BB_V, BB_CFG = nil, nil
+    return nil
+  end
   if v ~= BB_V then
     local c = cjson.decode(q:get("cfg") or "")
     local cfg
@@ -623,9 +634,15 @@ local function bb_config()
   return BB_CFG
 end
 
--- log_by_lua of every proxy host.
-function _M.log(host_id)
-  if ngx.ctx.corvus_wr then ngx.var.corvus_wr = ngx.ctx.corvus_wr end
+-- log_by_lua of every proxy host: access log record, then bad-behaviour counting. room: the host has an access queue (its decision is
+-- in ngx.ctx; ngx.ctx is not touched otherwise, creating it costs a table per request).
+function _M.log(host_id, room)
+  local wr = "-"
+  if room then
+    wr = ngx.ctx.corvus_wr or "-"
+    ngx.var.corvus_wr = wr
+  end
+  accesslog.record(wr)  -- the host's access log (nginx's own access_log is off there)
   local cfg = bb_config()
   if not cfg then return end
   local status = tonumber(ngx.var.status)

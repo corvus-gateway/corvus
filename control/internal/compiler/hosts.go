@@ -70,6 +70,11 @@ func upstreamAddr(host string, hosts map[string]string, hostGW string) string {
 	return host
 }
 
+// isIP reports whether an upstream address (IPv6 bracketed) is an IP literal.
+func isIP(addr string) bool {
+	return net.ParseIP(strings.TrimSuffix(strings.TrimPrefix(addr, "["), "]")) != nil
+}
+
 // isLoopback reports whether a forward host means "this machine".
 func isLoopback(host string) bool {
 	h := strings.Trim(strings.ToLower(host), "[]")

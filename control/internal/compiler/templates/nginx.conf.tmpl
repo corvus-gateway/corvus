@@ -3,6 +3,9 @@
 
 worker_processes  auto;
 worker_rlimit_nofile 65535;
+# JIT-compile the regular expressions known at load time (attack-pattern map, regex
+# locations); Lua patterns use the "j" flag of ngx.re.
+pcre_jit on;
 error_log  stderr warn;   # fd 2 directly: /dev/stderr cannot be reopened after su-exec
 pid        {{.P.DataDir}}/run/nginx.pid;
 
@@ -83,6 +86,7 @@ http {
     init_by_lua_block {
         require("corvus.waitroom").init("{{.Dir}}/policy.json")
         require("corvus.rules").init("{{.Dir}}/rules.json")
+        require("corvus.accesslog").init("{{.P.DataDir}}/run/corvus-access.sock")
     }
 
     # Only WebSocket upgrades are forwarded; anything else (e.g. h2c) is dropped (F5).
@@ -137,11 +141,22 @@ http {
 {{- end}}
 {{end}}
     # Access logs go to corvus-control over a Unix datagram socket (lossy, never blocks requests).
-    log_format corvus_json escape=json
-        '{"t":$msec,"h":"$corvus_host","m":"$request_method","u":"$uri","s":$status,"b":$body_bytes_sent,'
-        '"rt":$request_time,"ip":"$remote_addr","wr":"$corvus_wr","x":"$corvus_exploit","rl":"$limit_req_status",'
-        '"r":"$corvus_rule","cc":"$corvus_cc","bd":"$corvus_body","bn":"$corvus_ban","ua":"$http_user_agent"}';
-    access_log syslog:server=unix:{{.P.DataDir}}/run/corvus-access.sock,nohostname,tag=corvus corvus_json;
+    # Proxy hosts send them from Lua in batches (corvus/accesslog.lua, same record format);
+    # this per-request syslog output serves the other servers (unknown hosts, redirections).
+    # Tab-separated, every value JSON-escaped (no raw tabs or newlines); parsed without
+    # reflection by corvus-control (control/internal/traffic/parse.go: keep the field order).
+    log_format corvus_log escape=json
+        'c1\t$msec\t$corvus_host\t$request_method\t$uri\t$status\t$body_bytes_sent\t$request_time\t'
+        '$remote_addr\t$corvus_wr\t$corvus_exploit\t$limit_req_status\t$corvus_rule\t$corvus_cc\t'
+        '$corvus_body\t$corvus_ban\t$http_user_agent';
+    access_log syslog:server=unix:{{.P.DataDir}}/run/corvus-access.sock,nohostname,tag=corvus corvus_log;
+
+    # HTTP-01 challenge answers from corvus-control (loopback), with a small keep-alive pool.
+    upstream corvus_acme {
+        server 127.0.0.1:{{.P.ACMEPort}};
+        keepalive 4;
+        keepalive_timeout 4s;
+    }
 
     # Internal status endpoint (loopback only): corvus-control polls it after a reload
     # to confirm the new configuration version is actually serving.
@@ -195,7 +210,9 @@ http {
         set $corvus_ban "";
 
         location ^~ /.well-known/acme-challenge/ {
-            proxy_pass http://127.0.0.1:{{.P.ACMEPort}};
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_pass http://corvus_acme;
         }
         location = /__corvus/healthz {
             access_log off;

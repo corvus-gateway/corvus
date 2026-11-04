@@ -553,6 +553,20 @@ echo "$EB" | grep -q 'Temporarily unavailable' && ok "502 uses the Corvus error 
 echo "$EB" | grep -q 'err.corvus.test' && ok "error page shows the host" || bad "error page without host"
 c -o /dev/null -X DELETE $A/api/proxy-hosts/$EH
 
+echo "[upstream pool]"
+# A forward host whose name does not resolve (container not created yet) must not block
+# deployment (resolved at run time): the host is created and answers with the error page.
+NH=$(c -X POST $A/api/proxy-hosts -d '{"domains":["nores.corvus.test"],"forward_scheme":"http","forward_host":"corvus-missing-backend","forward_port":80}' | js "d.get('id') or d.get('proxy_host',{}).get('id')")
+[ -n "$NH" ] && [ "$NH" != None ] && ok "host with an unresolvable forward host deploys" || bad "host with an unresolvable forward host rejected"
+sleep 2
+chk "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: nores.corvus.test' "$G/")" 502 "unresolvable forward host answers 502"
+chk "$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $H" "$G/")" 200 "other hosts unaffected"
+c -o /dev/null -X DELETE $A/api/proxy-hosts/$NH
+# Keep-alive pool: repeated requests reuse upstream connections (whoami shows the gateway's
+# source address and port), so there are fewer distinct ports than requests.
+PORTS=$(for i in $(seq 1 20); do curl -s -H "Host: $H" "$G/pool-$i" | sed -n 's/^RemoteAddr: //p'; done | sort -u | wc -l)
+[ "$PORTS" -ge 1 ] && [ "$PORTS" -lt 20 ] && ok "upstream connections reused ($PORTS connections for 20 requests)" || bad "no upstream connection reuse ($PORTS connections for 20 requests)"
+
 echo "[backup]"
 BK=$(mktemp)
 chk "$(curl -sk -b "$J" -o "$BK" -w '%{http_code}' "$A/api/backup")" 200 "backup download"
