@@ -3,6 +3,7 @@ import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
+import { streamsStrings } from "./streams.i18n";
 import { headersStrings } from "./headers.i18n";
 import { limitsStrings } from "./limits.i18n";
 import { certReplaceStrings } from "./certreplace.i18n";
@@ -208,6 +209,7 @@ export const en: Record<keyof typeof ko, string> = {
   ...bansStrings.en,
   ...tokensStrings.en,
   ...redirectsStrings.en,
+  ...streamsStrings.en,
   ...headersStrings.en,
   ...limitsStrings.en,
   ...certReplaceStrings.en,

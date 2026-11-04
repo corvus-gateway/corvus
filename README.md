@@ -54,6 +54,7 @@ Go control plane, React console) that can **import an existing NPM setup**.
 - Proxy hosts with wildcards, WebSocket, HTTP/2, forced HTTPS and custom Nginx snippets
 - Redirection hosts: send domains to another domain (301/302/303/307/308, optionally keeping the path), with the same TLS and protection
 - Free Let's Encrypt certificates (HTTP-01, or DNS-01 via Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) with automatic renewal, or upload your own (and replace it in place when it is renewed)
+- Streams: forward TCP/UDP ports (databases, SSH, MQTT, game servers) to another host, with optional TLS termination for TCP
 - Real client IP behind Cloudflare or trusted proxies; optional password protection per host
 - Security header presets per host (basic / strict: nosniff, frame and referrer policy, report-only CSP, HttpOnly/SameSite/Secure cookie flags), never overriding what the app already sends
 - Gzip compression of text responses (on by default), and per-host upload size limit and upstream timeout
@@ -258,14 +259,32 @@ To reach services that listen only on the host's `127.0.0.1`, or to keep an NPM 
 `network_mode: host` unchanged, run Corvus with host networking: replace `ports:` and `networks:`
 with `network_mode: host` (and set `CORVUS_REDIS_PORT` if 6379 is taken on the host).
 
+### Streams (TCP/UDP)
+
+*Streams* forward a TCP and/or UDP port to a forward host (same rules as above), optionally
+terminating TLS for TCP with one of your certificates. With the default bridge network, also
+publish each stream port in `docker-compose.yml`, then apply it with `docker compose up -d`:
+
+```yaml
+    ports:
+      - '80:80'
+      - '443:443'
+      - '9443:9443'
+      - '5432:5432'       # stream: PostgreSQL (TCP)
+      - '1194:1194/udp'   # stream: OpenVPN (UDP)
+```
+
+With `network_mode: host` nothing else is needed. Ports Corvus uses itself (80, 443, 9443 and its
+internal ports) cannot be used for streams.
+
 ### Migrating from Nginx Proxy Manager
 
-*Import from NPM* in the console copies **proxy hosts, redirection hosts, certificates** (Let's
+*Import from NPM* in the console copies **proxy hosts, redirection hosts, streams, certificates** (Let's
 Encrypt and custom, including Cloudflare DNS tokens) and **access lists** (users and IP rules) from
 an existing NPM installation. It only reads NPM's files and database — NPM itself is not changed,
 so you can go back at any time.
 
-Not imported: streams (TCP/UDP), 404 hosts, custom locations and advanced
+Not imported: 404 hosts, custom locations and advanced
 configuration that uses NPM-specific variables. The preview lists everything it skips.
 
 **Check which database your NPM uses.** Open NPM's `docker-compose.yml`:

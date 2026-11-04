@@ -354,6 +354,12 @@ func (s *Store) DeleteCertificate(ctx context.Context, id int64) error {
 	if n > 0 {
 		return fmt.Errorf("certificate is used by %d redirection host(s)", n)
 	}
+	if err := s.q.QueryRowContext(ctx, `SELECT COUNT(*) FROM streams WHERE certificate_id = ?`, id).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return fmt.Errorf("certificate is used by %d stream(s)", n)
+	}
 	res, err := s.q.ExecContext(ctx, `DELETE FROM certificates WHERE id = ?`, id)
 	if err != nil {
 		return err

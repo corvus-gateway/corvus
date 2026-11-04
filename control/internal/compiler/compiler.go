@@ -52,6 +52,23 @@ type Paths struct {
 	// Off by default: on a host without IPv6 routes a name with both A and AAAA
 	// records would intermittently fail.
 	ResolverIPv6 bool
+	AdminPort   int    // admin console/API port inside the container (9443); 0 = unknown
+	RedisPort   int    // loopback port of the bundled Valkey (6379); 0 = none
+}
+
+// ReservedPorts are the container ports Corvus itself listens on: streams may not use them.
+func (p Paths) ReservedPorts() map[int]string {
+	out := map[int]string{}
+	for _, r := range []struct {
+		port int
+		what string
+	}{{p.HTTPPort, "HTTP"}, {p.HTTPSPort, "HTTPS"}, {p.StatusPort, "gateway status"}, {p.ACMEPort, "ACME challenges"},
+		{p.AdminPort, "admin console"}, {p.RedisPort, "access-queue store (Valkey)"}} {
+		if r.port > 0 {
+			out[r.port] = r.what
+		}
+	}
+	return out
 }
 
 // CertDir is where certificate files for a certificate id live.
@@ -152,6 +169,7 @@ type mainView struct {
 	P          Paths
 	Hosts      int
 	Redirects  int
+	Streams    int // enabled streams; the stream {} block is rendered only when > 0
 	RateLimits []store.RateLimit
 }
 
@@ -359,6 +377,11 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		nr++
 	}
 
+	ns, err := c.renderStreams(ctx, s, dir, static, hostGW)
+	if err != nil {
+		return err
+	}
+
 	rj, _ := json.Marshal(rules)
 	if err := os.WriteFile(filepath.Join(dir, "rules.json"), rj, 0o644); err != nil {
 		return err
@@ -367,7 +390,7 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 	if err := os.WriteFile(filepath.Join(dir, "policy.json"), pj, 0o644); err != nil {
 		return err
 	}
-	return writeTemplate(filepath.Join(dir, "nginx.conf"), "nginx.conf.tmpl", mainView{Dir: slash, Name: filepath.Base(dir), P: c.P, Hosts: n, Redirects: nr, RateLimits: enabledLimits})
+	return writeTemplate(filepath.Join(dir, "nginx.conf"), "nginx.conf.tmpl", mainView{Dir: slash, Name: filepath.Base(dir), P: c.P, Hosts: n, Redirects: nr, Streams: ns, RateLimits: enabledLimits})
 }
 
 // certDir returns the certificate directory for id, or "" while its files don't exist

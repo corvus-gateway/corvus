@@ -55,6 +55,7 @@ OpenResty, plano de control en Go, consola en React) que puede **importar una co
 - Hosts proxy con comodines, WebSocket, HTTP/2, HTTPS forzado y fragmentos de Nginx personalizados
 - Hosts de redirección: envíe dominios a otro dominio (301/302/303/307/308, conservando opcionalmente la ruta), con el mismo TLS y la misma protección
 - Certificados gratuitos de Let's Encrypt (HTTP-01 o DNS-01 mediante Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) con renovación automática, o suba los suyos (y reemplácelos en su sitio al renovarlos)
+- Streams: reenvíe puertos TCP/UDP (bases de datos, SSH, MQTT, servidores de juegos) a otro host, con terminación TLS opcional para TCP
 - IP real del cliente detrás de Cloudflare o de proxies de confianza; protección opcional con contraseña por host
 - Ajustes predefinidos de cabeceras de seguridad por host (Básico / Estricto: nosniff, políticas de frame y de referrer, CSP en modo solo informe, atributos de cookie HttpOnly/SameSite/Secure), sin sobrescribir nunca lo que la aplicación ya envía
 - Compresión gzip de las respuestas de texto (activada por defecto), y límite de tamaño de subida y tiempo de espera del upstream por host
@@ -259,14 +260,32 @@ Para llegar a servicios que solo escuchan en `127.0.0.1` del host, o para manten
 de NPM que usaba `network_mode: host`, ejecute Corvus con red de host: sustituya `ports:` y `networks:` por
 `network_mode: host` (y defina `CORVUS_REDIS_PORT` si el 6379 ya está ocupado en el host).
 
+### Streams (TCP/UDP)
+
+Los *streams* reenvían un puerto TCP y/o UDP a un host de destino (mismas reglas que arriba), con terminación
+TLS opcional para TCP usando uno de sus certificados. Con la red bridge predeterminada, publique también cada
+puerto de stream en `docker-compose.yml` y aplíquelo con `docker compose up -d`:
+
+```yaml
+    ports:
+      - '80:80'
+      - '443:443'
+      - '9443:9443'
+      - '5432:5432'       # stream: PostgreSQL (TCP)
+      - '1194:1194/udp'   # stream: OpenVPN (UDP)
+```
+
+Con `network_mode: host` no hace falta nada más. Los puertos que usa el propio Corvus (80, 443, 9443 y sus
+puertos internos) no se pueden usar para streams.
+
 ### Migración desde Nginx Proxy Manager
 
-*Importar desde NPM* en la consola copia los **hosts proxy, hosts de redirección, certificados**
+*Importar desde NPM* en la consola copia los **hosts proxy, hosts de redirección, streams, certificados**
 (Let's Encrypt y personalizados, incluidos los tokens DNS de Cloudflare) y **listas de acceso** (usuarios y reglas IP) de
 una instalación existente de NPM. Solo lee los archivos y la base de datos de NPM; NPM no se modifica, así
 que puede volver a él en cualquier momento.
 
-No se importan: streams (TCP/UDP), hosts 404, ubicaciones personalizadas ni la configuración avanzada
+No se importan: hosts 404, ubicaciones personalizadas ni la configuración avanzada
 que usa variables propias de NPM. La vista previa enumera todo lo que se omite.
 
 **Compruebe qué base de datos usa su NPM.** Abra el `docker-compose.yml` de NPM:

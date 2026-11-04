@@ -54,6 +54,7 @@ Corvus는 Nginx Proxy Manager의 포크가 아닙니다. 기존 NPM 설정을 **
 - 와일드카드, WebSocket, HTTP/2, HTTPS 강제 전환, 사용자 정의 Nginx 스니펫을 지원하는 프록시 호스트
 - 리디렉션 호스트: 도메인을 다른 도메인으로 보냅니다(301/302/303/307/308, 경로 유지 선택). TLS와 보호 기능도 똑같이 적용됩니다
 - 자동 갱신되는 무료 Let's Encrypt 인증서(HTTP-01, 또는 DNS-01: Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) 또는 직접 업로드한 인증서(갱신 시 그 자리에서 교체 가능)
+- 스트림: TCP/UDP 포트(데이터베이스, SSH, MQTT, 게임 서버)를 다른 호스트로 전달하고, TCP는 TLS 종료도 선택할 수 있습니다
 - Cloudflare 또는 신뢰할 수 있는 프록시 뒤에서도 실제 클라이언트 IP 확인, 호스트별 비밀번호 보호(선택)
 - 호스트별 보안 헤더 프리셋(기본 / 엄격: nosniff, 프레임 및 리퍼러 정책, 보고 전용 CSP, HttpOnly/SameSite/Secure 쿠키 플래그). 애플리케이션이 이미 보내는 헤더는 덮어쓰지 않습니다
 - 텍스트 응답 Gzip 압축(기본 켜짐), 호스트별 업로드 크기 제한과 업스트림 타임아웃
@@ -256,13 +257,31 @@ docker compose -f docker-compose.hardened.yml up -d
 유지하려면 Corvus를 호스트 네트워킹으로 실행하세요. `ports:`와 `networks:`를 `network_mode: host`로
 바꾸면 됩니다(호스트에서 6379를 이미 쓰고 있다면 `CORVUS_REDIS_PORT`도 설정).
 
+### 스트림 (TCP/UDP)
+
+*스트림*은 TCP 및/또는 UDP 포트를 전달 대상 호스트로 보냅니다(위와 같은 규칙). TCP는 등록된 인증서로
+TLS를 종료할 수도 있습니다. 기본 브리지 네트워크에서는 각 스트림 포트를 `docker-compose.yml`에도
+게시한 뒤 `docker compose up -d`로 적용하세요.
+
+```yaml
+    ports:
+      - '80:80'
+      - '443:443'
+      - '9443:9443'
+      - '5432:5432'       # 스트림: PostgreSQL (TCP)
+      - '1194:1194/udp'   # 스트림: OpenVPN (UDP)
+```
+
+`network_mode: host`에서는 따로 할 일이 없습니다. Corvus가 직접 쓰는 포트(80, 443, 9443과 내부 포트)는
+스트림에 사용할 수 없습니다.
+
 ### Nginx Proxy Manager에서 마이그레이션
 
-콘솔의 *NPM 가져오기*는 기존 NPM 설치에서 **프록시 호스트, 리디렉션 호스트, 인증서**(Cloudflare DNS
+콘솔의 *NPM 가져오기*는 기존 NPM 설치에서 **프록시 호스트, 리디렉션 호스트, 스트림, 인증서**(Cloudflare DNS
 토큰을 포함한 Let's Encrypt 인증서와 사용자 지정 인증서), **접근 목록**(사용자와 IP 규칙)을 복사합니다.
 NPM의 파일과 데이터베이스를 읽기만 하고 NPM 자체는 변경하지 않으므로 언제든 되돌아갈 수 있습니다.
 
-가져오지 않는 항목: 스트림(TCP/UDP), 404 호스트, 사용자 지정 위치, NPM 전용 변수를
+가져오지 않는 항목: 404 호스트, 사용자 지정 위치, NPM 전용 변수를
 사용하는 고급 설정. 건너뛰는 항목은 모두 미리보기에 표시됩니다.
 
 **NPM이 어떤 데이터베이스를 쓰는지 확인하세요.** NPM의 `docker-compose.yml`을 열어 봅니다.

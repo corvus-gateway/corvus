@@ -219,6 +219,14 @@ func run() error {
 	// CORVUS_REDIS_HOST to use an external Redis instead (shared by several gateways).
 	redisHost, redisPort := env("CORVUS_REDIS_HOST", ""), env("CORVUS_REDIS_PORT", "6379")
 	embeddedRedis := redisHost == "" && withGateway
+	// Ports Corvus listens on itself may not be taken by streams (TCP/UDP forwarding).
+	adminListen := env("CORVUS_ADMIN_LISTEN", ":9443")
+	if _, port, err := net.SplitHostPort(adminListen); err == nil {
+		paths.AdminPort, _ = strconv.Atoi(port)
+	}
+	if embeddedRedis {
+		paths.RedisPort, _ = strconv.Atoi(redisPort)
+	}
 	if redisHost == "" {
 		redisHost = "127.0.0.1"
 	}
@@ -432,7 +440,7 @@ func run() error {
 	go srv.PurgeLoop(ctx)
 
 	hs := &http.Server{
-		Addr:              env("CORVUS_ADMIN_LISTEN", ":9443"),
+		Addr:              adminListen,
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,

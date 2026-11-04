@@ -55,6 +55,7 @@ Go-Steuerungsebene, React-Konsole), die ein **bestehendes NPM-Setup importieren*
 - Proxy-Hosts mit Wildcards, WebSocket, HTTP/2, erzwungenem HTTPS und benutzerdefinierten Nginx-Snippets
 - Weiterleitungs-Hosts: Domains auf eine andere Domain umleiten (301/302/303/307/308, optional mit Beibehaltung des Pfads), mit demselben TLS und Schutz
 - Kostenlose Let's-Encrypt-Zertifikate (HTTP-01 oder DNS-01 über Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) mit automatischer Erneuerung oder eigene Zertifikate per Upload (bei Erneuerung direkt ersetzbar)
+- Streams: TCP/UDP-Ports (Datenbanken, SSH, MQTT, Spieleserver) an einen anderen Host weiterleiten, für TCP optional mit TLS-Terminierung
 - Echte Client-IP hinter Cloudflare oder vertrauenswürdigen Proxys; optionaler Passwortschutz pro Host
 - Voreinstellungen für Sicherheits-Header pro Host (Basis / Streng: nosniff, Frame- und Referrer-Policy, CSP im Report-Only-Modus, Cookie-Flags HttpOnly/SameSite/Secure), ohne zu überschreiben, was die Anwendung bereits sendet
 - Gzip-Komprimierung von Textantworten (standardmäßig an) sowie Upload-Größenlimit und Upstream-Timeout pro Host
@@ -262,14 +263,32 @@ Um Dienste zu erreichen, die nur auf `127.0.0.1` des Hosts lauschen, oder um ein
 `ports:` und `networks:` durch `network_mode: host` (und setzen Sie `CORVUS_REDIS_PORT`, falls 6379 auf dem
 Host belegt ist).
 
+### Streams (TCP/UDP)
+
+*Streams* leiten einen TCP- und/oder UDP-Port an einen Ziel-Host weiter (Regeln wie oben); für TCP kann TLS
+mit einem Ihrer Zertifikate terminiert werden. Im Standard-Bridge-Netzwerk muss jeder Stream-Port zusätzlich in
+`docker-compose.yml` veröffentlicht und mit `docker compose up -d` übernommen werden:
+
+```yaml
+    ports:
+      - '80:80'
+      - '443:443'
+      - '9443:9443'
+      - '5432:5432'       # Stream: PostgreSQL (TCP)
+      - '1194:1194/udp'   # Stream: OpenVPN (UDP)
+```
+
+Mit `network_mode: host` ist nichts weiter nötig. Ports, die Corvus selbst nutzt (80, 443, 9443 und interne
+Ports), sind für Streams nicht verfügbar.
+
 ### Migration von Nginx Proxy Manager
 
-*Import aus NPM* in der Konsole übernimmt **Proxy-Hosts, Weiterleitungs-Hosts, Zertifikate** (Let's Encrypt
+*Import aus NPM* in der Konsole übernimmt **Proxy-Hosts, Weiterleitungs-Hosts, Streams, Zertifikate** (Let's Encrypt
 und eigene, einschließlich Cloudflare-DNS-Tokens) und **Zugriffslisten** (Benutzer und IP-Regeln) aus einer
 bestehenden NPM-Installation. Dabei werden nur die Dateien und die Datenbank von NPM gelesen – NPM selbst
 bleibt unverändert, Sie können also jederzeit zurückwechseln.
 
-Nicht importiert werden: Streams (TCP/UDP), 404-Hosts, benutzerdefinierte Locations und erweiterte
+Nicht importiert werden: 404-Hosts, benutzerdefinierte Locations und erweiterte
 Konfiguration mit NPM-spezifischen Variablen. Die Vorschau listet alles auf, was übersprungen wird.
 
 **Prüfen Sie, welche Datenbank Ihr NPM verwendet.** Öffnen Sie die `docker-compose.yml` von NPM:

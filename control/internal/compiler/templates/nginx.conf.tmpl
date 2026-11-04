@@ -248,3 +248,22 @@ http {
     # {{.Hosts}} proxy host(s), {{.Redirects}} redirection host(s)
     include {{.Dir}}/hosts/*.conf;
 }
+{{- if gt .Streams 0}}
+
+# TCP/UDP port forwarding ({{.Streams}} stream(s)). No access log (nginx's stream default);
+# errors go to the main error log.
+stream {
+    resolver {{.P.Resolver}} ipv6=off valid=30s;
+    resolver_timeout 5s;
+    proxy_connect_timeout 10s;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:corvus_stream_ssl:5m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    include {{.Dir}}/streams/*.conf;
+}
+{{- end}}

@@ -45,6 +45,7 @@ Corvus 不是 Nginx Proxy Manager 的分支。它是全新的实现（OpenResty 
 - 代理主机支持通配符、WebSocket、HTTP/2、强制 HTTPS 以及自定义 Nginx 片段
 - 重定向主机：将域名跳转到另一个域名（301/302/303/307/308，可选保留路径），同样享有 TLS 与防护
 - 免费的 Let's Encrypt 证书（HTTP-01，或DNS-01：Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap），自动续期，也可上传自有证书（续期后可原地替换）
+- 流转发：将 TCP/UDP 端口（数据库、SSH、MQTT、游戏服务器）转发到其他主机，TCP 可选 TLS 终止
 - 在 Cloudflare 或受信任代理之后获取真实客户端 IP；可按主机启用密码保护
 - 按主机设置安全响应头预设（基础 / 严格：nosniff、frame 与 referrer 策略、仅报告的 CSP、HttpOnly/SameSite/Secure Cookie 标志），绝不覆盖应用自身已发送的响应头
 - 文本响应的 Gzip 压缩（默认开启），以及按主机设置的上传大小限制和上游超时
@@ -235,13 +236,29 @@ docker compose -f docker-compose.hardened.yml up -d
 运行 Corvus：将 `ports:` 和 `networks:` 替换为 `network_mode: host`（如果主机上 6379 已被占用，还需设置
 `CORVUS_REDIS_PORT`）。
 
+### 流转发 (TCP/UDP)
+
+*流* 将 TCP 和/或 UDP 端口转发到转发主机（规则同上），TCP 还可以用已有证书终止 TLS。使用默认桥接网络时，
+还需在 `docker-compose.yml` 中发布每个流端口，然后执行 `docker compose up -d` 生效：
+
+```yaml
+    ports:
+      - '80:80'
+      - '443:443'
+      - '9443:9443'
+      - '5432:5432'       # 流：PostgreSQL (TCP)
+      - '1194:1194/udp'   # 流：OpenVPN (UDP)
+```
+
+使用 `network_mode: host` 时无需其他操作。Corvus 自身使用的端口（80、443、9443 及内部端口）不能用于流。
+
 ### 从 Nginx Proxy Manager 迁移
 
-控制台中的 *从 NPM 导入* 会从现有的 NPM 安装中复制 **代理主机、重定向主机、证书**（Let's Encrypt 证书和
+控制台中的 *从 NPM 导入* 会从现有的 NPM 安装中复制 **代理主机、重定向主机、流、证书**（Let's Encrypt 证书和
 自定义证书，包括 Cloudflare DNS 令牌）以及 **访问列表**（用户和 IP 规则）。它只读取 NPM 的文件和数据库，不会修改 NPM
 本身，因此随时可以切换回去。
 
-不会导入的内容：流（TCP/UDP）、404 主机、自定义位置，以及使用 NPM 专有变量的高级配置。
+不会导入的内容：404 主机、自定义位置，以及使用 NPM 专有变量的高级配置。
 所有被跳过的项目都会在预览中列出。
 
 **先确认你的 NPM 使用哪种数据库。** 打开 NPM 的 `docker-compose.yml`：

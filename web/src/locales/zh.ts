@@ -3,6 +3,7 @@ import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
+import { streamsStrings } from "./streams.i18n";
 import { headersStrings } from "./headers.i18n";
 import { limitsStrings } from "./limits.i18n";
 import { certReplaceStrings } from "./certreplace.i18n";
@@ -309,6 +310,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   ...bansStrings.zh,
   ...tokensStrings.zh,
   ...redirectsStrings.zh,
+  ...streamsStrings.zh,
   ...headersStrings.zh,
   ...limitsStrings.zh,
   ...certReplaceStrings.zh,
@@ -339,7 +341,7 @@ export const zhRuleLabels: RuleLabels | undefined = {
 
 export const zhAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "代理主机", redirection_host: "重定向主机", waitroom: "访问排队", certificate: "证书", deploy: "部署", auth: "认证", setup: "初始设置",
+    proxy_host: "代理主机", stream: "流转发", redirection_host: "重定向主机", waitroom: "访问排队", certificate: "证书", deploy: "部署", auth: "认证", setup: "初始设置",
     rate_limit: "速率限制", access_list: "Basic 认证", security_rule: "安全规则", ip_list: "IP 列表", geoip: "国家/地区数据库", settings: "设置", network: "网络", import: "导入", mfa: "MFA", user: "账号",
   },
   verb: {

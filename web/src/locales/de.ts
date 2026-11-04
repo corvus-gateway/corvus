@@ -3,6 +3,7 @@ import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
+import { streamsStrings } from "./streams.i18n";
 import { headersStrings } from "./headers.i18n";
 import { limitsStrings } from "./limits.i18n";
 import { certReplaceStrings } from "./certreplace.i18n";
@@ -308,6 +309,7 @@ export const de: Partial<Record<keyof typeof ko, string>> = {
   ...bansStrings.de,
   ...tokensStrings.de,
   ...redirectsStrings.de,
+  ...streamsStrings.de,
   ...headersStrings.de,
   ...limitsStrings.de,
   ...certReplaceStrings.de,
@@ -338,7 +340,7 @@ export const deRuleLabels: RuleLabels | undefined = {
 
 export const deAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "Proxy-Host", redirection_host: "Weiterleitungs-Host", waitroom: "Zugriffswarteschlange", certificate: "Zertifikat", deploy: "Bereitstellung", auth: "Authentifizierung", setup: "Einrichtung",
+    proxy_host: "Proxy-Host", stream: "Stream", redirection_host: "Weiterleitungs-Host", waitroom: "Zugriffswarteschlange", certificate: "Zertifikat", deploy: "Bereitstellung", auth: "Authentifizierung", setup: "Einrichtung",
     rate_limit: "Ratenbegrenzung", access_list: "Basic-Authentifizierung", security_rule: "Sicherheitsregel", ip_list: "IP-Liste", geoip: "Länderdatenbank", settings: "Einstellungen", network: "Netzwerk", import: "Import", mfa: "MFA", user: "Konto",
   },
   verb: {

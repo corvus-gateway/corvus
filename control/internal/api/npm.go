@@ -10,6 +10,7 @@ import (
 
 	"corvus/control/internal/auth"
 	"corvus/control/internal/certs"
+	"corvus/control/internal/compiler"
 	"corvus/control/internal/npmimport"
 	"corvus/control/internal/seal"
 	"corvus/control/internal/store"
@@ -24,6 +25,7 @@ type npmRequest struct {
 	MySQL          *npmimport.MySQL `json:"mysql"`
 	ProxyHostIDs   []int64          `json:"proxy_host_ids"`
 	RedirectIDs    []int64          `json:"redirection_host_ids"`
+	StreamIDs      []int64          `json:"stream_ids"`
 	CertificateIDs []int64          `json:"certificate_ids"`
 	AccessListIDs  []int64          `json:"access_list_ids"`
 }
@@ -105,6 +107,18 @@ func (s *Server) npmRead(w http.ResponseWriter, r *http.Request) (*npmimport.Sna
 	if snap.Redirects == nil {
 		snap.Redirects = []npmimport.Redirect{}
 	}
+	streams, err := s.Store.ListStreams(r.Context())
+	if err != nil {
+		fail(w, err)
+		return nil, in, false
+	}
+	for i := range snap.Streams {
+		x := npmStream(snap.Streams[i], nil)
+		snap.Streams[i].Conflict = compiler.StreamConflict(s.Paths, streams, x)
+	}
+	if snap.Streams == nil {
+		snap.Streams = []npmimport.Stream{}
+	}
 	return snap, in, true
 }
 
@@ -141,7 +155,7 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	var skips []skipped
-	counts := map[string]int{"proxy_hosts": 0, "redirection_hosts": 0, "certificates": 0, "access_lists": 0}
+	counts := map[string]int{"proxy_hosts": 0, "redirection_hosts": 0, "streams": 0, "certificates": 0, "access_lists": 0}
 	type pendingFiles struct {
 		id        int64
 		cert, key []byte
@@ -318,6 +332,24 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 			}
 			counts["redirection_hosts"]++
 		}
+		for _, h := range snap.Streams {
+			if !selected(in.StreamIDs, h.NPMID) {
+				continue
+			}
+			if h.Conflict != "" {
+				skips = append(skips, skipped{"stream", h.NPMID, h.Conflict})
+				continue
+			}
+			xs := npmStream(h, certMap)
+			if err := checkStream(r, tx, s.Paths, xs); err != nil {
+				skips = append(skips, skipped{"stream", h.NPMID, err.Error()})
+				continue
+			}
+			if err := tx.SaveStream(ctx, xs); err != nil {
+				return err
+			}
+			counts["streams"]++
+		}
 		for _, ir := range ipRules {
 			if len(ir.hosts) == 0 {
 				continue
@@ -352,6 +384,16 @@ func npmRedirect(h npmimport.Redirect, certMap map[int64]int64) *store.Redirecti
 		xh.CertificateID, xh.SSLForced = &id, h.SSLForced
 	}
 	return xh
+}
+
+// npmStream maps an NPM stream to a Corvus one; certMap maps NPM certificate ids to
+// imported Corvus certificates (unmapped: plain TCP).
+func npmStream(h npmimport.Stream, certMap map[int64]int64) *store.Stream {
+	xs := &store.Stream{IncomingPort: h.IncomingPort, TCP: h.TCP, UDP: h.UDP, ForwardHost: h.ForwardHost, ForwardPort: h.ForwardPort, Enabled: h.Enabled}
+	if id, ok := certMap[h.CertificateID]; ok && h.CertificateID != 0 && h.TCP {
+		xs.CertificateID = &id
+	}
+	return xs
 }
 
 func contains(list []string, v string) bool {

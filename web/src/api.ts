@@ -118,6 +118,12 @@ export interface RedirectionHost {
   created_at: string; updated_at: string;
 }
 
+/** TCP/UDP port forwarding (GET /api/streams). */
+export interface Stream {
+  id: number; incoming_port: number; tcp_forwarding: boolean; udp_forwarding: boolean; forward_host: string; forward_port: number;
+  certificate_id: number | null; enabled: boolean; created_at: string; updated_at: string;
+}
+
 export interface LiveStats { name: string; available: boolean; active: number; waiting: number; capacity: number }
 
 export interface Waitroom {
@@ -218,6 +224,7 @@ export interface TrafficEvent { ts: number | string; kind: EventKind; host: stri
 export interface NpmPreview {
   proxy_hosts: { npm_id: number; domains: string[]; forward?: string; conflict?: string | boolean }[];
   redirection_hosts?: { npm_id: number; domains: string[]; forward?: string; conflict?: string | boolean }[];
+  streams?: { npm_id: number; incoming_port: number; forward_host: string; forward_port: number; tcp_forwarding: boolean; udp_forwarding: boolean; conflict?: string | boolean }[];
   certificates: { npm_id: number; name?: string; nice_name?: string; domains?: string[] }[];
   access_lists: { npm_id: number; name?: string }[];
   warnings: string[];

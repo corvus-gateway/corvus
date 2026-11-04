@@ -87,7 +87,7 @@ Role: **public** = no authentication · **viewer** = any signed-in user or token
 | GET | `/api/overview` | viewer | Dashboard summary |
 | GET | `/api/audit` | viewer | Audit log |
 
-### Proxy hosts, redirection hosts, certificates, deployments
+### Proxy hosts, redirection hosts, streams, certificates, deployments
 
 | Method | Path | Role | Description |
 |---|---|---|---|
@@ -103,6 +103,11 @@ Role: **public** = no authentication · **viewer** = any signed-in user or token
 | POST | `/api/redirection-hosts` | operator | Create (fields below) |
 | PUT | `/api/redirection-hosts/{id}` | operator | Replace |
 | DELETE | `/api/redirection-hosts/{id}` | operator | Delete |
+| GET | `/api/streams` | viewer | List streams (TCP/UDP port forwarding) |
+| GET | `/api/streams/{id}` | viewer | Get one stream |
+| POST | `/api/streams` | operator | Create (fields below) |
+| PUT | `/api/streams/{id}` | operator | Replace |
+| DELETE | `/api/streams/{id}` | operator | Delete |
 | GET | `/api/certificates` | viewer | List certificates |
 | POST | `/api/certificates` | operator | Upload a custom certificate |
 | PUT | `/api/certificates/{id}` | operator | Replace an uploaded certificate in place (`certificate`, `private_key`, optional `name`): validated like an upload, keeps its ID and host assignments, redeploys; ACME certificates → 422 |
@@ -190,6 +195,16 @@ query; default `true`), `ssl_forced`, `http2`, `certificate_id` or `certificate_
 `block_exploits` (default `true`), `advanced_config`, `enabled`. Domains must not be used by another
 proxy or redirection host. IP bans, security rules with scope "all" and exploit blocking apply to
 redirection hosts too; rules scoped to specific hosts target proxy hosts only.
+
+Stream fields: `incoming_port` (1–65535, the container port to listen on), `tcp_forwarding`
+(default `true`), `udp_forwarding` (default `false`; at least one of the two), `forward_host`
+(container name, DNS name or IPv4; `127.0.0.1`/`localhost` mean the Docker host, as for proxy hosts),
+`forward_port`, `certificate_id` (optional TLS termination, TCP only: TLS from clients, plain TCP to
+the forward host; the TCP listener opens once the certificate is issued), `enabled` (default `true`).
+Ports Corvus listens on itself (HTTP, HTTPS, admin, internal status/ACME ports, the bundled Valkey)
+are refused (`422`, field `incoming_port`), and an enabled stream may not share a port and protocol
+with another enabled stream. On a Docker bridge network the port must also be published in compose.
+Streams have no access log; bans and security rules do not apply to them yet.
 
 `certificate_request` orders a Let's Encrypt certificate for the host's domains: `email`, `challenge`
 (`http-01` or `dns-01`), `dns_provider`, `dns_credentials` (e.g. `{"api_token": "…"}` for Cloudflare), `staging`.
@@ -344,7 +359,7 @@ tested, deployed and rolled back with the rest of the configuration.
 | POST | `/api/users/{id}/reset-mfa` | admin (session) | Reset a user's MFA |
 | GET / POST | `/api/tokens` | session | API tokens (`{ "name", "role", "expires_days" }`) |
 | DELETE | `/api/tokens/{id}` | session | Revoke a token |
-| POST | `/api/import/npm/preview`, `/apply` | admin | Import from Nginx Proxy Manager (`/apply` takes `proxy_host_ids`, `redirection_host_ids`, `certificate_ids`, `access_list_ids`; omitted = all) |
+| POST | `/api/import/npm/preview`, `/apply` | admin | Import from Nginx Proxy Manager (`/apply` takes `proxy_host_ids`, `redirection_host_ids`, `stream_ids`, `certificate_ids`, `access_list_ids`; omitted = all) |
 
 ### Backup and restore
 

@@ -55,6 +55,7 @@ OpenResty, plan de contrôle en Go, console React) capable d'**importer une conf
 - Hôtes proxy avec jokers (wildcards), WebSocket, HTTP/2, HTTPS forcé et extraits Nginx personnalisés
 - Hôtes de redirection : renvoyer des domaines vers un autre domaine (301/302/303/307/308, en conservant éventuellement le chemin), avec le même TLS et la même protection
 - Certificats Let's Encrypt gratuits (HTTP-01, ou DNS-01 via Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) avec renouvellement automatique, ou import des vôtres (remplaçables sur place lors du renouvellement)
+- Flux (streams) : rediriger des ports TCP/UDP (bases de données, SSH, MQTT, serveurs de jeu) vers un autre hôte, avec terminaison TLS optionnelle pour TCP
 - Véritable IP client derrière Cloudflare ou des proxys de confiance ; protection par mot de passe optionnelle par hôte
 - Préréglages d'en-têtes de sécurité par hôte (Basique / Strict : nosniff, politiques de frame et de referrer, CSP en mode rapport seul, attributs de cookie HttpOnly/SameSite/Secure), sans jamais écraser ce que l'application envoie déjà
 - Compression gzip des réponses texte (activée par défaut), limite de taille d'envoi et délai d'attente de l'amont par hôte
@@ -261,14 +262,32 @@ Pour atteindre des services qui n'écoutent que sur `127.0.0.1` de l'hôte, ou p
 déploiement NPM qui utilisait `network_mode: host`, exécutez Corvus en réseau hôte : remplacez `ports:` et
 `networks:` par `network_mode: host` (et définissez `CORVUS_REDIS_PORT` si le port 6379 est déjà pris sur l'hôte).
 
+### Flux (TCP/UDP)
+
+Les *flux* redirigent un port TCP et/ou UDP vers un hôte de destination (mêmes règles que ci-dessus), avec en
+option la terminaison TLS pour TCP à l'aide de l'un de vos certificats. Avec le réseau bridge par défaut,
+publiez aussi chaque port de flux dans `docker-compose.yml`, puis appliquez avec `docker compose up -d` :
+
+```yaml
+    ports:
+      - '80:80'
+      - '443:443'
+      - '9443:9443'
+      - '5432:5432'       # flux : PostgreSQL (TCP)
+      - '1194:1194/udp'   # flux : OpenVPN (UDP)
+```
+
+Avec `network_mode: host`, rien d'autre n'est nécessaire. Les ports utilisés par Corvus lui-même (80, 443, 9443
+et ses ports internes) ne peuvent pas servir aux flux.
+
 ### Migrer depuis Nginx Proxy Manager
 
-*Importer depuis NPM* dans la console copie les **hôtes proxy, hôtes de redirection, certificats**
+*Importer depuis NPM* dans la console copie les **hôtes proxy, hôtes de redirection, flux, certificats**
 (Let's Encrypt et personnalisés, y compris les jetons DNS Cloudflare) et **listes d'accès** (utilisateurs et règles IP)
 d'une installation NPM existante. Seuls les fichiers et la base de données de NPM sont lus — NPM lui-même
 n'est pas modifié, vous pouvez donc revenir en arrière à tout moment.
 
-Non importés : les streams (TCP/UDP), les hôtes 404, les emplacements personnalisés et la configuration
+Non importés : les hôtes 404, les emplacements personnalisés et la configuration
 avancée qui utilise des variables propres à NPM. L'aperçu liste tout ce qui est ignoré.
 
 **Vérifiez quelle base de données votre NPM utilise.** Ouvrez le `docker-compose.yml` de NPM :

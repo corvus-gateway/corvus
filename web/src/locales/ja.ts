@@ -3,6 +3,7 @@ import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
+import { streamsStrings } from "./streams.i18n";
 import { headersStrings } from "./headers.i18n";
 import { limitsStrings } from "./limits.i18n";
 import { certReplaceStrings } from "./certreplace.i18n";
@@ -309,6 +310,7 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   ...bansStrings.ja,
   ...tokensStrings.ja,
   ...redirectsStrings.ja,
+  ...streamsStrings.ja,
   ...headersStrings.ja,
   ...limitsStrings.ja,
   ...certReplaceStrings.ja,
@@ -339,7 +341,7 @@ export const jaRuleLabels: RuleLabels | undefined = {
 
 export const jaAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "プロキシホスト", redirection_host: "リダイレクトホスト", waitroom: "アクセスキュー", certificate: "証明書", deploy: "デプロイ", auth: "認証", setup: "初期設定",
+    proxy_host: "プロキシホスト", stream: "ストリーム", redirection_host: "リダイレクトホスト", waitroom: "アクセスキュー", certificate: "証明書", deploy: "デプロイ", auth: "認証", setup: "初期設定",
     rate_limit: "レート制限", access_list: "Basic 認証", security_rule: "セキュリティルール", ip_list: "IP リスト", geoip: "国データベース", settings: "設定", network: "ネットワーク", import: "インポート", mfa: "MFA", user: "アカウント",
   },
   verb: {
