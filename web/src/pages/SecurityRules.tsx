@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Activity, AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, CornerDownRight, Eye, Globe, GripVertical, ListFilter, Pencil, Plus, RefreshCw, ShieldBan, Trash2, FileStack } from "lucide-react";
-import { ApiError, api, type GeoipStatus, type IpList, type ProxyHost, type RuleAction, type RuleEvent, type SecurityRule } from "../api";
+import { ApiError, api, type ChallengeBind, type ChallengeMode, type GeoipStatus, type IpList, type ProxyHost, type RuleAction, type RuleEvent, type RuleEventAction, type SecurityRule } from "../api";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
 import { RuleExpression } from "../components/RuleExpression";
 import { Button } from "../components/ui/button";
@@ -15,18 +15,27 @@ import { ConfirmDialog, RowMenu, Sheet, Tip } from "../components/ui/overlay";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
 import { useResource, type Resource } from "../hooks/useResource";
 import { useCan } from "../lib/rbac";
-import { useI18n, type TFn } from "../i18n";
+import { useI18n, type Key, type TFn } from "../i18n";
 import {
   LIMITS, STATUS_CODES, expressionText, flag, mapServerErrors, summarize, toGroups, toRows, usesCountry, validateRule, newRow,
   type CondRow, type RuleErrors,
 } from "../lib/rules";
 import { cn, fmtCompact, fmtDateTime, fmtNum, relTime } from "../lib/utils";
 
-type Form = Pick<SecurityRule, "name" | "description" | "enabled" | "action" | "status_code" | "skip_basic_auth" | "scope" | "host_ids">;
-const blank: Form = { name: "", description: "", enabled: true, action: "block", status_code: 403, skip_basic_auth: false, scope: "all", host_ids: [] };
+type Form = Pick<SecurityRule, "name" | "description" | "enabled" | "action" | "status_code" | "skip_basic_auth" | "scope" | "host_ids"
+  | "challenge_mode" | "challenge_difficulty" | "challenge_ttl_s" | "challenge_bind">;
+// Challenge limits (control/internal/validate/rules.go).
+const CH_DIFFICULTY = { min: 12, max: 24, def: 16 } as const;
+const CH_TTLS = [300, 1800, 3600, 21600, 86400, 259200, 604800] as const;
+const blank: Form = {
+  name: "", description: "", enabled: true, action: "block", status_code: 403, skip_basic_auth: false, scope: "all", host_ids: [],
+  challenge_mode: "js", challenge_difficulty: CH_DIFFICULTY.def, challenge_ttl_s: 86400, challenge_bind: "ip",
+};
 const pick = (r: SecurityRule): Form => ({
   name: r.name, description: r.description ?? "", enabled: r.enabled, action: r.action, status_code: r.status_code || 403,
   skip_basic_auth: !!r.skip_basic_auth, scope: r.scope === "hosts" ? "hosts" : "all", host_ids: r.host_ids ?? [],
+  challenge_mode: r.challenge_mode === "cookie" ? "cookie" : "js", challenge_difficulty: r.challenge_difficulty || CH_DIFFICULTY.def,
+  challenge_ttl_s: r.challenge_ttl_s || 86400, challenge_bind: r.challenge_bind === "ip_ua" ? "ip_ua" : "ip",
 });
 const bodyOf = (f: Form, groups: SecurityRule["expression"]["groups"]) => ({
   ...f, name: f.name.trim(), description: f.description.trim(),
@@ -34,10 +43,20 @@ const bodyOf = (f: Form, groups: SecurityRule["expression"]["groups"]) => ({
   host_ids: f.scope === "hosts" ? f.host_ids : [], expression: { groups },
 });
 
-export const actionTone: Record<RuleAction, Tone> = { block: "danger", allow: "ok", log: "neutral" };
-export function ActionBadge({ action, code }: { action: RuleAction; code?: number }) {
+const ttlKeys: Record<number, Key> = { 300: "chTtl5m", 1800: "chTtl30m", 3600: "chTtl1h", 21600: "chTtl6h", 86400: "chTtl24h", 259200: "chTtl3d", 604800: "chTtl7d" };
+const ttlLabel = (t: TFn, s: number) => (ttlKeys[s] ? t(ttlKeys[s]) : t("chTtlSeconds", { n: s }));
+/** Short challenge summary for the rule list: "JavaScript (proof of work) · 16 · 24 hours". */
+const challengeSummary = (t: TFn, r: Pick<SecurityRule, "challenge_mode" | "challenge_difficulty" | "challenge_ttl_s">) =>
+  [r.challenge_mode === "cookie" ? t("chModeCookie") : t("chModeJs"), r.challenge_mode === "cookie" ? "" : String(r.challenge_difficulty || CH_DIFFICULTY.def), ttlLabel(t, r.challenge_ttl_s || 86400)]
+    .filter(Boolean).join(" · ");
+
+export const actionTone: Record<RuleEventAction, Tone> = { block: "danger", allow: "ok", log: "neutral", challenge: "brand", challenge_pass: "ok", challenge_fail: "warn" };
+const actionKey: Record<RuleEventAction, Key> = {
+  block: "actBlock", allow: "actAllow", log: "actLog", challenge: "actChallenge", challenge_pass: "actChallengePass", challenge_fail: "actChallengeFail",
+};
+export function ActionBadge({ action, code }: { action: RuleEventAction; code?: number }) {
   const { t } = useI18n();
-  const label = action === "block" ? t("actBlock") : action === "allow" ? t("actAllow") : t("actLog");
+  const label = actionKey[action] ? t(actionKey[action]) : action;
   return <Badge tone={actionTone[action] ?? "neutral"} dot>{label}{action === "block" && code ? <span className="num opacity-80">· {code}</span> : null}</Badge>;
 }
 
@@ -233,7 +252,8 @@ function RulesTab({ list, lists, hosts, geo, onEdit, onEvents }: {
                         <span className="block truncate text-xs text-fg-muted" tabIndex={0}>{summarize(groups, lang, lists) || "–"}</span>
                       </Tip>
                     </Td>
-                    <Td><ActionBadge action={r.action} code={r.status_code} />{r.action === "allow" && r.skip_basic_auth && <div className="mt-0.5 text-2xs text-fg-subtle">{t("skipsBasicAuth")}</div>}</Td>
+                    <Td><ActionBadge action={r.action} code={r.status_code} />{r.action === "allow" && r.skip_basic_auth && <div className="mt-0.5 text-2xs text-fg-subtle">{t("skipsBasicAuth")}</div>}
+                      {r.action === "challenge" && <div className="mt-0.5 text-2xs text-fg-subtle">{challengeSummary(t, r)}</div>}</Td>
                     <Td className="hidden max-w-[14rem] lg:table-cell">
                       {r.scope === "hosts" ? (
                         <Tip label={(r.host_ids ?? []).map(hostName).join(", ")}>
@@ -322,7 +342,7 @@ const EVENT_LIMITS = [100, 250, 500];
 function EventsTab({ rules, ruleId, setRuleId }: { rules: SecurityRule[]; ruleId: number | ""; setRuleId: (v: number | "") => void }) {
   const { t, lang } = useI18n();
   const [limit, setLimit] = useState(100);
-  const [action, setAction] = useState<RuleAction | "">("");
+  const [action, setAction] = useState<RuleEventAction | "">("");
   const [q, setQ] = useState("");
   const path = `/api/security-rules/events?limit=${limit}${ruleId !== "" ? `&rule_id=${ruleId}` : ""}`;
   const res = useResource<RuleEvent[]>(path, { poll: 10000 });
@@ -339,8 +359,8 @@ function EventsTab({ rules, ruleId, setRuleId }: { rules: SecurityRule[]; ruleId
         <div className="w-48"><Select aria-label={t("rule")} className="!h-8" value={ruleId} onChange={(e) => setRuleId(e.target.value ? Number(e.target.value) : "")}>
           <option value="">{t("allRules")}</option>{rules.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
         </Select></div>
-        <div className="w-32"><Select aria-label={t("action")} className="!h-8" value={action} onChange={(e) => setAction(e.target.value as RuleAction | "")}>
-          <option value="">{t("allActions")}</option><option value="block">{t("actBlock")}</option><option value="allow">{t("actAllow")}</option><option value="log">{t("actLog")}</option>
+        <div className="w-40"><Select aria-label={t("action")} className="!h-8" value={action} onChange={(e) => setAction(e.target.value as RuleEventAction | "")}>
+          <option value="">{t("allActions")}</option>{(Object.keys(actionKey) as RuleEventAction[]).map((a) => <option key={a} value={a}>{t(actionKey[a])}</option>)}
         </Select></div>
         <div className="w-32"><Select aria-label={t("rows")} className="!h-8" value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
           {EVENT_LIMITS.map((l) => <option key={l} value={l}>{t("lastN", { n: l })}</option>)}
@@ -439,7 +459,7 @@ function RuleSheet({ editing, setEditing, lists, hosts, geoipAvailable, onSaved 
         <FormSection title={t("secThen")}>
           <Field label={t("action")}>
             <Segmented<RuleAction> label={t("action")} value={f.action} onChange={(v) => !ro && set({ action: v })}
-              options={[{ value: "block", label: t("actBlock"), disabled: ro }, { value: "allow", label: t("actAllow"), disabled: ro }, { value: "log", label: t("actLog"), disabled: ro }]} />
+              options={[{ value: "block", label: t("actBlock"), disabled: ro }, { value: "challenge", label: t("actChallenge"), disabled: ro }, { value: "allow", label: t("actAllow"), disabled: ro }, { value: "log", label: t("actLog"), disabled: ro }]} />
           </Field>
           {f.action === "block" && (
             <IdField label={t("responseCode")} error={errs.status_code} hint={f.status_code === 444 ? t("sc444Hint") : t("blockPageHint")}>
@@ -458,6 +478,41 @@ function RuleSheet({ editing, setEditing, lists, hosts, geoipAvailable, onSaved 
             <Callout tone="info" icon={CheckCircle2}>{t("allowNote")}</Callout>
           </>)}
           {f.action === "log" && <Callout tone="neutral">{t("logNote")}</Callout>}
+          {f.action === "challenge" && (<>
+            <Field label={t("chMode")} hint={f.challenge_mode === "cookie" ? t("chModeCookieDesc") : t("chModeJsDesc")}>
+              <Segmented<ChallengeMode> label={t("chMode")} value={f.challenge_mode} onChange={(v) => !ro && set({ challenge_mode: v })}
+                options={[{ value: "js", label: t("chModeJs"), disabled: ro }, { value: "cookie", label: t("chModeCookie"), disabled: ro }]} />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {f.challenge_mode === "js" && (
+                <IdField label={t("chDifficulty")} error={errs.challenge_difficulty} hint={t("chDifficultyHint")}>
+                  {(id) => (
+                    <Select id={id} value={f.challenge_difficulty} disabled={ro} onChange={(e) => set({ challenge_difficulty: Number(e.target.value) })}>
+                      {Array.from({ length: CH_DIFFICULTY.max - CH_DIFFICULTY.min + 1 }, (_, i) => CH_DIFFICULTY.min + i).map((b) => (
+                        <option key={b} value={b}>{b}{b === CH_DIFFICULTY.def ? ` (${t("chDefault")})` : b === CH_DIFFICULTY.min ? ` (${t("chLight")})` : b === CH_DIFFICULTY.max ? ` (${t("chHeavy")})` : ""}</option>
+                      ))}
+                    </Select>
+                  )}
+                </IdField>
+              )}
+              <IdField label={t("chTtl")} error={errs.challenge_ttl_s} hint={t("chTtlHint")}>
+                {(id) => (
+                  <Select id={id} value={f.challenge_ttl_s} disabled={ro} onChange={(e) => set({ challenge_ttl_s: Number(e.target.value) })}>
+                    {(CH_TTLS as readonly number[]).includes(f.challenge_ttl_s) ? null : <option value={f.challenge_ttl_s}>{ttlLabel(t, f.challenge_ttl_s)}</option>}
+                    {CH_TTLS.map((s) => <option key={s} value={s}>{ttlLabel(t, s)}</option>)}
+                  </Select>
+                )}
+              </IdField>
+            </div>
+            <IdField label={t("chBind")} error={errs.challenge_bind} hint={t("chBindHint")}>
+              {(id) => (
+                <Select id={id} value={f.challenge_bind} disabled={ro} onChange={(e) => set({ challenge_bind: e.target.value as ChallengeBind })}>
+                  <option value="ip">{t("chBindIp")}</option><option value="ip_ua">{t("chBindIpUa")}</option>
+                </Select>
+              )}
+            </IdField>
+            <Callout tone="info">{t("chNote")}</Callout>
+          </>)}
         </FormSection>
 
         <FormSection title={t("scope")} description={t("scopeDesc")}>

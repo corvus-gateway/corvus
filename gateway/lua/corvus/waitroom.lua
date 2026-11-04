@@ -11,8 +11,7 @@ local redis = require "resty.redis"
 local cjson = require "cjson.safe"
 local rstring = require "resty.string"
 local rrandom = require "resty.random"
-local rsha256 = require "resty.sha256"
-local bit = require "bit"
+local crypto = require "corvus.crypto"
 
 local ngx = ngx
 local _M = {}
@@ -93,42 +92,11 @@ end
 
 -- ---------------------------------------------------------------- tokens
 
-local function b64url(s)
-  return (ngx.encode_base64(s):gsub("[+/=]", { ["+"] = "-", ["/"] = "_", ["="] = "" }))
-end
-
--- HMAC-SHA256 (RFC 2104) on top of resty.sha256 (FFI to OpenSSL); the padded
--- key blocks are precomputed per key, so each MAC costs two SHA-256 passes.
-local function sha256_bin(s)
-  local h = rsha256:new()
-  h:update(s)
-  return h:final()
-end
-
-hmac_key = function(secret)
-  if #secret > 64 then secret = sha256_bin(secret) end
-  secret = secret .. string.rep("\0", 64 - #secret)
-  local ipad, opad = {}, {}
-  for i = 1, 64 do
-    local b = secret:byte(i)
-    ipad[i] = string.char(bit.bxor(b, 0x36))
-    opad[i] = string.char(bit.bxor(b, 0x5c))
-  end
-  return { ipad = table.concat(ipad), opad = table.concat(opad), kid = rstring.to_hex(sha256_bin(secret)):sub(1, 8) }
-end
-
-local function hmac(key, msg)
-  return sha256_bin(key.opad .. sha256_bin(key.ipad .. msg))
-end
+-- HMAC-SHA256 tokens: see corvus/crypto.lua (shared with the security-rule challenge).
+local b64url, sha256_bin, hmac, const_eq = crypto.b64url, crypto.sha256_bin, crypto.hmac, crypto.const_eq
+hmac_key = crypto.hmac_key
 
 -- KEYS: kid → key (current + previous, for rotation); CURRENT signs new tokens.
-
-local function const_eq(a, b)
-  if #a ~= #b then return false end
-  local r = 0
-  for i = 1, #a do r = bit.bor(r, bit.bxor(a:byte(i), b:byte(i))) end
-  return r == 0
-end
 
 -- Client network used for optional token binding: IPv4 /24, IPv6 first three groups (/48).
 local function client_net()

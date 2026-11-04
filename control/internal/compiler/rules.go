@@ -21,6 +21,8 @@ type rulesFile struct {
 	Geo       string              `json:"geo"`
 	BlockPage string              `json:"block_page"`
 	ErrorPage string              `json:"error_page"` // upstream errors 502/503/504
+	// Page for the "challenge" rule action (built-in only).
+	ChallengePage string `json:"challenge_page"`
 	// Request-body signatures from the active rule bundle (empty: built-in list in Lua).
 	BodySignatures []sigJSON `json:"body_signatures,omitempty"`
 }
@@ -37,6 +39,15 @@ type ruleJSON struct {
 	Status   int          `json:"status"`
 	SkipAuth bool         `json:"skip_auth"`
 	Groups   [][]condJSON `json:"groups"`
+	// Only for action "challenge" (gateway corvus/challenge.lua).
+	Challenge *challengeJSON `json:"challenge,omitempty"`
+}
+
+type challengeJSON struct {
+	Mode       string `json:"mode"`       // js | cookie
+	Difficulty int    `json:"difficulty"` // leading zero bits (js)
+	TTL        int    `json:"ttl"`        // pass cookie lifetime, seconds
+	Bind       string `json:"bind"`       // ip | ip_ua
 }
 
 type condJSON struct {
@@ -86,8 +97,9 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 		hostIDs[h.ID] = true
 	}
 	out := &rulesFile{Rules: []ruleJSON{}, Hosts: map[string]hostJSON{}, Geo: c.P.GeoFile(),
-		BlockPage: filepath.ToSlash(filepath.Join(c.P.HTMLDir, "blocked.html")),
-		ErrorPage: filepath.ToSlash(filepath.Join(c.P.HTMLDir, "error.html"))}
+		BlockPage:     filepath.ToSlash(filepath.Join(c.P.HTMLDir, "blocked.html")),
+		ErrorPage:     filepath.ToSlash(filepath.Join(c.P.HTMLDir, "error.html")),
+		ChallengePage: filepath.ToSlash(filepath.Join(c.P.HTMLDir, "challenge.html"))}
 	if c.Bundle != nil {
 		if b := c.Bundle(); b != nil {
 			for _, sg := range b.Signatures {
@@ -124,6 +136,9 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 			return nil, fmt.Errorf("security rule %d: %w", r.ID, err)
 		}
 		rj := ruleJSON{ID: rc.ID, Action: rc.Action, Status: rc.StatusCode, SkipAuth: rc.SkipBasicAuth}
+		if rc.Action == "challenge" {
+			rj.Challenge = &challengeJSON{Mode: rc.ChallengeMode, Difficulty: rc.ChallengeDifficulty, TTL: rc.ChallengeTTL, Bind: rc.ChallengeBind}
+		}
 		for _, g := range rc.Expression.Groups {
 			var cg []condJSON
 			for _, cond := range g {

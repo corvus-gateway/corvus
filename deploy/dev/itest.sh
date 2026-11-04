@@ -248,6 +248,66 @@ c -o /dev/null -X DELETE $A/api/security-rules/$BBR
 sleep 2
 chk "$(code "$G/bb-after-unban")" 200 "bad-behaviour ban lifted"
 
+echo "[challenge]"
+field() { sed -n "s/.*name=\"$1\" value=\"\([^\"]*\)\".*/\1/p" | head -1; }
+status() { head -1 | cut -d' ' -f2; }
+verify() { curl -s -o /dev/null -D - -c "$1" -b "$1" --data-urlencode "t=$2" --data-urlencode "c=$3" --data-urlencode "r=$4" "$G/__corvus/challenge/verify"; }
+CHC=$(rule "$(cond itest-ch-cookie challenge ',"challenge_mode":"cookie"' '{"field":"http.path","operator":"starts_with","value":["/itest-ch-cookie"]}')")
+CHB=$(rule "$(cond itest-ch-block block '' '{"field":"http.path","operator":"eq","value":["/itest-ch-cookie/blocked"]}')")
+chk "$(c $A/api/security-rules | js "[(r['action'], r['challenge_mode'], r['challenge_ttl_s'], r['challenge_bind']) for r in d if r['id']==$CHC][0]")" "('challenge', 'cookie', 86400, 'ip')" "challenge rule stored with defaults"
+chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/security-rules -d "$(cond itest-bad challenge ',"challenge_difficulty":30' '{"field":"http.path","operator":"eq","value":["/x"]}')")" 422 "challenge difficulty above 24 rejected"
+CJ=$(mktemp)
+R=$(curl -s -D - -c "$CJ" -b "$CJ" "$G/itest-ch-cookie/page?x=1")
+chk "$(echo "$R" | status)" 403 "cookie challenge: first request gets the challenge page"
+echo "$R" | grep -qi '^cache-control: no-store' && ok "challenge page is not cacheable" || bad "challenge page without Cache-Control: no-store"
+echo "$R" | grep -qi '^x-corvus-challenge: cookie' && ok "challenge mode header" || bad "no X-Corvus-Challenge header"
+TOK=$(echo "$R" | field t)
+chk "$(echo "$R" | field r)" "/itest-ch-cookie/page?x=1" "return path in the challenge form"
+chk "$(code -X POST "$G/itest-ch-cookie/form")" 403 "POST without a pass is challenged too"
+chk "$(code "$G/__corvus/challenge/verify")" 405 "verify endpoint accepts POST only"
+chk "$(verify "$CJ" "${TOK}x" "" /itest-ch-cookie/page | status)" 403 "tampered challenge token refused"
+V=$(verify "$CJ" "$TOK" "" "/itest-ch-cookie/page?x=1")
+chk "$(echo "$V" | status)" 303 "cookie challenge: answer accepted (303)"
+echo "$V" | grep -qi '^location: .*/itest-ch-cookie/page?x=1' && ok "redirected back to the original URL" || bad "redirect target: $(echo "$V" | grep -i '^location')"
+SC=$(echo "$V" | grep -i '^set-cookie: __corvus_ch=')
+case "$SC" in *HttpOnly*SameSite=Lax*) ok "pass cookie is HttpOnly, SameSite=Lax";; *) bad "pass cookie flags: $SC";; esac
+chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$CJ" "$G/itest-ch-cookie/page?x=1")" 200 "cookie challenge: request with the pass reaches the backend"
+chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$CJ" "$G/itest-ch-cookie/blocked")" 403 "block rules still apply with a pass"
+curl -s -b "$CJ" "$G/itest-ch-cookie/blocked" | grep -q 'name="t"' && bad "block rule answered with a challenge" || ok "blocked with the block page"
+chk "$(code "$G/itest-ch-cookie/page")" 403 "without the cookie: challenged again"
+V=$(verify "$CJ" "$TOK" "" "//evil.example/x")
+echo "$V" | grep -i '^location:' | grep -qi 'evil' && bad "open redirect: $(echo "$V" | grep -i '^location')" || ok "network-path return target replaced by /"
+# js mode: compute the proof of work here (difficulty 12 ≈ 4k hashes)
+CHJ=$(rule "$(cond itest-ch-js challenge ',"challenge_mode":"js","challenge_difficulty":12,"challenge_ttl_s":300' '{"field":"http.path","operator":"starts_with","value":["/itest-ch-js"]}')")
+JJ=$(mktemp)
+P=$(curl -s -c "$JJ" -b "$JJ" "$G/itest-ch-js/x")
+echo "$P" | grep -q 'data-mode="js" data-bits="12"' && ok "js challenge page with difficulty 12" || bad "js challenge page"
+chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$CJ" "$G/itest-ch-js/x")" 403 "a cookie-check pass does not satisfy a js challenge"
+TOK=$(echo "$P" | field t)
+chk "$(verify "$JJ" "$TOK" 0x /itest-ch-js/x | status)" 403 "js challenge: invalid proof of work refused"
+CNT=$($PY -c '
+import hashlib, sys
+nonce, bits, i = sys.argv[1].split(".")[8], int(sys.argv[2]), 0
+while int.from_bytes(hashlib.sha256((nonce + str(i)).encode()).digest(), "big") >> (256 - bits):
+    i += 1
+print(i)' "$TOK" 12)
+chk "$(verify "$JJ" "$TOK" "$CNT" /itest-ch-js/x | status)" 303 "js challenge: proof of work accepted (counter $CNT)"
+chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$JJ" "$G/itest-ch-js/x")" 200 "js challenge: pass reaches the backend"
+chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$JJ" "$G/itest-ch-cookie/page")" 200 "a js pass also satisfies a cookie challenge"
+# challenge pages never count as bad behaviour
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/settings/autoban -d '{"enabled":true,"threshold":20,"window_s":600,"duration_s":120,"include_scans":false,"scan_threshold":200,"exempt":[],"bad_behaviour":true,"bad_behaviour_codes":[403],"bad_behaviour_threshold":3,"bad_behaviour_window_s":60}')" 200 "bad behaviour: three 403s in 60 s"
+sleep 3
+codes=$(for i in 1 2 3 4 5; do code "$G/itest-ch-cookie/bb-$i"; echo; done | tr '\n' ' ')
+chk "$codes" "403 403 403 403 403 " "challenge pages served repeatedly"
+chk "$(code "$G/ch-not-banned")" 200 "challenge pages do not count toward bad-behaviour bans"
+c -o /dev/null -X PUT $A/api/settings/autoban -d '{"enabled":false,"threshold":20,"window_s":600,"duration_s":900,"include_scans":false,"scan_threshold":200,"exempt":[],"bad_behaviour":false}'
+for id in $(c $A/api/bans | js "' '.join(str(b['id']) for b in d if b['ip']=='$ip')"); do c -o /dev/null -X DELETE $A/api/bans/$id; done
+sleep 3
+chk "$(c "$A/api/security-rules/events?limit=500" | js "sorted({e['action'] for e in d if e['rule_id'] in ($CHC, $CHJ)})")" "['challenge', 'challenge_fail', 'challenge_pass']" "challenge events recorded (issued / passed / failed)"
+chk "$(c "$A/api/traffic/events?limit=500" | js "sorted({e['kind'] for e in d if e['kind'].startswith('challenge')})")" "['challenge_failed', 'challenge_issued', 'challenge_passed']" "challenge traffic events"
+rm -f "$CJ" "$JJ"
+for id in $CHC $CHB $CHJ; do c -o /dev/null -X DELETE $A/api/security-rules/$id; done
+
 echo "[admin console allowlist]"
 chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/settings/network -d '{"trusted_proxies":[],"admin_allow":["10.255.255.0/24"]}')" 422 "allowlist without my address refused (lock-out guard)"
 chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/settings/network -d "{\"trusted_proxies\":[],\"admin_allow\":[\"$ip/32\"]}")" 200 "allowlist with my address saved"

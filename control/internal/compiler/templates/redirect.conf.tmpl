@@ -32,6 +32,16 @@ server {
     location ^~ /.well-known/acme-challenge/ {
         proxy_pass http://127.0.0.1:{{.P.ACMEPort}};
     }
+
+    # Security-rule challenge answers (corvus/challenge.lua), as on proxy hosts.
+    location = /__corvus/challenge/verify {
+        client_max_body_size 4k;
+        client_body_buffer_size 4k;
+        limit_req zone=corvus_ch_api burst=20 nodelay;
+        limit_req_status 429;
+        default_type text/html;
+        content_by_lua_block { require("corvus.rules").challenge_verify("{{.RuleKey}}") }
+    }
 {{- if .AdvancedConfig}}
 
     # --- advanced configuration (operator supplied) ---

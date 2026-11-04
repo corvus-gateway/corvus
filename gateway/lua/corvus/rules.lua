@@ -6,6 +6,8 @@
 --   allow → skip later rules, attack-pattern blocking and rate limiting
 --           (optionally Basic auth too) and stop
 --   log   → record and continue
+--   challenge → serve the challenge page (corvus/challenge.lua) and stop, unless the
+--           request carries a valid challenge pass: then continue with later rules
 -- After the rules, hosts with "block exploits" refuse requests that match the
 -- attack-pattern map ($corvus_exploit).
 --
@@ -14,6 +16,7 @@
 local cjson = require "cjson.safe"
 local body = require "corvus.body"
 local ualist = require "corvus.ualist"
+local challenge = require "corvus.challenge"
 local ffi = require "ffi"
 local bit = require "bit"
 
@@ -27,6 +30,9 @@ local HOSTS = {}      -- host id → { rules = {...}, cf = bool, exploits = bool
 local GEO             -- country range table (see control/internal/geoip)
 local BLOCK_PAGE = "<!doctype html><title>Blocked</title><p>Access denied.</p>"
 local ERROR_PAGE = "<!doctype html><title>Unavailable</title><p>The site is temporarily unavailable. Please try again shortly.</p>"
+local CHALLENGE_PAGE = [[<!doctype html><meta charset=utf-8><title>Checking your browser</title>]]
+  .. [[<form method=post action="/__corvus/challenge/verify"><input type=hidden name=t value="{{TOKEN}}">]]
+  .. [[<input type=hidden name=r value="{{RETURN}}"><button>Continue</button></form>]]
 
 pcall(ffi.cdef, "int memcmp(const void *s1, const void *s2, size_t n);")
 
@@ -184,6 +190,7 @@ function _M.init(path)
     compiled[i] = {
       id = r.id, action = r.action, status = r.status or 403, skip_auth = r.skip_auth and true or false,
       tag = r.id .. ":" .. r.action, groups = groups,
+      ch = r.action == "challenge" and challenge.settings(r.challenge) or nil,
     }
   end
   HOSTS = {}
@@ -202,6 +209,10 @@ function _M.init(path)
   if cfg.error_page then
     ERROR_PAGE = read_file(cfg.error_page) or ERROR_PAGE
   end
+  if cfg.challenge_page then
+    CHALLENGE_PAGE = read_file(cfg.challenge_page) or CHALLENGE_PAGE
+  end
+  challenge.init()
 end
 
 -- ------------------------------------------------------------------ evaluate
@@ -301,15 +312,17 @@ local function esc(s)
   return (string.gsub(tostring(s or ""), "[&<>\"']", HTML_ESC))
 end
 
--- Serves a block or error page: {{STATUS}} {{RID}} {{HOST}} {{IP}} {{TIME}} are
--- replaced with HTML-escaped values; unknown placeholders render empty.
-local function send_page(tpl, status)
+-- Serves a block, error or challenge page: {{STATUS}} {{RID}} {{HOST}} {{IP}} {{TIME}}
+-- (and the page's own `vars`) are replaced with HTML-escaped values; unknown
+-- placeholders render empty.
+local function send_page(tpl, status, vars)
   ngx.status = status
   ngx.header["Content-Type"] = "text/html; charset=utf-8"
   ngx.header["Cache-Control"] = "no-store"
   local page = string.gsub(tpl, "{{(%u+)}}", function(k)
     local v
-    if k == "STATUS" then v = status
+    if vars and vars[k] ~= nil then v = vars[k]
+    elseif k == "STATUS" then v = status
     elseif k == "RID" then v = ngx.var.request_id or "-"
     elseif k == "HOST" then v = ngx.var.host
     elseif k == "IP" then v = ngx.var.remote_addr
@@ -332,6 +345,26 @@ function _M.upstream_error(status)
   return send_page(ERROR_PAGE, status)
 end
 
+-- Challenge page. Status 403 (as Cloudflare's challenge pages): the request did not
+-- reach the site, and unlike 503 (+ Retry-After) it neither invites HTTP clients to
+-- retry in a loop nor shows up as a server error in 5xx monitoring and error rates.
+-- Clients without a browser simply see a 403. Never cached (no-store); not counted
+-- as bad behaviour (ngx.ctx.corvus_ch, see _M.log).
+local function send_challenge(rule, ret)
+  ngx.ctx.corvus_ch = true
+  ngx.header["X-Corvus-Challenge"] = rule.ch.name
+  ngx.header["X-Robots-Tag"] = "noindex"
+  return send_page(CHALLENGE_PAGE, 403, challenge.page_vars(rule.id, rule.ch, ret))
+end
+
+local function challenge_rule(host, rid)
+  if not host then return nil end
+  for _, rule in ipairs(host.rules) do
+    if rule.id == rid and rule.ch then return rule end
+  end
+  return nil
+end
+
 function _M.rewrite(host_id)
   local host = HOSTS[host_id]
   if not host then return end
@@ -351,6 +384,12 @@ function _M.rewrite(host_id)
       local a = rule.action
       if a == "log" then
         if ngx.var.corvus_rule == "" then ngx.var.corvus_rule = rule.tag end
+      elseif a == "challenge" then
+        -- the verify endpoint itself is never challenged (block rules still apply)
+        if uri ~= challenge.VERIFY_PATH and not challenge.passed(ctx, rule.ch) then
+          ngx.var.corvus_rule = rule.tag
+          return send_challenge(rule, challenge.return_path())
+        end
       else
         ngx.var.corvus_rule = rule.tag
         if a == "block" then
@@ -378,6 +417,37 @@ function _M.rewrite(host_id)
       end
     end
   end
+end
+
+-- content_by_lua of /__corvus/challenge/verify (every proxy and redirection host):
+-- POST t=<challenge token>&c=<counter>&r=<return path>. Solved → pass cookie and 303
+-- back to r (same-host paths only); failed → a fresh challenge (403), or the block
+-- page when the token does not name a challenge rule of this host.
+-- Log field $corvus_rule: "<rule>:challenge_pass" / "<rule>:challenge_fail".
+function _M.challenge_verify(host_id)
+  ngx.ctx.corvus_ch = true
+  if ngx.req.get_method() ~= "POST" then
+    ngx.header["Allow"] = "POST"
+    return ngx.exit(405)
+  end
+  ngx.req.read_body()
+  local args = ngx.req.get_post_args(8)
+  if type(args) ~= "table" then args = {} end
+  local host = HOSTS[host_id]
+  local ok, rid, res = challenge.verify(args, function(id) return challenge_rule(host, id) ~= nil end)
+  local r = args.r
+  if type(r) == "table" then r = r[1] end
+  local ret = challenge.safe_return(r)
+  if ok then
+    ngx.var.corvus_rule = rid .. ":challenge_pass"
+    ngx.header["Set-Cookie"] = res
+    ngx.header["Cache-Control"] = "no-store"
+    return ngx.redirect(ret, 303)
+  end
+  local rule = rid and challenge_rule(host, rid)
+  if not rule then return deny(403) end
+  ngx.var.corvus_rule = rid .. ":challenge_fail"
+  return send_challenge(rule, ret)
 end
 
 -- Status-port handler: replace the ban list. Body: {"ips": {"<ip>": <expires unix | 0>}}.
@@ -479,8 +549,8 @@ function _M.log(host_id)
   if not cfg then return end
   local status = tonumber(ngx.var.status)
   if not status or not cfg.codes[status] then return end
-  -- already banned, or allowed by a security rule: not counted
-  if ngx.var.corvus_ban == "1" or ngx.var.corvus_skip == "1" then return end
+  -- already banned, allowed by a security rule or answered with a challenge: not counted
+  if ngx.var.corvus_ban == "1" or ngx.var.corvus_skip == "1" or ngx.ctx.corvus_ch then return end
   local uri = ngx.var.uri or ""
   -- the gateway's own endpoints (certificate validation, access queue) never count
   if sub(uri, 1, 28) == "/.well-known/acme-challenge/" or sub(uri, 1, 10) == "/__corvus/" then return end

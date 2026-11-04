@@ -159,16 +159,21 @@ export type RuleOperator =
   | "in" | "not_in" | "eq" | "ne" | "contains" | "not_contains" | "starts_with" | "ends_with"
   | "matches" | "not_matches" | "exists" | "not_exists";
 export interface RuleCondition { field: RuleField; name?: string; operator: RuleOperator; value: string[]; ci?: boolean }
-export type RuleAction = "block" | "allow" | "log";
+export type RuleAction = "block" | "allow" | "log" | "challenge";
+/** Rule event actions: rule actions plus the outcome of a challenge answer. */
+export type RuleEventAction = RuleAction | "challenge_pass" | "challenge_fail";
+export type ChallengeMode = "js" | "cookie";
+export type ChallengeBind = "ip" | "ip_ua";
 export interface SecurityRule {
   id: number; name: string; description: string; enabled: boolean; position: number;
   action: RuleAction; status_code: number; skip_basic_auth: boolean;
+  challenge_mode: ChallengeMode; challenge_difficulty: number; challenge_ttl_s: number; challenge_bind: ChallengeBind;
   scope: "all" | "hosts"; host_ids: number[];
   expression: { groups: RuleCondition[][] };
   hits_24h?: number; last_hit_at?: string | null; created_at?: string; updated_at?: string;
 }
 export interface RuleEvent {
-  t: number | string; rule_id: number; rule: string; action: RuleAction; host: string; ip: string;
+  t: number | string; rule_id: number; rule: string; action: RuleEventAction; host: string; ip: string;
   country?: string; method?: string; path?: string; ua?: string; status?: number;
 }
 export interface GeoipStatus { available: boolean; source?: string; updated_at?: string | null; ranges?: number; error?: string; attribution?: string }
@@ -188,7 +193,8 @@ export interface HostTraffic { host: string; requests: number; rps: number; s4xx
 export interface PathTraffic { path: string; requests: number; errors: number; p95: number }
 export interface LogLine { ts: number | string; host: string; method: string; path: string; status: number; rt_ms: number; bytes: number; ip: string; wr?: string; ua?: string }
 export type EventKind = "rate_limited" | "blocked_exploit" | "server_error" | "waitroom_queue" | "waitroom_fail"
-  | "exploit_detected" | "blocked_rule" | "rule_logged" | "blocked_body" | "body_detected" | "banned" | "rate_limit_dry_run";
+  | "exploit_detected" | "blocked_rule" | "rule_logged" | "blocked_body" | "body_detected" | "banned" | "rate_limit_dry_run"
+  | "challenge_issued" | "challenge_passed" | "challenge_failed";
 export interface TrafficEvent { ts: number | string; kind: EventKind; host: string; path: string; ip: string; count: number }
 
 export interface NpmPreview {

@@ -88,3 +88,31 @@ func TestMultipleEventKinds(t *testing.T) {
 		t.Fatalf("kinds: %v", kinds)
 	}
 }
+
+// Challenge pages are events of their own: never "blocked", and their 403s do not
+// count as 4xx for scanner detection.
+func TestChallengeEvents(t *testing.T) {
+	c := New()
+	now := time.Now()
+	ts := float64(now.Unix())
+	c.Add(&Record{T: ts, H: "h", U: "/shop", S: 403, IP: "2.2.2.2", R: "7:challenge"})
+	c.Add(&Record{T: ts, H: "h", U: "/__corvus/challenge/verify", S: 403, IP: "2.2.2.2", R: "7:challenge_fail"})
+	c.Add(&Record{T: ts, H: "h", U: "/__corvus/challenge/verify", S: 303, IP: "2.2.2.2", R: "7:challenge_pass"})
+	kinds := map[string]bool{}
+	for _, e := range c.Events("", 10) {
+		kinds[e.Kind] = true
+	}
+	if len(kinds) != 3 || !kinds["challenge_issued"] || !kinds["challenge_failed"] || !kinds["challenge_passed"] {
+		t.Fatalf("kinds: %v", kinds)
+	}
+	if s := c.SummaryFor(time.Minute, "", now); s.Blocked != 0 || s.Requests != 3 {
+		t.Errorf("summary: %+v", s)
+	}
+	if a := c.IPCounts(time.Minute, now)["2.2.2.2"]; a.Requests != 3 || a.S4xx != 0 {
+		t.Errorf("IP activity: %+v", a)
+	}
+	ev := c.RuleEvents(7, 10)
+	if len(ev) != 3 || ev[0].Action != "challenge_pass" {
+		t.Errorf("rule events: %+v", ev)
+	}
+}

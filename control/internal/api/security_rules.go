@@ -28,6 +28,10 @@ type ruleInput struct {
 	Action        string           `json:"action"`
 	StatusCode    int              `json:"status_code"`
 	SkipBasicAuth bool             `json:"skip_basic_auth"`
+	ChallengeMode string           `json:"challenge_mode"`
+	ChallengeDiff int              `json:"challenge_difficulty"`
+	ChallengeTTL  int              `json:"challenge_ttl_s"`
+	ChallengeBind string           `json:"challenge_bind"`
 	Scope         string           `json:"scope"`
 	HostIDs       []int64          `json:"host_ids"`
 	Expression    store.Expression `json:"expression"`
@@ -43,6 +47,7 @@ type ruleInput struct {
 func (in ruleInput) build(ctx context.Context, tx *store.Store, r *store.SecurityRule) error {
 	r.Name, r.Description, r.Action, r.StatusCode, r.SkipBasicAuth = in.Name, in.Description, in.Action, in.StatusCode, in.SkipBasicAuth
 	r.Scope, r.HostIDs, r.Expression = in.Scope, in.HostIDs, in.Expression
+	r.ChallengeMode, r.ChallengeDifficulty, r.ChallengeTTL, r.ChallengeBind = in.ChallengeMode, in.ChallengeDiff, in.ChallengeTTL, in.ChallengeBind
 	if in.Enabled != nil {
 		r.Enabled = *in.Enabled
 	} else if r.ID == 0 {

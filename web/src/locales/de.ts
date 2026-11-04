@@ -8,6 +8,7 @@ import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import { pagesStrings } from "./pages.i18n";
+import { challengeStrings } from "./challenge.i18n";
 import type { ko } from "./ko";
 import type { RuleLabels } from "../lib/rules";
 import type { AuditLabels } from "../lib/audit";
@@ -311,6 +312,7 @@ export const de: Partial<Record<keyof typeof ko, string>> = {
   ...templatesStrings.de,
   ...backupStrings.de,
   ...pagesStrings.de,
+  ...challengeStrings.de,
 };
 
 export const deRuleLabels: RuleLabels | undefined = {

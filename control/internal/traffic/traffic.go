@@ -33,7 +33,7 @@ type Record struct {
 	X  string  `json:"x"`  // exploit rule matched (detect-only unless the host blocks)
 	RL string  `json:"rl"` // $limit_req_status
 	UA string  `json:"ua"`
-	R  string  `json:"r"`  // security rule match "<id>:<action>" ($corvus_rule)
+	R  string  `json:"r"`  // security rule match "<id>:<action>" ($corvus_rule; challenge, challenge_pass, challenge_fail for challenges)
 	CC string  `json:"cc"` // client country used by rules ($corvus_cc)
 	BD string  `json:"bd"` // body inspection "<signature>:<log|block>" ($corvus_body)
 	BN string  `json:"bn"` // "1" when the client address is banned ($corvus_ban)
@@ -306,6 +306,14 @@ func classify(r *Record) (blocked bool, kinds []string) {
 			kinds = append(kinds, "blocked_rule")
 		case "log":
 			kinds = append(kinds, "rule_logged")
+		// Challenges are neither blocks nor detections: they never count toward
+		// automatic bans or security alerts (see autoban.Kinds, alerts.securityKinds).
+		case "challenge":
+			kinds = append(kinds, "challenge_issued")
+		case "challenge_pass":
+			kinds = append(kinds, "challenge_passed")
+		case "challenge_fail":
+			kinds = append(kinds, "challenge_failed")
 		}
 	}
 	if r.X != "" {
@@ -326,6 +334,13 @@ func classify(r *Record) (blocked bool, kinds []string) {
 		kinds = append(kinds, "server_error")
 	}
 	return blocked, kinds
+}
+
+// isChallenge reports whether the gateway answered with a challenge page (issued, or
+// re-issued after a failed answer) instead of the site's response.
+func isChallenge(r *Record) bool {
+	_, action, ok := parseRule(r.R)
+	return ok && (action == "challenge" || action == "challenge_fail")
 }
 
 func (c *Collector) Add(r *Record) {
@@ -407,8 +422,8 @@ func (c *Collector) Add(r *Record) {
 		}
 		if st != nil {
 			st.n++
-			if r.S >= 400 && r.S < 500 {
-				st.s4++
+			if r.S >= 400 && r.S < 500 && !isChallenge(r) {
+				st.s4++ // scanner detection: challenge pages are not counted
 			}
 			st.host = r.H
 		}

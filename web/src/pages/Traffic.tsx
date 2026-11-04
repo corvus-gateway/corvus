@@ -1,6 +1,6 @@
 import { useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Activity, AlertOctagon, Ban, Download, Gauge, Hourglass, ListFilter, Radio, ScrollText, ServerCrash, TimerReset, type LucideIcon } from "lucide-react";
+import { Activity, AlertOctagon, Ban, BadgeCheck, Download, Gauge, Hourglass, ListFilter, Puzzle, Radio, ScrollText, ServerCrash, TimerReset, type LucideIcon } from "lucide-react";
 import { getText, type EventKind, type HostTraffic, type LogLine, type PathTraffic, type Timeseries, type TrafficEvent, type TrafficSummary } from "../api";
 import { ChartLegend, StackBar, TimeChart, type Series } from "../components/charts";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
@@ -252,6 +252,9 @@ const eventMeta: Record<EventKind, { icon: LucideIcon; tone: Tone; key: Key }> =
   server_error: { icon: ServerCrash, tone: "danger", key: "evServerError" },
   waitroom_queue: { icon: Hourglass, tone: "info", key: "evWaitroomQueue" },
   waitroom_fail: { icon: AlertOctagon, tone: "warn", key: "evWaitroomFail" },
+  challenge_issued: { icon: Puzzle, tone: "info", key: "evChallengeIssued" },
+  challenge_passed: { icon: BadgeCheck, tone: "ok", key: "evChallengePassed" },
+  challenge_failed: { icon: Puzzle, tone: "warn", key: "evChallengeFailed" },
 };
 
 function Events({ qs, poll }: { qs: string; poll: number }) {

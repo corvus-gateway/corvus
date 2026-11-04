@@ -27,25 +27,32 @@ type Expression struct {
 }
 
 type SecurityRule struct {
-	ID            int64      `json:"id"`
-	Name          string     `json:"name"`
-	Description   string     `json:"description"`
-	Enabled       bool       `json:"enabled"`
-	Position      int        `json:"position"`
-	Action        string     `json:"action"`
-	StatusCode    int        `json:"status_code"`
-	SkipBasicAuth bool       `json:"skip_basic_auth"`
-	Scope         string     `json:"scope"`
-	HostIDs       []int64    `json:"host_ids"`
-	Expression    Expression `json:"expression"`
-	Hits24h       int64      `json:"hits_24h"`
-	LastHitAt     *time.Time `json:"last_hit_at"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	ID            int64  `json:"id"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	Enabled       bool   `json:"enabled"`
+	Position      int    `json:"position"`
+	Action        string `json:"action"`
+	StatusCode    int    `json:"status_code"`
+	SkipBasicAuth bool   `json:"skip_basic_auth"`
+	// Action "challenge": js (proof of work) | cookie, difficulty in leading zero bits
+	// (js, 12-24), pass cookie lifetime (300-604800 s) and binding (ip | ip_ua).
+	ChallengeMode       string     `json:"challenge_mode"`
+	ChallengeDifficulty int        `json:"challenge_difficulty"`
+	ChallengeTTL        int        `json:"challenge_ttl_s"`
+	ChallengeBind       string     `json:"challenge_bind"`
+	Scope               string     `json:"scope"`
+	HostIDs             []int64    `json:"host_ids"`
+	Expression          Expression `json:"expression"`
+	Hits24h             int64      `json:"hits_24h"`
+	LastHitAt           *time.Time `json:"last_hit_at"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
 func (s *Store) ListSecurityRules(ctx context.Context) ([]SecurityRule, error) {
-	rows, err := s.q.QueryContext(ctx, `SELECT id, name, description, enabled, position, action, status_code, skip_basic_auth, scope, expression, created_at, updated_at
+	rows, err := s.q.QueryContext(ctx, `SELECT id, name, description, enabled, position, action, status_code, skip_basic_auth,
+		challenge_mode, challenge_difficulty, challenge_ttl_s, challenge_bind, scope, expression, created_at, updated_at
 		FROM security_rules ORDER BY position, id`)
 	if err != nil {
 		return nil, err
@@ -55,7 +62,8 @@ func (s *Store) ListSecurityRules(ctx context.Context) ([]SecurityRule, error) {
 		var r SecurityRule
 		var en, skip int
 		var expr string
-		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &en, &r.Position, &r.Action, &r.StatusCode, &skip, &r.Scope, &expr, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &en, &r.Position, &r.Action, &r.StatusCode, &skip,
+			&r.ChallengeMode, &r.ChallengeDifficulty, &r.ChallengeTTL, &r.ChallengeBind, &r.Scope, &expr, &r.CreatedAt, &r.UpdatedAt); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -110,7 +118,28 @@ func (s *Store) SaveSecurityRule(ctx context.Context, r *SecurityRule) error {
 	return s.WithTx(ctx, func(tx *Store) error { return tx.saveSecurityRule(ctx, r) })
 }
 
+// Defaults for the challenge settings (also stored for rules that are not challenges,
+// so the columns always hold valid values).
+const (
+	DefaultChallengeMode       = "js"
+	DefaultChallengeDifficulty = 16
+	DefaultChallengeTTL        = 86400
+	DefaultChallengeBind       = "ip"
+)
+
 func (s *Store) saveSecurityRule(ctx context.Context, r *SecurityRule) error {
+	if r.ChallengeMode == "" {
+		r.ChallengeMode = DefaultChallengeMode
+	}
+	if r.ChallengeDifficulty == 0 {
+		r.ChallengeDifficulty = DefaultChallengeDifficulty
+	}
+	if r.ChallengeTTL == 0 {
+		r.ChallengeTTL = DefaultChallengeTTL
+	}
+	if r.ChallengeBind == "" {
+		r.ChallengeBind = DefaultChallengeBind
+	}
 	t := now()
 	if r.ID == 0 {
 		var maxPos int
@@ -118,16 +147,20 @@ func (s *Store) saveSecurityRule(ctx context.Context, r *SecurityRule) error {
 			return err
 		}
 		r.Position = maxPos + 1
-		res, err := s.q.ExecContext(ctx, `INSERT INTO security_rules(name, description, enabled, position, action, status_code, skip_basic_auth, scope, expression, created_at, updated_at)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?)`, r.Name, r.Description, b2i(r.Enabled), r.Position, r.Action, r.StatusCode, b2i(r.SkipBasicAuth), r.Scope, toJSON(r.Expression), t, t)
+		res, err := s.q.ExecContext(ctx, `INSERT INTO security_rules(name, description, enabled, position, action, status_code, skip_basic_auth,
+			challenge_mode, challenge_difficulty, challenge_ttl_s, challenge_bind, scope, expression, created_at, updated_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, r.Name, r.Description, b2i(r.Enabled), r.Position, r.Action, r.StatusCode, b2i(r.SkipBasicAuth),
+			r.ChallengeMode, r.ChallengeDifficulty, r.ChallengeTTL, r.ChallengeBind, r.Scope, toJSON(r.Expression), t, t)
 		if err != nil {
 			return err
 		}
 		r.ID, _ = res.LastInsertId()
 		r.CreatedAt = t
 	} else {
-		res, err := s.q.ExecContext(ctx, `UPDATE security_rules SET name=?, description=?, enabled=?, action=?, status_code=?, skip_basic_auth=?, scope=?, expression=?, updated_at=? WHERE id=?`,
-			r.Name, r.Description, b2i(r.Enabled), r.Action, r.StatusCode, b2i(r.SkipBasicAuth), r.Scope, toJSON(r.Expression), t, r.ID)
+		res, err := s.q.ExecContext(ctx, `UPDATE security_rules SET name=?, description=?, enabled=?, action=?, status_code=?, skip_basic_auth=?,
+			challenge_mode=?, challenge_difficulty=?, challenge_ttl_s=?, challenge_bind=?, scope=?, expression=?, updated_at=? WHERE id=?`,
+			r.Name, r.Description, b2i(r.Enabled), r.Action, r.StatusCode, b2i(r.SkipBasicAuth),
+			r.ChallengeMode, r.ChallengeDifficulty, r.ChallengeTTL, r.ChallengeBind, r.Scope, toJSON(r.Expression), t, r.ID)
 		if err != nil {
 			return err
 		}

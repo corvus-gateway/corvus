@@ -171,6 +171,33 @@ redirection hosts too; rules scoped to specific hosts target proxy hosts only.
 | GET / POST | `/api/access-lists` | viewer / operator | Password protection lists |
 | PUT / DELETE | `/api/access-lists/{id}` | operator | Update / delete |
 
+**Security rule fields**: `name`, `description`, `enabled`, `action` (`block`, `allow`, `log`,
+`challenge`), `status_code` (block only: `401`, `403`, `404`, `410`, `429`, `444`), `skip_basic_auth`
+(allow only), `scope` (`all` or `hosts` with `host_ids`), `expression` (`{ "groups": [[condition, …], …] }`:
+any group whose conditions all match), and for `challenge`:
+
+| Field | Default | Description |
+|---|---|---|
+| `challenge_mode` | `js` | `js`: the browser solves a SHA-256 proof of work; `cookie`: the page only posts its signed token back (no computation) |
+| `challenge_difficulty` | `16` | Leading zero bits the proof of work must reach (12–24, `js` only; each step doubles the work) |
+| `challenge_ttl_s` | `86400` | How long a visitor who passed is not challenged again (300–604800 s) |
+| `challenge_bind` | `ip` | Pass cookie bound to the client IP (`ip`) or to the IP and User-Agent (`ip_ua`) |
+
+A **challenge** answers matching requests with a challenge page (status `403`, `Cache-Control: no-store`,
+`X-Corvus-Challenge: js|cookie`, localized client-side in 8 languages, no external resources). The page
+posts its answer to `/__corvus/challenge/verify` (POST only, at most 4 KB, rate-limited per IP); on success
+the gateway sets the `__corvus_ch` cookie (HttpOnly, SameSite=Lax, Secure on HTTPS) and redirects (303) back
+to the original URL — same-host paths only, and `/` for requests other than GET/HEAD, whose body cannot be
+replayed. Requests with a valid pass skip challenge rules until it expires; block rules still apply. A pass
+from a `js` challenge also satisfies `cookie` challenges and challenges of equal or lower difficulty.
+Challenges and passes are HMAC-signed with a key derived from the access queue secret (`CORVUS_WR_SECRET`,
+rotation via `CORVUS_WR_SECRET_PREV`) and bound to the client IP and host, so the gateway keeps no state;
+a challenge must be answered within 5 minutes. Non-browser clients (API clients, feeds, monitoring, search
+engine crawlers) cannot pass — put an allow rule above the challenge for them. Challenge pages are shown in
+rule events (`challenge`, `challenge_pass`, `challenge_fail`) and traffic events (`challenge_issued`,
+`challenge_passed`, `challenge_failed`); they are not counted as blocked requests, security detections,
+scanner 4xx responses or bad behaviour. The challenge page cannot be customized yet.
+
 **Automatic ban settings** (`/api/settings/autoban`):
 
 | Field | Default | Description |
@@ -187,8 +214,8 @@ redirection hosts too; rules scoped to specific hosts target proxy hosts only.
 
 Bad behaviour is counted in the gateway, so the IP is refused from the next request on, without
 waiting for corvus-control's 15-second evaluation. Requests from banned IPs, from exempt networks,
-requests a security rule allowed and the gateway's own endpoints (ACME challenges, access queue) are
-not counted. corvus-control then records the ban (source `auto`, reason like
+requests a security rule allowed, challenge pages and the gateway's own endpoints (ACME challenges,
+access queue, challenge answers) are not counted. corvus-control then records the ban (source `auto`, reason like
 `bad behaviour: 12×404 on example.com in 60s`, audit action `ban.auto`) with the usual escalation;
 the first gateway-local ban lasts `duration_s`.
 

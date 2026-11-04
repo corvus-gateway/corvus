@@ -103,11 +103,12 @@ func SecurityRule(r *store.SecurityRule, listKind func(int64) string, hostExists
 		r.SkipBasicAuth = false
 	case "allow":
 		r.StatusCode = 403
-	case "log":
+	case "log", "challenge":
 		r.StatusCode, r.SkipBasicAuth = 403, false
 	default:
-		errs.add("action", "invalid", "action must be block, allow or log")
+		errs.add("action", "invalid", "action must be block, allow, log or challenge")
 	}
+	challengeSettings(r, &errs)
 	switch r.Scope {
 	case "", "all":
 		r.Scope, r.HostIDs = "all", []int64{}
@@ -150,6 +151,51 @@ func SecurityRule(r *store.SecurityRule, listKind func(int64) string, hostExists
 		}
 	}
 	return errs.OrNil()
+}
+
+// Challenge limits: proof-of-work difficulty in leading zero bits (each bit doubles
+// the browser's work: 16 ≈ 65k hashes, 24 ≈ 17M) and the pass cookie lifetime.
+const (
+	MinChallengeDifficulty = 12
+	MaxChallengeDifficulty = 24
+	MinChallengeTTL        = 300
+	MaxChallengeTTL        = 7 * 86400
+)
+
+// challengeSettings validates the challenge fields of a challenge rule and resets them
+// to the defaults for other actions.
+func challengeSettings(r *store.SecurityRule, errs *Errors) {
+	if r.Action != "challenge" {
+		r.ChallengeMode, r.ChallengeDifficulty = store.DefaultChallengeMode, store.DefaultChallengeDifficulty
+		r.ChallengeTTL, r.ChallengeBind = store.DefaultChallengeTTL, store.DefaultChallengeBind
+		return
+	}
+	switch r.ChallengeMode {
+	case "":
+		r.ChallengeMode = store.DefaultChallengeMode
+	case "js", "cookie":
+	default:
+		errs.add("challenge_mode", "invalid", "challenge mode must be js or cookie")
+	}
+	if r.ChallengeDifficulty == 0 || r.ChallengeMode == "cookie" {
+		r.ChallengeDifficulty = store.DefaultChallengeDifficulty // not used in cookie mode
+	}
+	if r.ChallengeDifficulty < MinChallengeDifficulty || r.ChallengeDifficulty > MaxChallengeDifficulty {
+		errs.add("challenge_difficulty", "invalid", "difficulty must be %d-%d bits", MinChallengeDifficulty, MaxChallengeDifficulty)
+	}
+	if r.ChallengeTTL == 0 {
+		r.ChallengeTTL = store.DefaultChallengeTTL
+	}
+	if r.ChallengeTTL < MinChallengeTTL || r.ChallengeTTL > MaxChallengeTTL {
+		errs.add("challenge_ttl_s", "invalid", "challenge lifetime must be %d-%d seconds (5 minutes to 7 days)", MinChallengeTTL, MaxChallengeTTL)
+	}
+	switch r.ChallengeBind {
+	case "":
+		r.ChallengeBind = store.DefaultChallengeBind
+	case "ip", "ip_ua":
+	default:
+		errs.add("challenge_bind", "invalid", "challenge binding must be ip or ip_ua")
+	}
 }
 
 func condition(c *store.Condition, listKind func(int64) string) error {

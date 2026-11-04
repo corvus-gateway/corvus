@@ -134,6 +134,17 @@ server {
         proxy_pass http://127.0.0.1:{{.P.ACMEPort}};
     }
 
+    # Security-rule challenge answers (corvus/challenge.lua). Bans and block rules still
+    # apply (server rewrite phase); POST only, small bodies, rate-limited per client IP.
+    location = /__corvus/challenge/verify {
+        client_max_body_size 4k;
+        client_body_buffer_size 4k;
+        limit_req zone=corvus_ch_api burst=20 nodelay;
+        limit_req_status 429;
+        default_type text/html;
+        content_by_lua_block { require("corvus.rules").challenge_verify({{.ID}}) }
+    }
+
     # Upstream error pages (502/503/504, corvus/rules.lua). Named locations: not
     # reachable by clients; the security rules already ran for this request.
 {{- range .ErrorCodes}}

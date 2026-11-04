@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"strings"
 	"testing"
 
 	"corvus/control/internal/store"
@@ -63,6 +64,60 @@ func TestSecurityRuleValidation(t *testing.T) {
 	}
 	if SecurityRule(&store.SecurityRule{Name: "x", Action: "block"}, nil, nil) == nil {
 		t.Error("empty expression accepted")
+	}
+}
+
+func TestChallengeRuleValidation(t *testing.T) {
+	cond := store.Condition{Field: "http.path", Operator: "starts_with", Value: []string{"/shop"}}
+	r := rule(cond)
+	r.Action, r.StatusCode, r.SkipBasicAuth = "challenge", 410, true
+	if err := SecurityRule(r, nil, nil); err != nil {
+		t.Fatalf("challenge with defaults rejected: %v", err)
+	}
+	if r.StatusCode != 403 || r.SkipBasicAuth || r.ChallengeMode != "js" || r.ChallengeDifficulty != 16 || r.ChallengeTTL != 86400 || r.ChallengeBind != "ip" {
+		t.Fatalf("defaults not applied: %+v", r)
+	}
+	r = rule(cond)
+	r.Action, r.ChallengeMode, r.ChallengeDifficulty, r.ChallengeTTL, r.ChallengeBind = "challenge", "js", 24, 300, "ip_ua"
+	if err := SecurityRule(r, nil, nil); err != nil || r.ChallengeDifficulty != 24 || r.ChallengeTTL != 300 || r.ChallengeBind != "ip_ua" {
+		t.Fatalf("limits rejected or changed: %v %+v", err, r)
+	}
+	// cookie mode has no proof of work: any difficulty is reset to the default
+	r = rule(cond)
+	r.Action, r.ChallengeMode, r.ChallengeDifficulty = "challenge", "cookie", 99
+	if err := SecurityRule(r, nil, nil); err != nil || r.ChallengeDifficulty != 16 {
+		t.Fatalf("cookie mode: %v %+v", err, r)
+	}
+	// other actions keep default challenge settings
+	r = rule(cond)
+	r.Action, r.ChallengeMode, r.ChallengeDifficulty, r.ChallengeTTL, r.ChallengeBind = "block", "nope", 99, 1, "x"
+	if err := SecurityRule(r, nil, nil); err != nil || r.ChallengeMode != "js" || r.ChallengeDifficulty != 16 || r.ChallengeTTL != 86400 || r.ChallengeBind != "ip" {
+		t.Fatalf("block rule challenge fields: %v %+v", err, r)
+	}
+	bad := map[string]func(*store.SecurityRule){
+		"mode":            func(r *store.SecurityRule) { r.ChallengeMode = "captcha" },
+		"difficulty low":  func(r *store.SecurityRule) { r.ChallengeDifficulty = 11 },
+		"difficulty high": func(r *store.SecurityRule) { r.ChallengeDifficulty = 25 },
+		"ttl low":         func(r *store.SecurityRule) { r.ChallengeTTL = 299 },
+		"ttl high":        func(r *store.SecurityRule) { r.ChallengeTTL = 7*86400 + 1 },
+		"ttl negative":    func(r *store.SecurityRule) { r.ChallengeTTL = -1 },
+		"bind":            func(r *store.SecurityRule) { r.ChallengeBind = "ua" },
+	}
+	for name, mod := range bad {
+		r := rule(cond)
+		r.Action = "challenge"
+		mod(r)
+		err := SecurityRule(r, nil, nil)
+		if err == nil {
+			t.Errorf("%s accepted: %+v", name, r)
+		} else if !strings.Contains(err.Error(), "challenge") && !strings.Contains(err.Error(), "difficulty") {
+			t.Errorf("%s: unexpected error %v", name, err)
+		}
+	}
+	r = rule(cond)
+	r.Action = "captcha"
+	if SecurityRule(r, nil, nil) == nil {
+		t.Error("unknown action accepted")
 	}
 }
 

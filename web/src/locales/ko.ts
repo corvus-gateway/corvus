@@ -8,6 +8,7 @@ import { koListFeeds } from "./listfeeds.i18n";
 import { koBans } from "./bans.i18n";
 import { koBackup } from "./backup.i18n";
 import { koPages } from "./pages.i18n";
+import { koChallenge } from "./challenge.i18n";
 import { koSecurity } from "./security";
 import { koUsers } from "./users";
 import { koAlerts } from "./alerts";
@@ -209,4 +210,5 @@ export const ko = {
   ...koTemplates,
   ...koBackup,
   ...koPages,
+  ...koChallenge,
 } as const;

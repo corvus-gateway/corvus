@@ -47,6 +47,9 @@ http {
     # Waiting room status API: coarse per-IP flood guard (NAT-friendly). The real
     # limit is per session in Lua (each sid may poll at most a few times a second).
     limit_req_zone $binary_remote_addr zone=corvus_wr_api:10m rate=500r/s;
+    # Security-rule challenge answers (/__corvus/challenge/verify): a browser posts once
+    # per challenge, so a few per second per IP is plenty.
+    limit_req_zone $binary_remote_addr zone=corvus_ch_api:10m rate=5r/s;
     server_names_hash_bucket_size 128;
     map_hash_bucket_size 128;
 
