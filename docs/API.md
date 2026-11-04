@@ -105,6 +105,7 @@ Role: **public** = no authentication · **viewer** = any signed-in user or token
 | DELETE | `/api/redirection-hosts/{id}` | operator | Delete |
 | GET | `/api/certificates` | viewer | List certificates |
 | POST | `/api/certificates` | operator | Upload a custom certificate |
+| PUT | `/api/certificates/{id}` | operator | Replace an uploaded certificate in place (`certificate`, `private_key`, optional `name`): validated like an upload, keeps its ID and host assignments, redeploys; ACME certificates → 422 |
 | POST | `/api/certificates/acme` | operator | Order a Let's Encrypt certificate (HTTP-01 or DNS-01) |
 | POST | `/api/certificates/{id}/renew` | operator | Renew now |
 | DELETE | `/api/certificates/{id}` | operator | Delete |

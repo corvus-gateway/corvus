@@ -605,6 +605,63 @@ func (s *Server) uploadCertificate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 201, c)
 }
 
+// replaceCertificate swaps the certificate and key of an uploaded certificate in place
+// (validated like an upload). It keeps its ID, so every host using it is redeployed
+// with the new pair; if the deployment fails the previous files are put back.
+func (s *Server) replaceCertificate(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		Name        string `json:"name"`
+		Certificate string `json:"certificate"`
+		PrivateKey  string `json:"private_key"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	before, err := s.Store.CertificateByID(r.Context(), id)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if before.Kind != "custom" {
+		fail(w, validate.Errors{{Field: "certificate", Code: "not_custom", Message: "only uploaded certificates can be replaced; ACME certificates are renewed by Corvus"}})
+		return
+	}
+	info, err := certs.Parse([]byte(in.Certificate), []byte(in.PrivateKey))
+	if err != nil {
+		fail(w, validate.Errors{{Field: "certificate", Code: "invalid", Message: err.Error()}})
+		return
+	}
+	name := strings.TrimSpace(in.Name)
+	if name == "" {
+		name = before.Name
+	}
+	dir := filepath.FromSlash(s.Paths.CertDir(id))
+	oldCert, errC := os.ReadFile(filepath.Join(dir, "fullchain.pem"))
+	oldKey, errK := os.ReadFile(filepath.Join(dir, "privkey.pem"))
+	v, err := s.Deployer.Apply(r.Context(), userID(r), fmt.Sprintf("replace certificate #%d", id), func(tx *store.Store) error {
+		if err := tx.ReplaceCustomCertificate(r.Context(), id, name, info.Domains, info.NotAfter); err != nil {
+			return err
+		}
+		return certs.Write(dir, []byte(in.Certificate), []byte(in.PrivateKey))
+	})
+	if err != nil {
+		if errC == nil && errK == nil {
+			_ = certs.Write(dir, oldCert, oldKey)
+		}
+		fail(w, err)
+		return
+	}
+	after := *before
+	after.Name, after.Domains, after.NotAfter, after.Status, after.LastError = name, info.Domains, info.NotAfter, "valid", ""
+	s.audit(r, "certificate.replace", fmt.Sprintf("certificate:%d", id), map[string]any{
+		"name": name, "domains_before": before.Domains, "domains": info.Domains, "not_after_before": before.NotAfter, "not_after": info.NotAfter})
+	writeJSON(w, 200, map[string]any{"certificate": after, "version": v})
+}
+
 func (s *Server) deleteCertificate(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {

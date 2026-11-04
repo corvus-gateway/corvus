@@ -116,6 +116,7 @@ func (s *Server) Handler() http.Handler {
 
 	priv("GET /api/certificates", s.listCertificates)
 	op("POST /api/certificates", s.uploadCertificate)
+	op("PUT /api/certificates/{id}", s.replaceCertificate)
 	op("DELETE /api/certificates/{id}", s.deleteCertificate)
 
 	priv("GET /api/deployments", s.listDeployments)
