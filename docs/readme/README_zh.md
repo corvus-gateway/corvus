@@ -43,16 +43,21 @@ Corvus 不是 Nginx Proxy Manager 的分支。它是全新的实现（OpenResty 
 
 **代理与 TLS**
 - 代理主机支持通配符、WebSocket、HTTP/2、强制 HTTPS 以及自定义 Nginx 片段
+- 重定向主机：将域名跳转到另一个域名（301/302/303/307/308，可选保留路径），同样享有 TLS 与防护
 - 免费的 Let's Encrypt 证书（HTTP-01，或DNS-01：Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap），自动续期，也可上传自有证书
 - 在 Cloudflare 或受信任代理之后获取真实客户端 IP；可按主机启用密码保护
+- 按主机设置安全响应头预设（基础 / 严格：nosniff、frame 与 referrer 策略、仅报告的 CSP、HttpOnly/SameSite/Secure Cookie 标志），绝不覆盖应用自身已发送的响应头
 - 每次变更都会通过 `openresty -t` 验证，原子化应用，并且可以回滚
 
 **Corvus Sentinel — 安全引擎**
-- 安全规则：匹配 IP、IP 列表、国家/地区、路径、查询参数、方法或请求头 → 拦截、放行或仅记录，可全局生效或按主机生效
+- 安全规则：匹配 IP、IP 列表、国家/地区、路径、查询参数、方法、请求头或 User-Agent 列表 → 拦截、放行、仅记录或质询，可全局生效或按主机生效
+- 从 URL 保持更新的 IP 列表和 User-Agent 列表（例如 Tor 出口节点、恶意爬虫列表；内置预设），在后台刷新，仅在内容变化时重新部署
+- 无需第三方服务的浏览器质询：JavaScript 工作量证明（难度可调）或轻量级 Cookie 检查，并签发经签名、与 IP 绑定的通行 Cookie
+- 按主机的“遭受攻击模式”：对所有访客发起质询——可手动开启，也可在每秒请求数或被拦截请求的比例超过阈值期间自动开启（开启和关闭时发送告警）
 - 对 JSON、表单和 multipart 请求体进行检测（记录或拦截）
 - 针对近期 CVE（React2Shell、wp2shell、PHP-CGI、Vite、n8n 等）的一键**虚拟补丁**
 - 托管特征库更新，仅接受已签名且版本更新的内容（防篡改、防降级）
-- 对屡次攻击的 IP 自动封禁，支持逐级升级与豁免
+- 对屡次攻击的 IP 自动封禁，支持逐级升级与豁免；可选对不良行为立即封禁（同一 IP 在同一站点产生过多 4xx 响应）
 - 带演练（dry-run）模式的速率限制；开箱即用的漏洞利用路径拦截
 
 **访问排队**
@@ -151,6 +156,39 @@ docker compose up -d
 **请备份 `secrets/`**——其中保存着用于加密数据库中 MFA 密钥和 DNS 令牌的密钥。容器以非特权用户
 `10001` 运行，并在首次启动时接管 `./data` 的所有权。
 
+**从控制台备份：** *数据保留 → 备份与恢复 → 下载备份*（仅限管理员，且须为已登录的会话——API 令牌无法
+下载备份）会生成 `corvus-backup-<version>-<timestamp>.tar.gz`，其中包含：
+
+- `corvus.db`——SQLite 设置数据库的一致性快照（在 Corvus 运行期间通过 `VACUUM INTO` 生成），
+- `secrets/`、`certs/` 和 `rules/`（已安装的托管规则包），
+- `manifest.json`——格式版本、Corvus 版本、创建时间、数据库引擎以及每个文件的 SHA-256。
+
+生成的配置版本（`nginx/`）、流量历史和请求日志（`history/`）、国家/地区数据库（`geoip/`）以及 `run/`
+不包含在内：它们会重新生成或重新下载。使用 PostgreSQL（`CORVUS_DB_URL`）时，归档中不含数据库，只有一个
+`README.txt`——请使用 `pg_dump` 备份数据库，并将转储文件与归档放在一起保存（其中的加密字段需要
+`secrets/data_key`）。**归档中包含私钥和数据密钥：请加密存储。** 每次下载都会记录在审计日志中。
+
+**从控制台恢复：** *从备份恢复* 用于上传归档（最大 200 MB）。系统会对其进行检查——格式版本、每个文件的
+SHA-256、不得包含绝对路径、`..`、链接或未知条目、数据库引擎须一致——并显示摘要（版本、日期、文件数和
+证书数）。*下次重启时恢复* 会将其暂存到 `./data/restore-pending/`；在重启容器之前不会有任何变化：
+
+```bash
+docker compose restart
+```
+
+启动时，在打开数据库之前，Corvus 会将当前的 `corvus.db`、`secrets/`、`certs/`、`rules/` 和 `nginx/` 移动到
+`./data/restore-backup-<timestamp>/`，并用备份替换它们（随后根据恢复的数据库重新生成配置）。如需回滚，
+请停止容器并将这些文件移回原处。如果暂存的文件未通过检查，则不会执行恢复，当前状态保持不变，暂存的文件
+会被移动到 `./data/restore-failed-<timestamp>/`（参见 `docker compose logs`）。恢复不会影响流量历史。
+
+**手动恢复：** 归档的目录结构与数据目录结构相同。在首次启动之前，将其解压到空的 `./data` 中（多出的
+`manifest.json` 无害）：
+
+```bash
+mkdir data && tar -xzf corvus-backup-….tar.gz -C data
+docker compose up -d
+```
+
 ### 加固安装
 
 [`deploy/docker-compose.hardened.yml`](../../deploy/docker-compose.hardened.yml) 使用相同的镜像运行，但根文件系统为只读，
@@ -176,6 +214,9 @@ docker compose -f docker-compose.hardened.yml up -d
 | `CORVUS_REDIS_PORT` | 内置访问队列存储在 127.0.0.1 上的端口（默认 `6379`）；使用 `network_mode: host` 且主机已占用 6379 时请修改 |
 | `CORVUS_RESOLVER` | 用于解析转发目标主机的 DNS 服务器。默认：Docker 的 DNS；使用主机网络时为 `/etc/resolv.conf` 中的第一个 `nameserver` |
 | `CORVUS_LOOPBACK=container` | 让 `127.0.0.1`/`localhost` 转发目标指向容器自身，而不是 Docker 主机 |
+| `PUID` / `PGID` | 运行容器并拥有 `./data` 的用户和组（默认 `10001`），例如你的 NAS 用户 |
+| `CORVUS_ACME_DIRECTORY` | 使用其他 CA 代替 Let's Encrypt 时的 ACME 目录 URL，例如私有 step-ca `https://ca.internal/acme/acme/directory` |
+| `LEGO_CA_CERTIFICATES` | ACME 客户端应信任的私有 CA 的 PEM 文件（需挂载到容器中），例如 `/data/ca.pem` |
 
 ### 转发目标主机
 
@@ -194,11 +235,11 @@ docker compose -f docker-compose.hardened.yml up -d
 
 ### 从 Nginx Proxy Manager 迁移
 
-控制台中的 *从 NPM 导入* 会从现有的 NPM 安装中复制 **代理主机、证书**（Let's Encrypt 证书和自定义证书，
-包括 Cloudflare DNS 令牌）以及 **访问列表**（用户和 IP 规则）。它只读取 NPM 的文件和数据库，不会修改 NPM
+控制台中的 *从 NPM 导入* 会从现有的 NPM 安装中复制 **代理主机、重定向主机、证书**（Let's Encrypt 证书和
+自定义证书，包括 Cloudflare DNS 令牌）以及 **访问列表**（用户和 IP 规则）。它只读取 NPM 的文件和数据库，不会修改 NPM
 本身，因此随时可以切换回去。
 
-不会导入的内容：流（TCP/UDP）、重定向主机、404 主机、自定义位置，以及使用 NPM 专有变量的高级配置。
+不会导入的内容：流（TCP/UDP）、404 主机、自定义位置，以及使用 NPM 专有变量的高级配置。
 所有被跳过的项目都会在预览中列出。
 
 **先确认你的 NPM 使用哪种数据库。** 打开 NPM 的 `docker-compose.yml`：
@@ -270,6 +311,26 @@ cd /path/to/npm && docker compose down         # 同时停止 NPM 的数据库
 - 证书会继续在 Corvus 中续期。使用了不受支持的 DNS 提供商的主机会在没有自动续期的情况下导入，预览中
   会对此发出警告。
 - **切换回去：** 在 Corvus 中执行 `docker compose down`，然后在 NPM 中执行 `docker compose up -d`。
+
+## 性能
+
+使用 [基准测试工作流](../benchmark.md) 在 GitHub 托管的 `ubuntu-24.04` 运行器（4 vCPU AMD EPYC 9V74）上测得：
+Corvus 绑定到 **2 vCPU**，wrk 和后端运行在另外两个 vCPU 上，64 个 keep-alive 连接，请求 `GET /`，响应为 3 字节。
+
+| 场景 | req/s | p50 | p99 | 内存 |
+|---|---:|---:|---:|---:|
+| nginx 1.28 反向代理（基线） | 81,960 | 0.75 ms | 1.43 ms | 16 MB |
+| Corvus，默认主机 | 13,669 | 4.55 ms | 17.47 ms | 69 MB |
+| Corvus，30 条规则 + 1,000 个 CIDR 的列表 + 漏洞利用拦截 + 响应头 + 速率限制 | 11,919 | 5.32 ms | 7.83 ms | 80 MB |
+| Corvus，HTTPS（ECDSA P-256），keep-alive | 12,516 | 5.07 ms | 7.69 ms | 83 MB |
+| Corvus，HTTPS，每个请求都进行新的 TLS 握手 | 2,979 handshakes/s | 5.44 ms | 19.35 ms | 91 MB |
+| Corvus，访问排队（已放行的访客） | 12,874 | 4.94 ms | 7.93 ms | 83 MB |
+| Corvus，质询规则（持有通行 Cookie 的访客） | 12,733 | 4.97 ms | 7.46 ms | 86 MB |
+
+在基础请求路径之上，防护功能的开销很小（完整规则集约为 13 %）；与原生 nginx 的差距主要来自每个请求的
+Lua 处理、访问日志采集以及每个请求单独建立的上游连接。**注意：** 测试使用的是共享 CI 运行器，负载生成器
+与被测服务在同一台机器上，且响应极小——这些数字偏保守，用于比较不同场景和版本，而非容量保证。内存包括
+控制平面和内置的 Valkey。
 
 ## 开发
 

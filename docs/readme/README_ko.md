@@ -52,16 +52,21 @@ Corvus는 Nginx Proxy Manager의 포크가 아닙니다. 기존 NPM 설정을 **
 
 **프록시 및 TLS**
 - 와일드카드, WebSocket, HTTP/2, HTTPS 강제 전환, 사용자 정의 Nginx 스니펫을 지원하는 프록시 호스트
+- 리디렉션 호스트: 도메인을 다른 도메인으로 보냅니다(301/302/303/307/308, 경로 유지 선택). TLS와 보호 기능도 똑같이 적용됩니다
 - 자동 갱신되는 무료 Let's Encrypt 인증서(HTTP-01, 또는 DNS-01: Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) 또는 직접 업로드한 인증서
 - Cloudflare 또는 신뢰할 수 있는 프록시 뒤에서도 실제 클라이언트 IP 확인, 호스트별 비밀번호 보호(선택)
+- 호스트별 보안 헤더 프리셋(기본 / 엄격: nosniff, 프레임 및 리퍼러 정책, 보고 전용 CSP, HttpOnly/SameSite/Secure 쿠키 플래그). 애플리케이션이 이미 보내는 헤더는 덮어쓰지 않습니다
 - 모든 변경은 `openresty -t`로 검증하고, 원자적으로 적용하며, 롤백할 수 있습니다
 
 **Corvus Sentinel — 보안 엔진**
-- 보안 규칙: IP, IP 목록, 국가, 경로, 쿼리, 메서드, 헤더를 매칭하여 차단·허용·기록, 전역 또는 호스트별 적용
+- 보안 규칙: IP, IP 목록, 국가, 경로, 쿼리, 메서드, 헤더, User-Agent 목록을 매칭하여 차단·허용·기록·챌린지, 전역 또는 호스트별 적용
+- URL에서 최신 상태로 유지되는 IP 및 User-Agent 목록(예: Tor 출구 노드, 악성 봇 목록, 프리셋 포함). 백그라운드에서 갱신되며 내용이 바뀔 때만 다시 배포합니다
+- 외부 서비스 없이 동작하는 브라우저 챌린지: JavaScript 작업 증명(난이도 조절 가능) 또는 가벼운 쿠키 확인, 서명되고 IP에 묶인 통과 쿠키 발급
+- 호스트별 "공격 대응 모드": 모든 방문자에게 챌린지를 요구합니다. 직접 켜거나, 초당 요청 수 또는 차단된 요청 비율이 기준을 넘는 동안 자동으로 켜집니다(켜지고 꺼질 때 알림)
 - JSON, 폼, multipart 요청 본문 검사(기록 또는 차단)
 - 최신 CVE(React2Shell, wp2shell, PHP-CGI, Vite, n8n …)에 대한 원클릭 **가상 패치**
 - 서명되어 있고 더 최신인 경우에만 적용하는 관리형 시그니처 업데이트(변조 및 다운그레이드 방지)
-- 반복 위반자에 대한 자동 IP 차단(단계적 가중 및 예외 지정 지원)
+- 반복 위반자에 대한 자동 IP 차단(단계적 가중 및 예외 지정 지원), 이상 행동 시 즉시 차단(선택: IP·사이트별 4xx 응답이 너무 많은 경우)
 - 드라이런 모드를 갖춘 속도 제한, 기본으로 제공되는 익스플로잇 경로 차단
 
 **접속 대기열(Access Queue)**
@@ -163,6 +168,46 @@ docker compose up -d
 MFA 시크릿과 DNS 토큰을 암호화하는 키가 이곳에 있습니다. 컨테이너는 권한 없는 사용자
 `10001`로 실행되며, 처음 시작할 때 `./data`의 소유권을 가져옵니다.
 
+**콘솔에서 백업:** *데이터 보관 → 백업 및 복원 → 백업 다운로드*(관리자, 로그인한 세션 전용 — API
+토큰으로는 백업을 내려받을 수 없습니다)를 누르면 다음 내용이 담긴
+`corvus-backup-<version>-<timestamp>.tar.gz`가 만들어집니다.
+
+- `corvus.db` — SQLite 설정 데이터베이스의 일관된 스냅샷(Corvus가 실행되는 동안 `VACUUM INTO`로
+  생성),
+- `secrets/`, `certs/`, `rules/`(설치된 관리형 규칙 번들),
+- `manifest.json` — 형식 버전, Corvus 버전, 생성 시각, 데이터베이스 엔진, 모든 파일의 SHA-256.
+
+생성된 설정 버전(`nginx/`), 트래픽 이력과 요청 로그(`history/`), 국가 데이터베이스(`geoip/`),
+`run/`은 포함되지 않습니다. 다시 생성되거나 다시 내려받기 때문입니다. PostgreSQL(`CORVUS_DB_URL`)을
+쓰는 경우 아카이브에는 데이터베이스 없이 `README.txt`만 들어 있습니다. 데이터베이스는 `pg_dump`로
+백업하고 덤프를 아카이브와 함께 보관하세요(암호화된 필드를 풀려면 `secrets/data_key`가 필요합니다).
+**아카이브에는 개인 키와 데이터 키가 들어 있으므로 암호화해서 보관하세요.** 모든 다운로드는 감사
+로그에 기록됩니다.
+
+**콘솔에서 복원:** *백업에서 복원*으로 아카이브(최대 200 MB)를 업로드합니다. 형식 버전, 모든 파일의
+SHA-256, 절대 경로·`..`·링크·알 수 없는 항목이 없는지, 데이터베이스 엔진이 같은지를 검사한 뒤 요약
+(버전, 날짜, 파일 수와 인증서 수)을 보여 줍니다. *다음 재시작 때 복원*을 누르면 아카이브가
+`./data/restore-pending/`에 준비되며, 컨테이너를 재시작하기 전까지는 아무것도 바뀌지 않습니다.
+
+```bash
+docker compose restart
+```
+
+시작할 때 데이터베이스를 열기 전에 Corvus는 현재의 `corvus.db`, `secrets/`, `certs/`, `rules/`,
+`nginx/`를 `./data/restore-backup-<timestamp>/`로 옮기고 그 자리에 백업을 넣습니다(그다음 복원된
+데이터베이스로 설정을 다시 생성합니다). 되돌리려면 컨테이너를 중지하고 이 파일들을 원래 위치로
+옮기세요. 준비된 파일이 검사를 통과하지 못하면 복원은 적용되지 않고 현재 상태가 유지되며, 준비된
+파일은 `./data/restore-failed-<timestamp>/`로 옮겨집니다(`docker compose logs` 참고). 트래픽 이력은
+복원의 영향을 받지 않습니다.
+
+**수동 복원:** 아카이브 구조는 데이터 디렉터리 구조와 같습니다. 처음 시작하기 전에 빈 `./data`에
+압축을 풀면 됩니다(추가로 들어 있는 `manifest.json`은 무해합니다).
+
+```bash
+mkdir data && tar -xzf corvus-backup-….tar.gz -C data
+docker compose up -d
+```
+
 ### 강화된 설치
 
 [`deploy/docker-compose.hardened.yml`](../../deploy/docker-compose.hardened.yml)은 같은 이미지를 읽기 전용 루트
@@ -189,6 +234,9 @@ docker compose -f docker-compose.hardened.yml up -d
 | `CORVUS_REDIS_PORT` | 127.0.0.1에서 동작하는 내장 접속 대기열 저장소의 포트(기본값 `6379`). `network_mode: host`에서 호스트가 이미 6379를 쓰고 있다면 변경 |
 | `CORVUS_RESOLVER` | 포워드 호스트 이름 확인에 쓸 DNS 서버. 기본값: Docker DNS, 호스트 네트워킹에서는 `/etc/resolv.conf`의 첫 번째 `nameserver` |
 | `CORVUS_LOOPBACK=container` | `127.0.0.1`/`localhost` 포워드 호스트가 Docker 호스트 대신 컨테이너 자신을 가리키도록 설정 |
+| `PUID` / `PGID` | 컨테이너를 실행하고 `./data`를 소유할 사용자와 그룹(기본값 `10001`). 예: NAS 사용자 |
+| `CORVUS_ACME_DIRECTORY` | Let's Encrypt 대신 사용할 다른 CA의 ACME 디렉터리 URL. 예: 사설 step-ca `https://ca.internal/acme/acme/directory` |
+| `LEGO_CA_CERTIFICATES` | ACME 클라이언트가 신뢰할 사설 CA의 PEM 파일(컨테이너에 마운트). 예: `/data/ca.pem` |
 
 ### 포워드 호스트
 
@@ -208,11 +256,11 @@ docker compose -f docker-compose.hardened.yml up -d
 
 ### Nginx Proxy Manager에서 마이그레이션
 
-콘솔의 *NPM 가져오기*는 기존 NPM 설치에서 **프록시 호스트, 인증서**(Cloudflare DNS 토큰을 포함한
-Let's Encrypt 인증서와 사용자 지정 인증서), **접근 목록**(사용자와 IP 규칙)을 복사합니다. NPM의 파일과
-데이터베이스를 읽기만 하고 NPM 자체는 변경하지 않으므로 언제든 되돌아갈 수 있습니다.
+콘솔의 *NPM 가져오기*는 기존 NPM 설치에서 **프록시 호스트, 리디렉션 호스트, 인증서**(Cloudflare DNS
+토큰을 포함한 Let's Encrypt 인증서와 사용자 지정 인증서), **접근 목록**(사용자와 IP 규칙)을 복사합니다.
+NPM의 파일과 데이터베이스를 읽기만 하고 NPM 자체는 변경하지 않으므로 언제든 되돌아갈 수 있습니다.
 
-가져오지 않는 항목: 스트림(TCP/UDP), 리디렉션 호스트, 404 호스트, 사용자 지정 위치, NPM 전용 변수를
+가져오지 않는 항목: 스트림(TCP/UDP), 404 호스트, 사용자 지정 위치, NPM 전용 변수를
 사용하는 고급 설정. 건너뛰는 항목은 모두 미리보기에 표시됩니다.
 
 **NPM이 어떤 데이터베이스를 쓰는지 확인하세요.** NPM의 `docker-compose.yml`을 열어 봅니다.
@@ -288,6 +336,28 @@ cd /path/to/npm && docker compose down         # NPM 데이터베이스도 중�
 - 인증서는 Corvus에서 계속 갱신됩니다. 지원하지 않는 DNS 공급자를 쓰던 호스트는 자동 갱신 없이
   가져오며, 미리보기에서 경고가 표시됩니다.
 - **되돌리기:** Corvus에서 `docker compose down`, 그다음 NPM에서 `docker compose up -d`.
+
+## 성능
+
+GitHub 호스팅 `ubuntu-24.04` 러너(4 vCPU AMD EPYC 9V74)에서 [벤치마크 워크플로](../benchmark.md)로
+측정했습니다. Corvus는 **2 vCPU**에 고정하고 wrk와 백엔드는 나머지 두 개에서 실행했으며, keep-alive
+연결 64개로 3바이트 응답을 돌려주는 `GET /`를 요청했습니다.
+
+| 시나리오 | req/s | p50 | p99 | 메모리 |
+|---|---:|---:|---:|---:|
+| nginx 1.28 리버스 프록시(기준) | 81,960 | 0.75 ms | 1.43 ms | 16 MB |
+| Corvus, 기본 호스트 | 13,669 | 4.55 ms | 17.47 ms | 69 MB |
+| Corvus, 규칙 30개 + CIDR 1,000개 목록 + 익스플로잇 차단 + 헤더 + 속도 제한 | 11,919 | 5.32 ms | 7.83 ms | 80 MB |
+| Corvus, HTTPS(ECDSA P-256), keep-alive | 12,516 | 5.07 ms | 7.69 ms | 83 MB |
+| Corvus, HTTPS, 요청마다 새 TLS 핸드셰이크 | 2,979 handshakes/s | 5.44 ms | 19.35 ms | 91 MB |
+| Corvus, 접속 대기열(입장한 방문자) | 12,874 | 4.94 ms | 7.93 ms | 83 MB |
+| Corvus, 챌린지 규칙(통과 쿠키가 있는 방문자) | 12,733 | 4.97 ms | 7.46 ms | 86 MB |
+
+보호 기능은 기본 요청 경로에 비해 부담이 크지 않습니다(전체 규칙 세트에서 약 13 %). 일반 nginx와의
+차이는 대부분 요청마다 실행되는 Lua, 접근 로그 수집, 요청마다 새로 맺는 업스트림 연결에서 옵니다.
+**주의:** 부하 생성기가 같은 머신에서 돌아가는 공유 CI 러너이고 응답도 아주 작습니다. 수치는
+보수적이며 시나리오와 버전을 비교하기 위한 것이지 처리 용량을 보장하는 값이 아닙니다. 메모리에는
+컨트롤 플레인과 내장 Valkey가 포함됩니다.
 
 ## 개발
 

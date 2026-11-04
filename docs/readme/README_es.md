@@ -53,16 +53,21 @@ OpenResty, plano de control en Go, consola en React) que puede **importar una co
 
 **Proxy y TLS**
 - Hosts proxy con comodines, WebSocket, HTTP/2, HTTPS forzado y fragmentos de Nginx personalizados
+- Hosts de redirección: envíe dominios a otro dominio (301/302/303/307/308, conservando opcionalmente la ruta), con el mismo TLS y la misma protección
 - Certificados gratuitos de Let's Encrypt (HTTP-01 o DNS-01 mediante Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) con renovación automática, o suba los suyos
 - IP real del cliente detrás de Cloudflare o de proxies de confianza; protección opcional con contraseña por host
+- Ajustes predefinidos de cabeceras de seguridad por host (Básico / Estricto: nosniff, políticas de frame y de referrer, CSP en modo solo informe, atributos de cookie HttpOnly/SameSite/Secure), sin sobrescribir nunca lo que la aplicación ya envía
 - Cada cambio se valida con `openresty -t`, se aplica de forma atómica y se puede revertir
 
 **Corvus Sentinel — motor de seguridad**
-- Reglas de seguridad: coincidencia por IP, lista de IP, país, ruta, query, método o cabecera → bloquear, permitir o registrar, de forma global o por host
+- Reglas de seguridad: coincidencia por IP, lista de IP, país, ruta, query, método, cabecera o lista de User-Agent → bloquear, permitir, registrar o desafiar, de forma global o por host
+- Listas de IP y de User-Agent mantenidas al día desde una URL (p. ej. nodos de salida de Tor, listas de bots maliciosos; ajustes predefinidos incluidos), actualizadas en segundo plano y redesplegadas solo cuando cambian
+- Desafío del navegador sin servicios de terceros: una prueba de trabajo en JavaScript (dificultad ajustable) o una comprobación ligera por cookie, con una cookie de paso firmada y vinculada a la IP
+- Modo «bajo ataque» por host: desafía a todos los visitantes; se activa a mano o automáticamente mientras las solicitudes por segundo o la proporción de solicitudes bloqueadas superan un umbral (con alertas al activarse y desactivarse)
 - Inspección del cuerpo de las solicitudes JSON, de formulario y multipart (registrar o bloquear)
 - **Parches virtuales** con un clic para CVE recientes (React2Shell, wp2shell, PHP-CGI, Vite, n8n …)
 - Actualizaciones de firmas gestionadas, aceptadas solo si están firmadas y son más recientes (sin manipulación ni degradación)
-- Bloqueo automático de IP reincidentes, con escalado y exenciones
+- Bloqueo automático de IP reincidentes, con escalado y exenciones; bloqueo inmediato opcional por mal comportamiento (demasiadas respuestas 4xx por IP y sitio)
 - Límites de tasa con modo de simulación (dry-run); bloqueo de rutas de exploits listo para usar
 
 **Cola de acceso**
@@ -164,6 +169,48 @@ los certificados, el historial de tráfico y `secrets/`. **Haga copia de segurid
 claves que cifran los secretos MFA y los tokens DNS de la base de datos. El contenedor se ejecuta como el
 usuario sin privilegios `10001` y toma posesión de `./data` en el primer inicio.
 
+**Copia de seguridad desde la consola:** *Retención de datos → Copia de seguridad y restauración → Descargar
+copia* (administradores, solo con sesión iniciada; los tokens de API no pueden descargar copias) crea
+`corvus-backup-<version>-<timestamp>.tar.gz` con:
+
+- `corvus.db`: una instantánea coherente de la base de datos de ajustes SQLite (tomada con `VACUUM INTO`
+  mientras Corvus sigue en marcha),
+- `secrets/`, `certs/` y `rules/` (paquete de reglas gestionadas instalado),
+- `manifest.json`: versión del formato, versión de Corvus, fecha de creación, motor de base de datos y el
+  SHA-256 de cada archivo.
+
+Quedan fuera las versiones de configuración generadas (`nginx/`), el historial de tráfico y los registros de
+solicitudes (`history/`), la base de datos de países (`geoip/`) y `run/`: se regeneran o se vuelven a
+descargar. Con PostgreSQL (`CORVUS_DB_URL`) el archivo no contiene ninguna base de datos, solo un `README.txt`;
+haga la copia de la base de datos con `pg_dump` y guarde el volcado junto con el archivo (sus campos cifrados
+necesitan `secrets/data_key`). **El archivo contiene las claves privadas y la clave de datos: guárdelo
+cifrado.** Cada descarga queda registrada en el registro de auditoría.
+
+**Restauración desde la consola:** *Restaurar desde una copia* sube un archivo (200 MB como máximo). Se
+comprueba (versión del formato, SHA-256 de cada archivo, sin rutas absolutas, `..`, enlaces ni entradas
+desconocidas, mismo motor de base de datos) y se muestra su resumen (versión, fecha, número de archivos y de
+certificados). *Restaurar en el próximo reinicio* lo prepara en `./data/restore-pending/`; nada cambia hasta
+que reinicie el contenedor:
+
+```bash
+docker compose restart
+```
+
+Al iniciarse, antes de abrir la base de datos, Corvus mueve los `corvus.db`, `secrets/`, `certs/`, `rules/` y
+`nginx/` actuales a `./data/restore-backup-<timestamp>/` y coloca la copia en su lugar (después la configuración
+se vuelve a generar a partir de la base de datos restaurada). Para revertir, detenga el contenedor y devuelva
+esos archivos a su sitio. Si los archivos preparados no superan las comprobaciones, la restauración no se aplica,
+se conserva el estado actual y los archivos preparados se mueven a `./data/restore-failed-<timestamp>/`
+(consulte `docker compose logs`). Una restauración no toca el historial de tráfico.
+
+**Restauración manual:** la estructura del archivo es la del directorio de datos. Antes del primer inicio,
+extráigalo en un `./data` vacío (el `manifest.json` adicional no causa problemas):
+
+```bash
+mkdir data && tar -xzf corvus-backup-….tar.gz -C data
+docker compose up -d
+```
+
 ### Instalación reforzada
 
 [`deploy/docker-compose.hardened.yml`](../../deploy/docker-compose.hardened.yml) ejecuta la misma imagen con un sistema
@@ -190,6 +237,9 @@ Defina estas variables en `environment:` dentro de `docker-compose.yml`.
 | `CORVUS_REDIS_PORT` | Puerto del almacén integrado de la cola de acceso en 127.0.0.1 (por defecto `6379`); cámbielo con `network_mode: host` si el host ya usa el 6379 |
 | `CORVUS_RESOLVER` | Servidor DNS para los hosts de destino. Por defecto: el DNS de Docker, o el primer `nameserver` de `/etc/resolv.conf` con red de host |
 | `CORVUS_LOOPBACK=container` | Hacer que los hosts de destino `127.0.0.1`/`localhost` apunten al propio contenedor en lugar de al host de Docker |
+| `PUID` / `PGID` | Usuario y grupo con los que se ejecuta el contenedor y que son propietarios de `./data` (por defecto `10001`), p. ej. su usuario del NAS |
+| `CORVUS_ACME_DIRECTORY` | URL del directorio ACME de otra CA en lugar de Let's Encrypt, p. ej. un step-ca privado `https://ca.internal/acme/acme/directory` |
+| `LEGO_CA_CERTIFICATES` | Archivo(s) PEM de una CA privada en la que debe confiar el cliente ACME (móntelo en el contenedor), p. ej. `/data/ca.pem` |
 
 ### Hosts de destino
 
@@ -209,13 +259,13 @@ de NPM que usaba `network_mode: host`, ejecute Corvus con red de host: sustituya
 
 ### Migración desde Nginx Proxy Manager
 
-*Importar desde NPM* en la consola copia los **hosts proxy, certificados** (Let's Encrypt y
-personalizados, incluidos los tokens DNS de Cloudflare) y **listas de acceso** (usuarios y reglas IP) de
+*Importar desde NPM* en la consola copia los **hosts proxy, hosts de redirección, certificados**
+(Let's Encrypt y personalizados, incluidos los tokens DNS de Cloudflare) y **listas de acceso** (usuarios y reglas IP) de
 una instalación existente de NPM. Solo lee los archivos y la base de datos de NPM; NPM no se modifica, así
 que puede volver a él en cualquier momento.
 
-No se importan: streams (TCP/UDP), hosts de redirección, hosts 404, ubicaciones personalizadas ni la
-configuración avanzada que usa variables propias de NPM. La vista previa enumera todo lo que se omite.
+No se importan: streams (TCP/UDP), hosts 404, ubicaciones personalizadas ni la configuración avanzada
+que usa variables propias de NPM. La vista previa enumera todo lo que se omite.
 
 **Compruebe qué base de datos usa su NPM.** Abra el `docker-compose.yml` de NPM:
 
@@ -290,6 +340,29 @@ cd /path/to/npm && docker compose down         # detener también la base de dat
 - Los certificados se siguen renovando en Corvus. Los hosts que usaban un proveedor DNS no compatible se
   importan sin renovación automática; la vista previa avisa de ellos.
 - **Volver atrás:** `docker compose down` en Corvus y después `docker compose up -d` en NPM.
+
+## Rendimiento
+
+Medido con el [flujo de trabajo de benchmark](../benchmark.md) en un runner `ubuntu-24.04` alojado por GitHub
+(4 vCPU AMD EPYC 9V74): Corvus fijado a **2 vCPU**, wrk y el backend en las otras dos, 64 conexiones
+keep-alive, `GET /` con una respuesta de 3 bytes.
+
+| Escenario | req/s | p50 | p99 | Memoria |
+|---|---:|---:|---:|---:|
+| nginx 1.28 como proxy inverso (referencia) | 81,960 | 0.75 ms | 1.43 ms | 16 MB |
+| Corvus, host predeterminado | 13,669 | 4.55 ms | 17.47 ms | 69 MB |
+| Corvus, 30 reglas + lista de 1,000 CIDR + bloqueo de exploits + cabeceras + límite de tasa | 11,919 | 5.32 ms | 7.83 ms | 80 MB |
+| Corvus, HTTPS (ECDSA P-256), keep-alive | 12,516 | 5.07 ms | 7.69 ms | 83 MB |
+| Corvus, HTTPS, nuevo handshake TLS en cada solicitud | 2,979 handshakes/s | 5.44 ms | 19.35 ms | 91 MB |
+| Corvus, cola de acceso (visitantes admitidos) | 12,874 | 4.94 ms | 7.93 ms | 83 MB |
+| Corvus, regla de desafío (visitantes con pase) | 12,733 | 4.97 ms | 7.46 ms | 86 MB |
+
+Las funciones de protección cuestan poco sobre la ruta básica de la solicitud (alrededor de un 13 % con el
+conjunto completo de reglas); la mayor parte de la diferencia con nginx sin más se debe al Lua por solicitud,
+la ingesta de los registros de acceso y las conexiones upstream por solicitud. **Advertencia:** se trata de un
+runner de CI compartido, con el generador de carga en la misma máquina y respuestas diminutas; las cifras son
+conservadoras y sirven para comparar escenarios y versiones, no como garantía de capacidad. La memoria incluye
+el plano de control y el Valkey integrado.
 
 ## Desarrollo
 
