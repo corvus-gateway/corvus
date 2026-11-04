@@ -52,7 +52,7 @@ Corvus は Nginx Proxy Manager のフォークではありません。既存の 
 
 **プロキシと TLS**
 - ワイルドカード、WebSocket、HTTP/2、HTTPS 強制、カスタム Nginx スニペットに対応したプロキシホスト
-- 自動更新される無料の Let's Encrypt 証明書(HTTP-01、または Cloudflare 経由の DNS-01)、または独自証明書のアップロード
+- 自動更新される無料の Let's Encrypt 証明書(HTTP-01、または DNS-01: Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap)、または独自証明書のアップロード
 - Cloudflare や信頼できるプロキシの背後でも実際のクライアント IP を取得、ホストごとのパスワード保護(任意)
 - すべての変更は `openresty -t` で検証され、アトミックに適用され、ロールバックも可能
 

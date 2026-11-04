@@ -153,13 +153,13 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 				xc.ACME = store.ACMEInfo{Email: c.Email, Challenge: "http-01"}
 				if c.DNSProvider != "" {
 					xc.ACME.Challenge = "dns-01"
-					if c.DNSProvider == "cloudflare" && c.DNSToken != "" {
-						cred, _ := json.Marshal(map[string]string{"api_token": c.DNSToken})
+					if c.DNSCredentials != nil {
+						cred, _ := json.Marshal(c.DNSCredentials)
 						sealed, err := seal.Seal(s.DataKey, string(cred))
 						if err != nil {
 							return err
 						}
-						xc.ACME.DNSProvider, xc.ACME.Credentials = "cloudflare", sealed
+						xc.ACME.DNSProvider, xc.ACME.Credentials = c.DNSProvider, sealed
 					} else {
 						xc.AutoRenew = false
 					}

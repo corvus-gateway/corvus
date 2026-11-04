@@ -25,7 +25,6 @@ import (
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/go-acme/lego/v4/lego"
-	"github.com/go-acme/lego/v4/providers/dns/cloudflare"
 	"github.com/go-acme/lego/v4/registration"
 
 	"corvus/control/internal/certs"
@@ -35,9 +34,12 @@ import (
 
 // Credentials for DNS providers (stored sealed in the certificate's ACME info).
 type Credentials struct {
+	// Cloudflare (kept in named fields for compatibility with stored certificates)
 	APIToken string `json:"api_token,omitempty"`
 	Email    string `json:"email,omitempty"`   // legacy global API key auth
 	APIKey   string `json:"api_key,omitempty"` // legacy global API key auth
+	// Values holds the certbot keys of every other provider (see providers.go).
+	Values map[string]string `json:"values,omitempty"`
 }
 
 type Service struct {
@@ -264,15 +266,7 @@ func (s *Service) issue(ctx context.Context, id int64) error {
 		}
 		var cred Credentials
 		_ = json.Unmarshal([]byte(credJSON), &cred)
-		if c.ACME.DNSProvider != "cloudflare" || (cred.APIToken == "" && cred.APIKey == "") {
-			return fail(errors.New("DNS-01 requires Cloudflare credentials"))
-		}
-		cfg := cloudflare.NewDefaultConfig()
-		cfg.AuthToken = cred.APIToken
-		if cred.APIToken == "" {
-			cfg.AuthEmail, cfg.AuthKey = cred.Email, cred.APIKey
-		}
-		p, err := cloudflare.NewDNSProviderConfig(cfg)
+		p, err := dnsProvider(c.ACME.DNSProvider, cred)
 		if err != nil {
 			return fail(err)
 		}

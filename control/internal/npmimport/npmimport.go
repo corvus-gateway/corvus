@@ -18,6 +18,8 @@ import (
 	"strings"
 	"time"
 
+	"corvus/control/internal/acme"
+
 	"github.com/go-sql-driver/mysql"
 	_ "modernc.org/sqlite"
 )
@@ -61,17 +63,17 @@ type Host struct {
 }
 
 type Cert struct {
-	NPMID       int64    `json:"npm_id"`
-	Name        string   `json:"name"`
-	Provider    string   `json:"provider"` // letsencrypt | other
-	Domains     []string `json:"domains"`
-	DNSProvider string   `json:"dns_provider,omitempty"`
-	Email       string   `json:"email,omitempty"`
-	FilesFound  bool     `json:"files_found"`
-	Warnings    []string `json:"warnings,omitempty"`
-	CertPEM     []byte   `json:"-"`
-	KeyPEM      []byte   `json:"-"`
-	DNSToken    string   `json:"-"` // Cloudflare API token (sensitive)
+	NPMID          int64             `json:"npm_id"`
+	Name           string            `json:"name"`
+	Provider       string            `json:"provider"` // letsencrypt | other
+	Domains        []string          `json:"domains"`
+	DNSProvider    string            `json:"dns_provider,omitempty"`
+	Email          string            `json:"email,omitempty"`
+	FilesFound     bool              `json:"files_found"`
+	Warnings       []string          `json:"warnings,omitempty"`
+	CertPEM        []byte            `json:"-"`
+	KeyPEM         []byte            `json:"-"`
+	DNSCredentials *acme.Credentials `json:"-"` // parsed DNS-01 credentials (sensitive); nil = no automatic renewal
 }
 
 type ACLClient struct {
@@ -156,13 +158,12 @@ func Read(ctx context.Context, src Source) (*Snapshot, error) {
 		if c.Provider == "letsencrypt" {
 			if m.DNSChallenge {
 				c.DNSProvider = m.DNSProvider
-				if m.DNSProvider == "cloudflare" {
-					c.DNSToken = parseCloudflareToken(m.Credentials)
-					if c.DNSToken == "" {
-						c.Warnings = append(c.Warnings, "Cloudflare credentials use a global API key or are missing; renewal needs an API token")
-					}
-				} else {
+				if p, ok := acme.ProviderByID(m.DNSProvider); !ok {
 					c.Warnings = append(c.Warnings, fmt.Sprintf("DNS provider %q is not supported by Corvus yet; imported without automatic renewal", m.DNSProvider))
+				} else if cred, err := acme.ParseCredentials(p.ID, m.Credentials); err != nil {
+					c.Warnings = append(c.Warnings, fmt.Sprintf("%s credentials can't be used (%v); imported without automatic renewal", p.Name, err))
+				} else {
+					c.DNSCredentials = &cred
 				}
 			}
 			dir := filepath.Join(src.LetsEncryptDir, "live", fmt.Sprintf("npm-%d", c.NPMID))
@@ -320,15 +321,4 @@ func openMySQL(ctx context.Context, m *MySQL) (*sql.DB, error) {
 		return nil, fmt.Errorf("cannot connect to MySQL at %s: %v", cfg.Addr, err)
 	}
 	return db, nil
-}
-
-// parseCloudflareToken extracts dns_cloudflare_api_token from certbot credentials.
-func parseCloudflareToken(cred string) string {
-	for _, line := range strings.Split(cred, "\n") {
-		k, v, ok := strings.Cut(line, "=")
-		if ok && strings.TrimSpace(k) == "dns_cloudflare_api_token" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
 }

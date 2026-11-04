@@ -52,7 +52,7 @@ Go control plane, React console) that can **import an existing NPM setup**.
 
 **Proxy & TLS**
 - Proxy hosts with wildcards, WebSocket, HTTP/2, forced HTTPS and custom Nginx snippets
-- Free Let's Encrypt certificates (HTTP-01, or DNS-01 via Cloudflare) with automatic renewal, or upload your own
+- Free Let's Encrypt certificates (HTTP-01, or DNS-01 via Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) with automatic renewal, or upload your own
 - Real client IP behind Cloudflare or trusted proxies; optional password protection per host
 - Every change is validated with `openresty -t`, applied atomically and can be rolled back
 

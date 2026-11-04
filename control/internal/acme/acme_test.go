@@ -33,3 +33,49 @@ func TestDirectoryScope(t *testing.T) {
 		t.Fatal("sameCA")
 	}
 }
+
+func TestProviders(t *testing.T) {
+	creds := map[string]string{
+		"digitalocean": "dns_digitalocean_token = do-token",
+		"duckdns":      "dns_duckdns_token = duck-token",
+		"gandi":        "dns_gandi_token = pat",
+		"godaddy":      "dns_godaddy_key = k\ndns_godaddy_secret = s",
+		"hetzner":      "dns_hetzner_api_token = legacy", // NPM's certbot-dns-hetzner key
+		"namecheap":    "dns_namecheap_username = u\ndns_namecheap_api_key = k",
+	}
+	for _, p := range Providers {
+		if _, err := ParseCredentials(p.ID, p.Template); err == nil {
+			t.Errorf("%s: unchanged template accepted", p.ID)
+		}
+		if p.ID == "cloudflare" {
+			continue
+		}
+		text, ok := creds[p.ID]
+		if !ok {
+			t.Fatalf("%s: no test credentials", p.ID)
+		}
+		c, err := ParseCredentials(p.ID, "# comment\n"+text+"\nunrelated_key = x")
+		if err != nil {
+			t.Fatalf("%s: %v", p.ID, err)
+		}
+		if _, ok := c.Values["unrelated_key"]; ok {
+			t.Errorf("%s: unrelated key kept", p.ID)
+		}
+		if _, err := ParseCredentials(p.ID, "# empty"); err == nil {
+			t.Errorf("%s: missing credentials accepted", p.ID)
+		}
+		if p.ID == "namecheap" {
+			continue // building it looks up the public IP over the network
+		}
+		if _, err := dnsProvider(p.ID, c); err != nil {
+			t.Errorf("%s: build: %v", p.ID, err)
+		}
+	}
+	// stored Cloudflare credentials (named fields) still build
+	if _, err := dnsProvider("cloudflare", Credentials{APIToken: "t"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dnsProvider("route53", Credentials{}); err == nil {
+		t.Fatal("unknown provider accepted")
+	}
+}

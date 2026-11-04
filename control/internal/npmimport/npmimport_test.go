@@ -69,7 +69,7 @@ func TestRead(t *testing.T) {
 		t.Fatalf("host 2 should drop NPM-specific config and warn about locations: %+v", h2)
 	}
 	le := snap.Certificates[0]
-	if le.DNSToken != "cf-token-123" || le.Email != "ops@example.com" || !le.FilesFound {
+	if le.DNSCredentials == nil || le.DNSCredentials.APIToken != "cf-token-123" || le.Email != "ops@example.com" || !le.FilesFound {
 		t.Fatalf("LE cert: %+v", le)
 	}
 	a := snap.AccessLists[0]
