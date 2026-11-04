@@ -21,7 +21,8 @@ CREATE TABLE access_list_auth (id INTEGER PRIMARY KEY, access_list_id INTEGER, u
 CREATE TABLE proxy_host (id INTEGER PRIMARY KEY, domain_names TEXT, forward_scheme TEXT, forward_host TEXT, forward_port INTEGER,
   access_list_id INTEGER DEFAULT 0, certificate_id INTEGER DEFAULT 0, ssl_forced INTEGER, block_exploits INTEGER, allow_websocket_upgrade INTEGER,
   http2_support INTEGER, enabled INTEGER, advanced_config TEXT, locations TEXT, is_deleted INTEGER DEFAULT 0);
-CREATE TABLE stream (id INTEGER PRIMARY KEY, is_deleted INTEGER DEFAULT 0);
+CREATE TABLE stream (id INTEGER PRIMARY KEY, incoming_port INTEGER, forwarding_host TEXT, forwarding_port INTEGER, tcp_forwarding INTEGER,
+  udp_forwarding INTEGER, certificate_id INTEGER DEFAULT 0, enabled INTEGER, meta TEXT, is_deleted INTEGER DEFAULT 0);
 CREATE TABLE redirection_host (id INTEGER PRIMARY KEY, domain_names TEXT, forward_scheme TEXT DEFAULT 'auto', forward_domain_name TEXT,
   forward_http_code INTEGER DEFAULT 302, preserve_path INTEGER, certificate_id INTEGER DEFAULT 0, ssl_forced INTEGER, http2_support INTEGER,
   block_exploits INTEGER, enabled INTEGER, advanced_config TEXT, is_deleted INTEGER DEFAULT 0);
@@ -38,7 +39,10 @@ INSERT INTO access_list_auth VALUES (1, 1, 'alice', 'plain-secret');
 INSERT INTO proxy_host VALUES (1, '["shop.example.com"]', 'http', 'app', 8080, 1, 1, 1, 1, 1, 1, 1, 'client_max_body_size 20m;', '[]', 0);
 INSERT INTO proxy_host VALUES (2, '["b.example.com"]', 'http', 'b', 80, 0, 0, 0, 0, 0, 0, 1, 'proxy_pass $forward_scheme://$server:$port;', '[{"path":"/x"}]', 0);
 INSERT INTO proxy_host VALUES (3, '["deleted.example.com"]', 'http', 'c', 80, 0, 0, 0, 0, 0, 0, 1, '', '[]', 1);
-INSERT INTO stream VALUES (1, 0);
+INSERT INTO stream VALUES (1, 5432, ' db ', 5432, 1, 0, 2, 1, '{}', 0);
+INSERT INTO stream VALUES (2, 53, '10.0.0.53', 53, 1, 1, 0, 0, '{}', 0);
+INSERT INTO stream VALUES (3, 1194, 'vpn', 1194, 0, 1, 2, 1, '{}', 0);
+INSERT INTO stream VALUES (4, 25, 'mail', 25, 1, 0, 0, 1, '{}', 1);
 `
 
 func TestRead(t *testing.T) {
@@ -81,8 +85,22 @@ func TestRead(t *testing.T) {
 	if a.SatisfyAll || len(a.Clients) != 1 || a.Users[0].Password != "plain-secret" {
 		t.Fatalf("acl: %+v", a)
 	}
-	if len(snap.Warnings) != 1 {
-		t.Fatalf("expected stream warning, got %v", snap.Warnings)
+	if len(snap.Warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", snap.Warnings)
+	}
+	if len(snap.Streams) != 3 {
+		t.Fatalf("streams (soft-deleted must be filtered): %+v", snap.Streams)
+	}
+	s1, s2, s3 := snap.Streams[0], snap.Streams[1], snap.Streams[2]
+	if s1.NPMID != 1 || s1.IncomingPort != 5432 || s1.ForwardHost != "db" || s1.ForwardPort != 5432 || !s1.TCP || s1.UDP || s1.CertificateID != 2 || !s1.Enabled {
+		t.Fatalf("stream 1 mapping: %+v", s1)
+	}
+	if !s2.TCP || !s2.UDP || s2.Enabled || s2.CertificateID != 0 || s2.ForwardHost != "10.0.0.53" {
+		t.Fatalf("stream 2 mapping: %+v", s2)
+	}
+	// UDP only: the certificate cannot be used
+	if s3.TCP || !s3.UDP || s3.CertificateID != 0 || len(s3.Warnings) != 1 {
+		t.Fatalf("stream 3 mapping: %+v", s3)
 	}
 	if len(snap.Redirects) != 2 {
 		t.Fatalf("redirection hosts: %+v", snap.Redirects)
@@ -117,6 +135,9 @@ CREATE TABLE access_list (id INTEGER PRIMARY KEY, name TEXT, satisfy_any INTEGER
 CREATE TABLE redirection_host (id INTEGER PRIMARY KEY, domain_names TEXT, forward_domain_name TEXT, preserve_path INTEGER, certificate_id INTEGER DEFAULT 0,
   ssl_forced INTEGER, http2_support INTEGER, block_exploits INTEGER, enabled INTEGER, advanced_config TEXT, is_deleted INTEGER DEFAULT 0);
 INSERT INTO redirection_host VALUES (1, '["a.example.com"]', 'b.example.com', 1, 0, 0, 0, 1, 1, NULL, 0);
+CREATE TABLE stream (id INTEGER PRIMARY KEY, incoming_port INTEGER, forward_ip TEXT, forwarding_port INTEGER, tcp_forwarding INTEGER,
+  udp_forwarding INTEGER, enabled INTEGER, is_deleted INTEGER DEFAULT 0);
+INSERT INTO stream VALUES (1, 2222, '10.0.0.2', 22, 1, 0, 1, 0);
 `); err != nil {
 		t.Fatal(err)
 	}
@@ -127,6 +148,10 @@ INSERT INTO redirection_host VALUES (1, '["a.example.com"]', 'b.example.com', 1,
 	}
 	if len(snap.Redirects) != 1 || snap.Redirects[0].ForwardScheme != "auto" || snap.Redirects[0].HTTPCode != 302 || snap.Redirects[0].ForwardDomain != "b.example.com" {
 		t.Fatalf("legacy redirect: %+v", snap.Redirects)
+	}
+	// NPM before 2.9: forward_ip, no certificate_id.
+	if len(snap.Streams) != 1 || snap.Streams[0].ForwardHost != "10.0.0.2" || snap.Streams[0].IncomingPort != 2222 || snap.Streams[0].ForwardPort != 22 || !snap.Streams[0].TCP {
+		t.Fatalf("legacy stream: %+v", snap.Streams)
 	}
 }
 

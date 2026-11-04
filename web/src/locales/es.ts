@@ -3,6 +3,7 @@ import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
+import { streamsStrings } from "./streams.i18n";
 import { headersStrings } from "./headers.i18n";
 import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
@@ -306,6 +307,7 @@ export const es: Partial<Record<keyof typeof ko, string>> = {
   ...bansStrings.es,
   ...tokensStrings.es,
   ...redirectsStrings.es,
+  ...streamsStrings.es,
   ...headersStrings.es,
   ...listFeedsStrings.es,
   ...ssoStrings.es,
@@ -334,7 +336,7 @@ export const esRuleLabels: RuleLabels | undefined = {
 
 export const esAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "Host proxy", redirection_host: "Host de redirección", waitroom: "Cola de acceso", certificate: "Certificado", deploy: "Implementación", auth: "Autenticación", setup: "Configuración inicial",
+    proxy_host: "Host proxy", stream: "Stream", redirection_host: "Host de redirección", waitroom: "Cola de acceso", certificate: "Certificado", deploy: "Implementación", auth: "Autenticación", setup: "Configuración inicial",
     rate_limit: "Límite de tasa", access_list: "Autenticación Basic", security_rule: "Regla de seguridad", ip_list: "Lista de IP", geoip: "Base de datos de países", settings: "Configuración", network: "Red", import: "Importación", mfa: "MFA", user: "Cuenta",
   },
   verb: {

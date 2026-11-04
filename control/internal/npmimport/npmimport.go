@@ -115,9 +115,24 @@ type Redirect struct {
 	Warnings       []string `json:"warnings,omitempty"`
 }
 
+// Stream is an NPM stream (TCP/UDP port forwarding).
+type Stream struct {
+	NPMID         int64    `json:"npm_id"`
+	IncomingPort  int      `json:"incoming_port"`
+	ForwardHost   string   `json:"forward_host"`
+	ForwardPort   int      `json:"forward_port"`
+	TCP           bool     `json:"tcp_forwarding"`
+	UDP           bool     `json:"udp_forwarding"`
+	CertificateID int64    `json:"certificate_id,omitempty"` // NPM id (TLS termination)
+	Enabled       bool     `json:"enabled"`
+	Conflict      string   `json:"conflict,omitempty"`
+	Warnings      []string `json:"warnings,omitempty"`
+}
+
 type Snapshot struct {
 	ProxyHosts   []Host       `json:"proxy_hosts"`
 	Redirects    []Redirect   `json:"redirection_hosts"`
+	Streams      []Stream     `json:"streams"`
 	Certificates []Cert       `json:"certificates"`
 	AccessLists  []AccessList `json:"access_lists"`
 	Warnings     []string     `json:"warnings"`
@@ -282,12 +297,60 @@ func Read(ctx context.Context, src Source) (*Snapshot, error) {
 		return nil, err
 	}
 
-	var streams int
-	_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM stream WHERE is_deleted = 0`).Scan(&streams)
-	if streams > 0 {
-		snap.Warnings = append(snap.Warnings, fmt.Sprintf("%d stream(s) (TCP/UDP) are not supported yet and were skipped", streams))
+	if err := readStreams(ctx, db, snap); err != nil {
+		return nil, err
 	}
 	return snap, nil
+}
+
+// readStreams loads NPM's stream table. certificate_id (TLS streams) was added in NPM 2.11;
+// before 2.9 the forward host column was called forward_ip. No stream table: no streams.
+func readStreams(ctx context.Context, db *sql.DB, snap *Snapshot) error {
+	const cols = `id, incoming_port, forwarding_port, tcp_forwarding, udp_forwarding, enabled`
+	var rows *sql.Rows
+	var err error
+	withCert := true
+	for _, q := range []string{
+		`SELECT ` + cols + `, forwarding_host, certificate_id FROM stream WHERE is_deleted = 0 ORDER BY id`,
+		`SELECT ` + cols + `, forwarding_host FROM stream WHERE is_deleted = 0 ORDER BY id`,
+		`SELECT ` + cols + `, forward_ip FROM stream WHERE is_deleted = 0 ORDER BY id`,
+	} {
+		if rows, err = db.QueryContext(ctx, q); err == nil {
+			break
+		}
+		withCert = false
+	}
+	if err != nil {
+		var n int
+		if db.QueryRowContext(ctx, `SELECT COUNT(*) FROM stream WHERE is_deleted = 0`).Scan(&n) == nil && n > 0 {
+			snap.Warnings = append(snap.Warnings, fmt.Sprintf("streams could not be read and were skipped: %v", err))
+		}
+		return nil
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var st Stream
+		var tcp, udp, en int
+		var cert sql.NullInt64
+		dest := []any{&st.NPMID, &st.IncomingPort, &st.ForwardPort, &tcp, &udp, &en, &st.ForwardHost}
+		if withCert {
+			dest = append(dest, &cert)
+		}
+		if err := rows.Scan(dest...); err != nil {
+			return fmt.Errorf("read streams: %w", err)
+		}
+		st.TCP, st.UDP, st.Enabled = tcp == 1, udp == 1, en == 1
+		st.ForwardHost = strings.TrimSpace(st.ForwardHost)
+		if cert.Valid && cert.Int64 > 0 {
+			st.CertificateID = cert.Int64
+			if !st.TCP {
+				st.Warnings = append(st.Warnings, "TLS termination requires TCP; the certificate is not used")
+				st.CertificateID = 0
+			}
+		}
+		snap.Streams = append(snap.Streams, st)
+	}
+	return rows.Err()
 }
 
 // readRedirects loads NPM's redirection_host table. forward_scheme and forward_http_code

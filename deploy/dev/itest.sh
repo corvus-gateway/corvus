@@ -567,6 +567,22 @@ c -o /dev/null -X DELETE $A/api/proxy-hosts/$NH
 PORTS=$(for i in $(seq 1 20); do curl -s -H "Host: $H" "$G/pool-$i" | sed -n 's/^RemoteAddr: //p'; done | sort -u | wc -l)
 [ "$PORTS" -ge 1 ] && [ "$PORTS" -lt 20 ] && ok "upstream connections reused ($PORTS connections for 20 requests)" || bad "no upstream connection reuse ($PORTS connections for 20 requests)"
 
+echo "[streams]"
+# TCP port forwarding: container port 8090 (published by deploy/dev/docker-compose.yml) → demo:80.
+for id in $(c $A/api/streams | js "' '.join(str(s['id']) for s in d if s['incoming_port']==8090)"); do c -o /dev/null -X DELETE $A/api/streams/$id; done
+chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/streams -d '{"incoming_port":9443,"tcp_forwarding":true,"forward_host":"demo","forward_port":80}')" 422 "port used by Corvus (admin) rejected"
+SID=$(c -X POST $A/api/streams -d '{"incoming_port":8090,"tcp_forwarding":true,"forward_host":"demo","forward_port":80}' | js "d.get('stream',{}).get('id')")
+[ -n "$SID" ] && [ "$SID" != None ] && ok "TCP stream created" || bad "TCP stream not created"
+sleep 2
+SB=$(curl -s -m 5 --http1.0 "http://$H:8090/stream-check")
+echo "$SB" | grep -q '^Hostname:' && ok "TCP stream forwards to the demo backend" || bad "no whoami answer through the stream: $SB"
+echo "$SB" | grep -q 'GET /stream-check' && ok "stream passes the request through unchanged" || bad "request not passed through: $SB"
+chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/streams -d '{"incoming_port":8090,"tcp_forwarding":true,"forward_host":"demo","forward_port":80}')" 422 "second TCP stream on the same port rejected"
+c -o /dev/null -X PUT $A/api/streams/$SID -d '{"incoming_port":8090,"tcp_forwarding":true,"forward_host":"demo","forward_port":80,"enabled":false}'
+sleep 2
+chk "$(curl -s -m 5 -o /dev/null -w '%{http_code}' "http://$H:8090/")" 000 "disabled stream closes the port"
+c -o /dev/null -X DELETE $A/api/streams/$SID
+
 echo "[access queue]"
 WR=$(c -X POST $A/api/waitrooms -d '{"name":"itest-queue","capacity":1000,"max_new_per_ip":0}' | js "d['waitroom']['id']")
 chk "$(put_host ",\"waitroom_id\":$WR,\"waitroom_path\":\"/\"")" 200 "attach access queue"
@@ -594,7 +610,7 @@ P=$(c -X POST $A/api/import/npm/preview -d '{}')
 chk "$(echo "$P" | js "(len(d['proxy_hosts']),len(d['certificates']),len(d['access_lists']))")" "(3, 2, 1)" "preview hosts/certs/acls (soft-deleted excluded)"
 chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/import/npm/preview -d '{"path":"/data"}')" 422 "paths outside /import rejected"
 R=$(c -X POST $A/api/import/npm/apply -d '{}')
-chk "$(echo "$R" | js "sorted((k,v) for k,v in d['imported'].items() if k not in ('security_rules','redirection_hosts'))")" "[('access_lists', 1), ('certificates', 2), ('proxy_hosts', 3)]" "import applied"
+chk "$(echo "$R" | js "sorted((k,v) for k,v in d['imported'].items() if k not in ('security_rules','redirection_hosts','streams'))")" "[('access_lists', 1), ('certificates', 2), ('proxy_hosts', 3)]" "import applied"
 chk "$(code -H 'Host: npm-shop.corvus.test' "$G/")" 301 "imported host forces HTTPS"
 chk "$(curl -sk -o /dev/null -w '%{http_code}' --resolve npm-shop.corvus.test:8443:$H https://npm-shop.corvus.test:8443/)" 200 "imported certificate serves HTTPS"
 chk "$(code -H 'Host: npm-custom.corvus.test' -u alice:alice-secret-1 "$G/")" 200 "imported access list password works"
