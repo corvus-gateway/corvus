@@ -176,9 +176,30 @@ docker compose -f docker-compose.hardened.yml up -d
 
 ### 从 Nginx Proxy Manager 迁移
 
-将 NPM 的 `data` 和 `letsencrypt` 目录以只读方式挂载，并让 Corvus 指向它们：
+控制台中的 *从 NPM 导入* 会从现有的 NPM 安装中复制 **代理主机、证书**（Let's Encrypt 证书和自定义证书，
+包括 Cloudflare DNS 令牌）以及 **访问列表**（用户和 IP 规则）。它只读取 NPM 的文件和数据库，不会修改 NPM
+本身，因此随时可以切换回去。
+
+不会导入的内容：流（TCP/UDP）、重定向主机、404 主机、自定义位置，以及使用 NPM 专有变量的高级配置。
+所有被跳过的项目都会在预览中列出。
+
+**先确认你的 NPM 使用哪种数据库。** 打开 NPM 的 `docker-compose.yml`：
+
+- 没有 `DB_MYSQL_*` / `DB_POSTGRES_*` 变量，且存在 `data/database.sqlite` → **SQLite**（NPM 默认）
+- 有 `DB_MYSQL_HOST`、`DB_MYSQL_USER`、…，通常还有一个单独的 `db` 服务 → **MySQL / MariaDB**
+- `DB_POSTGRES_*` → 导入不支持 PostgreSQL，请在控制台中重新创建主机
+
+两种情况都需要将 NPM 的 `data` 和 `letsencrypt` 目录以只读方式挂载到 Corvus 中（证书文件位于其中）：
 
 ```yml
+services:
+  corvus:
+    image: 'ghcr.io/corvus-gateway/gateway:latest'
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '9443:9443'
     environment:
       CORVUS_IMPORT_DIR: /import
     volumes:
@@ -187,8 +208,50 @@ docker compose -f docker-compose.hardened.yml up -d
       - /path/to/npm/letsencrypt:/import/npm/letsencrypt:ro
 ```
 
-然后在控制台中打开 *从 NPM 导入*。主机、证书和访问列表都会被迁移过来。之后请停止 NPM，以免两者争用
-80/443 端口和证书续期。
+请使用 NPM 的 `./data` 和 `./letsencrypt` 卷在宿主机上的路径。NPM 和 Corvus 都需要 80/443 端口，
+因此不能同时运行。
+
+#### 使用 SQLite 的 NPM（默认）
+
+```bash
+cd /path/to/npm && docker compose down        # 停止 NPM（释放 80/443）
+cd /path/to/corvus && docker compose up -d     # 使用上述挂载启动 Corvus
+```
+
+在控制台中打开 *从 NPM 导入*，保持 **SQLite**，点击 *预览*，选择要导入的内容后点击 *导入所选项*。
+如果预览报告 `permission denied`，请让 Corvus（以 uid 10001 运行）能够读取这些文件：`sudo chmod o+rx /path/to/npm/data && sudo chmod o+r /path/to/npm/data/database.sqlite`。
+
+#### 使用 MySQL / MariaDB 的 NPM
+
+导入期间 Corvus 需要连接 NPM 的数据库，因此只停止 NPM 的代理服务，保持其数据库继续运行：
+
+```bash
+cd /path/to/npm && docker compose stop app     # 占用 80/443 的 NPM 服务（通常为 "app"）
+cd /path/to/corvus && docker compose up -d
+
+# 为导入将 Corvus 连接到 NPM 的 Docker 网络
+docker network ls | grep -i npm                # 例如 npm_default
+docker network connect npm_default $(docker compose ps -q corvus)
+```
+
+在 *从 NPM 导入* 中选择 **MySQL / MariaDB**，并填写 NPM 的数据库设置：主机 = 数据库服务名（通常为 `db`），
+端口 `3306`，以及 `DB_MYSQL_NAME`、`DB_MYSQL_USER` 和 `DB_MYSQL_PASSWORD` 的值。连接为只读，密码不会被
+保存。然后依次点击 *预览* → *导入所选项*。
+
+导入完成后：
+
+```bash
+docker network disconnect npm_default $(docker compose ps -q corvus)
+cd /path/to/npm && docker compose down         # 同时停止 NPM 的数据库
+```
+
+#### 导入之后
+
+- 检查导入的主机，然后删除 `CORVUS_IMPORT_DIR` 和两个 `/import` 挂载，再次运行
+  `docker compose up -d`。
+- 证书会继续在 Corvus 中续期。使用了不受支持的 DNS 提供商的主机会在没有自动续期的情况下导入，预览中
+  会对此发出警告。
+- **切换回去：** 在 Corvus 中执行 `docker compose down`，然后在 NPM 中执行 `docker compose up -d`。
 
 ## 开发
 

@@ -181,9 +181,33 @@ docker compose -f docker-compose.hardened.yml up -d
 
 ### Миграция с Nginx Proxy Manager
 
-Смонтируйте каталоги NPM `data` и `letsencrypt` только для чтения и укажите их Corvus:
+*Импорт из NPM* в консоли копирует из существующей установки NPM **прокси-хосты, сертификаты**
+(Let's Encrypt и собственные, включая токены Cloudflare DNS) и **списки доступа** (пользователи и правила
+IP). Он только читает файлы и базу данных NPM — сам NPM не изменяется, поэтому вернуться можно в любой
+момент.
+
+Не импортируются: потоки (TCP/UDP), хосты перенаправления, хосты 404, пользовательские location и
+расширенная конфигурация, использующая переменные, специфичные для NPM. Всё пропускаемое перечислено в
+предпросмотре.
+
+**Проверьте, какую базу данных использует ваш NPM.** Откройте `docker-compose.yml` NPM:
+
+- нет переменных `DB_MYSQL_*` / `DB_POSTGRES_*`, и есть `data/database.sqlite` → **SQLite** (по умолчанию в NPM)
+- есть `DB_MYSQL_HOST`, `DB_MYSQL_USER`, … и обычно отдельный сервис `db` → **MySQL / MariaDB**
+- `DB_POSTGRES_*` → PostgreSQL импортом не поддерживается; создайте хосты в консоли заново
+
+В обоих случаях каталоги NPM `data` и `letsencrypt` нужно смонтировать в Corvus только для чтения (в них
+лежат файлы сертификатов):
 
 ```yml
+services:
+  corvus:
+    image: 'ghcr.io/corvus-gateway/gateway:latest'
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '9443:9443'
     environment:
       CORVUS_IMPORT_DIR: /import
     volumes:
@@ -192,8 +216,52 @@ docker compose -f docker-compose.hardened.yml up -d
       - /path/to/npm/letsencrypt:/import/npm/letsencrypt:ro
 ```
 
-Затем откройте в консоли *Импорт из NPM*. Хосты, сертификаты и списки доступа будут перенесены. После
-этого остановите NPM, чтобы два сервиса не конкурировали за порты 80/443 и продление сертификатов.
+Укажите пути на хосте для томов NPM `./data` и `./letsencrypt`. И NPM, и Corvus нужны порты 80/443, поэтому
+одновременно они работать не могут.
+
+#### NPM с SQLite (по умолчанию)
+
+```bash
+cd /path/to/npm && docker compose down        # остановить NPM (освобождает 80/443)
+cd /path/to/corvus && docker compose up -d     # запустить Corvus с монтированиями выше
+```
+
+В консоли откройте *Импорт из NPM*, оставьте **SQLite**, нажмите *Предпросмотр*, выберите, что
+импортировать, и нажмите *Импортировать выбранное*. Если предпросмотр сообщает `permission denied`, дайте
+Corvus (он работает от uid 10001) доступ на чтение файлов: `sudo chmod o+rx /path/to/npm/data && sudo chmod o+r /path/to/npm/data/database.sqlite`.
+
+#### NPM с MySQL / MariaDB
+
+Во время импорта Corvus должен подключаться к базе данных NPM, поэтому остановите только прокси-сервис NPM,
+а базу данных оставьте запущенной:
+
+```bash
+cd /path/to/npm && docker compose stop app     # сервис NPM, занимающий 80/443 (часто "app")
+cd /path/to/corvus && docker compose up -d
+
+# подключить Corvus к Docker-сети NPM на время импорта
+docker network ls | grep -i npm                # например, npm_default
+docker network connect npm_default $(docker compose ps -q corvus)
+```
+
+В *Импорт из NPM* выберите **MySQL / MariaDB** и введите параметры базы данных NPM: хост = имя сервиса базы
+данных (обычно `db`), порт `3306` и значения `DB_MYSQL_NAME`, `DB_MYSQL_USER` и `DB_MYSQL_PASSWORD`.
+Подключение только для чтения, пароль не сохраняется. Затем *Предпросмотр* → *Импортировать выбранное*.
+
+Когда импорт завершён:
+
+```bash
+docker network disconnect npm_default $(docker compose ps -q corvus)
+cd /path/to/npm && docker compose down         # остановить и базу данных NPM
+```
+
+#### После импорта
+
+- Проверьте импортированные хосты, затем удалите `CORVUS_IMPORT_DIR` и оба монтирования `/import` и снова
+  выполните `docker compose up -d`.
+- Сертификаты продолжают продлеваться в Corvus. Хосты с неподдерживаемым DNS-провайдером импортируются без
+  автоматического продления — предпросмотр предупреждает о них.
+- **Возврат:** `docker compose down` в Corvus, затем `docker compose up -d` в NPM.
 
 ## Разработка
 
