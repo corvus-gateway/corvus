@@ -314,21 +314,22 @@ cd /path/to/npm && docker compose down         # 同时停止 NPM 的数据库
 
 ## 性能
 
-使用 [基准测试工作流](../benchmark.md) 在 GitHub 托管的 `ubuntu-24.04` 运行器（4 vCPU AMD EPYC 9V74）上测得：
+使用 [基准测试工作流](../benchmark.md) 在 GitHub 托管的 `ubuntu-24.04` 运行器（4 vCPU AMD EPYC 9V45）上测得：
 Corvus 绑定到 **2 vCPU**，wrk 和后端运行在另外两个 vCPU 上，64 个 keep-alive 连接，请求 `GET /`，响应为 3 字节。
 
 | 场景 | req/s | p50 | p99 | 内存 |
 |---|---:|---:|---:|---:|
-| nginx 1.28 反向代理（基线） | 81,960 | 0.75 ms | 1.43 ms | 16 MB |
-| Corvus，默认主机 | 13,669 | 4.55 ms | 17.47 ms | 69 MB |
-| Corvus，30 条规则 + 1,000 个 CIDR 的列表 + 漏洞利用拦截 + 响应头 + 速率限制 | 11,919 | 5.32 ms | 7.83 ms | 80 MB |
-| Corvus，HTTPS（ECDSA P-256），keep-alive | 12,516 | 5.07 ms | 7.69 ms | 83 MB |
-| Corvus，HTTPS，每个请求都进行新的 TLS 握手 | 2,979 handshakes/s | 5.44 ms | 19.35 ms | 91 MB |
-| Corvus，访问排队（已放行的访客） | 12,874 | 4.94 ms | 7.93 ms | 83 MB |
-| Corvus，质询规则（持有通行 Cookie 的访客） | 12,733 | 4.97 ms | 7.46 ms | 86 MB |
+| nginx 1.28 反向代理（基线） | 97,227 | 0.63 ms | 1.16 ms | 17 MB |
+| Corvus，默认主机 | 75,473 | 0.79 ms | 1.83 ms | 72 MB |
+| Corvus，30 条规则 + 1,000 个 CIDR 的列表 + 漏洞利用拦截 + 响应头 + 速率限制 | 54,585 | 1.12 ms | 2.29 ms | 77 MB |
+| Corvus，HTTPS（ECDSA P-256），keep-alive | 59,697 | 1.00 ms | 2.18 ms | 80 MB |
+| Corvus，HTTPS，每个请求都进行新的 TLS 握手 | 4,348 handshakes/s | 5.88 ms | 11.62 ms | 88 MB |
+| Corvus，访问排队（已放行的访客） | 57,954 | 1.05 ms | 2.22 ms | 84 MB |
+| Corvus，质询规则（持有通行 Cookie 的访客） | 62,901 | 0.96 ms | 1.94 ms | 88 MB |
 
-在基础请求路径之上，防护功能的开销很小（完整规则集约为 13 %）；与原生 nginx 的差距主要来自每个请求的
-Lua 处理、访问日志采集以及每个请求单独建立的上游连接。**注意：** 测试使用的是共享 CI 运行器，负载生成器
+在基础请求路径上，Corvus 可达到原生 nginx 约四分之三的吞吐量（到上游的 keep-alive 连接池、按 worker
+批量发送的访问日志）；启用完整防护（含 1,000 个 CIDR 列表的 30 条规则、漏洞利用拦截、安全响应头和速率
+限制）后，在此基础上再降低约 28 %。**注意：** 测试使用的是共享 CI 运行器，负载生成器
 与被测服务在同一台机器上，且响应极小——这些数字偏保守，用于比较不同场景和版本，而非容量保证。内存包括
 控制平面和内置的 Valkey。
 

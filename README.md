@@ -343,22 +343,23 @@ cd /path/to/npm && docker compose down         # stop NPM's database too
 ## Performance
 
 Measured with the [benchmark workflow](docs/benchmark.md) on a GitHub-hosted `ubuntu-24.04`
-runner (4 vCPU AMD EPYC 9V74): Corvus pinned to **2 vCPU**, wrk and the backend on the other two,
+runner (4 vCPU AMD EPYC 9V45): Corvus pinned to **2 vCPU**, wrk and the backend on the other two,
 64 keep-alive connections, `GET /` with a 3-byte response.
 
 | Scenario | req/s | p50 | p99 | Memory |
 |---|---:|---:|---:|---:|
-| nginx 1.28 reverse proxy (baseline) | 81,960 | 0.75 ms | 1.43 ms | 16 MB |
-| Corvus, default host | 13,669 | 4.55 ms | 17.47 ms | 69 MB |
-| Corvus, 30 rules + 1,000-CIDR list + exploit blocking + headers + rate limit | 11,919 | 5.32 ms | 7.83 ms | 80 MB |
-| Corvus, HTTPS (ECDSA P-256), keep-alive | 12,516 | 5.07 ms | 7.69 ms | 83 MB |
-| Corvus, HTTPS, new TLS handshake per request | 2,979 handshakes/s | 5.44 ms | 19.35 ms | 91 MB |
-| Corvus, access queue (admitted visitors) | 12,874 | 4.94 ms | 7.93 ms | 83 MB |
-| Corvus, challenge rule (visitors with a pass) | 12,733 | 4.97 ms | 7.46 ms | 86 MB |
+| nginx 1.28 reverse proxy (baseline) | 97,227 | 0.63 ms | 1.16 ms | 17 MB |
+| Corvus, default host | 75,473 | 0.79 ms | 1.83 ms | 72 MB |
+| Corvus, 30 rules + 1,000-CIDR list + exploit blocking + headers + rate limit | 54,585 | 1.12 ms | 2.29 ms | 77 MB |
+| Corvus, HTTPS (ECDSA P-256), keep-alive | 59,697 | 1.00 ms | 2.18 ms | 80 MB |
+| Corvus, HTTPS, new TLS handshake per request | 4,348 handshakes/s | 5.88 ms | 11.62 ms | 88 MB |
+| Corvus, access queue (admitted visitors) | 57,954 | 1.05 ms | 2.22 ms | 84 MB |
+| Corvus, challenge rule (visitors with a pass) | 62,901 | 0.96 ms | 1.94 ms | 88 MB |
 
-Protection features cost little on top of the base request path (about 13 % for the full rule
-set); most of the gap to plain nginx is per-request Lua, access-log ingestion and per-request
-upstream connections. **Caveat:** a shared CI runner with the load generator on the same machine
+On the base request path Corvus reaches about three quarters of plain nginx's throughput
+(keep-alive upstream pools, access log batched per worker); the full protection set — 30 rules
+with a 1,000-CIDR list, exploit blocking, security headers and a rate limit — costs about 28 %
+on top of that. **Caveat:** a shared CI runner with the load generator on the same machine
 and tiny responses — the numbers are conservative and meant for comparing scenarios and
 versions, not as capacity guarantees. Memory includes the control plane and embedded Valkey.
 

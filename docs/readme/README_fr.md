@@ -346,22 +346,23 @@ cd /path/to/npm && docker compose down         # arrêter aussi la base de donn�
 ## Performances
 
 Mesuré avec le [workflow de benchmark](../benchmark.md) sur un runner `ubuntu-24.04` hébergé par GitHub
-(4 vCPU AMD EPYC 9V74) : Corvus limité à **2 vCPU**, wrk et le backend sur les deux autres, 64 connexions
+(4 vCPU AMD EPYC 9V45) : Corvus limité à **2 vCPU**, wrk et le backend sur les deux autres, 64 connexions
 keep-alive, `GET /` avec une réponse de 3 octets.
 
 | Scénario | req/s | p50 | p99 | Mémoire |
 |---|---:|---:|---:|---:|
-| nginx 1.28 en reverse proxy (référence) | 81,960 | 0.75 ms | 1.43 ms | 16 MB |
-| Corvus, hôte par défaut | 13,669 | 4.55 ms | 17.47 ms | 69 MB |
-| Corvus, 30 règles + liste de 1,000 CIDR + blocage des exploits + en-têtes + limite de débit | 11,919 | 5.32 ms | 7.83 ms | 80 MB |
-| Corvus, HTTPS (ECDSA P-256), keep-alive | 12,516 | 5.07 ms | 7.69 ms | 83 MB |
-| Corvus, HTTPS, nouvelle poignée de main TLS à chaque requête | 2,979 handshakes/s | 5.44 ms | 19.35 ms | 91 MB |
-| Corvus, file d'accès (visiteurs admis) | 12,874 | 4.94 ms | 7.93 ms | 83 MB |
-| Corvus, règle de défi (visiteurs munis d'un passe) | 12,733 | 4.97 ms | 7.46 ms | 86 MB |
+| nginx 1.28 en reverse proxy (référence) | 97,227 | 0.63 ms | 1.16 ms | 17 MB |
+| Corvus, hôte par défaut | 75,473 | 0.79 ms | 1.83 ms | 72 MB |
+| Corvus, 30 règles + liste de 1,000 CIDR + blocage des exploits + en-têtes + limite de débit | 54,585 | 1.12 ms | 2.29 ms | 77 MB |
+| Corvus, HTTPS (ECDSA P-256), keep-alive | 59,697 | 1.00 ms | 2.18 ms | 80 MB |
+| Corvus, HTTPS, nouvelle poignée de main TLS à chaque requête | 4,348 handshakes/s | 5.88 ms | 11.62 ms | 88 MB |
+| Corvus, file d'accès (visiteurs admis) | 57,954 | 1.05 ms | 2.22 ms | 84 MB |
+| Corvus, règle de défi (visiteurs munis d'un passe) | 62,901 | 0.96 ms | 1.94 ms | 88 MB |
 
-Les fonctions de protection coûtent peu par rapport au traitement de base des requêtes (environ 13 % pour
-l'ensemble complet de règles) ; l'essentiel de l'écart avec nginx seul vient du Lua exécuté à chaque requête,
-de l'ingestion des journaux d'accès et des connexions upstream ouvertes pour chaque requête. **Mise en garde :**
+Sur le traitement de base des requêtes, Corvus atteint environ les trois quarts du débit de nginx seul
+(pools de connexions keep-alive vers l'upstream, journal d'accès regroupé par worker) ; l'ensemble complet
+de protections — 30 règles avec une liste de 1,000 CIDR, blocage des exploits, en-têtes de sécurité et limite
+de débit — coûte environ 28 % de plus. **Mise en garde :**
 il s'agit d'un runner CI partagé, avec le générateur de charge sur la même machine et des réponses minuscules —
 les chiffres sont prudents et servent à comparer des scénarios et des versions, pas à garantir une capacité.
 La mémoire inclut le plan de contrôle et le Valkey intégré.

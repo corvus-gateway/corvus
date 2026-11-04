@@ -347,22 +347,23 @@ cd /path/to/npm && docker compose down         # auch die NPM-Datenbank stoppen
 ## Leistung
 
 Gemessen mit dem [Benchmark-Workflow](../benchmark.md) auf einem von GitHub gehosteten `ubuntu-24.04`-Runner
-(4 vCPU AMD EPYC 9V74): Corvus auf **2 vCPU** festgelegt, wrk und das Backend auf den anderen beiden,
+(4 vCPU AMD EPYC 9V45): Corvus auf **2 vCPU** festgelegt, wrk und das Backend auf den anderen beiden,
 64 Keep-Alive-Verbindungen, `GET /` mit einer 3-Byte-Antwort.
 
 | Szenario | req/s | p50 | p99 | Speicher |
 |---|---:|---:|---:|---:|
-| nginx 1.28 als Reverse Proxy (Vergleichswert) | 81,960 | 0.75 ms | 1.43 ms | 16 MB |
-| Corvus, Standard-Host | 13,669 | 4.55 ms | 17.47 ms | 69 MB |
-| Corvus, 30 Regeln + Liste mit 1,000 CIDRs + Exploit-Blockierung + Header + Ratenbegrenzung | 11,919 | 5.32 ms | 7.83 ms | 80 MB |
-| Corvus, HTTPS (ECDSA P-256), Keep-Alive | 12,516 | 5.07 ms | 7.69 ms | 83 MB |
-| Corvus, HTTPS, neuer TLS-Handshake pro Anfrage | 2,979 handshakes/s | 5.44 ms | 19.35 ms | 91 MB |
-| Corvus, Zugriffswarteschlange (eingelassene Besucher) | 12,874 | 4.94 ms | 7.93 ms | 83 MB |
-| Corvus, Challenge-Regel (Besucher mit Pass) | 12,733 | 4.97 ms | 7.46 ms | 86 MB |
+| nginx 1.28 als Reverse Proxy (Vergleichswert) | 97,227 | 0.63 ms | 1.16 ms | 17 MB |
+| Corvus, Standard-Host | 75,473 | 0.79 ms | 1.83 ms | 72 MB |
+| Corvus, 30 Regeln + Liste mit 1,000 CIDRs + Exploit-Blockierung + Header + Ratenbegrenzung | 54,585 | 1.12 ms | 2.29 ms | 77 MB |
+| Corvus, HTTPS (ECDSA P-256), Keep-Alive | 59,697 | 1.00 ms | 2.18 ms | 80 MB |
+| Corvus, HTTPS, neuer TLS-Handshake pro Anfrage | 4,348 handshakes/s | 5.88 ms | 11.62 ms | 88 MB |
+| Corvus, Zugriffswarteschlange (eingelassene Besucher) | 57,954 | 1.05 ms | 2.22 ms | 84 MB |
+| Corvus, Challenge-Regel (Besucher mit Pass) | 62,901 | 0.96 ms | 1.94 ms | 88 MB |
 
-Die Schutzfunktionen kosten gegenüber dem grundlegenden Anfragepfad wenig (etwa 13 % für den vollständigen
-Regelsatz); der Großteil des Abstands zu reinem nginx entsteht durch Lua pro Anfrage, die Verarbeitung der
-Access-Logs und Upstream-Verbindungen pro Anfrage. **Einschränkung:** ein geteilter CI-Runner, auf dem auch der
+Auf dem grundlegenden Anfragepfad erreicht Corvus etwa drei Viertel des Durchsatzes von reinem nginx
+(Keep-Alive-Pools zum Upstream, Access-Log pro Worker gebündelt); der vollständige Schutz — 30 Regeln mit
+einer Liste von 1,000 CIDRs, Exploit-Blockierung, Sicherheits-Header und Ratenbegrenzung — kostet zusätzlich
+etwa 28 %. **Einschränkung:** ein geteilter CI-Runner, auf dem auch der
 Lastgenerator läuft, und winzige Antworten — die Zahlen sind konservativ und zum Vergleich von Szenarien und
 Versionen gedacht, nicht als Kapazitätsgarantie. Der Speicher umfasst die Steuerungsebene und das eingebettete
 Valkey.
