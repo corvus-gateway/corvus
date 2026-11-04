@@ -54,9 +54,11 @@ Go control plane, React console) that can **import an existing NPM setup**.
 - Proxy hosts with wildcards, WebSocket, HTTP/2, forced HTTPS and custom Nginx snippets
 - Custom locations: route paths (e.g. `/api`) to their own upstream, with the host's protections
 - Redirection hosts: send domains to another domain (301/302/303/307/308, optionally keeping the path), with the same TLS and protection
-- Free Let's Encrypt certificates (HTTP-01, or DNS-01 via Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) with automatic renewal, or upload your own
+- Free Let's Encrypt certificates (HTTP-01, or DNS-01 via Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) with automatic renewal, or upload your own (and replace it in place when it is renewed)
+- Streams: forward TCP/UDP ports (databases, SSH, MQTT, game servers) to another host, with optional TLS termination for TCP
 - Real client IP behind Cloudflare or trusted proxies; optional password protection per host
 - Security header presets per host (basic / strict: nosniff, frame and referrer policy, report-only CSP, HttpOnly/SameSite/Secure cookie flags), never overriding what the app already sends
+- Gzip compression of text responses (on by default), and per-host upload size limit and upstream timeout
 - Every change is validated with `openresty -t`, applied atomically and can be rolled back
 
 **Corvus Sentinel — security engine**
@@ -237,6 +239,7 @@ Set these under `environment:` in `docker-compose.yml`.
 | `CORVUS_REDIS_PORT` | Port of the built-in access-queue store on 127.0.0.1 (default `6379`); change it with `network_mode: host` if the host already uses 6379 |
 | `CORVUS_RESOLVER` | DNS server for forward hosts. Default: Docker's DNS, or the first `nameserver` of `/etc/resolv.conf` with host networking |
 | `CORVUS_LOOPBACK=container` | Make `127.0.0.1`/`localhost` forward hosts point at the container itself instead of the Docker host |
+| `CORVUS_IPV6` | `auto` (default): also listen on IPv6 when the system has it · `off`: IPv4 only · `on`: always listen on IPv6 and resolve forward hosts to IPv6 addresses too (IPv6-only upstreams) |
 | `PUID` / `PGID` | User and group the container runs as and owns `./data` (default `10001`), e.g. your NAS user |
 | `CORVUS_ACME_DIRECTORY` | ACME directory URL of another CA instead of Let's Encrypt, e.g. a private step-ca `https://ca.internal/acme/acme/directory` |
 | `LEGO_CA_CERTIFICATES` | PEM file(s) of a private CA the ACME client should trust (mount it into the container), e.g. `/data/ca.pem` |
@@ -257,14 +260,32 @@ To reach services that listen only on the host's `127.0.0.1`, or to keep an NPM 
 `network_mode: host` unchanged, run Corvus with host networking: replace `ports:` and `networks:`
 with `network_mode: host` (and set `CORVUS_REDIS_PORT` if 6379 is taken on the host).
 
+### Streams (TCP/UDP)
+
+*Streams* forward a TCP and/or UDP port to a forward host (same rules as above), optionally
+terminating TLS for TCP with one of your certificates. With the default bridge network, also
+publish each stream port in `docker-compose.yml`, then apply it with `docker compose up -d`:
+
+```yaml
+    ports:
+      - '80:80'
+      - '443:443'
+      - '9443:9443'
+      - '5432:5432'       # stream: PostgreSQL (TCP)
+      - '1194:1194/udp'   # stream: OpenVPN (UDP)
+```
+
+With `network_mode: host` nothing else is needed. Ports Corvus uses itself (80, 443, 9443 and its
+internal ports) cannot be used for streams.
+
 ### Migrating from Nginx Proxy Manager
 
-*Import from NPM* in the console copies **proxy hosts, redirection hosts, certificates** (Let's
+*Import from NPM* in the console copies **proxy hosts, redirection hosts, streams, certificates** (Let's
 Encrypt and custom, including Cloudflare DNS tokens) and **access lists** (users and IP rules) from
 an existing NPM installation. It only reads NPM's files and database — NPM itself is not changed,
 so you can go back at any time.
 
-Not imported: streams (TCP/UDP), 404 hosts, and advanced configuration (also of custom
+Not imported: 404 hosts and advanced configuration (also of custom
 locations) that uses NPM-specific variables. The preview lists everything it skips.
 
 **Check which database your NPM uses.** Open NPM's `docker-compose.yml`:

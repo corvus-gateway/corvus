@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -44,6 +45,30 @@ type Paths struct {
 	StatusPort  int    // loopback-only status port used to confirm reloads (9180)
 	ACMEPort    int    // loopback port where corvus-control answers HTTP-01 challenges (9181)
 	DefaultCert string // directory holding the default fullchain.pem/privkey.pem
+	// IPv6 adds `listen [::]:port` to every public server (only when the system has
+	// IPv6: nginx fails to start if it cannot bind an IPv6 socket).
+	IPv6 bool
+	// ResolverIPv6 lets the resolver return IPv6 (AAAA) answers for forward hosts.
+	// Off by default: on a host without IPv6 routes a name with both A and AAAA
+	// records would intermittently fail.
+	ResolverIPv6 bool
+	AdminPort    int // admin console/API port inside the container (9443); 0 = unknown
+	RedisPort    int // loopback port of the bundled Valkey (6379); 0 = none
+}
+
+// ReservedPorts are the container ports Corvus itself listens on: streams may not use them.
+func (p Paths) ReservedPorts() map[int]string {
+	out := map[int]string{}
+	for _, r := range []struct {
+		port int
+		what string
+	}{{p.HTTPPort, "HTTP"}, {p.HTTPSPort, "HTTPS"}, {p.StatusPort, "gateway status"}, {p.ACMEPort, "ACME challenges"},
+		{p.AdminPort, "admin console"}, {p.RedisPort, "access-queue store (Valkey)"}} {
+		if r.port > 0 {
+			out[r.port] = r.what
+		}
+	}
+	return out
 }
 
 // CertDir is where certificate files for a certificate id live.
@@ -82,24 +107,28 @@ type hostView struct {
 	Cloudflare      []string
 	TrustedProxies  []string
 	RealIPHeader    string
-	ErrorCodes      []int // upstream errors answered with the error page (see UpstreamErrorCodes)
+	ErrorCodes      []int  // upstream errors answered with the error page (see UpstreamErrorCodes)
+	UploadLimit     string // client_max_body_size for the server ("" = global default)
+	GzipOff         bool   // the host turned compression off
 	P               Paths
 }
 
 // target is an upstream block and how a location proxies to it: the host's forward
 // host or a custom location.
 type target struct {
-	Prefix     string // custom location path ("" = the host's forward host)
-	Name       string // upstream block name
-	Scheme     string // http | https
-	Addr       string // server address (see upstreamAddr)
-	Port       int
-	Resolve    bool   // Addr is a name: resolved at run time (server … resolve)
-	Path       string // forward path replacing the location prefix ("" = URI unchanged)
-	Websocket  bool
-	ErrorCodes []int
-	RateLimit  *store.RateLimit
-	Advanced   string // location advanced configuration
+	Prefix    string // custom location path ("" = the host's forward host)
+	Name      string // upstream block name
+	Scheme    string // http | https
+	Addr      string // server address (see upstreamAddr)
+	Port      int
+	Resolve   bool   // Addr is a name: resolved at run time (server … resolve)
+	Path      string // forward path replacing the location prefix ("" = URI unchanged)
+	Websocket bool
+	// UpstreamTimeoutS is the host's upstream read/send timeout (nil = default).
+	UpstreamTimeoutS *int
+	ErrorCodes       []int
+	RateLimit        *store.RateLimit
+	Advanced         string // location advanced configuration
 }
 
 // targets builds the host's upstream targets: its forward host, the custom locations,
@@ -108,7 +137,7 @@ func (v *hostView) targets(static map[string]string, hostGW string) {
 	mk := func(name, scheme, host string, port int) target {
 		addr := upstreamAddr(host, static, hostGW)
 		return target{Name: name, Scheme: scheme, Addr: addr, Port: port, Resolve: !isIP(addr),
-			Websocket: v.Websocket, ErrorCodes: v.ErrorCodes, RateLimit: v.RateLimit}
+			Websocket: v.Websocket, UpstreamTimeoutS: v.UpstreamTimeoutS, ErrorCodes: v.ErrorCodes, RateLimit: v.RateLimit}
 	}
 	v.Host = mk(fmt.Sprintf("corvus_up_%d", v.ID), v.ForwardScheme, v.ForwardHost, v.ForwardPort)
 	v.Upstream = v.Host.Addr
@@ -127,6 +156,9 @@ func (v *hostView) targets(static map[string]string, hostGW string) {
 		}
 	}
 }
+
+// gzipDirective finds a gzip on/off directive in an advanced configuration.
+var gzipDirective = regexp.MustCompile(`(?m)(?:^|[;{])\s*gzip\s`)
 
 // UpstreamErrorCodes are the nginx-generated upstream errors (connection refused,
 // timeouts, invalid responses) answered with the error page. Responses the upstream
@@ -184,6 +216,7 @@ type mainView struct {
 	P          Paths
 	Hosts      int
 	Redirects  int
+	Streams    int // enabled streams; the stream {} block is rendered only when > 0
 	RateLimits []store.RateLimit
 }
 
@@ -326,6 +359,15 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		}
 		v := hostView{ProxyHost: hc, P: c.P, HasRootLocation: validate.HasRootLocation(hc.AdvancedConfig)}
 		v.OwnAccessLog = strings.Contains(hc.AdvancedConfig, "access_log")
+		// Upload size and gzip are server-level directives: an advanced configuration that
+		// sets them itself (common in NPM setups) keeps its own (nginx rejects duplicates).
+		if hc.MaxUploadMB != nil && !strings.Contains(hc.AdvancedConfig, "client_max_body_size") {
+			v.UploadLimit = "0"
+			if *hc.MaxUploadMB > 0 {
+				v.UploadLimit = fmt.Sprintf("%dm", *hc.MaxUploadMB)
+			}
+		}
+		v.GzipOff = !hc.Gzip && !gzipDirective.MatchString(hc.AdvancedConfig)
 		v.CertDir = c.certDir(hc.CertificateID)
 		if hc.WaitroomID != nil {
 			if r := byID[*hc.WaitroomID]; r != nil && r.Enabled {
@@ -382,6 +424,11 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		nr++
 	}
 
+	ns, err := c.renderStreams(ctx, s, dir, static, hostGW)
+	if err != nil {
+		return err
+	}
+
 	rj, _ := json.Marshal(rules)
 	if err := os.WriteFile(filepath.Join(dir, "rules.json"), rj, 0o644); err != nil {
 		return err
@@ -390,7 +437,7 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 	if err := os.WriteFile(filepath.Join(dir, "policy.json"), pj, 0o644); err != nil {
 		return err
 	}
-	return writeTemplate(filepath.Join(dir, "nginx.conf"), "nginx.conf.tmpl", mainView{Dir: slash, Name: filepath.Base(dir), P: c.P, Hosts: n, Redirects: nr, RateLimits: enabledLimits})
+	return writeTemplate(filepath.Join(dir, "nginx.conf"), "nginx.conf.tmpl", mainView{Dir: slash, Name: filepath.Base(dir), P: c.P, Hosts: n, Redirects: nr, Streams: ns, RateLimits: enabledLimits})
 }
 
 // certDir returns the certificate directory for id, or "" while its files don't exist

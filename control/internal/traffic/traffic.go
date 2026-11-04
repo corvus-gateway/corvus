@@ -271,7 +271,7 @@ func (c *Collector) Ingest(msg []byte) {
 // dry-run rate limit at the same time).
 func classify(r *Record) (blocked bool, kinds []string) {
 	switch {
-	case r.RL == "REJECTED" || r.S == 429:
+	case r.RL == "REJECTED" || (r.S == 429 && !waitroomHeld(r.WR)):
 		blocked = true
 		kinds = append(kinds, "rate_limited")
 	case r.RL == "REJECTED_DRY_RUN":
@@ -325,6 +325,12 @@ func classify(r *Record) (blocked bool, kinds []string) {
 		kinds = append(kinds, "server_error")
 	}
 	return blocked, kinds
+}
+
+// waitroomHeld reports whether the access queue answered the request itself (cookie
+// check, waiting, queue full; 429 + Retry-After): visitors told to wait, not rate limited.
+func waitroomHeld(wr string) bool {
+	return wr == "cookie-check" || wr == "queue" || wr == "full"
 }
 
 // isChallenge reports whether the gateway answered with a challenge page (issued, or

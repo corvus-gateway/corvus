@@ -87,6 +87,40 @@ func defaultResolver(resolvConf string) string {
 	return first
 }
 
+// ipv6Settings turns CORVUS_IPV6 into the gateway's IPv6 behaviour:
+//   - "auto" (default): listen on IPv6 when the system has it; the resolver keeps
+//     returning IPv4 addresses only.
+//   - "on": always listen on IPv6, and let the resolver return IPv6 (AAAA) addresses
+//     for forward hosts (IPv6-only upstreams).
+//   - "off": IPv4 only.
+//
+// Docker bridge networks usually have IPv6 disabled; nginx then refuses to start if it
+// is told to listen on [::], so "auto" checks first.
+func ipv6Settings(mode string, available func() bool) (listen, resolver bool) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "on", "1", "true", "yes":
+		return true, true
+	case "off", "0", "false", "no":
+		return false, false
+	}
+	return available(), false
+}
+
+// ipv6Available reports whether an interface has an IPv6 address and an IPv6 socket
+// can be bound.
+func ipv6Available() bool {
+	b, err := os.ReadFile("/proc/net/if_inet6")
+	if err != nil || len(strings.TrimSpace(string(b))) == 0 {
+		return false
+	}
+	l, err := net.Listen("tcp6", "[::]:0")
+	if err != nil {
+		return false
+	}
+	l.Close()
+	return true
+}
+
 func envBool(key string, def bool) bool {
 	v, err := strconv.ParseBool(env(key, strconv.FormatBool(def)))
 	if err != nil {
@@ -159,6 +193,8 @@ func run() error {
 		ACMEPort:    9181,
 		DefaultCert: filepath.ToSlash(filepath.Join(dataDir, "certs", "default")),
 	}
+	paths.IPv6, paths.ResolverIPv6 = ipv6Settings(env("CORVUS_IPV6", "auto"), ipv6Available)
+	slog.Info("gateway IPv6", "listen", paths.IPv6, "resolver_aaaa", paths.ResolverIPv6)
 	adminHosts := []string{"localhost", "127.0.0.1"}
 	for _, h := range strings.Split(env("CORVUS_ADMIN_HOSTS", ""), ",") {
 		if h = strings.TrimSpace(h); h != "" {
@@ -183,6 +219,14 @@ func run() error {
 	// CORVUS_REDIS_HOST to use an external Redis instead (shared by several gateways).
 	redisHost, redisPort := env("CORVUS_REDIS_HOST", ""), env("CORVUS_REDIS_PORT", "6379")
 	embeddedRedis := redisHost == "" && withGateway
+	// Ports Corvus listens on itself may not be taken by streams (TCP/UDP forwarding).
+	adminListen := env("CORVUS_ADMIN_LISTEN", ":9443")
+	if _, port, err := net.SplitHostPort(adminListen); err == nil {
+		paths.AdminPort, _ = strconv.Atoi(port)
+	}
+	if embeddedRedis {
+		paths.RedisPort, _ = strconv.Atoi(redisPort)
+	}
 	if redisHost == "" {
 		redisHost = "127.0.0.1"
 	}
@@ -396,7 +440,7 @@ func run() error {
 	go srv.PurgeLoop(ctx)
 
 	hs := &http.Server{
-		Addr:              env("CORVUS_ADMIN_LISTEN", ":9443"),
+		Addr:              adminListen,
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,

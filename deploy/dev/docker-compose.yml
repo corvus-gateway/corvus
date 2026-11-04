@@ -1,5 +1,5 @@
 # Corvus on the shared development server (prebuilt binary, test ports, demo backend).
-# Ports: 8081→80 (HTTP), 8443→443 (HTTPS), 9443 (admin UI). Debug endpoints enabled for corvus-loadtest.
+# Ports: 8081→80 (HTTP), 8443→443 (HTTPS), 9443 (admin UI), 8090 (TCP stream test). Debug endpoints enabled for corvus-loadtest.
 name: corvus-dev
 
 # Same hardening as the install compose (non-root, read-only, no capabilities, Redis ACL).
@@ -21,6 +21,7 @@ services:
       - "8081:80"
       - "8443:443"
       - "9443:9443"
+      - "8090:8090"   # itest: TCP stream (port forwarding)
     sysctls:
       net.ipv4.ip_unprivileged_port_start: 0
     tmpfs:

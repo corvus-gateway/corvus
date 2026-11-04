@@ -31,7 +31,8 @@ export default function Certificates() {
   const anyPending = list.data?.some((c) => c.status === "pending") ?? false;
   useEffect(() => { setPoll(anyPending ? 3000 : 0); }, [anyPending]);
 
-  const [upload, setUpload] = useState<{ name: string; certificate: string; private_key: string } | null>(null);
+  // id set: replace that uploaded certificate in place (PUT) instead of uploading a new one.
+  const [upload, setUpload] = useState<{ id?: number; name: string; certificate: string; private_key: string } | null>(null);
   const [wizard, setWizard] = useState<{ step: 0 | 1 | 2; form: Acme } | null>(null);
   const [deleting, setDeleting] = useState<Certificate | null>(null);
   const providers = useDnsProviders();
@@ -44,7 +45,9 @@ export default function Certificates() {
 
   const doUpload = async () => {
     if (!upload) return;
-    const r = await up.run(() => api.post("/api/certificates", upload), { success: t("certUploaded"), deployed: false });
+    const { id, ...body } = upload;
+    const r = await up.run(() => (id ? api.put(`/api/certificates/${id}`, body) : api.post("/api/certificates", body)),
+      id ? { success: t("certReplaced") } : { success: t("certUploaded"), deployed: false });
     if (r !== undefined) { setUpload(null); list.reload(); window.dispatchEvent(new Event("corvus:refresh")); }
   };
   const doAcme = async () => {
@@ -112,7 +115,8 @@ export default function Certificates() {
                     <Td className="hidden lg:table-cell">{c.kind === "acme" ? (c.auto_renew ? <Badge tone="ok" icon={Check}>{t("on")}</Badge> : <Badge>{t("off")}</Badge>) : <span className="text-fg-subtle">–</span>}</Td>
                     <Td className="text-right"><RowMenu items={[
                       { label: t("renewNow"), icon: RefreshCw, hidden: c.kind !== "acme", disabled: st === "pending", onSelect: () => renew(c) },
-                      { label: t("delete"), icon: Trash2, danger: true, separatorBefore: c.kind === "acme", onSelect: () => setDeleting(c) },
+                      { label: t("replaceCertAction"), icon: Upload, hidden: c.kind !== "custom", onSelect: () => { up.setError(null); setUpload({ id: c.id, name: c.name, certificate: "", private_key: "" }); } },
+                      { label: t("delete"), icon: Trash2, danger: true, separatorBefore: c.kind === "acme" || c.kind === "custom", onSelect: () => setDeleting(c) },
                     ]} /></Td>
                   </Tr>
                 );
@@ -122,8 +126,8 @@ export default function Certificates() {
         )}
       </Card>
 
-      <Sheet open={!!upload} onOpenChange={(o) => !o && setUpload(null)} onSubmit={doUpload} title={t("uploadCert")} description={t("uploadCertDesc")}
-        footer={<><Button onClick={() => setUpload(null)}>{t("cancel")}</Button><Button type="submit" variant="primary" loading={up.busy}>{t("upload")}</Button></>}>
+      <Sheet open={!!upload} onOpenChange={(o) => !o && setUpload(null)} onSubmit={doUpload} title={upload?.id ? t("replaceCertTitle") : t("uploadCert")} description={upload?.id ? t("replaceCertDesc") : t("uploadCertDesc")}
+        footer={<><Button onClick={() => setUpload(null)}>{t("cancel")}</Button><Button type="submit" variant="primary" loading={up.busy}>{upload?.id ? t("replaceCertAction") : t("upload")}</Button></>}>
         {upload && <>
           {up.error && <div className="px-6 pt-5"><ErrorBox error={up.error} /></div>}
           <FormSection title={t("secBasic")}>

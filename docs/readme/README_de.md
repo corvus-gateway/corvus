@@ -55,9 +55,11 @@ Go-Steuerungsebene, React-Konsole), die ein **bestehendes NPM-Setup importieren*
 - Proxy-Hosts mit Wildcards, WebSocket, HTTP/2, erzwungenem HTTPS und benutzerdefinierten Nginx-Snippets
 - Eigene Locations: Pfade (z. B. `/api`) an einen eigenen Upstream weiterleiten, mit dem Schutz des Hosts
 - Weiterleitungs-Hosts: Domains auf eine andere Domain umleiten (301/302/303/307/308, optional mit Beibehaltung des Pfads), mit demselben TLS und Schutz
-- Kostenlose Let's-Encrypt-Zertifikate (HTTP-01 oder DNS-01 über Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) mit automatischer Erneuerung oder eigene Zertifikate per Upload
+- Kostenlose Let's-Encrypt-Zertifikate (HTTP-01 oder DNS-01 über Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) mit automatischer Erneuerung oder eigene Zertifikate per Upload (bei Erneuerung direkt ersetzbar)
+- Streams: TCP/UDP-Ports (Datenbanken, SSH, MQTT, Spieleserver) an einen anderen Host weiterleiten, für TCP optional mit TLS-Terminierung
 - Echte Client-IP hinter Cloudflare oder vertrauenswürdigen Proxys; optionaler Passwortschutz pro Host
 - Voreinstellungen für Sicherheits-Header pro Host (Basis / Streng: nosniff, Frame- und Referrer-Policy, CSP im Report-Only-Modus, Cookie-Flags HttpOnly/SameSite/Secure), ohne zu überschreiben, was die Anwendung bereits sendet
+- Gzip-Komprimierung von Textantworten (standardmäßig an) sowie Upload-Größenlimit und Upstream-Timeout pro Host
 - Jede Änderung wird mit `openresty -t` geprüft, atomar angewendet und kann zurückgerollt werden
 
 **Corvus Sentinel — Sicherheits-Engine**
@@ -240,6 +242,7 @@ Setzen Sie diese Variablen unter `environment:` in `docker-compose.yml`.
 | `CORVUS_REDIS_PORT` | Port des integrierten Speichers der Zugriffswarteschlange auf 127.0.0.1 (Standard `6379`); bei `network_mode: host` ändern, wenn der Host 6379 bereits belegt |
 | `CORVUS_RESOLVER` | DNS-Server für Ziel-Hosts. Standard: der DNS von Docker bzw. bei Host-Networking der erste `nameserver` aus `/etc/resolv.conf` |
 | `CORVUS_LOOPBACK=container` | Ziel-Hosts `127.0.0.1`/`localhost` zeigen auf den Container selbst statt auf den Docker-Host |
+| `CORVUS_IPV6` | `auto` (Standard): zusätzlich auf IPv6 lauschen, wenn das System IPv6 hat · `off`: nur IPv4 · `on`: immer auf IPv6 lauschen und Ziel-Hosts auch zu IPv6-Adressen auflösen (reine IPv6-Upstreams) |
 | `PUID` / `PGID` | Benutzer und Gruppe, als die der Container läuft und denen `./data` gehört (Standard `10001`), z. B. Ihr NAS-Benutzer |
 | `CORVUS_ACME_DIRECTORY` | ACME-Verzeichnis-URL einer anderen CA statt Let's Encrypt, z. B. eine private step-ca `https://ca.internal/acme/acme/directory` |
 | `LEGO_CA_CERTIFICATES` | PEM-Datei(en) einer privaten CA, der der ACME-Client vertrauen soll (in den Container einbinden), z. B. `/data/ca.pem` |
@@ -261,14 +264,32 @@ Um Dienste zu erreichen, die nur auf `127.0.0.1` des Hosts lauschen, oder um ein
 `ports:` und `networks:` durch `network_mode: host` (und setzen Sie `CORVUS_REDIS_PORT`, falls 6379 auf dem
 Host belegt ist).
 
+### Streams (TCP/UDP)
+
+*Streams* leiten einen TCP- und/oder UDP-Port an einen Ziel-Host weiter (Regeln wie oben); für TCP kann TLS
+mit einem Ihrer Zertifikate terminiert werden. Im Standard-Bridge-Netzwerk muss jeder Stream-Port zusätzlich in
+`docker-compose.yml` veröffentlicht und mit `docker compose up -d` übernommen werden:
+
+```yaml
+    ports:
+      - '80:80'
+      - '443:443'
+      - '9443:9443'
+      - '5432:5432'       # Stream: PostgreSQL (TCP)
+      - '1194:1194/udp'   # Stream: OpenVPN (UDP)
+```
+
+Mit `network_mode: host` ist nichts weiter nötig. Ports, die Corvus selbst nutzt (80, 443, 9443 und interne
+Ports), sind für Streams nicht verfügbar.
+
 ### Migration von Nginx Proxy Manager
 
-*Import aus NPM* in der Konsole übernimmt **Proxy-Hosts, Weiterleitungs-Hosts, Zertifikate** (Let's Encrypt
+*Import aus NPM* in der Konsole übernimmt **Proxy-Hosts, Weiterleitungs-Hosts, Streams, Zertifikate** (Let's Encrypt
 und eigene, einschließlich Cloudflare-DNS-Tokens) und **Zugriffslisten** (Benutzer und IP-Regeln) aus einer
 bestehenden NPM-Installation. Dabei werden nur die Dateien und die Datenbank von NPM gelesen – NPM selbst
 bleibt unverändert, Sie können also jederzeit zurückwechseln.
 
-Nicht importiert werden: Streams (TCP/UDP), 404-Hosts und erweiterte Konfiguration (auch von
+Nicht importiert werden: 404-Hosts und erweiterte Konfiguration (auch von
 benutzerdefinierten Locations) mit NPM-spezifischen Variablen. Die Vorschau listet alles auf, was übersprungen wird.
 
 **Prüfen Sie, welche Datenbank Ihr NPM verwendet.** Öffnen Sie die `docker-compose.yml` von NPM:

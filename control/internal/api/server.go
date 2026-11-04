@@ -108,6 +108,12 @@ func (s *Server) Handler() http.Handler {
 	op("PUT /api/redirection-hosts/{id}", s.updateRedirectionHost)
 	op("DELETE /api/redirection-hosts/{id}", s.deleteRedirectionHost)
 
+	priv("GET /api/streams", s.listStreams)
+	op("POST /api/streams", s.createStream)
+	priv("GET /api/streams/{id}", s.getStream)
+	op("PUT /api/streams/{id}", s.updateStream)
+	op("DELETE /api/streams/{id}", s.deleteStream)
+
 	priv("GET /api/waitrooms", s.listWaitrooms)
 	op("POST /api/waitrooms", s.createWaitroom)
 	op("PUT /api/waitrooms/{id}", s.updateWaitroom)
@@ -116,6 +122,7 @@ func (s *Server) Handler() http.Handler {
 
 	priv("GET /api/certificates", s.listCertificates)
 	op("POST /api/certificates", s.uploadCertificate)
+	op("PUT /api/certificates/{id}", s.replaceCertificate)
 	op("DELETE /api/certificates/{id}", s.deleteCertificate)
 
 	priv("GET /api/deployments", s.listDeployments)

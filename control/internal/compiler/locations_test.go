@@ -44,6 +44,13 @@ func TestRenderLocations(t *testing.T) {
 		store.Location{Path: "/", ForwardHost: "new-app", ForwardPort: 3000},
 		store.Location{Path: "/x", ForwardHost: "x", ForwardPort: 80})
 
+	timeout := 30
+	th := &store.ProxyHost{Domains: []string{"t.example.com"}, ForwardScheme: "http", ForwardHost: "app", ForwardPort: 8080, Enabled: true,
+		UpstreamTimeoutS: &timeout, Locations: []store.Location{{Path: "/api", ForwardHost: "api", ForwardPort: 80}}}
+	if err := st.SaveProxyHost(ctx, th); err != nil {
+		t.Fatal(err)
+	}
+
 	dir := filepath.Join(t.TempDir(), "v1")
 	if err := c.Render(ctx, st, dir); err != nil {
 		t.Fatal(err)
@@ -94,5 +101,9 @@ func TestRenderLocations(t *testing.T) {
 	}
 	if n := strings.Count(conf, `set $corvus_room "event";`); n != 2 {
 		t.Errorf("host %d: %d queued locations, want 2", rootQ, n)
+	}
+	// the host's upstream timeout applies to its custom locations too
+	if n := strings.Count(read(th.ID), "proxy_read_timeout 30s;"); n != 2 {
+		t.Errorf("host %d: upstream timeout in %d locations, want 2", th.ID, n)
 	}
 }

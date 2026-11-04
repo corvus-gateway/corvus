@@ -55,6 +55,12 @@ func Domain(d string) bool {
 }
 
 // ProxyHost normalizes and validates a proxy host in place.
+// Upper bounds of a proxy host's upload size (MB, 1 TB) and upstream timeout (s, 1 day).
+const (
+	MaxUploadMB         = 1048576
+	MaxUpstreamTimeoutS = 86400
+)
+
 func ProxyHost(h *store.ProxyHost) error {
 	var errs Errors
 	switch h.BodyInspection {
@@ -77,6 +83,12 @@ func ProxyHost(h *store.ProxyHost) error {
 	}
 	if h.BodyMaxKB < 16 || h.BodyMaxKB > 8192 {
 		errs.add("body_max_kb", "invalid", "body inspection limit must be 16-8192 KiB")
+	}
+	if h.MaxUploadMB != nil && (*h.MaxUploadMB < 0 || *h.MaxUploadMB > MaxUploadMB) {
+		errs.add("max_upload_mb", "invalid", "maximum upload size must be 0 (unlimited) to %d MB", MaxUploadMB)
+	}
+	if h.UpstreamTimeoutS != nil && (*h.UpstreamTimeoutS < 1 || *h.UpstreamTimeoutS > MaxUpstreamTimeoutS) {
+		errs.add("upstream_timeout_s", "invalid", "upstream timeout must be 1-%d seconds", MaxUpstreamTimeoutS)
 	}
 	h.Domains = hostDomains(&errs, h.Domains)
 

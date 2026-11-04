@@ -35,7 +35,7 @@ local DEFAULTS = {
   fail       = "open",-- behaviour when Redis is unavailable: "open" | "closed"
   poll_min   = 3,     -- s; suggested poll interval near the front of the line
   poll_max   = 30,    -- s; suggested poll interval far back in the line
-  max_queue  = 100000,-- waiters per room; beyond this new visitors get 503 (protects Redis memory)
+  max_queue  = 100000,-- waiters per room; beyond this new visitors get 429 (protects Redis memory)
   max_new_per_ip = 60,-- new queue entries per client IP per minute (0 = unlimited)
   bind_ip    = false, -- bind admission tokens to the client's network (/24, IPv6 /48)
 }
@@ -261,6 +261,13 @@ local function poll_interval(room, rank)
   return s
 end
 
+-- "Wait and come back" answers (cookie check, waiting, queue full) to requests that
+-- cannot follow the waiting page (API calls, fetch/XHR, WebSockets): 429 + Retry-After.
+-- The site is not failing, so these must not read as server errors (503) in logs, error
+-- rates and 5xx alerts. Only a Redis outage with fail = "closed" answers 503. Neither
+-- counts as bad behaviour or as rate limiting (rules.lua _M.log, traffic.classify).
+local WAIT_STATUS = 429
+
 local function send_json(status, body)
   ngx.status = status
   ngx.header["Content-Type"] = "application/json"
@@ -283,7 +290,7 @@ local function send_waiting(room, res)
     return ngx.redirect("/__corvus/wait/" .. room.name .. "?r=" .. ngx.escape_uri(ngx.var.request_uri), 302)
   end
   ngx.header["Retry-After"] = tostring(retry)
-  return send_json(503, {
+  return send_json(WAIT_STATUS, {
     status = "waiting", room = room.name, rank = res.rank, ticket = res.ticket,
     waiting = res.waiting, retry_after = retry,
   })
@@ -299,12 +306,12 @@ local function send_busy(room)
   ngx.header["Retry-After"] = "30"
   ngx.header["Cache-Control"] = "no-store"
   if wants_html() then
-    ngx.status = 503
+    ngx.status = WAIT_STATUS
     ngx.header["Content-Type"] = "text/html; charset=utf-8"
     ngx.print(BUSY_HTML)
-    return ngx.exit(503)
+    return ngx.exit(WAIT_STATUS)
   end
-  return send_json(503, { status = "full", room = room.name, retry_after = 30 })
+  return send_json(WAIT_STATUS, { status = "full", room = room.name, retry_after = 30 })
 end
 
 -- Limits how many new queue entries one client IP may create per minute.
@@ -395,7 +402,7 @@ function _M.access()
       return ngx.redirect(ngx.var.request_uri, 302)
     end
     ngx.header["Retry-After"] = "1"
-    return send_json(503, { status = "retry", room = room.name, retry_after = 1 })
+    return send_json(WAIT_STATUS, { status = "retry", room = room.name, retry_after = 1 })
   end
   if not allow_new_entry(room, sid) then return send_too_many(room) end
   local res, err = run(room, "enter", sid)

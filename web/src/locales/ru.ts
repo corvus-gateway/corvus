@@ -3,8 +3,11 @@ import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
+import { streamsStrings } from "./streams.i18n";
 import { headersStrings } from "./headers.i18n";
 import { locationsStrings } from "./locations.i18n";
+import { limitsStrings } from "./limits.i18n";
+import { certReplaceStrings } from "./certreplace.i18n";
 import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
@@ -307,8 +310,11 @@ export const ru: Partial<Record<keyof typeof ko, string>> = {
   ...bansStrings.ru,
   ...tokensStrings.ru,
   ...redirectsStrings.ru,
+  ...streamsStrings.ru,
   ...headersStrings.ru,
   ...locationsStrings.ru,
+  ...limitsStrings.ru,
+  ...certReplaceStrings.ru,
   ...listFeedsStrings.ru,
   ...ssoStrings.ru,
   ...retentionStrings.ru,
@@ -336,7 +342,7 @@ export const ruRuleLabels: RuleLabels | undefined = {
 
 export const ruAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "Прокси-хост", redirection_host: "Хост перенаправления", waitroom: "Очередь доступа", certificate: "Сертификат", deploy: "Развёртывание", auth: "Аутентификация", setup: "Настройка",
+    proxy_host: "Прокси-хост", stream: "Поток", redirection_host: "Хост перенаправления", waitroom: "Очередь доступа", certificate: "Сертификат", deploy: "Развёртывание", auth: "Аутентификация", setup: "Настройка",
     rate_limit: "Ограничение запросов", access_list: "Basic-аутентификация", security_rule: "Правило безопасности", ip_list: "Список IP", geoip: "База стран", settings: "Настройки", network: "Сеть", import: "Импорт", mfa: "MFA", user: "Учётная запись",
   },
   verb: {

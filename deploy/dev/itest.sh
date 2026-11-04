@@ -589,6 +589,94 @@ chk "$(lcode "$G/anything")" 200 "root location answers from its upstream"
 chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$LH -d '{"domains":["loc.corvus.test"],"forward_host":"demo","forward_port":1,"locations":[{"path":"/__corvus/x","forward_host":"demo","forward_port":80}]}')" 422 "reserved location path rejected"
 c -o /dev/null -X DELETE $A/api/proxy-hosts/$LH
 
+echo "[streams]"
+# TCP port forwarding: container port 8090 (published by deploy/dev/docker-compose.yml) → demo:80.
+for id in $(c $A/api/streams | js "' '.join(str(s['id']) for s in d if s['incoming_port']==8090)"); do c -o /dev/null -X DELETE $A/api/streams/$id; done
+chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/streams -d '{"incoming_port":9443,"tcp_forwarding":true,"forward_host":"demo","forward_port":80}')" 422 "port used by Corvus (admin) rejected"
+SID=$(c -X POST $A/api/streams -d '{"incoming_port":8090,"tcp_forwarding":true,"forward_host":"demo","forward_port":80}' | js "d.get('stream',{}).get('id')")
+[ -n "$SID" ] && [ "$SID" != None ] && ok "TCP stream created" || bad "TCP stream not created"
+sleep 2
+# Stream ports are checked from the Docker host when CORVUS_SSH is set (e.g. "ssh user@host"):
+# a NAT in front of the test server may forward only the gateway's HTTP/HTTPS/admin ports.
+scurl() { if [ -n "${CORVUS_SSH:-}" ]; then $CORVUS_SSH curl "$@" "http://127.0.0.1:8090/stream-check"; else curl "$@" "http://$H:8090/stream-check"; fi; }
+SB=$(scurl -s -m 5 --http1.0)
+echo "$SB" | grep -q '^Hostname:' && ok "TCP stream forwards to the demo backend" || bad "no whoami answer through the stream: $SB"
+echo "$SB" | grep -q 'GET /stream-check' && ok "stream passes the request through unchanged" || bad "request not passed through: $SB"
+chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/streams -d '{"incoming_port":8090,"tcp_forwarding":true,"forward_host":"demo","forward_port":80}')" 422 "second TCP stream on the same port rejected"
+c -o /dev/null -X PUT $A/api/streams/$SID -d '{"incoming_port":8090,"tcp_forwarding":true,"forward_host":"demo","forward_port":80,"enabled":false}'
+sleep 2
+chk "$(scurl -s -m 5 -o /dev/null -w '%{http_code}')" 000 "disabled stream closes the port"
+c -o /dev/null -X DELETE $A/api/streams/$SID
+
+echo "[access queue]"
+WR=$(c -X POST $A/api/waitrooms -d '{"name":"itest-queue","capacity":1000,"max_new_per_ip":0}' | js "d['waitroom']['id']")
+chk "$(put_host ",\"waitroom_id\":$WR,\"waitroom_path\":\"/\"")" 200 "attach access queue"
+WQ=$(mktemp)
+r=$(curl -s -D - -o /dev/null -c "$WQ" -b "$WQ" -H 'Accept: application/json' "$G/wq-api" | tr -d '')
+chk "$(echo "$r" | head -1 | cut -d' ' -f2)" 429 "cookie check for an API request: 429, not a server error"
+echo "$r" | grep -qi '^retry-after: 1' && ok "cookie check sends Retry-After" || bad "cookie check without Retry-After"
+chk "$(code -c "$WQ" -b "$WQ" -H 'Accept: application/json' "$G/wq-api")" 200 "with the queue cookie: admitted"
+chk "$(code -H 'Accept: text/html' "$G/wq-page")" 302 "cookie check for a page: redirect to itself"
+sleep 2
+chk "$(c "$A/api/traffic/logs?range=1h&limit=50&q=/wq-api" | js "(429,'cookie-check') in [(l['status'],l.get('wr')) for l in d['items'] if l['path']=='/wq-api']")" True "cookie check logged as 429 cookie-check"
+chk "$(c "$A/api/traffic/events?range=1h" | js "any(e['kind'] in ('rate_limited','server_error') and e['path']=='/wq-api' for e in d)")" False "cookie check is neither a rate limit nor a server error event"
+put_host ',"waitroom_id":null' >/dev/null
+c -o /dev/null -X DELETE $A/api/waitrooms/$WR
+rm -f "$WQ"
+
+echo "[ipv6]"
+# IPv4 keeps working whatever CORVUS_IPV6 decided; IPv6 is checked only when the server
+# has an IPv6 address reachable from here (CORVUS_HOST6, e.g. 2001:db8::10).
+chk "$(code "$G/__corvus/healthz" -H 'Host: unknown.corvus.test')" 200 "IPv4 listener serves"
+chk "$(code -H "Host: $H" "$G/")" 200 "proxy host serves over IPv4"
+if [ -n "${CORVUS_HOST6:-}" ]; then
+  chk "$(code -g -H "Host: $H" "http://[$CORVUS_HOST6]:8081/")" 200 "proxy host serves over IPv6"
+  chk "$(code -g "http://[$CORVUS_HOST6]:8081/__corvus/healthz")" 200 "default server listens on IPv6"
+else
+  ok "ipv6 not available (set CORVUS_HOST6 to test IPv6 listeners)"
+fi
+echo "[upload limits and gzip]"
+LIMJ='{"domains":["limits.corvus.test"],"forward_scheme":"http","forward_host":"demo","forward_port":80,"max_upload_mb":1,"upstream_timeout_s":30'
+LH=$(c -X POST $A/api/proxy-hosts -d "$LIMJ}" | js "d.get('id') or d.get('proxy_host',{}).get('id')")
+chk "$(c $A/api/proxy-hosts/$LH | js "(d.get('max_upload_mb'),d.get('upstream_timeout_s'),d.get('gzip'))")" "(1, 30, True)" "host stores upload size, timeout and gzip (default on)"
+sleep 2
+UP=$(mktemp)
+head -c 2097152 /dev/zero > "$UP"
+chk "$(code -H 'Host: limits.corvus.test' -H 'Content-Type: application/octet-stream' --data-binary @"$UP" "$G/upload")" 413 "2 MB upload to a 1 MB host: 413"
+head -c 524288 /dev/zero > "$UP"
+chk "$(code -H 'Host: limits.corvus.test' -H 'Content-Type: application/octet-stream' --data-binary @"$UP" "$G/upload")" 200 "512 KB upload accepted"
+rm -f "$UP"
+# whoami echoes the request headers as text/plain: a padded header makes the answer > 1 KB.
+PAD=$(head -c 3000 /dev/zero | tr '\0' a)
+ce() { curl -s -o /dev/null -D - -H 'Host: limits.corvus.test' -H 'Accept-Encoding: gzip' -H "X-Pad: $PAD" "$G/gz" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-encoding"{print $2}'; }
+chk "$(ce)" gzip "text response compressed"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$LH -d "$LIMJ,\"gzip\":false}")" 200 "turn gzip off"
+sleep 2
+chk "$(ce)" "" "gzip off: response not compressed"
+c -o /dev/null -X DELETE $A/api/proxy-hosts/$LH
+echo "[certificate replace]"
+CT=$(mktemp -d)
+for n in 1 2; do
+  san="DNS:replace.corvus.test"; [ $n = 2 ] && san="$san,DNS:www.replace.corvus.test"
+  MSYS2_ARG_CONV_EXCL="/CN" openssl req -x509 -newkey rsa:2048 -nodes -days 30 -set_serial $((1000+n)) -subj /CN=replace.corvus.test \
+    -addext "subjectAltName=$san" -keyout "$CT/k$n.pem" -out "$CT/c$n.pem" 2>/dev/null
+done
+certjson() { $PY -c "import json,sys; print(json.dumps({'name':'itest-replace','certificate':open(sys.argv[1]).read(),'private_key':open(sys.argv[2]).read()}))" "$CT/c$1.pem" "$CT/k$1.pem"; }
+CRID=$(c -X POST $A/api/certificates -d "$(certjson 1)" | js "d['id']")
+RH=$(c -X POST $A/api/proxy-hosts -d "{\"domains\":[\"replace.corvus.test\"],\"forward_scheme\":\"http\",\"forward_host\":\"demo\",\"forward_port\":80,\"certificate_id\":$CRID}" | js "d.get('id') or d.get('proxy_host',{}).get('id')")
+sleep 2
+serial() { echo | openssl s_client -connect "$H:8443" -servername replace.corvus.test 2>/dev/null | openssl x509 -noout -serial 2>/dev/null | cut -d= -f2; }
+chk "$(serial)" 03E9 "host serves the uploaded certificate"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/certificates/$CRID -d "$($PY -c "import json,sys; print(json.dumps({'certificate':open(sys.argv[1]).read(),'private_key':open(sys.argv[2]).read()}))" "$CT/c2.pem" "$CT/k1.pem")")" 422 "replacement with a key that does not match: 422"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/certificates/$CRID -d "$(certjson 2)")" 200 "replace the certificate in place"
+sleep 2
+chk "$(serial)" 03EA "host serves the replacement without being edited"
+chk "$(c $A/api/certificates | js "[(x['name'],len(x['domains'])) for x in d if x['id']==$CRID][0]")" "('itest-replace', 2)" "same ID, name kept, domains updated"
+chk "$(c $A/api/proxy-hosts/$RH | js "d['certificate_id']")" "$CRID" "host still uses the certificate"
+c -o /dev/null -X DELETE $A/api/proxy-hosts/$RH
+c -o /dev/null -X DELETE $A/api/certificates/$CRID
+rm -rf "$CT"
+
 echo "[backup]"
 BK=$(mktemp)
 chk "$(curl -sk -b "$J" -o "$BK" -w '%{http_code}' "$A/api/backup")" 200 "backup download"
@@ -600,7 +688,7 @@ P=$(c -X POST $A/api/import/npm/preview -d '{}')
 chk "$(echo "$P" | js "(len(d['proxy_hosts']),len(d['certificates']),len(d['access_lists']))")" "(3, 2, 1)" "preview hosts/certs/acls (soft-deleted excluded)"
 chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/import/npm/preview -d '{"path":"/data"}')" 422 "paths outside /import rejected"
 R=$(c -X POST $A/api/import/npm/apply -d '{}')
-chk "$(echo "$R" | js "sorted((k,v) for k,v in d['imported'].items() if k not in ('security_rules','redirection_hosts'))")" "[('access_lists', 1), ('certificates', 2), ('proxy_hosts', 3)]" "import applied"
+chk "$(echo "$R" | js "sorted((k,v) for k,v in d['imported'].items() if k not in ('security_rules','redirection_hosts','streams'))")" "[('access_lists', 1), ('certificates', 2), ('proxy_hosts', 3)]" "import applied"
 chk "$(code -H 'Host: npm-shop.corvus.test' "$G/")" 301 "imported host forces HTTPS"
 chk "$(curl -sk -o /dev/null -w '%{http_code}' --resolve npm-shop.corvus.test:8443:$H https://npm-shop.corvus.test:8443/)" 200 "imported certificate serves HTTPS"
 chk "$(code -H 'Host: npm-custom.corvus.test' -u alice:alice-secret-1 "$G/")" 200 "imported access list password works"

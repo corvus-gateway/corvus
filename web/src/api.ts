@@ -85,6 +85,11 @@ export interface ProxyHost {
   client_ip?: ClientIPMode; rate_limit_id?: number | null; access_list_id?: number | null; block_exploits?: boolean;
   body_inspection?: "off" | "log" | "block"; body_max_kb?: number;
   security_headers?: SecurityHeaders;
+  /** null = global default (100 MB), 0 = unlimited. */
+  max_upload_mb?: number | null;
+  /** Upstream read/send timeout in seconds; null = default (60 s, WebSocket 1 h). */
+  upstream_timeout_s?: number | null;
+  gzip?: boolean;
   under_attack?: UnderAttackMode;
   under_attack_config?: UnderAttackConfig;
   locations?: ProxyLocation[];
@@ -118,6 +123,12 @@ export interface RedirectionHost {
   id: number; domains: string[]; forward_scheme: RedirectScheme; forward_domain: string; http_code: number; preserve_path: boolean;
   certificate_id: number | null; ssl_forced: boolean; http2: boolean; block_exploits: boolean; advanced_config: string; enabled: boolean;
   created_at: string; updated_at: string;
+}
+
+/** TCP/UDP port forwarding (GET /api/streams). */
+export interface Stream {
+  id: number; incoming_port: number; tcp_forwarding: boolean; udp_forwarding: boolean; forward_host: string; forward_port: number;
+  certificate_id: number | null; enabled: boolean; created_at: string; updated_at: string;
 }
 
 export interface LiveStats { name: string; available: boolean; active: number; waiting: number; capacity: number }
@@ -220,6 +231,7 @@ export interface TrafficEvent { ts: number | string; kind: EventKind; host: stri
 export interface NpmPreview {
   proxy_hosts: { npm_id: number; domains: string[]; forward?: string; conflict?: string | boolean }[];
   redirection_hosts?: { npm_id: number; domains: string[]; forward?: string; conflict?: string | boolean }[];
+  streams?: { npm_id: number; incoming_port: number; forward_host: string; forward_port: number; tcp_forwarding: boolean; udp_forwarding: boolean; conflict?: string | boolean }[];
   certificates: { npm_id: number; name?: string; nice_name?: string; domains?: string[] }[];
   access_lists: { npm_id: number; name?: string }[];
   warnings: string[];

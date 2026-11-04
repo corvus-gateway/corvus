@@ -54,9 +54,11 @@ Corvus は Nginx Proxy Manager のフォークではありません。既存の 
 - ワイルドカード、WebSocket、HTTP/2、HTTPS 強制、カスタム Nginx スニペットに対応したプロキシホスト
 - カスタムロケーション: パス（例: `/api`）ごとに別のアップストリームへ転送し、ホストの保護をそのまま適用
 - リダイレクトホスト: ドメインを別のドメインへ転送(301/302/303/307/308、パスの維持も可能)。TLS と保護機能も同じように適用
-- 自動更新される無料の Let's Encrypt 証明書(HTTP-01、または DNS-01: Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap)、または独自証明書のアップロード
+- 自動更新される無料の Let's Encrypt 証明書(HTTP-01、または DNS-01: Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap)、または独自証明書のアップロード(更新時はそのまま置き換え可能)
+- ストリーム: TCP/UDP ポート(データベース、SSH、MQTT、ゲームサーバー)を別のホストへ転送。TCP では TLS 終端も可能
 - Cloudflare や信頼できるプロキシの背後でも実際のクライアント IP を取得、ホストごとのパスワード保護(任意)
 - ホストごとのセキュリティヘッダーのプリセット(基本 / 厳格: nosniff、フレーム・リファラーポリシー、レポート専用 CSP、HttpOnly/SameSite/Secure Cookie フラグ)。アプリがすでに送っているヘッダーは上書きしません
+- テキスト応答の Gzip 圧縮(既定で有効)、ホストごとのアップロードサイズ上限とアップストリームのタイムアウト
 - すべての変更は `openresty -t` で検証され、アトミックに適用され、ロールバックも可能
 
 **Corvus Sentinel — セキュリティエンジン**
@@ -236,6 +238,7 @@ docker compose -f docker-compose.hardened.yml up -d
 | `CORVUS_REDIS_PORT` | 127.0.0.1 で動作する内蔵アクセスキューストアのポート(デフォルト `6379`)。`network_mode: host` でホストがすでに 6379 を使っている場合に変更 |
 | `CORVUS_RESOLVER` | 転送先ホストの名前解決に使う DNS サーバー。デフォルト: Docker の DNS、ホストネットワークでは `/etc/resolv.conf` の最初の `nameserver` |
 | `CORVUS_LOOPBACK=container` | `127.0.0.1`/`localhost` の転送先ホストが Docker ホストではなくコンテナ自身を指すようにする |
+| `CORVUS_IPV6` | `auto`(既定): システムに IPv6 があれば IPv6 でも待ち受け · `off`: IPv4 のみ · `on`: 常に IPv6 で待ち受け、転送先ホストも IPv6 アドレスで解決(IPv6 専用アップストリーム) |
 | `PUID` / `PGID` | コンテナを実行し `./data` を所有するユーザーとグループ(デフォルト `10001`)。例: NAS のユーザー |
 | `CORVUS_ACME_DIRECTORY` | Let's Encrypt の代わりに使う別の CA の ACME ディレクトリ URL。例: プライベート step-ca の `https://ca.internal/acme/acme/directory` |
 | `LEGO_CA_CERTIFICATES` | ACME クライアントが信頼するプライベート CA の PEM ファイル(コンテナにマウント)。例: `/data/ca.pem` |
@@ -256,13 +259,31 @@ docker compose -f docker-compose.hardened.yml up -d
 構成をそのまま使う場合は、Corvus をホストネットワークで実行します。`ports:` と `networks:` を
 `network_mode: host` に置き換えてください(ホストで 6379 が使用中なら `CORVUS_REDIS_PORT` も設定)。
 
+### ストリーム (TCP/UDP)
+
+*ストリーム* は TCP / UDP ポートを転送先ホストへ転送します(ルールは上記と同じ)。TCP では登録済みの
+証明書で TLS を終端することもできます。デフォルトのブリッジネットワークでは、各ストリームのポートを
+`docker-compose.yml` にも公開し、`docker compose up -d` で反映してください。
+
+```yaml
+    ports:
+      - '80:80'
+      - '443:443'
+      - '9443:9443'
+      - '5432:5432'       # ストリーム: PostgreSQL (TCP)
+      - '1194:1194/udp'   # ストリーム: OpenVPN (UDP)
+```
+
+`network_mode: host` では追加の作業は不要です。Corvus 自身が使うポート(80、443、9443 と内部ポート)は
+ストリームに使えません。
+
 ### Nginx Proxy Manager からの移行
 
-コンソールの *NPM からインポート* は、既存の NPM 環境から **プロキシホスト、リダイレクトホスト、証明書**
+コンソールの *NPM からインポート* は、既存の NPM 環境から **プロキシホスト、リダイレクトホスト、ストリーム、証明書**
 （Cloudflare DNS トークンを含む Let's Encrypt 証明書とカスタム証明書）と **アクセスリスト**（ユーザーと
 IP ルール）をコピーします。NPM のファイルとデータベースを読み取るだけで NPM 自体は変更しないため、いつでも元に戻せます。
 
-インポートされないもの: ストリーム（TCP/UDP）、404 ホスト、NPM 固有の変数を使う高度な設定
+インポートされないもの: 404 ホスト、NPM 固有の変数を使う高度な設定
 （カスタムロケーションの高度な設定を含む）。スキップされる項目はすべてプレビューに一覧表示されます。
 
 **NPM が使っているデータベースを確認してください。** NPM の `docker-compose.yml` を開きます。

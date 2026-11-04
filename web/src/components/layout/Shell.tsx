@@ -17,6 +17,7 @@ import { Skeleton } from "../ui/display";
 const Dashboard = lazy(() => import("../../pages/Dashboard"));
 const ProxyHosts = lazy(() => import("../../pages/ProxyHosts"));
 const RedirectionHosts = lazy(() => import("../../pages/RedirectionHosts"));
+const Streams = lazy(() => import("../../pages/Streams"));
 const Waitrooms = lazy(() => import("../../pages/Waitrooms"));
 const Traffic = lazy(() => import("../../pages/Traffic"));
 const RateLimits = lazy(() => import("../../pages/RateLimits"));
@@ -157,6 +158,7 @@ export function Shell() {
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/proxy-hosts" element={<ProxyHosts />} />
                 <Route path="/redirection-hosts" element={<RedirectionHosts />} />
+                <Route path="/streams" element={<Streams />} />
                 <Route path="/waitrooms" element={<Waitrooms />} />
                 <Route path="/traffic" element={<Traffic />} />
                 <Route path="/rate-limits" element={<RateLimits />} />

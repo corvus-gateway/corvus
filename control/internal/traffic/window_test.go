@@ -48,3 +48,22 @@ func TestUnderAttackRuleEvents(t *testing.T) {
 		t.Errorf("under-attack challenge recorded as a rule: %+v", c.ruleStats)
 	}
 }
+
+// Access queue answers (429 + Retry-After) are visitors told to wait: not rate limited,
+// not blocked, not server errors. The per-IP entry limit stays a rate limit.
+func TestWaitroomHeldNotRateLimited(t *testing.T) {
+	for _, wr := range []string{"cookie-check", "queue", "full"} {
+		blocked, kinds := classify(&Record{S: 429, WR: wr})
+		for _, k := range kinds {
+			if k == "rate_limited" || k == "server_error" {
+				t.Errorf("%s: kind %s", wr, k)
+			}
+		}
+		if blocked {
+			t.Errorf("%s: blocked", wr)
+		}
+	}
+	if blocked, _ := classify(&Record{S: 429, WR: "ip-limit"}); !blocked {
+		t.Error("ip-limit 429 must stay a rate limit")
+	}
+}

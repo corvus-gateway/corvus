@@ -35,6 +35,35 @@ func TestProxyHostNormalizes(t *testing.T) {
 	}
 }
 
+func TestProxyHostLimits(t *testing.T) {
+	n := func(v int) *int { return &v }
+	for _, tc := range []struct {
+		upload, timeout *int
+		field           string
+	}{
+		{nil, nil, ""},
+		{n(0), n(1), ""},
+		{n(MaxUploadMB), n(MaxUpstreamTimeoutS), ""},
+		{n(-1), nil, "max_upload_mb"},
+		{n(MaxUploadMB + 1), nil, "max_upload_mb"},
+		{nil, n(0), "upstream_timeout_s"},
+		{nil, n(MaxUpstreamTimeoutS + 1), "upstream_timeout_s"},
+	} {
+		h := validHost()
+		h.MaxUploadMB, h.UpstreamTimeoutS = tc.upload, tc.timeout
+		err := ProxyHost(&h)
+		if tc.field == "" {
+			if err != nil {
+				t.Errorf("%v/%v: %v", tc.upload, tc.timeout, err)
+			}
+			continue
+		}
+		if fe, ok := err.(Errors); !ok || len(fe) != 1 || fe[0].Field != tc.field {
+			t.Errorf("expected a %s error, got %v", tc.field, err)
+		}
+	}
+}
+
 func TestProxyHostSecurityHeaders(t *testing.T) {
 	h := validHost()
 	if err := ProxyHost(&h); err != nil || h.SecurityHeaders != "off" {
