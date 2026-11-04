@@ -583,6 +583,29 @@ put_host ',"waitroom_id":null' >/dev/null
 c -o /dev/null -X DELETE $A/api/waitrooms/$WR
 rm -f "$WQ"
 
+echo "[certificate replace]"
+CT=$(mktemp -d)
+for n in 1 2; do
+  san="DNS:replace.corvus.test"; [ $n = 2 ] && san="$san,DNS:www.replace.corvus.test"
+  openssl req -x509 -newkey rsa:2048 -nodes -days 30 -set_serial $((1000+n)) -subj /CN=replace.corvus.test \
+    -addext "subjectAltName=$san" -keyout "$CT/k$n.pem" -out "$CT/c$n.pem" 2>/dev/null
+done
+certjson() { $PY -c "import json,sys; print(json.dumps({'name':'itest-replace','certificate':open(sys.argv[1]).read(),'private_key':open(sys.argv[2]).read()}))" "$CT/c$1.pem" "$CT/k$1.pem"; }
+CRID=$(c -X POST $A/api/certificates -d "$(certjson 1)" | js "d['id']")
+RH=$(c -X POST $A/api/proxy-hosts -d "{\"domains\":[\"replace.corvus.test\"],\"forward_scheme\":\"http\",\"forward_host\":\"demo\",\"forward_port\":80,\"certificate_id\":$CRID}" | js "d.get('id') or d.get('proxy_host',{}).get('id')")
+sleep 2
+serial() { echo | openssl s_client -connect "$H:8443" -servername replace.corvus.test 2>/dev/null | openssl x509 -noout -serial 2>/dev/null | cut -d= -f2; }
+chk "$(serial)" 03E9 "host serves the uploaded certificate"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/certificates/$CRID -d "$($PY -c "import json,sys; print(json.dumps({'certificate':open(sys.argv[1]).read(),'private_key':open(sys.argv[2]).read()}))" "$CT/c2.pem" "$CT/k1.pem")")" 422 "replacement with a key that does not match: 422"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/certificates/$CRID -d "$(certjson 2)")" 200 "replace the certificate in place"
+sleep 2
+chk "$(serial)" 03EA "host serves the replacement without being edited"
+chk "$(c $A/api/certificates | js "[(x['name'],len(x['domains'])) for x in d if x['id']==$CRID][0]")" "('itest-replace', 2)" "same ID, name kept, domains updated"
+chk "$(c $A/api/proxy-hosts/$RH | js "d['certificate_id']")" "$CRID" "host still uses the certificate"
+c -o /dev/null -X DELETE $A/api/proxy-hosts/$RH
+c -o /dev/null -X DELETE $A/api/certificates/$CRID
+rm -rf "$CT"
+
 echo "[backup]"
 BK=$(mktemp)
 chk "$(curl -sk -b "$J" -o "$BK" -w '%{http_code}' "$A/api/backup")" 200 "backup download"

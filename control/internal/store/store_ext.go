@@ -318,6 +318,20 @@ func (s *Store) UpdateCertificateState(ctx context.Context, id int64, status, la
 	return err
 }
 
+// ReplaceCustomCertificate records a new certificate/key pair for an uploaded
+// certificate (same ID, so hosts keep using it). ACME certificates are not touched.
+func (s *Store) ReplaceCustomCertificate(ctx context.Context, id int64, name string, domains []string, notAfter time.Time) error {
+	res, err := s.q.ExecContext(ctx, `UPDATE certificates SET name=?, domains=?, not_after=?, status='valid', last_error='' WHERE id=? AND kind='custom'`,
+		name, toJSON(domains), notAfter.UTC(), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) SetCertificateStatus(ctx context.Context, id int64, status, lastError string) error {
 	_, err := s.q.ExecContext(ctx, `UPDATE certificates SET status=?, last_error=? WHERE id=?`, status, lastError, id)
 	return err
