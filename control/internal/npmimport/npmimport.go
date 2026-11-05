@@ -139,7 +139,9 @@ type Snapshot struct {
 	Streams      []Stream     `json:"streams"`
 	Certificates []Cert       `json:"certificates"`
 	AccessLists  []AccessList `json:"access_lists"`
-	Warnings     []string     `json:"warnings"`
+	// UnknownHosts is NPM's default site setting when it differs from the Corvus default.
+	UnknownHosts *store.UnknownHosts `json:"unknown_hosts,omitempty"`
+	Warnings     []string            `json:"warnings"`
 }
 
 // npmRefs detects advanced config that depends on NPM-specific variables or includes.
@@ -299,7 +301,52 @@ func Read(ctx context.Context, src Source) (*Snapshot, error) {
 	if err := readStreams(ctx, db, snap); err != nil {
 		return nil, err
 	}
+	readDefaultSite(ctx, db, snap)
 	return snap, nil
+}
+
+// readDefaultSite maps NPM's "Default Site" setting (what unknown hosts get) to the
+// Corvus unknown host setting. Only a setting other than the Corvus default (not
+// found) is offered for import; a custom HTML page cannot be carried over.
+func readDefaultSite(ctx context.Context, db *sql.DB, snap *Snapshot) {
+	var value, meta string
+	if db.QueryRowContext(ctx, "SELECT COALESCE(value, ''), COALESCE(meta, '{}') FROM `setting` WHERE id = 'default-site'").Scan(&value, &meta) != nil {
+		return // no setting table (older NPM) or no row: NPM's default
+	}
+	u, warn := DefaultSite(value, meta)
+	if warn != "" {
+		snap.Warnings = append(snap.Warnings, warn)
+	}
+	if u != nil && u.Mode != store.UnknownNotFound {
+		snap.UnknownHosts = u
+	}
+}
+
+// DefaultSite converts NPM's default-site value (congratulations | 404 | 444 | redirect
+// | html) and meta ({"redirect": "…", "html": "…"}) into a validated Corvus unknown host
+// setting. A non-empty warning explains what could not be imported.
+func DefaultSite(value, meta string) (*store.UnknownHosts, string) {
+	var m struct {
+		Redirect string `json:"redirect"`
+	}
+	_ = json.Unmarshal([]byte(meta), &m)
+	u := &store.UnknownHosts{Mode: store.UnknownNotFound}
+	warn := ""
+	switch strings.TrimSpace(value) {
+	case "", "congratulations", "404":
+	case "444":
+		u.Mode = store.UnknownClose
+	case "redirect":
+		u.Mode, u.RedirectURL = store.UnknownRedirect, m.Redirect
+	case "html":
+		warn = "the default site shows a custom HTML page, which is not imported; unknown hosts get the Corvus not found page"
+	default:
+		warn = fmt.Sprintf("default site %q is not supported; unknown hosts get the Corvus not found page", value)
+	}
+	if err := validate.UnknownHosts(u); err != nil {
+		return nil, fmt.Sprintf("the default site redirect %q is not a valid http(s) URL and was not imported", m.Redirect)
+	}
+	return u, warn
 }
 
 // npmLocation is an entry of NPM's proxy_host.locations JSON. NPM keeps the forward

@@ -240,8 +240,14 @@ http {
             return 200 "ok\n";
         }
         location / {
+{{- if eq .Unknown.Mode "close"}}
+            return 444;
+{{- else if eq .Unknown.Mode "redirect"}}
+            return 302 {{.Unknown.RedirectURL}};
+{{- else}}
             default_type text/html;
             return 404 "<!doctype html><meta charset=utf-8><title>Corvus</title><p>No site is configured for this host.</p>\n";
+{{- end}}
         }
     }
 

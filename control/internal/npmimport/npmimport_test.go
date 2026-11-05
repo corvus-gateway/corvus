@@ -98,8 +98,8 @@ func TestRead(t *testing.T) {
 	if a.SatisfyAll || len(a.Clients) != 1 || a.Users[0].Password != "plain-secret" {
 		t.Fatalf("acl: %+v", a)
 	}
-	if len(snap.Warnings) != 0 {
-		t.Fatalf("unexpected warnings: %v", snap.Warnings)
+	if len(snap.Warnings) != 0 || snap.UnknownHosts != nil {
+		t.Fatalf("unexpected warnings / default site (no setting table): %v %+v", snap.Warnings, snap.UnknownHosts)
 	}
 	if len(snap.Streams) != 3 {
 		t.Fatalf("streams (soft-deleted must be filtered): %+v", snap.Streams)
@@ -165,6 +165,60 @@ INSERT INTO stream VALUES (1, 2222, '10.0.0.2', 22, 1, 0, 1, 0);
 	// NPM before 2.9: forward_ip, no certificate_id.
 	if len(snap.Streams) != 1 || snap.Streams[0].ForwardHost != "10.0.0.2" || snap.Streams[0].IncomingPort != 2222 || snap.Streams[0].ForwardPort != 22 || !snap.Streams[0].TCP {
 		t.Fatalf("legacy stream: %+v", snap.Streams)
+	}
+}
+
+func TestDefaultSite(t *testing.T) {
+	for _, c := range []struct {
+		value, meta string
+		mode, url   string // "" mode = nothing to import
+		warn        bool
+	}{
+		{"congratulations", `{}`, "not_found", "", false},
+		{"404", `{"redirect":"","html":""}`, "not_found", "", false},
+		{"444", `{}`, "close", "", false},
+		{"redirect", `{"redirect":"https://www.example.com/"}`, "redirect", "https://www.example.com/", false},
+		{"redirect", `{"redirect":"www.example.com"}`, "", "", true},
+		{"html", `{"html":"<p>hi</p>"}`, "not_found", "", true},
+		{"other", `{}`, "not_found", "", true},
+	} {
+		u, warn := DefaultSite(c.value, c.meta)
+		switch {
+		case c.mode == "" && u != nil, c.mode != "" && (u == nil || u.Mode != c.mode || u.RedirectURL != c.url):
+			t.Errorf("%s %s: got %+v", c.value, c.meta, u)
+		case (warn != "") != c.warn:
+			t.Errorf("%s %s: warning %q", c.value, c.meta, warn)
+		}
+	}
+
+	// Read offers only a setting other than the Corvus default.
+	for _, c := range []struct {
+		row  string
+		mode string
+		warn int
+	}{
+		{`('default-site', 'congratulations', '{}')`, "", 0},
+		{`('default-site', '444', '{}')`, "close", 0},
+		{`('default-site', 'redirect', '{"redirect":"https://example.com/hello"}')`, "redirect", 0},
+		{`('default-site', 'html', '{"html":"<p>x</p>"}')`, "", 1},
+	} {
+		data := t.TempDir()
+		db, err := sql.Open("sqlite", filepath.Join(data, "database.sqlite"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(npmSchema + "CREATE TABLE setting (id TEXT PRIMARY KEY, name TEXT, description TEXT, value TEXT, meta TEXT);\n" +
+			"INSERT INTO setting (id, value, meta) VALUES " + c.row + ";"); err != nil {
+			t.Fatal(err)
+		}
+		db.Close()
+		snap, err := Read(context.Background(), Source{DataDir: data, LetsEncryptDir: filepath.Join(data, "le")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := snap.UnknownHosts; (c.mode == "") != (got == nil) || (got != nil && got.Mode != c.mode) || len(snap.Warnings) != c.warn {
+			t.Errorf("%s: unknown hosts %+v, warnings %v", c.row, got, snap.Warnings)
+		}
 	}
 }
 

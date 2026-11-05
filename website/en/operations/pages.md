@@ -26,3 +26,17 @@ These are replaced (HTML-escaped) when the page is served:
 
 Pages can be up to 64 KB. Saving deploys immediately; **Reset to default** brings back the built-in
 page.
+
+## Unknown hosts { #unknown-hosts }
+
+A request for a host name that no proxy or redirection host serves (a mistyped name, a bare IP
+address, a scanner) is answered according to **Unknown hosts** at the bottom of the page:
+
+| Option | Answer |
+|---|---|
+| **Not found page (404)** | A short `404` page (default) |
+| **Close the connection** | No response at all: the connection is closed (nginx `444`) |
+| **Redirect to a URL** | `302` to the URL you enter, e.g. `https://www.example.com/`. The requested path is not appended |
+
+This applies to plain HTTP. HTTPS connections for unknown names are always refused during the TLS
+handshake, so no certificate is revealed. Let's Encrypt HTTP challenges keep working in every mode.

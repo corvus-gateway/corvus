@@ -37,7 +37,7 @@ traffic goes to a third-party cloud.
 
 | | |
 |---|---|
-| **Proxy & TLS** | Proxy hosts, [custom locations](proxy/locations.md), [redirections](proxy/redirection-hosts.md), [TCP/UDP streams](proxy/streams.md), [Let's Encrypt certificates](proxy/certificates.md) with automatic renewal |
+| **Proxy & TLS** | Proxy hosts, [custom locations](proxy/locations.md), [redirections](proxy/redirection-hosts.md), [TCP/UDP streams](proxy/streams.md), [Let's Encrypt certificates](proxy/certificates.md) with automatic renewal, what [unknown hosts](operations/pages.md#unknown-hosts) get: 404, closed connection or a redirect |
 | **Security** | Known attack patterns blocked by default, [security rules](security/rules.md), [IP and User-Agent lists](security/ip-lists.md), [browser challenge and "under attack" mode](security/challenge.md), [automatic bans](security/bans.md) |
 | **Access queue** | [Capacity-based waiting room](access-queue.md) for traffic spikes |
 | **Monitoring** | [Live traffic, request logs and security events](operations/traffic.md), [alerts](operations/alerts.md) to Slack, Discord, Teams, Telegram and more |

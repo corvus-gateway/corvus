@@ -47,11 +47,44 @@ func (s *Server) getPages(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	u, err := s.Store.UnknownHosts(r.Context())
+	if err != nil {
+		fail(w, err)
+		return
+	}
 	writeJSON(w, 200, map[string]any{
-		"pages":        map[string]pageView{"block": s.pageView(p, "block"), "error": s.pageView(p, "error")},
-		"max_bytes":    validate.MaxCustomPageBytes,
-		"placeholders": validate.PagePlaceholders,
+		"pages":         map[string]pageView{"block": s.pageView(p, "block"), "error": s.pageView(p, "error")},
+		"max_bytes":     validate.MaxCustomPageBytes,
+		"placeholders":  validate.PagePlaceholders,
+		"unknown_hosts": u,
 	})
+}
+
+// putUnknownHosts stores what the gateway answers for unknown host names
+// ({"mode": "not_found"|"close"|"redirect", "redirect_url": "https://…"}) and deploys it.
+func (s *Server) putUnknownHosts(w http.ResponseWriter, r *http.Request) {
+	var in store.UnknownHosts
+	if !decode(w, r, &in) {
+		return
+	}
+	if err := validate.UnknownHosts(&in); err != nil {
+		fail(w, err)
+		return
+	}
+	var before store.UnknownHosts
+	ver, err := s.Deployer.Apply(r.Context(), userID(r), "update unknown host setting", func(tx *store.Store) error {
+		var err error
+		if before, err = tx.UnknownHosts(r.Context()); err != nil {
+			return err
+		}
+		return tx.SetUnknownHosts(r.Context(), in)
+	})
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	s.audit(r, "unknown_hosts.update", "settings:unknown_hosts", map[string]any{"before": before, "after": in})
+	writeJSON(w, 200, map[string]any{"unknown_hosts": in, "version": ver})
 }
 
 // putPage stores a custom page (PUT, {"html": "..."}) or restores the built-in

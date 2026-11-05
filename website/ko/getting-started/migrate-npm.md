@@ -117,3 +117,4 @@ NPM의 `./data`, `./letsencrypt` 볼륨의 호스트 경로를 사용하세요. 
 | SSL Certificates | **인증서** |
 | Access Lists | 사용자와 IP 규칙을 함께 가져와 같은 호스트에 연결합니다. 새 호스트에는 프록시 호스트 입력 화면의 **비밀번호 보호**를, IP 제한에는 [보안 규칙](../security/rules.md)을 사용하세요 |
 | Advanced (사용자 지정 Nginx 설정) | **고급 → 고급 nginx 설정** |
+| Settings → Default Site | **차단·오류 페이지**의 [알 수 없는 호스트](../operations/pages.md#unknown-hosts): 404와 Congratulations는 **찾을 수 없음 페이지 (404)**가 되고, No Response(444)와 Redirect는 그대로 가져옵니다. Custom Page(HTML)는 가져오지 않습니다 |

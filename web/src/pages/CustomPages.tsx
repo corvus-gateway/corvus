@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileWarning, RotateCcw, Save } from "lucide-react";
+import { FileWarning, Globe, RotateCcw, Save } from "lucide-react";
 import { api } from "../api";
 import { ErrorBox, PageHeader, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Badge, Callout, Card, CardHeader, ComingSoon, Skeleton } from "../components/ui/display";
-import { Field, Segmented, Textarea, fieldErr } from "../components/ui/form";
+import { Field, IdField, Input, Segmented, Select, Textarea, fieldErr } from "../components/ui/form";
 import { ConfirmDialog } from "../components/ui/overlay";
 import { useResource } from "../hooks/useResource";
 import { useCan } from "../lib/rbac";
@@ -12,7 +12,58 @@ import { useI18n, type Key } from "../i18n";
 
 type PageName = "block" | "error";
 interface PageView { custom: boolean; html: string; default_html: string }
-interface PagesResponse { pages: Record<PageName, PageView>; max_bytes: number; placeholders: string[] }
+type UnknownMode = "not_found" | "close" | "redirect";
+interface UnknownHosts { mode: UnknownMode; redirect_url: string }
+interface PagesResponse { pages: Record<PageName, PageView>; max_bytes: number; placeholders: string[]; unknown_hosts?: UnknownHosts }
+
+const UNKNOWN_MODES: { value: UnknownMode; label: Key }[] = [
+  { value: "not_found", label: "unknownNotFound" },
+  { value: "close", label: "unknownClose" },
+  { value: "redirect", label: "unknownRedirect" },
+];
+
+/** What the gateway answers for host names no proxy or redirection host serves. */
+function UnknownHostsCard({ value, onSaved }: { value: UnknownHosts; onSaved: () => void }) {
+  const { t } = useI18n();
+  const { can } = useCan();
+  const [mode, setMode] = useState<UnknownMode>(value.mode);
+  const [url, setUrl] = useState(value.redirect_url ?? "");
+  const save = useSubmit();
+  useEffect(() => { setMode(value.mode); setUrl(value.redirect_url ?? ""); }, [value]);
+  const dirty = mode !== value.mode || (mode === "redirect" && url.trim() !== (value.redirect_url ?? ""));
+
+  const onSave = async () => {
+    const r = await save.run(() => api.put("/api/settings/unknown-hosts", { mode, redirect_url: mode === "redirect" ? url.trim() : "" }), { success: t("savedDeployed") });
+    if (r !== undefined) onSaved();
+  };
+
+  return (
+    <Card>
+      <CardHeader icon={Globe} title={t("unknownHosts")} description={t("unknownHostsDesc")} />
+      <form className="px-4 pb-4 pt-2" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
+        <fieldset disabled={!can} className="min-w-0 space-y-4">
+          <ErrorBox error={save.error} />
+          <IdField label={t("unknownMode")} error={fieldErr(save.error, "mode")}>
+            {(id) => (
+              <Select id={id} value={mode} onChange={(e) => { setMode(e.target.value as UnknownMode); save.setError(null); }}>
+                {UNKNOWN_MODES.map((m) => <option key={m.value} value={m.value}>{t(m.label)}</option>)}
+              </Select>
+            )}
+          </IdField>
+          {mode === "redirect" && (
+            <IdField label={t("unknownRedirectUrl")} hint={t("unknownRedirectHint")} error={fieldErr(save.error, "redirect_url")} required>
+              {(id) => <Input id={id} className="font-mono" inputMode="url" value={url} onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://www.example.com/" invalid={!!fieldErr(save.error, "redirect_url")} />}
+            </IdField>
+          )}
+          {can && <div className="flex justify-end">
+            <Button type="submit" variant="primary" loading={save.busy} disabled={!dirty || (mode === "redirect" && !url.trim())}><Save className="h-4 w-4" />{t("saveAndDeploy")}</Button>
+          </div>}
+        </fieldset>
+      </form>
+    </Card>
+  );
+}
 
 const VARS: { name: string; label: Key }[] = [
   { name: "{{STATUS}}", label: "pageVarStatus" },
@@ -111,6 +162,7 @@ export default function CustomPages() {
               </div>
             </Card>
           </div>
+          {res.data?.unknown_hosts && <div className="grid items-start gap-5 lg:grid-cols-2"><UnknownHostsCard value={res.data.unknown_hosts} onSaved={res.reload} /></div>}
         </div>
       )}
       <ConfirmDialog open={confirm} onOpenChange={setConfirm} title={t("pageResetTitle")} description={t("pageResetDesc")}
