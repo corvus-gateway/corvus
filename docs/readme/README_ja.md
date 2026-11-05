@@ -33,6 +33,8 @@ Corvus は、Web サービスの前段に置くセルフホスト型ゲートウ
 アクセス集中に備えたアクセスキューを備えています。すべてが自分のサーバー上で動作し、トラフィックが
 サードパーティのクラウドに送信されることはありません。
 
+<p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
+
 - [クイックセットアップ](#クイックセットアップ)
 - [ドキュメント](https://corvus-gateway.github.io/corvus/)
 - [スクリーンショット](#スクリーンショット)

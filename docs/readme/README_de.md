@@ -33,6 +33,8 @@ und **überwacht, schützt und steuert** zusätzlich den durchlaufenden Datenver
 Angriffsabwehr, Ratenbegrenzung und eine Zugriffswarteschlange für Lastspitzen. Alles läuft auf
 Ihrem eigenen Server; es wird kein Traffic an eine Drittanbieter-Cloud gesendet.
 
+<p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
+
 - [Schnellstart](#schnellstart)
 - [Dokumentation](https://corvus-gateway.github.io/corvus/)
 - [Screenshots](#screenshots)

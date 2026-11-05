@@ -33,6 +33,8 @@ protects and controls** the traffic that passes through it: live monitoring, att
 rate limiting and an access queue for traffic spikes. Everything runs on your own server; no
 traffic is sent to a third-party cloud.
 
+<p align="center"><img src="assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
+
 - [Quick Setup](#quick-setup)
 - [Documentation](https://corvus-gateway.github.io/corvus/)
 - [Screenshots](#screenshots)

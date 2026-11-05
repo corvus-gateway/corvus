@@ -33,6 +33,8 @@ Corvus는 웹 서비스 앞단에 두는 셀프 호스팅 게이트웨이입니�
 트래픽 급증에 대비한 접속 대기열까지 제공합니다. 모든 것이 여러분의 서버에서 동작하며, 트래픽이
 외부 클라우드로 전송되지 않습니다.
 
+<p align="center"><img src="../../assets/demo/corvus-demo-ko.gif" alt="Corvus demo" width="900"></p>
+
 - [빠른 설정](#빠른-설정)
 - [문서](https://corvus-gateway.github.io/corvus/ko/)
 - [스크린샷](#스크린샷)

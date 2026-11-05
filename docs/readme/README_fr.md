@@ -33,6 +33,8 @@ exploiter que Nginx Proxy Manager — domaines, redirection et SSL gratuit en qu
 des attaques, limitation de débit et file d'accès pour absorber les pics de trafic. Tout s'exécute
 sur votre propre serveur ; aucun trafic n'est envoyé vers un cloud tiers.
 
+<p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
+
 - [Installation rapide](#installation-rapide)
 - [Documentation](https://corvus-gateway.github.io/corvus/)
 - [Captures d'écran](#captures-décran)

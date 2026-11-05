@@ -10,7 +10,7 @@ hide:
 운영할 수 있고(도메인 연결, 전달, 무료 SSL을 몇 번의 클릭으로), 지나가는 트래픽을 **관제하고,
 보호하고, 제어**합니다. 모든 것이 내 서버에서 동작하며, 트래픽이 외부 클라우드로 나가지 않습니다.
 
-![대시보드](img/dashboard.png){ .shot }
+![Corvus 데모](img/demo.gif){ .shot }
 
 <div class="grid cards" markdown>
 

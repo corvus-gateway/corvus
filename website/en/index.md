@@ -11,7 +11,7 @@ as Nginx Proxy Manager (domains, forwarding and free SSL in a few clicks), and i
 protects and controls** the traffic that passes through it. Everything runs on your own server; no
 traffic goes to a third-party cloud.
 
-![Dashboard](img/dashboard.png){ .shot }
+![Corvus demo](img/demo.gif){ .shot }
 
 <div class="grid cards" markdown>
 

@@ -33,6 +33,8 @@ como Nginx Proxy Manager — dominios, reenvío y SSL gratuito en unos pocos cli
 ataques, limitación de tasa y una cola de acceso para los picos de tráfico. Todo se ejecuta en su
 propio servidor; ningún tráfico se envía a una nube de terceros.
 
+<p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
+
 - [Instalación rápida](#instalación-rápida)
 - [Documentación](https://corvus-gateway.github.io/corvus/)
 - [Capturas de pantalla](#capturas-de-pantalla)
