@@ -356,7 +356,7 @@ var rootLocationRe = regexp.MustCompile(`(?m)^\s*location\s+/\s*\{`)
 
 func HasRootLocation(s string) bool { return rootLocationRe.MatchString(s) }
 
-// Waitroom normalizes and validates a access queue in place.
+// Waitroom normalizes and validates an access queue in place.
 func Waitroom(w *store.Waitroom) error {
 	var errs Errors
 	w.Name = strings.ToLower(strings.TrimSpace(w.Name))

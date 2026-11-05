@@ -501,7 +501,7 @@ func (s *Server) createWaitroom(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, o := range list {
 			if o.Name == wr.Name {
-				return validate.Errors{{Field: "name", Code: "duplicate", Message: "a access queue with this name already exists"}}
+				return validate.Errors{{Field: "name", Code: "duplicate", Message: "an access queue with this name already exists"}}
 			}
 		}
 		return tx.SaveWaitroom(r.Context(), wr)
@@ -534,7 +534,7 @@ func (s *Server) updateWaitroom(w http.ResponseWriter, r *http.Request) {
 		in.apply(wr)
 		// The name keys Redis state and visitor cookies; renaming would orphan the live queue.
 		if wr.Name != before.Name {
-			return validate.Errors{{Field: "name", Code: "immutable", Message: "a access queue cannot be renamed"}}
+			return validate.Errors{{Field: "name", Code: "immutable", Message: "an access queue cannot be renamed"}}
 		}
 		if err := validate.Waitroom(wr); err != nil {
 			return err

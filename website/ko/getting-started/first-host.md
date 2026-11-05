@@ -9,6 +9,40 @@
 - Corvus가 서비스에 접속할 수 있어야 합니다. 다른 컨테이너라면 두 컨테이너가 같은 Docker
   네트워크에 있어야 합니다([전달 대상](../proxy/proxy-hosts.md#forward-targets) 참고).
 
+??? example "Corvus를 다른 컨테이너와 연결하기"
+    공유 네트워크를 한 번 만듭니다.
+
+    ```bash
+    docker network create proxy
+    ```
+
+    Corvus에 이 네트워크를 추가합니다. 앱 서비스에도 같은 `networks:` 줄을 넣거나, 앱을
+    `--network proxy`로 실행하세요.
+
+    ```yaml
+    services:
+      corvus:
+        image: 'ghcr.io/corvus-gateway/gateway:latest'
+        restart: unless-stopped
+        ports:
+          - '80:80'
+          - '443:443'
+          - '9443:9443'
+        volumes:
+          - ./data:/data
+        networks:
+          - default
+          - proxy
+
+    networks:
+      proxy:
+        external: true
+    ```
+
+    `docker compose up -d`를 다시 실행합니다. 프록시 호스트의 **호스트 / IP**에는 **컨테이너
+    이름**(예: `shop-web`)을, 포트에는 앱이 **컨테이너 안에서** 듣는 포트(외부에 공개한 포트가
+    아님)를 넣습니다.
+
 ## 1. 호스트 추가
 
 **프록시 호스트**를 열고 **프록시 호스트 추가**를 누릅니다.

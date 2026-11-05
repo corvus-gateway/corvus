@@ -9,6 +9,40 @@ A **proxy host** sends requests for a domain (e.g. `shop.example.com`) to a serv
 - Corvus can reach the service. For another container, both must share a Docker network
   (see [Forward targets](../proxy/proxy-hosts.md#forward-targets)).
 
+??? example "Connect Corvus to your other containers"
+    Create a shared network once:
+
+    ```bash
+    docker network create proxy
+    ```
+
+    Add it to Corvus (and the same `networks:` lines to your app's service, or start the app
+    with `--network proxy`):
+
+    ```yaml
+    services:
+      corvus:
+        image: 'ghcr.io/corvus-gateway/gateway:latest'
+        restart: unless-stopped
+        ports:
+          - '80:80'
+          - '443:443'
+          - '9443:9443'
+        volumes:
+          - ./data:/data
+        networks:
+          - default
+          - proxy
+
+    networks:
+      proxy:
+        external: true
+    ```
+
+    Run `docker compose up -d` again. In the proxy host, use the **container name** as **Host / IP**
+    (e.g. `shop-web`) and the port the app listens on **inside** its container (not the published
+    one).
+
 ## 1. Add the host
 
 Open **Proxy hosts** and click **Add proxy host**.

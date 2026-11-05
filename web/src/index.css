@@ -4,7 +4,8 @@
 
 /* Design tokens: space-separated RGB so Tailwind alpha modifiers work. */
 @layer base {
-  :root {
+  /* The sign-in card is always light, so forms inside it use the light tokens in dark mode too. */
+  :root, .ck-card {
     --bg: 240 240 240;
     --surface: 255 255 255;
     --surface-2: 247 247 247;
