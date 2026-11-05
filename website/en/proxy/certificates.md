@@ -37,6 +37,10 @@ list: pick the saved one, or choose **Enter new credentials** and optionally giv
 **Credential name**. This works the same on the Certificates page and when you request a
 certificate from a proxy or redirection host form.
 
+![DNS credential in the request form](../img/certificate-dns.png){ .shot .panel }
+
+![DNS credentials card](../img/dns-credentials.png){ .shot }
+
 The **DNS credentials** card at the bottom of the Certificates page lists them with the provider
 and how many certificates use each one. From the row menu:
 

@@ -66,6 +66,21 @@ const shots = [
   { name: "proxy-host-queue", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^(Access queue|접속 대기열)$/);`, dialog: true },
   { name: "proxy-host-advanced", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^(Advanced|고급)$/);`, dialog: true },
   { name: "certificates", path: "/certificates" },
+  { name: "dns-credentials", path: "/certificates", act: `
+    const h = __qa("main *").find(e => [...e.childNodes].some(n => n.nodeType === 3 && /^(DNS credentials|DNS 인증 정보)$/.test(n.textContent.trim())));
+    let c = h; while (c && !/rounded-xl/.test(c.className || "")) c = c.parentElement;
+    c.id = "__dc"; c.scrollIntoView({ block: "center" }); await __sleep(300); return "#__dc";` },
+  { name: "certificate-dns", path: "/certificates", dialog: true, act: `
+    const btn = (re) => __qa("button").find(b => re.test(b.textContent.trim()));
+    btn(/^(Issue with ACME|ACME 발급)$/).click(); await __sleep(900);
+    const i = __q("[role=dialog] input"); i.focus();
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(i, "*.example.com"); i.dispatchEvent(new Event("input", { bubbles: true }));
+    i.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); await __sleep(200);
+    const m = __qa("[role=dialog] input").find(x => x.type === "email");
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(m, "admin@example.com"); m.dispatchEvent(new Event("input", { bubbles: true }));
+    btn(/^(Next|다음)$/).click(); await __sleep(800);
+    const d = __qa("[role=dialog] *").find(e => e.childNodes.length === 1 && e.textContent.trim() === "DNS-01");
+    let x = d; while (x && x.tagName !== "BUTTON" && x.tagName !== "LABEL") x = x.parentElement; (x || d).click(); await __sleep(800);` },
   { name: "redirection-hosts", path: "/redirection-hosts" },
   { name: "streams", path: "/streams" },
   { name: "stream-form", path: "/streams", act: `await __edit("5432");`, dialog: true },
