@@ -34,7 +34,7 @@ Angriffsabwehr, Ratenbegrenzung und eine Zugriffswarteschlange für Lastspitzen.
 Ihrem eigenen Server; es wird kein Traffic an eine Drittanbieter-Cloud gesendet.
 
 - [Schnellstart](#schnellstart)
-- [Vollständige Einrichtung](#vollständige-einrichtung)
+- [Dokumentation](https://corvus-gateway.github.io/corvus/)
 - [Screenshots](#screenshots)
 
 ## Projektziel
@@ -125,7 +125,7 @@ services:
 ```
 
 Das ist die gesamte Installation: Gateway, Admin-Konsole und Speicher für die Zugriffswarteschlange laufen in
-diesem einen Container. Optionen finden Sie unter [Vollständige Einrichtung](#vollständige-einrichtung).
+diesem einen Container. Optionen finden Sie in der [Dokumentation](https://corvus-gateway.github.io/corvus/).
 
 3. Starten Sie Ihren Stack mit
 
@@ -157,214 +157,11 @@ docker compose up -d
 Einstellungen, Zertifikate und der Verlauf in `./data` bleiben erhalten; Datenbankänderungen werden beim
 Start automatisch angewendet.
 
-## Vollständige Einrichtung
+## Dokumentation
 
-### Ports
-
-| Port | Zweck |
-|---|---|
-| 80 / 443 | Gateway — Proxy-Datenverkehr |
-| 9443 | Admin-Konsole und API — nur für vertrauenswürdige Netzwerke freigeben (Firewall oder *Netzwerk → Zugelassene Netze für die Admin-Konsole*) |
-
-### Daten und Backups
-
-Der gesamte Zustand liegt in `./data`: die Einstellungsdatenbank, der Verlauf der generierten Konfiguration,
-Zertifikate, der Traffic-Verlauf und `secrets/`. **Sichern Sie `secrets/`** — dort liegen die Schlüssel, mit denen
-MFA-Secrets und DNS-Tokens in der Datenbank verschlüsselt werden. Der Container läuft als unprivilegierter
-Benutzer `10001` und übernimmt beim ersten Start den Besitz von `./data`.
-
-**Sicherung über die Konsole:** *Datenaufbewahrung → Sicherung & Wiederherstellung → Sicherung herunterladen*
-(nur Administratoren in einer angemeldeten Sitzung — API-Tokens können keine Sicherungen herunterladen) erstellt
-`corvus-backup-<version>-<timestamp>.tar.gz` mit:
-
-- `corvus.db` — ein konsistenter Snapshot der SQLite-Einstellungsdatenbank (per `VACUUM INTO` erstellt,
-  während Corvus weiterläuft),
-- `secrets/`, `certs/` und `rules/` (installiertes Bundle mit verwalteten Regeln),
-- `manifest.json` — Formatversion, Corvus-Version, Erstellungszeit, Datenbank-Engine und der SHA-256 jeder
-  Datei.
-
-Generierte Konfigurationsversionen (`nginx/`), Traffic-Verlauf und Request-Logs (`history/`), die
-Länderdatenbank (`geoip/`) und `run/` sind nicht enthalten: Sie werden neu erzeugt bzw. erneut heruntergeladen.
-Mit PostgreSQL (`CORVUS_DB_URL`) enthält das Archiv keine Datenbank, nur eine `README.txt` — sichern Sie die
-Datenbank mit `pg_dump` und bewahren Sie den Dump zusammen mit dem Archiv auf (seine verschlüsselten Felder
-benötigen `secrets/data_key`). **Das Archiv enthält private Schlüssel und den Datenschlüssel: Speichern Sie
-es verschlüsselt.** Jeder Download wird im Audit-Log festgehalten.
-
-**Wiederherstellung über die Konsole:** *Aus einer Sicherung wiederherstellen* lädt ein Archiv hoch (höchstens
-200 MB). Es wird geprüft — Formatversion, SHA-256 jeder Datei, keine absoluten Pfade, `..`, Links oder
-unbekannten Einträge, dieselbe Datenbank-Engine — und eine Zusammenfassung (Version, Datum, Anzahl der Dateien
-und Zertifikate) wird angezeigt. *Beim nächsten Neustart wiederherstellen* legt es in `./data/restore-pending/`
-bereit; nichts ändert sich, bis Sie den Container neu starten:
-
-```bash
-docker compose restart
-```
-
-Beim Start, bevor die Datenbank geöffnet wird, verschiebt Corvus die aktuellen `corvus.db`, `secrets/`,
-`certs/`, `rules/` und `nginx/` nach `./data/restore-backup-<timestamp>/` und setzt die Sicherung an ihre Stelle
-(die Konfiguration wird anschließend aus der wiederhergestellten Datenbank neu erzeugt). Zum Zurückrollen
-stoppen Sie den Container und verschieben diese Dateien zurück. Bestehen die bereitgelegten Dateien die
-Prüfungen nicht, wird die Wiederherstellung nicht angewendet, der aktuelle Zustand bleibt erhalten und die
-bereitgelegten Dateien werden nach `./data/restore-failed-<timestamp>/` verschoben (siehe
-`docker compose logs`). Der Traffic-Verlauf bleibt von einer Wiederherstellung unberührt.
-
-**Manuelle Wiederherstellung:** Das Archiv ist genauso aufgebaut wie das Datenverzeichnis. Entpacken Sie es vor
-dem ersten Start in ein leeres `./data` (die zusätzliche `manifest.json` stört nicht):
-
-```bash
-mkdir data && tar -xzf corvus-backup-….tar.gz -C data
-docker compose up -d
-```
-
-### Gehärtete Installation
-
-[`deploy/docker-compose.hardened.yml`](../../deploy/docker-compose.hardened.yml) startet dasselbe Image mit einem
-schreibgeschützten Root-Dateisystem, ohne Linux-Capabilities und ohne Rechteausweitung. Legen Sie zuerst das
-Datenverzeichnis für den Benutzer `10001` an:
-
-```bash
-mkdir -p data && sudo chown 10001:10001 data
-docker compose -f docker-compose.hardened.yml up -d
-```
-
-### Konfiguration
-
-Setzen Sie diese Variablen unter `environment:` in `docker-compose.yml`.
-
-| Variable | Beschreibung |
-|---|---|
-| `CORVUS_ADMIN_HOSTS` | Zusätzliche Namen/IPs für das Admin-Zertifikat, z. B. `corvus.example.com,203.0.113.10` |
-| `CORVUS_DB_URL` | PostgreSQL statt SQLite verwenden, z. B. `postgres://corvus:…@db:5432/corvus` |
-| `CORVUS_REDIS_HOST` | Externes Redis/Valkey für die Zugriffswarteschlange verwenden (mehrere Gateways teilen sich eine Warteschlange); zusammen mit `CORVUS_REDIS_PASSWORD`. Standard: integriert |
-| `CORVUS_IMPORT_DIR` | Verzeichnis mit schreibgeschützten NPM-Volumes für *Import aus NPM* |
-| `CORVUS_RULES_URL` | Optionale URL eines signierten Bundles mit verwalteten Regeln |
-| `CORVUS_ADMIN_ALLOW_ANY=1` | Notfallschalter, falls Sie sich mit der Admin-Zulassungsliste ausgesperrt haben |
-| `CORVUS_REDIS_PORT` | Port des integrierten Speichers der Zugriffswarteschlange auf 127.0.0.1 (Standard `6379`); bei `network_mode: host` ändern, wenn der Host 6379 bereits belegt |
-| `CORVUS_RESOLVER` | DNS-Server für Ziel-Hosts. Standard: der DNS von Docker bzw. bei Host-Networking der erste `nameserver` aus `/etc/resolv.conf` |
-| `CORVUS_LOOPBACK=container` | Ziel-Hosts `127.0.0.1`/`localhost` zeigen auf den Container selbst statt auf den Docker-Host |
-| `CORVUS_IPV6` | `auto` (Standard): zusätzlich auf IPv6 lauschen, wenn das System IPv6 hat · `off`: nur IPv4 · `on`: immer auf IPv6 lauschen und Ziel-Hosts auch zu IPv6-Adressen auflösen (reine IPv6-Upstreams) |
-| `PUID` / `PGID` | Benutzer und Gruppe, als die der Container läuft und denen `./data` gehört (Standard `10001`), z. B. Ihr NAS-Benutzer |
-| `CORVUS_ACME_DIRECTORY` | ACME-Verzeichnis-URL einer anderen CA statt Let's Encrypt, z. B. eine private step-ca `https://ca.internal/acme/acme/directory` |
-| `LEGO_CA_CERTIFICATES` | PEM-Datei(en) einer privaten CA, der der ACME-Client vertrauen soll (in den Container einbinden), z. B. `/data/ca.pem` |
-
-### Ziel-Hosts
-
-Ein Proxy-Host kann weiterleiten an:
-
-- **einen anderen Container** über seinen Namen, z. B. `xoshop-web` Port `80` — Corvus muss sich mit ihm
-  ein Docker-Netzwerk teilen (fügen Sie dieses Netzwerk dem Dienst `corvus` hinzu);
-- **eine private oder öffentliche IP**, z. B. `10.3.2.39` Port `8084`;
-- **einen Dienst auf dem Docker-Host selbst** als `127.0.0.1` oder `localhost`, wie in NPM. Innerhalb eines
-  Containers bezeichnen diese Adressen den Docker-Host, `host.docker.internal` ist also nicht nötig. Der Dienst
-  muss auf einer für den Container erreichbaren Adresse lauschen (`0.0.0.0` oder die Docker-Bridge, nicht nur
-  `127.0.0.1`), und eine Host-Firewall muss Verbindungen aus Docker-Netzwerken zulassen.
-
-Um Dienste zu erreichen, die nur auf `127.0.0.1` des Hosts lauschen, oder um ein NPM-Setup mit
-`network_mode: host` unverändert zu übernehmen, betreiben Sie Corvus mit Host-Networking: Ersetzen Sie
-`ports:` und `networks:` durch `network_mode: host` (und setzen Sie `CORVUS_REDIS_PORT`, falls 6379 auf dem
-Host belegt ist).
-
-### Streams (TCP/UDP)
-
-*Streams* leiten einen TCP- und/oder UDP-Port an einen Ziel-Host weiter (Regeln wie oben); für TCP kann TLS
-mit einem Ihrer Zertifikate terminiert werden. Im Standard-Bridge-Netzwerk muss jeder Stream-Port zusätzlich in
-`docker-compose.yml` veröffentlicht und mit `docker compose up -d` übernommen werden:
-
-```yaml
-    ports:
-      - '80:80'
-      - '443:443'
-      - '9443:9443'
-      - '5432:5432'       # Stream: PostgreSQL (TCP)
-      - '1194:1194/udp'   # Stream: OpenVPN (UDP)
-```
-
-Mit `network_mode: host` ist nichts weiter nötig. Ports, die Corvus selbst nutzt (80, 443, 9443 und interne
-Ports), sind für Streams nicht verfügbar.
-
-### Migration von Nginx Proxy Manager
-
-*Import aus NPM* in der Konsole übernimmt **Proxy-Hosts, Weiterleitungs-Hosts, Streams, Zertifikate** (Let's Encrypt
-und eigene, einschließlich Cloudflare-DNS-Tokens) und **Zugriffslisten** (Benutzer und IP-Regeln) aus einer
-bestehenden NPM-Installation. Dabei werden nur die Dateien und die Datenbank von NPM gelesen – NPM selbst
-bleibt unverändert, Sie können also jederzeit zurückwechseln.
-
-Nicht importiert werden: 404-Hosts und erweiterte Konfiguration (auch von
-benutzerdefinierten Locations) mit NPM-spezifischen Variablen. Die Vorschau listet alles auf, was übersprungen wird.
-
-**Prüfen Sie, welche Datenbank Ihr NPM verwendet.** Öffnen Sie die `docker-compose.yml` von NPM:
-
-- keine `DB_MYSQL_*`- / `DB_POSTGRES_*`-Variablen und `data/database.sqlite` vorhanden → **SQLite** (NPM-Standard)
-- `DB_MYSQL_HOST`, `DB_MYSQL_USER`, … und meist ein separater `db`-Dienst → **MySQL / MariaDB**
-- `DB_POSTGRES_*` → PostgreSQL wird vom Import nicht unterstützt; legen Sie die Hosts in der Konsole neu an
-
-In beiden Fällen müssen die Verzeichnisse `data` und `letsencrypt` von NPM schreibgeschützt in Corvus
-eingebunden werden (dort liegen die Zertifikatsdateien):
-
-```yml
-services:
-  corvus:
-    image: 'ghcr.io/corvus-gateway/gateway:latest'
-    restart: unless-stopped
-    ports:
-      - '80:80'
-      - '443:443'
-      - '9443:9443'
-    environment:
-      CORVUS_IMPORT_DIR: /import
-    volumes:
-      - ./data:/data
-      - /path/to/npm/data:/import/npm/data:ro
-      - /path/to/npm/letsencrypt:/import/npm/letsencrypt:ro
-```
-
-Verwenden Sie die Host-Pfade der NPM-Volumes `./data` und `./letsencrypt`. NPM und Corvus benötigen beide
-die Ports 80/443 und können daher nicht gleichzeitig laufen.
-
-#### NPM mit SQLite (Standard)
-
-```bash
-cd /path/to/npm && docker compose down        # NPM stoppen (gibt 80/443 frei)
-cd /path/to/corvus && docker compose up -d     # Corvus mit den obigen Mounts starten
-```
-
-Öffnen Sie in der Konsole *Import aus NPM*, belassen Sie **SQLite**, klicken Sie auf *Vorschau*, wählen Sie
-aus, was importiert werden soll, und klicken Sie auf *Auswahl importieren*. Meldet die Vorschau
-`permission denied`, machen Sie die Dateien für Corvus lesbar (es läuft als uid 10001): `sudo chmod o+rx /path/to/npm/data && sudo chmod o+r /path/to/npm/data/database.sqlite`.
-
-#### NPM mit MySQL / MariaDB
-
-Corvus muss die NPM-Datenbank während des Imports erreichen. Stoppen Sie daher nur den Proxy-Dienst von NPM
-und lassen Sie die Datenbank weiterlaufen:
-
-```bash
-cd /path/to/npm && docker compose stop app     # der NPM-Dienst, der 80/443 belegt (oft "app")
-cd /path/to/corvus && docker compose up -d
-
-# Corvus für den Import mit dem Docker-Netzwerk von NPM verbinden
-docker network ls | grep -i npm                # z. B. npm_default
-docker network connect npm_default $(docker compose ps -q corvus)
-```
-
-Wählen Sie in *Import aus NPM* **MySQL / MariaDB** und geben Sie die Datenbankeinstellungen von NPM ein:
-Host = Name des Datenbankdienstes (meist `db`), Port `3306` sowie die Werte von `DB_MYSQL_NAME`,
-`DB_MYSQL_USER` und `DB_MYSQL_PASSWORD`. Die Verbindung ist schreibgeschützt, das Passwort wird nicht
-gespeichert. Danach *Vorschau* → *Auswahl importieren*.
-
-Nach Abschluss des Imports:
-
-```bash
-docker network disconnect npm_default $(docker compose ps -q corvus)
-cd /path/to/npm && docker compose down         # auch die NPM-Datenbank stoppen
-```
-
-#### Nach dem Import
-
-- Prüfen Sie die importierten Hosts, entfernen Sie dann `CORVUS_IMPORT_DIR` und die beiden `/import`-Mounts
-  und führen Sie erneut `docker compose up -d` aus.
-- Zertifikate werden in Corvus weiter erneuert. Hosts mit einem nicht unterstützten DNS-Anbieter werden ohne
-  automatische Erneuerung importiert – die Vorschau weist darauf hin.
-- **Zurückwechseln:** `docker compose down` in Corvus, dann `docker compose up -d` in NPM.
+Konfiguration, gehärtete Installation, Ziel-Hosts, Streams, Backups, Migration von Nginx Proxy Manager,
+Sicherheitsregeln, Zugriffswarteschlange und Fehlerbehebung beschreibt die **[Dokumentation](https://corvus-gateway.github.io/corvus/)**
+(auf Englisch und Koreanisch).
 
 ## Leistung
 

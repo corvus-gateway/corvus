@@ -1,0 +1,40 @@
+# Korean documentation — same settings as mkdocs.yml, Korean pages in ko/.
+INHERIT: mkdocs.yml
+docs_dir: ko
+site_dir: ../site/ko
+edit_uri: edit/main/website/ko/
+site_url: https://corvus-gateway.github.io/corvus/ko/
+theme:
+  language: ko
+nav:
+  - 홈: index.md
+  - 시작하기:
+      - 설치: getting-started/install.md
+      - 첫 프록시 호스트: getting-started/first-host.md
+      - NPM에서 이전: getting-started/migrate-npm.md
+      - 업그레이드: getting-started/upgrade.md
+  - 프록시:
+      - 프록시 호스트: proxy/proxy-hosts.md
+      - 사용자 지정 위치: proxy/locations.md
+      - 인증서: proxy/certificates.md
+      - 리디렉션 호스트: proxy/redirection-hosts.md
+      - 스트림 (TCP/UDP): proxy/streams.md
+  - 보안:
+      - 보호 동작 방식: security/index.md
+      - 보안 규칙: security/rules.md
+      - IP 목록: security/ip-lists.md
+      - 챌린지와 공격 대응 모드: security/challenge.md
+      - 차단과 Rate Limit: security/bans.md
+  - 접속 대기열: access-queue.md
+  - 운영:
+      - 트래픽 관제: operations/traffic.md
+      - 알림: operations/alerts.md
+      - 백업과 복원: operations/backup.md
+      - 사용자와 로그인: operations/users.md
+      - 차단·오류 페이지: operations/pages.md
+  - 참고:
+      - 환경 변수: reference/configuration.md
+      - 강화 설치: reference/hardened.md
+      - HTTP API: reference/api.md
+      - 성능: reference/performance.md
+      - 문제 해결: reference/troubleshooting.md

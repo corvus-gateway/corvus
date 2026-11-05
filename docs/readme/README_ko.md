@@ -34,7 +34,7 @@ Corvus는 웹 서비스 앞단에 두는 셀프 호스팅 게이트웨이입니�
 외부 클라우드로 전송되지 않습니다.
 
 - [빠른 설정](#빠른-설정)
-- [전체 설정](#전체-설정)
+- [문서](https://corvus-gateway.github.io/corvus/ko/)
 - [스크린샷](#스크린샷)
 
 ## 프로젝트 목표
@@ -124,7 +124,7 @@ services:
 ```
 
 이것이 설치의 전부입니다. 게이트웨이, 관리 콘솔, 접속 대기열 저장소가 이 컨테이너 하나에서
-실행됩니다. 옵션은 [전체 설정](#전체-설정)을 참고하세요.
+실행됩니다. 옵션은 [문서](https://corvus-gateway.github.io/corvus/ko/)를 참고하세요.
 
 3. 스택을 시작합니다.
 
@@ -155,209 +155,10 @@ docker compose up -d
 `./data`에 있는 설정, 인증서, 이력은 그대로 유지되며, 데이터베이스 변경 사항은 시작할 때
 자동으로 적용됩니다.
 
-## 전체 설정
+## 문서
 
-### 포트
-
-| 포트 | 용도 |
-|---|---|
-| 80 / 443 | 게이트웨이 — 프록시 트래픽 |
-| 9443 | 관리 콘솔 및 API — 신뢰할 수 있는 네트워크만 허용하세요(방화벽, 또는 *네트워크 → 관리 콘솔 접근 허용 네트워크*) |
-
-### 데이터와 백업
-
-모든 상태는 `./data`에 저장됩니다. 설정 데이터베이스, 생성된 설정 이력, 인증서, 트래픽 이력,
-`secrets/`가 여기에 들어 있습니다. **`secrets/`는 반드시 백업하세요.** 데이터베이스에 저장된
-MFA 시크릿과 DNS 토큰을 암호화하는 키가 이곳에 있습니다. 컨테이너는 권한 없는 사용자
-`10001`로 실행되며, 처음 시작할 때 `./data`의 소유권을 가져옵니다.
-
-**콘솔에서 백업:** *데이터 보관 → 백업 및 복원 → 백업 다운로드*(관리자, 로그인한 세션 전용 — API
-토큰으로는 백업을 내려받을 수 없습니다)를 누르면 다음 내용이 담긴
-`corvus-backup-<version>-<timestamp>.tar.gz`가 만들어집니다.
-
-- `corvus.db` — SQLite 설정 데이터베이스의 일관된 스냅샷(Corvus가 실행되는 동안 `VACUUM INTO`로
-  생성),
-- `secrets/`, `certs/`, `rules/`(설치된 관리형 규칙 번들),
-- `manifest.json` — 형식 버전, Corvus 버전, 생성 시각, 데이터베이스 엔진, 모든 파일의 SHA-256.
-
-생성된 설정 버전(`nginx/`), 트래픽 이력과 요청 로그(`history/`), 국가 데이터베이스(`geoip/`),
-`run/`은 포함되지 않습니다. 다시 생성되거나 다시 내려받기 때문입니다. PostgreSQL(`CORVUS_DB_URL`)을
-쓰는 경우 아카이브에는 데이터베이스 없이 `README.txt`만 들어 있습니다. 데이터베이스는 `pg_dump`로
-백업하고 덤프를 아카이브와 함께 보관하세요(암호화된 필드를 풀려면 `secrets/data_key`가 필요합니다).
-**아카이브에는 개인 키와 데이터 키가 들어 있으므로 암호화해서 보관하세요.** 모든 다운로드는 감사
-로그에 기록됩니다.
-
-**콘솔에서 복원:** *백업에서 복원*으로 아카이브(최대 200 MB)를 업로드합니다. 형식 버전, 모든 파일의
-SHA-256, 절대 경로·`..`·링크·알 수 없는 항목이 없는지, 데이터베이스 엔진이 같은지를 검사한 뒤 요약
-(버전, 날짜, 파일 수와 인증서 수)을 보여 줍니다. *다음 재시작 때 복원*을 누르면 아카이브가
-`./data/restore-pending/`에 준비되며, 컨테이너를 재시작하기 전까지는 아무것도 바뀌지 않습니다.
-
-```bash
-docker compose restart
-```
-
-시작할 때 데이터베이스를 열기 전에 Corvus는 현재의 `corvus.db`, `secrets/`, `certs/`, `rules/`,
-`nginx/`를 `./data/restore-backup-<timestamp>/`로 옮기고 그 자리에 백업을 넣습니다(그다음 복원된
-데이터베이스로 설정을 다시 생성합니다). 되돌리려면 컨테이너를 중지하고 이 파일들을 원래 위치로
-옮기세요. 준비된 파일이 검사를 통과하지 못하면 복원은 적용되지 않고 현재 상태가 유지되며, 준비된
-파일은 `./data/restore-failed-<timestamp>/`로 옮겨집니다(`docker compose logs` 참고). 트래픽 이력은
-복원의 영향을 받지 않습니다.
-
-**수동 복원:** 아카이브 구조는 데이터 디렉터리 구조와 같습니다. 처음 시작하기 전에 빈 `./data`에
-압축을 풀면 됩니다(추가로 들어 있는 `manifest.json`은 무해합니다).
-
-```bash
-mkdir data && tar -xzf corvus-backup-….tar.gz -C data
-docker compose up -d
-```
-
-### 강화된 설치
-
-[`deploy/docker-compose.hardened.yml`](../../deploy/docker-compose.hardened.yml)은 같은 이미지를 읽기 전용 루트
-파일 시스템, Linux capability 없음, 권한 상승 불가 상태로 실행합니다. 먼저 사용자 `10001`용
-데이터 디렉터리를 만드세요.
-
-```bash
-mkdir -p data && sudo chown 10001:10001 data
-docker compose -f docker-compose.hardened.yml up -d
-```
-
-### 구성
-
-다음 변수는 `docker-compose.yml`의 `environment:` 아래에 설정합니다.
-
-| 변수 | 설명 |
-|---|---|
-| `CORVUS_ADMIN_HOSTS` | 관리 콘솔 인증서에 추가할 이름/IP. 예: `corvus.example.com,203.0.113.10` |
-| `CORVUS_DB_URL` | SQLite 대신 PostgreSQL 사용. 예: `postgres://corvus:…@db:5432/corvus` |
-| `CORVUS_REDIS_HOST` | 접속 대기열에 외부 Redis/Valkey 사용(여러 게이트웨이가 하나의 대기열을 공유). `CORVUS_REDIS_PASSWORD`와 함께 사용. 기본값: 내장 |
-| `CORVUS_IMPORT_DIR` | *NPM 가져오기*에 사용할 읽기 전용 NPM 볼륨이 있는 디렉터리 |
-| `CORVUS_RULES_URL` | 서명된 관리형 규칙 번들의 URL(선택) |
-| `CORVUS_ADMIN_ALLOW_ANY=1` | 관리자 허용 목록 설정 때문에 접속할 수 없게 되었을 때 쓰는 복구 스위치 |
-| `CORVUS_REDIS_PORT` | 127.0.0.1에서 동작하는 내장 접속 대기열 저장소의 포트(기본값 `6379`). `network_mode: host`에서 호스트가 이미 6379를 쓰고 있다면 변경 |
-| `CORVUS_RESOLVER` | 포워드 호스트 이름 확인에 쓸 DNS 서버. 기본값: Docker DNS, 호스트 네트워킹에서는 `/etc/resolv.conf`의 첫 번째 `nameserver` |
-| `CORVUS_LOOPBACK=container` | `127.0.0.1`/`localhost` 포워드 호스트가 Docker 호스트 대신 컨테이너 자신을 가리키도록 설정 |
-| `CORVUS_IPV6` | `auto`(기본): 시스템에 IPv6가 있으면 IPv6로도 수신 · `off`: IPv4만 · `on`: 항상 IPv6로 수신하고 포워드 호스트를 IPv6 주소로도 조회(IPv6 전용 업스트림) |
-| `PUID` / `PGID` | 컨테이너를 실행하고 `./data`를 소유할 사용자와 그룹(기본값 `10001`). 예: NAS 사용자 |
-| `CORVUS_ACME_DIRECTORY` | Let's Encrypt 대신 사용할 다른 CA의 ACME 디렉터리 URL. 예: 사설 step-ca `https://ca.internal/acme/acme/directory` |
-| `LEGO_CA_CERTIFICATES` | ACME 클라이언트가 신뢰할 사설 CA의 PEM 파일(컨테이너에 마운트). 예: `/data/ca.pem` |
-
-### 포워드 호스트
-
-프록시 호스트는 다음 대상으로 전달할 수 있습니다.
-
-- **다른 컨테이너**를 이름으로 지정. 예: `xoshop-web` 포트 `80`. Corvus가 그 컨테이너와 같은 Docker
-  네트워크에 있어야 합니다(`corvus` 서비스에 해당 네트워크를 추가).
-- **사설 또는 공인 IP**. 예: `10.3.2.39` 포트 `8084`.
-- **Docker 호스트 자체의 서비스**를 NPM과 마찬가지로 `127.0.0.1` 또는 `localhost`로 지정. 컨테이너
-  안에서 이 주소는 Docker 호스트를 뜻하므로 `host.docker.internal`이 필요 없습니다. 단, 서비스가
-  컨테이너에서 접근할 수 있는 주소(`127.0.0.1`만이 아니라 `0.0.0.0` 또는 Docker 브리지)에서 수신해야
-  하며, 호스트 방화벽이 Docker 네트워크에서 오는 연결을 허용해야 합니다.
-
-호스트의 `127.0.0.1`에서만 수신하는 서비스에 연결하거나 `network_mode: host`를 쓰던 NPM 구성을 그대로
-유지하려면 Corvus를 호스트 네트워킹으로 실행하세요. `ports:`와 `networks:`를 `network_mode: host`로
-바꾸면 됩니다(호스트에서 6379를 이미 쓰고 있다면 `CORVUS_REDIS_PORT`도 설정).
-
-### 스트림 (TCP/UDP)
-
-*스트림*은 TCP 및/또는 UDP 포트를 전달 대상 호스트로 보냅니다(위와 같은 규칙). TCP는 등록된 인증서로
-TLS를 종료할 수도 있습니다. 기본 브리지 네트워크에서는 각 스트림 포트를 `docker-compose.yml`에도
-게시한 뒤 `docker compose up -d`로 적용하세요.
-
-```yaml
-    ports:
-      - '80:80'
-      - '443:443'
-      - '9443:9443'
-      - '5432:5432'       # 스트림: PostgreSQL (TCP)
-      - '1194:1194/udp'   # 스트림: OpenVPN (UDP)
-```
-
-`network_mode: host`에서는 따로 할 일이 없습니다. Corvus가 직접 쓰는 포트(80, 443, 9443과 내부 포트)는
-스트림에 사용할 수 없습니다.
-
-### Nginx Proxy Manager에서 마이그레이션
-
-콘솔의 *NPM 가져오기*는 기존 NPM 설치에서 **프록시 호스트, 리디렉션 호스트, 스트림, 인증서**(Cloudflare DNS
-토큰을 포함한 Let's Encrypt 인증서와 사용자 지정 인증서), **접근 목록**(사용자와 IP 규칙)을 복사합니다.
-NPM의 파일과 데이터베이스를 읽기만 하고 NPM 자체는 변경하지 않으므로 언제든 되돌아갈 수 있습니다.
-
-가져오지 않는 항목: 404 호스트, NPM 전용 변수를 사용하는 고급 설정
-(사용자 지정 위치의 고급 설정 포함). 건너뛰는 항목은 모두 미리보기에 표시됩니다.
-
-**NPM이 어떤 데이터베이스를 쓰는지 확인하세요.** NPM의 `docker-compose.yml`을 열어 봅니다.
-
-- `DB_MYSQL_*` / `DB_POSTGRES_*` 변수가 없고 `data/database.sqlite`가 있으면 → **SQLite**(NPM 기본값)
-- `DB_MYSQL_HOST`, `DB_MYSQL_USER`, … 가 있고 보통 별도의 `db` 서비스가 있으면 → **MySQL / MariaDB**
-- `DB_POSTGRES_*` → PostgreSQL은 가져오기를 지원하지 않으므로 콘솔에서 호스트를 다시 만드세요
-
-두 경우 모두 NPM의 `data`와 `letsencrypt` 디렉터리를 Corvus에 읽기 전용으로 마운트해야 합니다(인증서
-파일이 여기에 있습니다).
-
-```yml
-services:
-  corvus:
-    image: 'ghcr.io/corvus-gateway/gateway:latest'
-    restart: unless-stopped
-    ports:
-      - '80:80'
-      - '443:443'
-      - '9443:9443'
-    environment:
-      CORVUS_IMPORT_DIR: /import
-    volumes:
-      - ./data:/data
-      - /path/to/npm/data:/import/npm/data:ro
-      - /path/to/npm/letsencrypt:/import/npm/letsencrypt:ro
-```
-
-NPM의 `./data`와 `./letsencrypt` 볼륨의 호스트 경로를 사용하세요. NPM과 Corvus는 둘 다 80/443 포트가
-필요하므로 동시에 실행할 수 없습니다.
-
-#### SQLite를 쓰는 NPM(기본값)
-
-```bash
-cd /path/to/npm && docker compose down        # NPM 중지(80/443 해제)
-cd /path/to/corvus && docker compose up -d     # 위 마운트로 Corvus 시작
-```
-
-콘솔에서 *NPM 가져오기*를 열고 **SQLite**를 그대로 둔 채 *미리보기*를 누른 뒤, 가져올 항목을 골라
-*선택 항목 가져오기*를 누릅니다. 미리보기에서 `permission denied`가 나오면 Corvus(uid 10001로 실행)가
-파일을 읽을 수 있게 하세요: `sudo chmod o+rx /path/to/npm/data && sudo chmod o+r /path/to/npm/data/database.sqlite`.
-
-#### MySQL / MariaDB를 쓰는 NPM
-
-가져오는 동안 Corvus가 NPM의 데이터베이스에 접속해야 하므로, NPM의 프록시 서비스만 중지하고
-데이터베이스는 계속 실행해 둡니다.
-
-```bash
-cd /path/to/npm && docker compose stop app     # 80/443을 쓰는 NPM 서비스(보통 "app")
-cd /path/to/corvus && docker compose up -d
-
-# 가져오기를 위해 Corvus를 NPM의 Docker 네트워크에 연결
-docker network ls | grep -i npm                # 예: npm_default
-docker network connect npm_default $(docker compose ps -q corvus)
-```
-
-*NPM 가져오기*에서 **MySQL / MariaDB**를 고르고 NPM의 데이터베이스 설정을 입력합니다. 호스트 =
-데이터베이스 서비스 이름(보통 `db`), 포트 `3306`, 그리고 `DB_MYSQL_NAME`, `DB_MYSQL_USER`,
-`DB_MYSQL_PASSWORD`의 값입니다. 연결은 읽기 전용이며 비밀번호는 저장되지 않습니다. 그다음
-*미리보기* → *선택 항목 가져오기*를 누릅니다.
-
-가져오기가 끝나면:
-
-```bash
-docker network disconnect npm_default $(docker compose ps -q corvus)
-cd /path/to/npm && docker compose down         # NPM 데이터베이스도 중지
-```
-
-#### 가져온 뒤
-
-- 가져온 호스트를 확인한 다음 `CORVUS_IMPORT_DIR`와 두 개의 `/import` 마운트를 제거하고
-  `docker compose up -d`를 다시 실행합니다.
-- 인증서는 Corvus에서 계속 갱신됩니다. 지원하지 않는 DNS 공급자를 쓰던 호스트는 자동 갱신 없이
-  가져오며, 미리보기에서 경고가 표시됩니다.
-- **되돌리기:** Corvus에서 `docker compose down`, 그다음 NPM에서 `docker compose up -d`.
+구성, 강화된 설치, 포워드 호스트, 스트림, 백업, Nginx Proxy Manager에서 마이그레이션, 보안 규칙,
+접속 대기열, 문제 해결은 **[문서 사이트](https://corvus-gateway.github.io/corvus/ko/)**에서 화면과 함께 설명합니다 (한국어 · [English](https://corvus-gateway.github.io/corvus/)).
 
 ## 성능
 

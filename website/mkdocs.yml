@@ -1,0 +1,109 @@
+# English documentation. The Korean site (mkdocs.ko.yml) inherits this file.
+# Build both: website/build.sh  ·  preview: mkdocs serve -f website/mkdocs.yml
+site_name: Corvus AWPG
+site_description: Self-hosted web gateway with built-in protection, monitoring and an access queue.
+site_url: https://corvus-gateway.github.io/corvus/
+repo_url: https://github.com/corvus-gateway/corvus
+repo_name: corvus-gateway/corvus
+edit_uri: edit/main/website/en/
+copyright: Copyright &copy; 2026 Jikwang Moon · Apache License 2.0
+docs_dir: en
+site_dir: ../site
+
+theme:
+  name: material
+  language: en
+  logo: assets/logo.svg
+  favicon: assets/favicon.svg
+  font: false            # system fonts; no requests to Google Fonts
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: blue
+      toggle: { icon: material/weather-night, name: Dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: blue
+      toggle: { icon: material/weather-sunny, name: Light mode }
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+    - toc.follow
+
+extra:
+  generator: false
+  alternate:
+    - name: English
+      link: /corvus/
+      lang: en
+    - name: 한국어
+      link: /corvus/ko/
+      lang: ko
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/corvus-gateway/corvus
+
+extra_css:
+  - assets/extra.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc: { permalink: true }
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed: { alternate_style: true }
+  - pymdownx.highlight: { anchor_linenums: true }
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+validation:
+  links:
+    absolute_links: relative_to_docs
+    anchors: warn
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Install: getting-started/install.md
+      - First proxy host: getting-started/first-host.md
+      - Migrate from NPM: getting-started/migrate-npm.md
+      - Upgrade: getting-started/upgrade.md
+  - Proxy:
+      - Proxy hosts: proxy/proxy-hosts.md
+      - Custom locations: proxy/locations.md
+      - Certificates: proxy/certificates.md
+      - Redirection hosts: proxy/redirection-hosts.md
+      - Streams (TCP/UDP): proxy/streams.md
+  - Security:
+      - How protection works: security/index.md
+      - Security rules: security/rules.md
+      - IP lists: security/ip-lists.md
+      - Challenge & under attack: security/challenge.md
+      - Bans & rate limits: security/bans.md
+  - Access queue: access-queue.md
+  - Operations:
+      - Traffic monitor: operations/traffic.md
+      - Alerts: operations/alerts.md
+      - Backup & restore: operations/backup.md
+      - Users & sign-in: operations/users.md
+      - Block & error pages: operations/pages.md
+  - Reference:
+      - Configuration: reference/configuration.md
+      - Hardened install: reference/hardened.md
+      - HTTP API: reference/api.md
+      - Performance: reference/performance.md
+      - Troubleshooting: reference/troubleshooting.md

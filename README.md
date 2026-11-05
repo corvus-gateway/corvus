@@ -34,7 +34,7 @@ rate limiting and an access queue for traffic spikes. Everything runs on your ow
 traffic is sent to a third-party cloud.
 
 - [Quick Setup](#quick-setup)
-- [Full Setup](#full-setup)
+- [Documentation](https://corvus-gateway.github.io/corvus/)
 - [Screenshots](#screenshots)
 
 ## Project Goal
@@ -124,7 +124,7 @@ services:
 ```
 
 This is the whole installation: gateway, admin console and access-queue store run in this one
-container. See [Full Setup](#full-setup) for options.
+container. See the [documentation](https://corvus-gateway.github.io/corvus/) for options.
 
 3. Bring up your stack by running
 
@@ -155,212 +155,11 @@ docker compose up -d
 Settings, certificates and history in `./data` are kept; database changes are applied
 automatically on start.
 
-## Full Setup
+## Documentation
 
-### Ports
-
-| Port | Purpose |
-|---|---|
-| 80 / 443 | Gateway — proxied traffic |
-| 9443 | Admin console and API — allow only trusted networks (firewall, or *Network → Admin console allowed networks*) |
-
-### Data and backups
-
-All state lives in `./data`: the settings database, generated configuration history,
-certificates, traffic history and `secrets/`. **Back up `secrets/`** — it holds the keys that
-encrypt MFA secrets and DNS tokens in the database. The container runs as the unprivileged user
-`10001` and takes ownership of `./data` on first start.
-
-**Backup from the console:** *Data retention → Backup & restore → Download backup* (administrators,
-signed-in session only — API tokens cannot download backups) creates
-`corvus-backup-<version>-<timestamp>.tar.gz` with:
-
-- `corvus.db` — a consistent snapshot of the SQLite settings database (taken with `VACUUM INTO`
-  while Corvus keeps running),
-- `secrets/`, `certs/` and `rules/` (installed managed-rule bundle),
-- `manifest.json` — format version, Corvus version, creation time, database engine and the
-  SHA-256 of every file.
-
-Generated configuration versions (`nginx/`), traffic history and request logs (`history/`), the
-country database (`geoip/`) and `run/` are left out: they are regenerated or downloaded again.
-With PostgreSQL (`CORVUS_DB_URL`) the archive holds no database, only a `README.txt` — back the
-database up with `pg_dump` and keep the dump together with the archive (its encrypted fields need
-`secrets/data_key`). **The archive contains private keys and the data key: store it encrypted.**
-Every download is recorded in the audit log.
-
-**Restore from the console:** *Restore from a backup* uploads an archive (at most 200 MB). It is
-checked — format version, SHA-256 of every file, no absolute paths, `..`, links or unknown entries,
-same database engine — and its summary (version, date, file and certificate counts) is shown.
-*Restore on next restart* stages it in `./data/restore-pending/`; nothing changes until you restart
-the container:
-
-```bash
-docker compose restart
-```
-
-On start, before the database is opened, Corvus moves the current `corvus.db`, `secrets/`,
-`certs/`, `rules/` and `nginx/` to `./data/restore-backup-<timestamp>/` and puts the backup in
-their place (the configuration is then re-rendered from the restored database). To roll back, stop
-the container and move those files back. If the staged files fail their checks the restore is not
-applied, the current state is kept and the staged files are moved to `./data/restore-failed-<timestamp>/`
-(see `docker compose logs`). Traffic history is not touched by a restore.
-
-**Restore by hand:** the archive layout is the data directory layout. Before the first start,
-extract it into an empty `./data` (the extra `manifest.json` is harmless):
-
-```bash
-mkdir data && tar -xzf corvus-backup-….tar.gz -C data
-docker compose up -d
-```
-
-### Hardened install
-
-[`deploy/docker-compose.hardened.yml`](deploy/docker-compose.hardened.yml) runs the same image
-with a read-only root filesystem, no Linux capabilities and no privilege escalation. Create the
-data directory for user `10001` first:
-
-```bash
-mkdir -p data && sudo chown 10001:10001 data
-docker compose -f docker-compose.hardened.yml up -d
-```
-
-### Configuration
-
-Set these under `environment:` in `docker-compose.yml`.
-
-| Variable | Description |
-|---|---|
-| `CORVUS_ADMIN_HOSTS` | Extra names/IPs for the admin certificate, e.g. `corvus.example.com,203.0.113.10` |
-| `CORVUS_DB_URL` | Use PostgreSQL instead of SQLite, e.g. `postgres://corvus:…@db:5432/corvus` |
-| `CORVUS_REDIS_HOST` | Use an external Redis/Valkey for the access queue (several gateways sharing one queue); with `CORVUS_REDIS_PASSWORD`. Default: built-in |
-| `CORVUS_IMPORT_DIR` | Directory with read-only NPM volumes for *Import from NPM* |
-| `CORVUS_RULES_URL` | Optional URL of a signed managed-rules bundle |
-| `CORVUS_ADMIN_ALLOW_ANY=1` | Recovery switch if you locked yourself out with the admin allowlist |
-| `CORVUS_REDIS_PORT` | Port of the built-in access-queue store on 127.0.0.1 (default `6379`); change it with `network_mode: host` if the host already uses 6379 |
-| `CORVUS_RESOLVER` | DNS server for forward hosts. Default: Docker's DNS, or the first `nameserver` of `/etc/resolv.conf` with host networking |
-| `CORVUS_LOOPBACK=container` | Make `127.0.0.1`/`localhost` forward hosts point at the container itself instead of the Docker host |
-| `CORVUS_IPV6` | `auto` (default): also listen on IPv6 when the system has it · `off`: IPv4 only · `on`: always listen on IPv6 and resolve forward hosts to IPv6 addresses too (IPv6-only upstreams) |
-| `PUID` / `PGID` | User and group the container runs as and owns `./data` (default `10001`), e.g. your NAS user |
-| `CORVUS_ACME_DIRECTORY` | ACME directory URL of another CA instead of Let's Encrypt, e.g. a private step-ca `https://ca.internal/acme/acme/directory` |
-| `LEGO_CA_CERTIFICATES` | PEM file(s) of a private CA the ACME client should trust (mount it into the container), e.g. `/data/ca.pem` |
-
-### Forward hosts
-
-A proxy host can forward to:
-
-- **another container** by name, e.g. `xoshop-web` port `80` — Corvus must share a Docker network
-  with it (add that network to the `corvus` service);
-- **a private or public IP**, e.g. `10.3.2.39` port `8084`;
-- **a service on the Docker host itself** as `127.0.0.1` or `localhost`, like in NPM. Inside a
-  container these mean the Docker host, so no `host.docker.internal` is needed. The service must
-  listen on an address the container can reach (`0.0.0.0` or the Docker bridge, not only
-  `127.0.0.1`), and a host firewall must allow connections from Docker networks.
-
-To reach services that listen only on the host's `127.0.0.1`, or to keep an NPM setup that used
-`network_mode: host` unchanged, run Corvus with host networking: replace `ports:` and `networks:`
-with `network_mode: host` (and set `CORVUS_REDIS_PORT` if 6379 is taken on the host).
-
-### Streams (TCP/UDP)
-
-*Streams* forward a TCP and/or UDP port to a forward host (same rules as above), optionally
-terminating TLS for TCP with one of your certificates. With the default bridge network, also
-publish each stream port in `docker-compose.yml`, then apply it with `docker compose up -d`:
-
-```yaml
-    ports:
-      - '80:80'
-      - '443:443'
-      - '9443:9443'
-      - '5432:5432'       # stream: PostgreSQL (TCP)
-      - '1194:1194/udp'   # stream: OpenVPN (UDP)
-```
-
-With `network_mode: host` nothing else is needed. Ports Corvus uses itself (80, 443, 9443 and its
-internal ports) cannot be used for streams.
-
-### Migrating from Nginx Proxy Manager
-
-*Import from NPM* in the console copies **proxy hosts, redirection hosts, streams, certificates** (Let's
-Encrypt and custom, including Cloudflare DNS tokens) and **access lists** (users and IP rules) from
-an existing NPM installation. It only reads NPM's files and database — NPM itself is not changed,
-so you can go back at any time.
-
-Not imported: 404 hosts and advanced configuration (also of custom
-locations) that uses NPM-specific variables. The preview lists everything it skips.
-
-**Check which database your NPM uses.** Open NPM's `docker-compose.yml`:
-
-- no `DB_MYSQL_*` / `DB_POSTGRES_*` variables, and `data/database.sqlite` exists → **SQLite** (NPM's default)
-- `DB_MYSQL_HOST`, `DB_MYSQL_USER`, … and usually a separate `db` service → **MySQL / MariaDB**
-- `DB_POSTGRES_*` → PostgreSQL is not supported by the import; recreate the hosts in the console
-
-Both need NPM's `data` and `letsencrypt` directories mounted read-only into Corvus (certificate
-files live there):
-
-```yml
-services:
-  corvus:
-    image: 'ghcr.io/corvus-gateway/gateway:latest'
-    restart: unless-stopped
-    ports:
-      - '80:80'
-      - '443:443'
-      - '9443:9443'
-    environment:
-      CORVUS_IMPORT_DIR: /import
-    volumes:
-      - ./data:/data
-      - /path/to/npm/data:/import/npm/data:ro
-      - /path/to/npm/letsencrypt:/import/npm/letsencrypt:ro
-```
-
-Use the host paths of NPM's `./data` and `./letsencrypt` volumes. NPM and Corvus both need ports
-80/443, so they can't run at the same time.
-
-#### NPM with SQLite (default)
-
-```bash
-cd /path/to/npm && docker compose down        # stop NPM (frees 80/443)
-cd /path/to/corvus && docker compose up -d     # start Corvus with the mounts above
-```
-
-In the console, open *Import from NPM*, keep **SQLite**, click *Preview*, choose what to import
-and click *Import selected*. If the preview reports `permission denied`, make the files readable for
-Corvus (it runs as uid 10001): `sudo chmod o+rx /path/to/npm/data && sudo chmod o+r /path/to/npm/data/database.sqlite`.
-
-#### NPM with MySQL / MariaDB
-
-Corvus has to reach NPM's database while it imports, so stop only NPM's proxy service and keep its
-database running:
-
-```bash
-cd /path/to/npm && docker compose stop app     # the NPM service that owns 80/443 (often "app")
-cd /path/to/corvus && docker compose up -d
-
-# connect Corvus to NPM's Docker network for the import
-docker network ls | grep -i npm                # e.g. npm_default
-docker network connect npm_default $(docker compose ps -q corvus)
-```
-
-In *Import from NPM*, choose **MySQL / MariaDB** and enter NPM's database settings: host = the
-database service name (usually `db`), port `3306`, and the values of `DB_MYSQL_NAME`,
-`DB_MYSQL_USER` and `DB_MYSQL_PASSWORD`. The connection is read-only and the password is not
-stored. Then *Preview* → *Import selected*.
-
-When the import is done:
-
-```bash
-docker network disconnect npm_default $(docker compose ps -q corvus)
-cd /path/to/npm && docker compose down         # stop NPM's database too
-```
-
-#### After the import
-
-- Check the imported hosts, then remove `CORVUS_IMPORT_DIR` and the two `/import` mounts and run
-  `docker compose up -d` again.
-- Certificates keep renewing in Corvus. Hosts that used an unsupported DNS provider are imported
-  without automatic renewal — the preview warns about them.
-- **Going back:** `docker compose down` in Corvus, then `docker compose up -d` in NPM.
+Configuration, the hardened install, forward hosts, streams, backups, migrating from Nginx Proxy
+Manager, security rules, the access queue and troubleshooting are covered in the
+**[documentation](https://corvus-gateway.github.io/corvus/)** (English · [한국어](https://corvus-gateway.github.io/corvus/ko/)).
 
 ## Performance
 
