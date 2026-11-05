@@ -8,6 +8,7 @@ import { headersStrings } from "./headers.i18n";
 import { locationsStrings } from "./locations.i18n";
 import { limitsStrings } from "./limits.i18n";
 import { certReplaceStrings } from "./certreplace.i18n";
+import { dnsCredsStrings } from "./dnscreds.i18n";
 import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
@@ -315,6 +316,7 @@ export const ru: Partial<Record<keyof typeof ko, string>> = {
   ...locationsStrings.ru,
   ...limitsStrings.ru,
   ...certReplaceStrings.ru,
+  ...dnsCredsStrings.ru,
   ...listFeedsStrings.ru,
   ...ssoStrings.ru,
   ...retentionStrings.ru,
@@ -342,7 +344,7 @@ export const ruRuleLabels: RuleLabels | undefined = {
 
 export const ruAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "Прокси-хост", stream: "Поток", redirection_host: "Хост перенаправления", waitroom: "Очередь доступа", certificate: "Сертификат", deploy: "Развёртывание", auth: "Аутентификация", setup: "Настройка",
+    proxy_host: "Прокси-хост", stream: "Поток", redirection_host: "Хост перенаправления", waitroom: "Очередь доступа", certificate: "Сертификат", dns_credential: "Учётные данные DNS", deploy: "Развёртывание", auth: "Аутентификация", setup: "Настройка",
     rate_limit: "Ограничение запросов", access_list: "Basic-аутентификация", security_rule: "Правило безопасности", ip_list: "Список IP", geoip: "База стран", settings: "Настройки", network: "Сеть", import: "Импорт", mfa: "MFA", user: "Учётная запись", ban: "Блокировка IP", autoban: "Автоблокировка", sso: "SSO", token: "API-токен", alert_channel: "Канал оповещений", alert_rules: "Правила оповещений", backup: "Резервная копия", managed_rules: "Управляемые правила", page: "Страница", retention: "Хранение данных", unknown_hosts: "Неизвестные хосты",
   },
   verb: {

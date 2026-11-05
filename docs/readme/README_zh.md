@@ -47,7 +47,7 @@ Corvus 不是 Nginx Proxy Manager 的分支。它是全新的实现（OpenResty 
 - 代理主机支持通配符、WebSocket、HTTP/2、强制 HTTPS 以及自定义 Nginx 片段
 - 自定义位置：按路径（如 `/api`）转发到不同的上游，并保留主机的全部防护
 - 重定向主机：将域名跳转到另一个域名（301/302/303/307/308，可选保留路径），同样享有 TLS 与防护
-- 免费的 Let's Encrypt 证书（HTTP-01，或DNS-01：Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap），自动续期，也可上传自有证书（续期后可原地替换）
+- 免费的 Let's Encrypt 证书（HTTP-01，或DNS-01：Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap，服务商凭据保存后可重复使用），自动续期，也可上传自有证书（续期后可原地替换）
 - 流转发：将 TCP/UDP 端口（数据库、SSH、MQTT、游戏服务器）转发到其他主机，TCP 可选 TLS 终止
 - 未知主机名可选择返回 404 页面、关闭连接或重定向
 - 在 Cloudflare 或受信任代理之后获取真实客户端 IP；可按主机启用密码保护

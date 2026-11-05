@@ -8,6 +8,7 @@ import { headersStrings } from "./headers.i18n";
 import { locationsStrings } from "./locations.i18n";
 import { limitsStrings } from "./limits.i18n";
 import { certReplaceStrings } from "./certreplace.i18n";
+import { dnsCredsStrings } from "./dnscreds.i18n";
 import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
@@ -316,6 +317,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   ...locationsStrings.zh,
   ...limitsStrings.zh,
   ...certReplaceStrings.zh,
+  ...dnsCredsStrings.zh,
   ...listFeedsStrings.zh,
   ...ssoStrings.zh,
   ...retentionStrings.zh,
@@ -343,7 +345,7 @@ export const zhRuleLabels: RuleLabels | undefined = {
 
 export const zhAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "代理主机", stream: "流转发", redirection_host: "重定向主机", waitroom: "访问排队", certificate: "证书", deploy: "部署", auth: "认证", setup: "初始设置",
+    proxy_host: "代理主机", stream: "流转发", redirection_host: "重定向主机", waitroom: "访问排队", certificate: "证书", dns_credential: "DNS 凭据", deploy: "部署", auth: "认证", setup: "初始设置",
     rate_limit: "速率限制", access_list: "Basic 认证", security_rule: "安全规则", ip_list: "IP 列表", geoip: "国家/地区数据库", settings: "设置", network: "网络", import: "导入", mfa: "MFA", user: "账号", ban: "IP 封禁", autoban: "自动封禁", sso: "SSO", token: "API 令牌", alert_channel: "告警渠道", alert_rules: "告警规则", backup: "备份", managed_rules: "托管规则", page: "页面", retention: "数据保留", unknown_hosts: "未知主机",
   },
   verb: {

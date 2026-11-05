@@ -14,7 +14,7 @@ import { useResource } from "../hooks/useResource";
 import { useCan } from "../lib/rbac";
 import { useI18n } from "../i18n";
 import { useDnsProviders } from "../hooks/useDnsProviders";
-import { DnsFields } from "../components/DnsFields";
+import { DnsFields, dnsRequest, newDnsChoice, type DnsChoice } from "../components/DnsFields";
 import { useApp } from "../lib/app";
 import { cn, relTime } from "../lib/utils";
 
@@ -25,7 +25,7 @@ const authFrom = (h?: ProxyHost): BasicAuthForm => {
   return { enabled: users.length > 0, users };
 };
 
-interface CertReq { email: string; dns: boolean; provider: string; creds: string; staging: boolean; agree: boolean }
+interface CertReq { email: string; dns: boolean; dnsc: DnsChoice; staging: boolean; agree: boolean }
 
 type Form = Omit<ProxyHost, "id" | "created_at" | "updated_at">;
 
@@ -88,7 +88,7 @@ export default function ProxyHosts() {
   }, [hosts.data, q]);
 
   const open = (h?: ProxyHost) => { setError(null); setEditing({ id: h?.id ?? null, form: h ? toForm(h) : { ...blank }, req: null, auth: authFrom(h) }); };
-  const newReq = (): CertReq => ({ email: user.email, dns: false, provider: providers[0].id, creds: providers[0].credentials_template, staging: false, agree: false });
+  const newReq = (): CertReq => ({ email: user.email, dns: false, dnsc: newDnsChoice(providers[0]), staging: false, agree: false });
 
   const save = async () => {
     if (!editing) return;
@@ -100,7 +100,7 @@ export default function ProxyHosts() {
     if (req) {
       const dns = wildcard || req.dns;
       body.certificate_id = null;
-      body.certificate_request = { email: req.email, dns_challenge: dns, dns_provider: req.provider, dns_credentials: dns ? req.creds : "", staging: req.staging };
+      body.certificate_request = { email: req.email, dns_challenge: dns, staging: req.staging, ...(dns ? dnsRequest(req.dnsc) : {}) };
     }
     if (!showClientIp) { delete body.client_ip; }
     if (!showExploits) { delete body.block_exploits; }
@@ -264,7 +264,7 @@ export default function ProxyHosts() {
                 </IdField>
                 <SwitchRow label={t("dnsChallenge")} description={wildcard ? t("dnsChallengeLocked") : t("dnsChallengeDesc")} checked={useDns} disabled={wildcard} onChange={(v) => setReq({ dns: v })} />
                 {useDns ? (
-                  <DnsFields providers={providers} provider={req.provider} creds={req.creds} onChange={(x) => setReq({ provider: x.provider, creds: x.creds })} error={fieldErr(error, "certificate_request.dns_credentials")} />
+                  <DnsFields providers={providers} value={req.dnsc} onChange={(dnsc) => setReq({ dnsc })} fieldError={(f) => fieldErr(error, `certificate_request.${f}`)} />
                 ) : <p className="text-xs leading-5 text-fg-subtle">{t("httpChallengeHint")}</p>}
                 {fieldErr(error, "certificate_request") && <p role="alert" className="text-xs text-danger">{fieldErr(error, "certificate_request")}</p>}
                 <p className="text-xs leading-5 text-fg-subtle">{t("autoRenewNote")}</p>

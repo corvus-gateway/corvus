@@ -119,30 +119,26 @@ type proxyHostInput struct {
 }
 
 // requestCertificate creates a pending ACME certificate for h inside tx.
-func (s *Server) requestCertificate(r *http.Request, tx *store.Store, h *store.ProxyHost, req *certRequest) (*store.Certificate, error) {
-	c, err := s.orderCertificate(r, tx, h.Domains, req)
+func (s *Server) requestCertificate(r *http.Request, tx *store.Store, h *store.ProxyHost, req *certRequest) (*store.Certificate, *store.DNSCredential, error) {
+	c, created, err := s.orderCertificate(r, tx, h.Domains, req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	h.CertificateID = &c.ID
-	return c, nil
+	return c, created, nil
 }
 
-// orderCertificate creates a pending ACME certificate for domains inside tx.
-func (s *Server) orderCertificate(r *http.Request, tx *store.Store, hostDomains []string, req *certRequest) (*store.Certificate, error) {
+// orderCertificate creates a pending ACME certificate for domains inside tx (and the
+// DNS credential entered with it, which is returned when one was created).
+func (s *Server) orderCertificate(r *http.Request, tx *store.Store, hostDomains []string, req *certRequest) (*store.Certificate, *store.DNSCredential, error) {
 	if s.ACME == nil {
-		return nil, validate.Errors{{Field: "certificate_request", Code: "unavailable", Message: "ACME is not available"}}
+		return nil, nil, validate.Errors{{Field: "certificate_request", Code: "unavailable", Message: "ACME is not available"}}
 	}
-	info, domains, errs := s.buildACME(hostDomains, *req, "certificate_request.")
+	o, errs := s.buildACME(r.Context(), tx, hostDomains, *req, "certificate_request.")
 	if len(errs) > 0 {
-		return nil, errs
+		return nil, nil, errs
 	}
-	c := &store.Certificate{Name: domains[0], Kind: "acme", Domains: domains, NotAfter: time.Now().UTC(), Status: "pending", AutoRenew: true, ACME: info}
-	if err := tx.CreateCertificate(r.Context(), c); err != nil {
-		return nil, err
-	}
-	c.Challenge = info.Challenge
-	return c, nil
+	return s.createACMECertificate(r.Context(), tx, "", o)
 }
 
 func (in proxyHostInput) apply(h *store.ProxyHost) {
@@ -281,6 +277,7 @@ func (s *Server) createProxyHost(w http.ResponseWriter, r *http.Request) {
 	h := &store.ProxyHost{}
 	in.apply(h)
 	var cert *store.Certificate
+	var newCred *store.DNSCredential
 	if err := advancedAllowed(r, "", in.AdvancedConfig); err != nil {
 		fail(w, err)
 		return
@@ -292,7 +289,7 @@ func (s *Server) createProxyHost(w http.ResponseWriter, r *http.Request) {
 	v, err := s.Deployer.Apply(r.Context(), userID(r), "create proxy host "+strings.Join(in.Domains, ","), func(tx *store.Store) error {
 		if in.CertificateRequest != nil {
 			var err error
-			if cert, err = s.requestCertificate(r, tx, h, in.CertificateRequest); err != nil {
+			if cert, newCred, err = s.requestCertificate(r, tx, h, in.CertificateRequest); err != nil {
 				return err
 			}
 		}
@@ -314,9 +311,7 @@ func (s *Server) createProxyHost(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	if cert != nil {
-		s.ACME.Start(cert.ID)
-	}
+	s.startOrder(r, cert, newCred)
 	s.audit(r, "proxy_host.create", fmt.Sprintf("proxy_host:%d", h.ID), h)
 	s.underAttackChanged()
 	writeJSON(w, 201, map[string]any{"proxy_host": h, "version": v, "certificate": cert})
@@ -333,6 +328,7 @@ func (s *Server) updateProxyHost(w http.ResponseWriter, r *http.Request) {
 	}
 	var before, h *store.ProxyHost
 	var cert *store.Certificate
+	var newCred *store.DNSCredential
 	v, err := s.Deployer.Apply(r.Context(), userID(r), fmt.Sprintf("update proxy host #%d", id), func(tx *store.Store) error {
 		var err error
 		if before, err = tx.ProxyHostByID(r.Context(), id); err != nil {
@@ -348,7 +344,7 @@ func (s *Server) updateProxyHost(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		if in.CertificateRequest != nil {
-			if cert, err = s.requestCertificate(r, tx, h, in.CertificateRequest); err != nil {
+			if cert, newCred, err = s.requestCertificate(r, tx, h, in.CertificateRequest); err != nil {
 				return err
 			}
 		}
@@ -370,9 +366,7 @@ func (s *Server) updateProxyHost(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	if cert != nil {
-		s.ACME.Start(cert.ID)
-	}
+	s.startOrder(r, cert, newCred)
 	s.audit(r, "proxy_host.update", fmt.Sprintf("proxy_host:%d", id), map[string]any{"before": before, "after": h})
 	s.underAttackChanged()
 	writeJSON(w, 200, map[string]any{"proxy_host": h, "version": v, "certificate": cert})

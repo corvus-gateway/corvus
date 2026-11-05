@@ -8,6 +8,7 @@ import { koHeaders } from "./headers.i18n";
 import { koLocations } from "./locations.i18n";
 import { koLimits } from "./limits.i18n";
 import { koCertReplace } from "./certreplace.i18n";
+import { koDnsCreds } from "./dnscreds.i18n";
 import { koListFeeds } from "./listfeeds.i18n";
 import { koBans } from "./bans.i18n";
 import { koBackup } from "./backup.i18n";
@@ -213,6 +214,7 @@ export const ko = {
   ...koLocations,
   ...koLimits,
   ...koCertReplace,
+  ...koDnsCreds,
   ...koListFeeds,
   ...koSso,
   ...koRetention,

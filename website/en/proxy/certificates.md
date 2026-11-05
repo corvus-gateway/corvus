@@ -29,6 +29,25 @@ Supported providers: Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner,
 Create an API token at your provider that can edit DNS records and paste it into the form (for
 Cloudflare: permission *Zone → DNS → Edit*). The token is stored encrypted and never shown again.
 
+#### Saved DNS credentials
+
+You enter a token only once. The first time, it is saved as a **DNS credential** named after the
+provider (*Cloudflare*, then *Cloudflare 2*, …). Next time, the form shows a **DNS credential**
+list: pick the saved one, or choose **Enter new credentials** and optionally give them a
+**Credential name**. This works the same on the Certificates page and when you request a
+certificate from a proxy or redirection host form.
+
+The **DNS credentials** card at the bottom of the Certificates page lists them with the provider
+and how many certificates use each one. From the row menu:
+
+- **Replace secret**: enter a new token, for example after rotating it at your provider. Every
+  certificate using the credential renews with the new token; nothing is re-issued right away.
+- **Rename**.
+- **Delete**: only for credentials that no certificate uses.
+
+**Add credential** saves one in advance. Certificates from older versions and DNS certificates
+imported from Nginx Proxy Manager get saved credentials automatically, one per provider and token.
+
 !!! tip "Testing"
     Turn on **Use the staging environment** while you experiment. It has no rate limits, but browsers
     don't trust its certificates.

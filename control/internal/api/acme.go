@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,7 +9,6 @@ import (
 	"time"
 
 	"corvus/control/internal/acme"
-	"corvus/control/internal/seal"
 	"corvus/control/internal/store"
 	"corvus/control/internal/validate"
 )
@@ -29,12 +29,25 @@ type certRequest struct {
 	DNSProvider    string          `json:"dns_provider"`
 	DNSCredentials json.RawMessage `json:"dns_credentials"` // certbot ini text, or {"api_token": "..."}
 	CredentialsINI string          `json:"dns_credentials_ini"`
-	Staging        bool            `json:"staging"`
+	// DNSCredentialID selects a saved DNS credential; without it the credentials above
+	// are saved as a new one named DNSCredentialName (empty = automatic name).
+	DNSCredentialID   *int64 `json:"dns_credential_id"`
+	DNSCredentialName string `json:"dns_credential_name"`
+	Staging           bool   `json:"staging"`
 }
 
-// buildACME validates an order for domains and returns the stored ACME info
-// (credentials sealed with the data key). field prefixes error field names.
-func (s *Server) buildACME(domains []string, in certRequest, field string) (store.ACMEInfo, []string, validate.Errors) {
+// acmeOrder is a validated certRequest: the ACME info to store and either an existing
+// saved credential (credID) or a new one to save with the certificate (newCred).
+type acmeOrder struct {
+	info     store.ACMEInfo
+	domains  []string
+	credID   *int64
+	newCred  *acme.Credentials
+	credName string
+}
+
+// buildACME validates an order for domains. field prefixes error field names.
+func (s *Server) buildACME(ctx context.Context, st *store.Store, domains []string, in certRequest, field string) (acmeOrder, validate.Errors) {
 	var errs validate.Errors
 	add := func(f, code, msg string) {
 		errs = append(errs, validate.FieldError{Field: field + f, Code: code, Message: msg})
@@ -68,43 +81,109 @@ func (s *Server) buildACME(domains []string, in certRequest, field string) (stor
 			challenge = "dns-01"
 		}
 	}
-	info := store.ACMEInfo{Email: email, Challenge: challenge, Staging: in.Staging}
+	o := acmeOrder{info: store.ACMEInfo{Email: email, Challenge: challenge, Staging: in.Staging}, domains: out}
 	switch challenge {
 	case "http-01":
 		if wildcard {
 			add("dns_challenge", "wildcard_needs_dns", "wildcard certificates require the DNS challenge")
 		}
 	case "dns-01":
+		if in.DNSCredentialID != nil {
+			saved, err := st.DNSCredentialByID(ctx, *in.DNSCredentialID)
+			if err != nil {
+				add("dns_credential_id", "not_found", "DNS credential does not exist")
+				break
+			}
+			o.info.DNSProvider, o.credID = saved.Provider, &saved.ID
+			break
+		}
 		provider := in.DNSProvider
 		if provider == "" {
 			provider = "cloudflare"
 		}
-		text := in.CredentialsINI
-		if len(in.DNSCredentials) > 0 {
-			var str string
-			var obj map[string]string
-			if json.Unmarshal(in.DNSCredentials, &str) == nil {
-				text = str
-			} else if json.Unmarshal(in.DNSCredentials, &obj) == nil && obj["api_token"] != "" {
-				text = "dns_cloudflare_api_token=" + obj["api_token"]
-			}
-		}
-		cred, err := acme.ParseCredentials(provider, text)
+		cred, err := acme.ParseCredentials(provider, credentialText(in.CredentialsINI, in.DNSCredentials))
 		if err != nil {
 			add("dns_credentials", "invalid", err.Error())
 			break
 		}
-		raw, _ := json.Marshal(cred)
-		sealed, err := seal.Seal(s.DataKey, string(raw))
-		if err != nil {
-			add("dns_credentials", "internal", "could not store credentials")
+		o.credName = strings.TrimSpace(in.DNSCredentialName)
+		if msg := credentialNameError(ctx, st, o.credName, 0); msg != "" {
+			add("dns_credential_name", "invalid", msg)
 			break
 		}
-		info.DNSProvider, info.Credentials = provider, sealed
+		o.info.DNSProvider, o.newCred = provider, &cred
 	default:
 		add("challenge", "invalid", "challenge must be http-01 or dns-01")
 	}
-	return info, out, errs
+	return o, errs
+}
+
+// credentialText returns the certbot ini text of a request: dns_credentials (a string
+// or {"api_token": "..."}) wins over dns_credentials_ini.
+func credentialText(ini string, raw json.RawMessage) string {
+	if len(raw) > 0 {
+		var str string
+		var obj map[string]string
+		if json.Unmarshal(raw, &str) == nil {
+			return str
+		} else if json.Unmarshal(raw, &obj) == nil && obj["api_token"] != "" {
+			return "dns_cloudflare_api_token=" + obj["api_token"]
+		}
+	}
+	return ini
+}
+
+// credentialNameError checks a credential name (empty = automatic) against the saved
+// credentials other than id.
+func credentialNameError(ctx context.Context, st *store.Store, name string, id int64) string {
+	if name == "" {
+		return ""
+	}
+	if len(name) > 100 {
+		return "name is too long"
+	}
+	list, _ := st.ListDNSCredentials(ctx)
+	for _, c := range list {
+		if c.ID != id && strings.EqualFold(c.Name, name) {
+			return "a DNS credential with this name already exists"
+		}
+	}
+	return ""
+}
+
+// createACMECertificate saves the order's new credential (if any) and a pending
+// certificate inside tx; the returned credential is the one created, if any.
+func (s *Server) createACMECertificate(ctx context.Context, tx *store.Store, name string, o acmeOrder) (*store.Certificate, *store.DNSCredential, error) {
+	var created *store.DNSCredential
+	credID := o.credID
+	if o.newCred != nil {
+		var err error
+		if created, err = acme.SaveCredential(ctx, tx, s.DataKey, o.credName, o.info.DNSProvider, *o.newCred); err != nil {
+			return nil, nil, err
+		}
+		credID = &created.ID
+	}
+	if name == "" {
+		name = o.domains[0]
+	}
+	c := &store.Certificate{Name: name, Kind: "acme", Domains: o.domains, NotAfter: time.Now().UTC(), Status: "pending", AutoRenew: true, ACME: o.info, DNSCredentialID: credID}
+	if err := tx.CreateCertificate(ctx, c); err != nil {
+		return nil, nil, err
+	}
+	c.Challenge = o.info.Challenge
+	return c, created, nil
+}
+
+// startOrder starts issuance of a certificate ordered with a host (after the commit)
+// and records the credential that was saved with it.
+func (s *Server) startOrder(r *http.Request, c *store.Certificate, created *store.DNSCredential) {
+	if c == nil {
+		return
+	}
+	if created != nil {
+		s.audit(r, "dns_credential.create", fmt.Sprintf("dns_credential:%d", created.ID), created)
+	}
+	s.ACME.Start(c.ID)
 }
 
 func (s *Server) dnsProviders(w http.ResponseWriter, r *http.Request) {
@@ -124,23 +203,23 @@ func (s *Server) issueACME(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	info, domains, errs := s.buildACME(in.Domains, in.certRequest, "")
-	if len(errs) > 0 {
-		fail(w, errs)
-		return
-	}
-	name := strings.TrimSpace(in.Name)
-	if name == "" {
-		name = domains[0]
-	}
-	c := &store.Certificate{Name: name, Kind: "acme", Domains: domains, NotAfter: time.Now().UTC(), Status: "pending", AutoRenew: true, ACME: info}
-	if err := s.Store.CreateCertificate(r.Context(), c); err != nil {
+	var c *store.Certificate
+	var created *store.DNSCredential
+	err := s.Store.WithTx(r.Context(), func(tx *store.Store) error {
+		o, errs := s.buildACME(r.Context(), tx, in.Domains, in.certRequest, "")
+		if len(errs) > 0 {
+			return errs
+		}
+		var err error
+		c, created, err = s.createACMECertificate(r.Context(), tx, strings.TrimSpace(in.Name), o)
+		return err
+	})
+	if err != nil {
 		fail(w, err)
 		return
 	}
-	c.Challenge = info.Challenge
-	s.ACME.Start(c.ID)
-	s.audit(r, "certificate.acme_requested", fmt.Sprintf("certificate:%d", c.ID), map[string]any{"domains": domains, "challenge": info.Challenge, "staging": in.Staging})
+	s.startOrder(r, c, created)
+	s.audit(r, "certificate.acme_requested", fmt.Sprintf("certificate:%d", c.ID), map[string]any{"domains": c.Domains, "challenge": c.Challenge, "staging": in.Staging, "dns_credential_id": c.DNSCredentialID})
 	writeJSON(w, http.StatusAccepted, c)
 }
 

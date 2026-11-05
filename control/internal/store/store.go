@@ -278,7 +278,9 @@ type Certificate struct {
 	LastError string    `json:"last_error"`
 	AutoRenew bool      `json:"auto_renew"`
 	Challenge string    `json:"challenge,omitempty"`
-	ACME      ACMEInfo  `json:"-"`
+	// DNSCredentialID is the saved DNS credential used for DNS-01 issuance and renewals.
+	DNSCredentialID *int64   `json:"dns_credential_id,omitempty"`
+	ACME            ACMEInfo `json:"-"`
 }
 
 // ACMEInfo is the issuance configuration of an ACME certificate.
@@ -286,7 +288,7 @@ type ACMEInfo struct {
 	Email       string `json:"email,omitempty"`
 	Challenge   string `json:"challenge,omitempty"` // http-01 | dns-01
 	DNSProvider string `json:"dns_provider,omitempty"`
-	Credentials string `json:"credentials,omitempty"` // encrypted JSON (data key)
+	Credentials string `json:"credentials,omitempty"` // encrypted JSON (data key); legacy, see DNSCredentialID
 	Staging     bool   `json:"staging,omitempty"`
 }
 
@@ -295,8 +297,8 @@ func (s *Store) CreateCertificate(ctx context.Context, c *Certificate) error {
 	if c.Status == "" {
 		c.Status = "valid"
 	}
-	res, err := s.q.ExecContext(ctx, `INSERT INTO certificates(name, kind, domains, not_after, created_at, status, last_error, auto_renew, acme) VALUES (?,?,?,?,?,?,?,?,?)`,
-		c.Name, c.Kind, toJSON(c.Domains), c.NotAfter.UTC(), c.CreatedAt, c.Status, c.LastError, b2i(c.AutoRenew), toJSON(c.ACME))
+	res, err := s.q.ExecContext(ctx, `INSERT INTO certificates(name, kind, domains, not_after, created_at, status, last_error, auto_renew, acme, dns_credential_id) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		c.Name, c.Kind, toJSON(c.Domains), c.NotAfter.UTC(), c.CreatedAt, c.Status, c.LastError, b2i(c.AutoRenew), toJSON(c.ACME), c.DNSCredentialID)
 	if err != nil {
 		return err
 	}
@@ -305,7 +307,7 @@ func (s *Store) CreateCertificate(ctx context.Context, c *Certificate) error {
 }
 
 func (s *Store) ListCertificates(ctx context.Context) ([]Certificate, error) {
-	rows, err := s.q.QueryContext(ctx, `SELECT id, name, kind, domains, not_after, created_at, status, last_error, auto_renew, acme FROM certificates ORDER BY id`)
+	rows, err := s.q.QueryContext(ctx, `SELECT id, name, kind, domains, not_after, created_at, status, last_error, auto_renew, acme, dns_credential_id FROM certificates ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -315,8 +317,12 @@ func (s *Store) ListCertificates(ctx context.Context) ([]Certificate, error) {
 		var c Certificate
 		var domains, acme string
 		var auto int
-		if err := rows.Scan(&c.ID, &c.Name, &c.Kind, &domains, &c.NotAfter, &c.CreatedAt, &c.Status, &c.LastError, &auto, &acme); err != nil {
+		var cred sql.NullInt64
+		if err := rows.Scan(&c.ID, &c.Name, &c.Kind, &domains, &c.NotAfter, &c.CreatedAt, &c.Status, &c.LastError, &auto, &acme, &cred); err != nil {
 			return nil, err
+		}
+		if cred.Valid {
+			c.DNSCredentialID = &cred.Int64
 		}
 		_ = json.Unmarshal([]byte(domains), &c.Domains)
 		_ = json.Unmarshal([]byte(acme), &c.ACME)

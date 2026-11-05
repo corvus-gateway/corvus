@@ -1,18 +1,17 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"corvus/control/internal/acme"
 	"corvus/control/internal/auth"
 	"corvus/control/internal/certs"
 	"corvus/control/internal/compiler"
 	"corvus/control/internal/npmimport"
-	"corvus/control/internal/seal"
 	"corvus/control/internal/store"
 	"corvus/control/internal/validate"
 )
@@ -163,6 +162,7 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 		cert, key []byte
 	}
 	var files []pendingFiles
+	var newCreds []*store.DNSCredential
 
 	v, err := s.Deployer.Apply(ctx, userID(r), "import from Nginx Proxy Manager", func(tx *store.Store) error {
 		certMap := map[int64]int64{}
@@ -190,12 +190,15 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 				if c.DNSProvider != "" {
 					xc.ACME.Challenge = "dns-01"
 					if c.DNSCredentials != nil {
-						cred, _ := json.Marshal(c.DNSCredentials)
-						sealed, err := seal.Seal(s.DataKey, string(cred))
+						// saved once per provider and secret, shared by the imported certificates
+						saved, created, err := acme.ReuseOrSaveCredential(ctx, tx, s.DataKey, c.DNSProvider, *c.DNSCredentials)
 						if err != nil {
 							return err
 						}
-						xc.ACME.DNSProvider, xc.ACME.Credentials = c.DNSProvider, sealed
+						if created {
+							newCreds = append(newCreds, saved)
+						}
+						xc.ACME.DNSProvider, xc.DNSCredentialID = c.DNSProvider, &saved.ID
 					} else {
 						xc.AutoRenew = false
 					}
@@ -379,6 +382,9 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 	}
 	if skips == nil {
 		skips = []skipped{}
+	}
+	for _, c := range newCreds {
+		s.audit(r, "dns_credential.create", fmt.Sprintf("dns_credential:%d", c.ID), c)
 	}
 	s.audit(r, "import.npm", "npm", map[string]any{"imported": counts, "skipped": len(skips)})
 	writeJSON(w, 200, map[string]any{"imported": counts, "skipped": skips, "version": v, "at": time.Now().UTC()})

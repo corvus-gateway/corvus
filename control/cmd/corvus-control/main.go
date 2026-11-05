@@ -353,6 +353,10 @@ func run() error {
 			slog.Error("ACME challenge server", "err", err)
 		}
 	}()
+	// Per-certificate DNS secrets of older versions become saved DNS credentials.
+	if _, err := acmeSvc.AdoptLegacyCredentials(ctx); err != nil {
+		slog.Warn("moving per-certificate DNS credentials failed; they keep working as they are", "err", err)
+	}
 	go acmeSvc.RenewLoop(ctx)
 
 	// Country database for security rules (DB-IP Lite, monthly). CORVUS_GEOIP=off disables

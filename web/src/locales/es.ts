@@ -8,6 +8,7 @@ import { headersStrings } from "./headers.i18n";
 import { locationsStrings } from "./locations.i18n";
 import { limitsStrings } from "./limits.i18n";
 import { certReplaceStrings } from "./certreplace.i18n";
+import { dnsCredsStrings } from "./dnscreds.i18n";
 import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
@@ -315,6 +316,7 @@ export const es: Partial<Record<keyof typeof ko, string>> = {
   ...locationsStrings.es,
   ...limitsStrings.es,
   ...certReplaceStrings.es,
+  ...dnsCredsStrings.es,
   ...listFeedsStrings.es,
   ...ssoStrings.es,
   ...retentionStrings.es,
@@ -342,7 +344,7 @@ export const esRuleLabels: RuleLabels | undefined = {
 
 export const esAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "Host proxy", stream: "Stream", redirection_host: "Host de redirección", waitroom: "Cola de acceso", certificate: "Certificado", deploy: "Implementación", auth: "Autenticación", setup: "Configuración inicial",
+    proxy_host: "Host proxy", stream: "Stream", redirection_host: "Host de redirección", waitroom: "Cola de acceso", certificate: "Certificado", dns_credential: "Credencial DNS", deploy: "Implementación", auth: "Autenticación", setup: "Configuración inicial",
     rate_limit: "Límite de tasa", access_list: "Autenticación Basic", security_rule: "Regla de seguridad", ip_list: "Lista de IP", geoip: "Base de datos de países", settings: "Configuración", network: "Red", import: "Importación", mfa: "MFA", user: "Cuenta", ban: "Bloqueo de IP", autoban: "Bloqueo automático", sso: "SSO", token: "Token de API", alert_channel: "Canal de alertas", alert_rules: "Reglas de alerta", backup: "Copia de seguridad", managed_rules: "Reglas gestionadas", page: "Página", retention: "Retención de datos", unknown_hosts: "Hosts desconocidos",
   },
   verb: {

@@ -142,8 +142,11 @@ export interface Waitroom {
 
 export interface Certificate {
   id: number; name: string; kind: "selfsigned" | "custom" | "acme" | string; domains: string[]; not_after: string; created_at: string;
-  status?: "valid" | "pending" | "error"; last_error?: string; auto_renew?: boolean; challenge?: string;
+  status?: "valid" | "pending" | "error"; last_error?: string; auto_renew?: boolean; challenge?: string; dns_credential_id?: number;
 }
+
+/** Saved DNS-01 provider credential; the secret is never returned. */
+export interface DnsCredential { id: number; name: string; provider: string; used_by: number; created_at: string; updated_at: string }
 
 export interface Version {
   id: number; created_at: string; created_by: number | null; email: string; status: string; message: string;

@@ -196,6 +196,10 @@ func (s *Server) Handler() http.Handler {
 	op("POST /api/certificates/acme", s.issueACME)
 	priv("GET /api/acme/dns-providers", s.dnsProviders)
 	op("POST /api/certificates/{id}/renew", s.renewACME)
+	priv("GET /api/dns-credentials", s.listDNSCredentials) // dns_credentials.go
+	op("POST /api/dns-credentials", s.createDNSCredential)
+	op("PUT /api/dns-credentials/{id}", s.updateDNSCredential)
+	op("DELETE /api/dns-credentials/{id}", s.deleteDNSCredential)
 
 	priv("POST /api/auth/mfa/setup", s.mfaSetup)
 	priv("POST /api/auth/mfa/enable", s.mfaEnable)

@@ -115,6 +115,10 @@ Role: **public** = no authentication · **viewer** = any signed-in user or token
 | POST | `/api/certificates/{id}/renew` | operator | Renew now |
 | DELETE | `/api/certificates/{id}` | operator | Delete |
 | GET | `/api/acme/dns-providers` | viewer | Supported DNS-01 providers |
+| GET | `/api/dns-credentials` | viewer | Saved DNS-01 credentials: `id`, `name`, `provider`, `used_by` (certificates), timestamps; the secret is never returned |
+| POST | `/api/dns-credentials` | operator | Save one: `provider`, `credentials` (certbot ini text), optional `name` (default: provider name, "Cloudflare 2", …) |
+| PUT | `/api/dns-credentials/{id}` | operator | Rename (`name`) and/or replace the secret (`credentials`, optional `provider`); certificates use a new secret from their next renewal |
+| DELETE | `/api/dns-credentials/{id}` | operator | Delete; `422` (`in_use`) while certificates use it |
 | GET | `/api/deployments` | viewer | Configuration versions |
 | GET | `/api/deployments/{id}/files` | viewer | Generated files of a version |
 | POST | `/api/deployments` | operator | Redeploy the current configuration |
@@ -231,6 +235,9 @@ Streams have no access log; bans and security rules do not apply to them yet.
 
 `certificate_request` orders a Let's Encrypt certificate for the host's domains: `email`, `challenge`
 (`http-01` or `dns-01`), `dns_provider`, `dns_credentials` (e.g. `{"api_token": "…"}` for Cloudflare), `staging`.
+For DNS-01, `dns_credential_id` picks a saved DNS credential instead; new `dns_credentials` are saved
+as a DNS credential (named `dns_credential_name`, or automatically) and the certificate references it.
+The same fields work for `POST /api/certificates/acme`.
 
 ### Protection
 

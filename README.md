@@ -56,7 +56,7 @@ Go control plane, React console) that can **import an existing NPM setup**.
 - Proxy hosts with wildcards, WebSocket, HTTP/2, forced HTTPS and custom Nginx snippets
 - Custom locations: route paths (e.g. `/api`) to their own upstream, with the host's protections
 - Redirection hosts: send domains to another domain (301/302/303/307/308, optionally keeping the path), with the same TLS and protection
-- Free Let's Encrypt certificates (HTTP-01, or DNS-01 via Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) with automatic renewal, or upload your own (and replace it in place when it is renewed)
+- Free Let's Encrypt certificates (HTTP-01, or DNS-01 via Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap, with saved, reusable provider credentials) with automatic renewal, or upload your own (and replace it in place when it is renewed)
 - Streams: forward TCP/UDP ports (databases, SSH, MQTT, game servers) to another host, with optional TLS termination for TCP
 - Unknown host names get a 404 page, a closed connection or a redirect: your choice
 - Real client IP behind Cloudflare or trusted proxies; optional password protection per host

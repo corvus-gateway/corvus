@@ -32,7 +32,8 @@ import (
 	"corvus/control/internal/store"
 )
 
-// Credentials for DNS providers (stored sealed in the certificate's ACME info).
+// Credentials for DNS providers (stored sealed in a saved DNS credential; older
+// versions kept them in the certificate's ACME info).
 type Credentials struct {
 	// Cloudflare (kept in named fields for compatibility with stored certificates)
 	APIToken string `json:"api_token,omitempty"`
@@ -260,13 +261,11 @@ func (s *Service) issue(ctx context.Context, id int64) error {
 	}
 	switch c.ACME.Challenge {
 	case "dns-01":
-		credJSON, err := seal.Open(s.Key, c.ACME.Credentials)
+		provider, cred, err := s.dnsCredentials(ctx, c)
 		if err != nil {
 			return fail(err)
 		}
-		var cred Credentials
-		_ = json.Unmarshal([]byte(credJSON), &cred)
-		p, err := dnsProvider(c.ACME.DNSProvider, cred)
+		p, err := dnsProvider(provider, cred)
 		if err != nil {
 			return fail(err)
 		}

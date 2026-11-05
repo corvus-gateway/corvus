@@ -8,6 +8,7 @@ import { headersStrings } from "./headers.i18n";
 import { locationsStrings } from "./locations.i18n";
 import { limitsStrings } from "./limits.i18n";
 import { certReplaceStrings } from "./certreplace.i18n";
+import { dnsCredsStrings } from "./dnscreds.i18n";
 import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
@@ -316,6 +317,7 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   ...locationsStrings.ja,
   ...limitsStrings.ja,
   ...certReplaceStrings.ja,
+  ...dnsCredsStrings.ja,
   ...listFeedsStrings.ja,
   ...ssoStrings.ja,
   ...retentionStrings.ja,
@@ -343,7 +345,7 @@ export const jaRuleLabels: RuleLabels | undefined = {
 
 export const jaAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "プロキシホスト", stream: "ストリーム", redirection_host: "リダイレクトホスト", waitroom: "アクセスキュー", certificate: "証明書", deploy: "デプロイ", auth: "認証", setup: "初期設定",
+    proxy_host: "プロキシホスト", stream: "ストリーム", redirection_host: "リダイレクトホスト", waitroom: "アクセスキュー", certificate: "証明書", dns_credential: "DNS 認証情報", deploy: "デプロイ", auth: "認証", setup: "初期設定",
     rate_limit: "レート制限", access_list: "Basic 認証", security_rule: "セキュリティルール", ip_list: "IP リスト", geoip: "国データベース", settings: "設定", network: "ネットワーク", import: "インポート", mfa: "MFA", user: "アカウント", ban: "IP ブロック", autoban: "自動ブロック", sso: "SSO", token: "API トークン", alert_channel: "通知チャネル", alert_rules: "通知ルール", backup: "バックアップ", managed_rules: "マネージドルール", page: "ページ", retention: "データ保持", unknown_hosts: "不明なホスト",
   },
   verb: {

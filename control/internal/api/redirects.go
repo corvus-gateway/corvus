@@ -90,10 +90,11 @@ func (s *Server) createRedirectionHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var cert *store.Certificate
+	var newCred *store.DNSCredential
 	v, err := s.Deployer.Apply(r.Context(), userID(r), "create redirection host "+strings.Join(in.Domains, ","), func(tx *store.Store) error {
 		if in.CertificateRequest != nil {
 			var err error
-			if cert, err = s.orderCertificate(r, tx, h.Domains, in.CertificateRequest); err != nil {
+			if cert, newCred, err = s.orderCertificate(r, tx, h.Domains, in.CertificateRequest); err != nil {
 				return err
 			}
 			h.CertificateID = &cert.ID
@@ -107,9 +108,7 @@ func (s *Server) createRedirectionHost(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	if cert != nil {
-		s.ACME.Start(cert.ID)
-	}
+	s.startOrder(r, cert, newCred)
 	s.audit(r, "redirection_host.create", fmt.Sprintf("redirection_host:%d", h.ID), h)
 	writeJSON(w, 201, map[string]any{"redirection_host": h, "version": v, "certificate": cert})
 }
@@ -125,6 +124,7 @@ func (s *Server) updateRedirectionHost(w http.ResponseWriter, r *http.Request) {
 	}
 	var before, h *store.RedirectionHost
 	var cert *store.Certificate
+	var newCred *store.DNSCredential
 	v, err := s.Deployer.Apply(r.Context(), userID(r), fmt.Sprintf("update redirection host #%d", id), func(tx *store.Store) error {
 		var err error
 		if before, err = tx.RedirectionHostByID(r.Context(), id); err != nil {
@@ -137,7 +137,7 @@ func (s *Server) updateRedirectionHost(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		if in.CertificateRequest != nil {
-			if cert, err = s.orderCertificate(r, tx, h.Domains, in.CertificateRequest); err != nil {
+			if cert, newCred, err = s.orderCertificate(r, tx, h.Domains, in.CertificateRequest); err != nil {
 				return err
 			}
 			h.CertificateID = &cert.ID
@@ -151,9 +151,7 @@ func (s *Server) updateRedirectionHost(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	if cert != nil {
-		s.ACME.Start(cert.ID)
-	}
+	s.startOrder(r, cert, newCred)
 	s.audit(r, "redirection_host.update", fmt.Sprintf("redirection_host:%d", id), map[string]any{"before": before, "after": h})
 	writeJSON(w, 200, map[string]any{"redirection_host": h, "version": v, "certificate": cert})
 }
