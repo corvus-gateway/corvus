@@ -344,11 +344,11 @@ export const zhRuleLabels: RuleLabels | undefined = {
 export const zhAuditLabels: AuditLabels | undefined = {
   dom: {
     proxy_host: "代理主机", stream: "流转发", redirection_host: "重定向主机", waitroom: "访问排队", certificate: "证书", deploy: "部署", auth: "认证", setup: "初始设置",
-    rate_limit: "速率限制", access_list: "Basic 认证", security_rule: "安全规则", ip_list: "IP 列表", geoip: "国家/地区数据库", settings: "设置", network: "网络", import: "导入", mfa: "MFA", user: "账号",
+    rate_limit: "速率限制", access_list: "Basic 认证", security_rule: "安全规则", ip_list: "IP 列表", geoip: "国家/地区数据库", settings: "设置", network: "网络", import: "导入", mfa: "MFA", user: "账号", ban: "IP 封禁", autoban: "自动封禁", sso: "SSO", token: "API 令牌", alert_channel: "告警渠道", alert_rules: "告警规则", backup: "备份", managed_rules: "托管规则", page: "页面", retention: "数据保留", unknown_hosts: "未知主机",
   },
   verb: {
     create: "已创建", update: "已更新", delete: "已删除", upload: "已上传", apply: "已应用", rollback: "已回滚", login: "登录", logout: "退出登录",
     login_failed: "登录失败", password_changed: "密码已修改", admin_created: "管理员已创建", renew: "已续期", issue: "已签发",
-    enable: "已启用", disable: "已停用", refresh: "已刷新", mfa_enabled: "MFA 已启用", mfa_disabled: "MFA 已停用", acme: "ACME 已签发", reorder: "顺序已调整",
+    enable: "已启用", disable: "已停用", refresh: "已刷新", mfa_enabled: "MFA 已启用", mfa_disabled: "MFA 已停用", acme: "ACME 已签发", reorder: "顺序已调整", auto: "(自动)", test: "已测试", reset: "已重置", restore_upload: "已上传恢复文件", restore_confirm: "已确认恢复", restore_discard: "已放弃恢复", restore_rejected: "已拒绝恢复",
   },
 };

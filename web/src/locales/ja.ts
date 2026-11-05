@@ -344,11 +344,11 @@ export const jaRuleLabels: RuleLabels | undefined = {
 export const jaAuditLabels: AuditLabels | undefined = {
   dom: {
     proxy_host: "プロキシホスト", stream: "ストリーム", redirection_host: "リダイレクトホスト", waitroom: "アクセスキュー", certificate: "証明書", deploy: "デプロイ", auth: "認証", setup: "初期設定",
-    rate_limit: "レート制限", access_list: "Basic 認証", security_rule: "セキュリティルール", ip_list: "IP リスト", geoip: "国データベース", settings: "設定", network: "ネットワーク", import: "インポート", mfa: "MFA", user: "アカウント",
+    rate_limit: "レート制限", access_list: "Basic 認証", security_rule: "セキュリティルール", ip_list: "IP リスト", geoip: "国データベース", settings: "設定", network: "ネットワーク", import: "インポート", mfa: "MFA", user: "アカウント", ban: "IP ブロック", autoban: "自動ブロック", sso: "SSO", token: "API トークン", alert_channel: "通知チャネル", alert_rules: "通知ルール", backup: "バックアップ", managed_rules: "マネージドルール", page: "ページ", retention: "データ保持", unknown_hosts: "不明なホスト",
   },
   verb: {
     create: "作成", update: "更新", delete: "削除", upload: "アップロード", apply: "適用", rollback: "ロールバック", login: "サインイン", logout: "サインアウト",
     login_failed: "サインイン失敗", password_changed: "パスワード変更", admin_created: "管理者作成", renew: "更新", issue: "発行",
-    enable: "有効化", disable: "無効化", refresh: "再読み込み", mfa_enabled: "MFA 有効化", mfa_disabled: "MFA 無効化", acme: "ACME 発行", reorder: "並べ替え",
+    enable: "有効化", disable: "無効化", refresh: "再読み込み", mfa_enabled: "MFA 有効化", mfa_disabled: "MFA 無効化", acme: "ACME 発行", reorder: "並べ替え", auto: "(自動)", test: "テスト", reset: "リセット", restore_upload: "復元ファイルのアップロード", restore_confirm: "復元の確定", restore_discard: "復元の破棄", restore_rejected: "復元の拒否",
   },
 };

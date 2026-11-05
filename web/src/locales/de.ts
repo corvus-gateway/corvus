@@ -343,11 +343,11 @@ export const deRuleLabels: RuleLabels | undefined = {
 export const deAuditLabels: AuditLabels | undefined = {
   dom: {
     proxy_host: "Proxy-Host", stream: "Stream", redirection_host: "Weiterleitungs-Host", waitroom: "Zugriffswarteschlange", certificate: "Zertifikat", deploy: "Bereitstellung", auth: "Authentifizierung", setup: "Einrichtung",
-    rate_limit: "Ratenbegrenzung", access_list: "Basic-Authentifizierung", security_rule: "Sicherheitsregel", ip_list: "IP-Liste", geoip: "Länderdatenbank", settings: "Einstellungen", network: "Netzwerk", import: "Import", mfa: "MFA", user: "Konto",
+    rate_limit: "Ratenbegrenzung", access_list: "Basic-Authentifizierung", security_rule: "Sicherheitsregel", ip_list: "IP-Liste", geoip: "Länderdatenbank", settings: "Einstellungen", network: "Netzwerk", import: "Import", mfa: "MFA", user: "Konto", ban: "IP-Sperre", autoban: "Automatische Sperre", sso: "SSO", token: "API-Token", alert_channel: "Alarmkanal", alert_rules: "Alarmregeln", backup: "Sicherung", managed_rules: "Verwaltete Regeln", page: "Seite", retention: "Datenaufbewahrung", unknown_hosts: "Unbekannte Hosts",
   },
   verb: {
     create: "erstellt", update: "geändert", delete: "gelöscht", upload: "hochgeladen", apply: "angewendet", rollback: "zurückgesetzt", login: "angemeldet", logout: "abgemeldet",
     login_failed: "Anmeldung fehlgeschlagen", password_changed: "Passwort geändert", admin_created: "Administrator erstellt", renew: "erneuert", issue: "ausgestellt",
-    enable: "aktiviert", disable: "deaktiviert", refresh: "aktualisiert", mfa_enabled: "MFA aktiviert", mfa_disabled: "MFA deaktiviert", acme: "per ACME ausgestellt", reorder: "neu angeordnet",
+    enable: "aktiviert", disable: "deaktiviert", refresh: "aktualisiert", mfa_enabled: "MFA aktiviert", mfa_disabled: "MFA deaktiviert", acme: "per ACME ausgestellt", reorder: "neu angeordnet", auto: "(automatisch)", test: "getestet", reset: "zurückgesetzt", restore_upload: "Wiederherstellung hochgeladen", restore_confirm: "Wiederherstellung bestätigt", restore_discard: "Wiederherstellung verworfen", restore_rejected: "Wiederherstellung abgelehnt",
   },
 };
