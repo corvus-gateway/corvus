@@ -93,6 +93,11 @@ Attach an [access queue](../access-queue.md) and choose the **Protected path** (
 
 When **Enabled** is off, the host's settings are kept but it is removed from the gateway.
 
+If you opened the console through a proxy host (for example `https://corvus.example.com`), that
+host is marked **Console** in the list. Editing it shows a reminder, and disabling or deleting it
+asks for confirmation first, because the console would no longer be reachable at that address. Port
+9443 of the server (`https://server-ip:9443`) keeps working either way.
+
 ## How changes are applied
 
 **Save & deploy** creates a new configuration version, tests it with `openresty -t` and applies it

@@ -13,6 +13,7 @@ import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import { pagesStrings } from "./pages.i18n";
+import { consoleHostStrings } from "./consolehost.i18n";
 import { challengeStrings } from "./challenge.i18n";
 import { underAttackStrings } from "./underattack.i18n";
 import type { ko } from "./ko";
@@ -324,6 +325,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   ...templatesStrings.zh,
   ...backupStrings.zh,
   ...pagesStrings.zh,
+  ...consoleHostStrings.zh,
   ...challengeStrings.zh,
   ...underAttackStrings.zh,
 };

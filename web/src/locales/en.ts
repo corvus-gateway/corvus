@@ -13,6 +13,7 @@ import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import { pagesStrings } from "./pages.i18n";
+import { consoleHostStrings } from "./consolehost.i18n";
 import { challengeStrings } from "./challenge.i18n";
 import { underAttackStrings } from "./underattack.i18n";
 import { enSecurity } from "./security.en";
@@ -223,6 +224,7 @@ export const en: Record<keyof typeof ko, string> = {
   ...templatesStrings.en,
   ...backupStrings.en,
   ...pagesStrings.en,
+  ...consoleHostStrings.en,
   ...challengeStrings.en,
   ...underAttackStrings.en,
 };

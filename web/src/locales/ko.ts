@@ -13,6 +13,7 @@ import { koListFeeds } from "./listfeeds.i18n";
 import { koBans } from "./bans.i18n";
 import { koBackup } from "./backup.i18n";
 import { koPages } from "./pages.i18n";
+import { koConsoleHost } from "./consolehost.i18n";
 import { koChallenge } from "./challenge.i18n";
 import { koUnderAttack } from "./underattack.i18n";
 import { koSecurity } from "./security";
@@ -221,6 +222,7 @@ export const ko = {
   ...koTemplates,
   ...koBackup,
   ...koPages,
+  ...koConsoleHost,
   ...koChallenge,
   ...koUnderAttack,
 } as const;

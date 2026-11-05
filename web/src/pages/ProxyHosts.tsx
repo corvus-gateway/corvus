@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Loader2, ArrowRight, Copy, Globe, Lock, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2, Users, Zap, Gauge, KeyRound, ExternalLink, UserPlus, X, Siren, ShieldOff } from "lucide-react";
+import { AlertCircle, AlertTriangle, Loader2, ArrowRight, Copy, Globe, Lock, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2, Users, Zap, Gauge, KeyRound, ExternalLink, UserPlus, X, Siren, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 import { api, type AccessList, type Certificate, type ClientIPMode, type ProxyHost, type RateLimit, type SecurityHeaders, type UnderAttackStatus, type Waitroom } from "../api";
 import { UnderAttackFields, uaConfig, UA_DEFAULTS } from "../components/UnderAttackFields";
 import { LocationsFields } from "../components/LocationsFields";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
 import { Button, IconButton } from "../components/ui/button";
-import { Badge, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
+import { Badge, Callout, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
 import { Field, FormSection, IdField, Input, NumberInput, Segmented, Select, SearchInput, Switch, SwitchRow, TagInput, Textarea, fieldErr } from "../components/ui/form";
 import { ConfirmDialog, RowMenu, Sheet, Tip } from "../components/ui/overlay";
+import { servesConsole } from "../locales/consolehost.i18n";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
 import { useResource } from "../hooks/useResource";
 import { useCan } from "../lib/rbac";
@@ -115,7 +116,9 @@ export default function ProxyHosts() {
     if (r !== undefined) { if (req) toast.success(t("savedIssuing")); setEditing(null); certs.reload(); hosts.reload(); window.dispatchEvent(new Event("corvus:refresh")); }
   };
 
+  const [disabling, setDisabling] = useState<ProxyHost | null>(null);
   const toggle = async (h: ProxyHost, enabled: boolean) => {
+    if (!enabled && servesConsole(h.domains) && disabling?.id !== h.id) { setDisabling(h); return; }
     const body = { ...toForm(h), enabled };
     const r = await rowAction.run(() => api.put(`/api/proxy-hosts/${h.id}`, body), { success: enabled ? t("hostEnabled") : t("hostDisabled") });
     if (r !== undefined) { hosts.reload(); window.dispatchEvent(new Event("corvus:refresh")); }
@@ -133,6 +136,7 @@ export default function ProxyHosts() {
   };
 
   const f = editing?.form;
+  const editingConsole = !!editing?.id && servesConsole((hosts.data ?? []).find((x) => x.id === editing.id)?.domains ?? []);
   const set = (patch: Partial<Form>) => setEditing((e) => (e ? { ...e, form: { ...e.form, ...patch } } : e));
   const req = editing?.req ?? null;
   const setReq = (patch: Partial<CertReq>) => setEditing((e) => (e && e.req ? { ...e, req: { ...e.req, ...patch } } : e));
@@ -173,6 +177,7 @@ export default function ProxyHosts() {
                           </a>
                           {h.domains.length > 1 && <Tip label={h.domains.slice(1).join(", ")}><span><Badge>+{h.domains.length - 1}</Badge></span></Tip>}
                           {uaSt?.active && <Tip label={uaSt.reason || t("uaOn")}><span><Badge tone="danger" icon={Siren}>{t("uaBadge")}</Badge></span></Tip>}
+                          {servesConsole(h.domains) && <Tip label={t("consoleHostTitle")}><span><Badge tone="info">{t("consoleHostBadge")}</Badge></span></Tip>}
                         </div>
                         <div className="mt-0.5 flex items-center gap-2 text-xs text-fg-subtle">
                           {cn_ ? <span className="inline-flex items-center gap-1"><Lock className="h-3 w-3 text-ok" aria-hidden />{cn_}</span> : <span>{t("noTls")}</span>}
@@ -223,6 +228,7 @@ export default function ProxyHosts() {
         footer={<><Button onClick={() => setEditing(null)}>{t("cancel")}</Button><Button type="submit" variant="primary" loading={busy} disabled={!!noDomain || (!!req && !req.agree)}>{t("saveAndDeploy")}</Button></>}>
         {f && (<>
           {error && <div className="px-6 pt-5"><ErrorBox error={error} /></div>}
+          {editingConsole && <div className="px-6 pt-5"><Callout tone="warn" icon={AlertTriangle} title={t("consoleHostTitle")}>{t("consoleHostEdit")}</Callout></div>}
           <FormSection title={t("secDomains")}>
             <Field label={t("domains")} required hint={t("domainsHint")} error={fieldErr(error, "domains")}>
               <TagInput label={t("domains")} value={f.domains} onChange={(v) => set({ domains: v })} placeholder="shop.example.com, *.example.com" invalid={!!fieldErr(error, "domains")} />
@@ -399,6 +405,12 @@ export default function ProxyHosts() {
       <ConfirmDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)} title={t("deleteHostTitle")} confirmLabel={t("delete")}
         description={t("confirmDelete")} onConfirm={remove}>
         {deleting && <div className="rounded-lg border border-line bg-surface-2 px-3 py-2 font-mono text-xs">{deleting.domains.join(", ")}</div>}
+        {deleting && servesConsole(deleting.domains) && <Callout tone="danger" icon={AlertTriangle} className="mt-3">{t("consoleHostDelete")}</Callout>}
+      </ConfirmDialog>
+
+      <ConfirmDialog open={!!disabling} onOpenChange={(o) => !o && setDisabling(null)} title={t("consoleHostDisableTitle")} confirmLabel={t("disable")}
+        description={t("consoleHostDisable")} onConfirm={async () => { if (disabling) await toggle(disabling, false); }}>
+        {disabling && <div className="rounded-lg border border-line bg-surface-2 px-3 py-2 font-mono text-xs">{disabling.domains.join(", ")}</div>}
       </ConfirmDialog>
     </>
   );
