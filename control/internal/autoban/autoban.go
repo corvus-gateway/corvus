@@ -54,7 +54,9 @@ func DefaultSettings() Settings {
 const maxDuration = 30 * 24 * time.Hour
 
 // Detection kinds that count toward a ban (bans themselves do not).
-var Kinds = []string{"blocked_exploit", "exploit_detected", "blocked_rule", "rule_logged", "blocked_body", "body_detected"}
+// Matches of security rules in Log mode ("rule_logged") are not counted: operators use Log to
+// try a rule on real traffic, and the visitors it matches are not attackers.
+var Kinds = []string{"blocked_exploit", "exploit_detected", "blocked_rule", "blocked_body", "body_detected"}
 
 func Load(ctx context.Context, s *store.Store) Settings {
 	set := DefaultSettings()

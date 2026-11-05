@@ -105,6 +105,24 @@ func TestAutoBanThresholdExemptAndEscalation(t *testing.T) {
 	}
 }
 
+// Security rules in Log mode are for trying a rule on real traffic: the visitors they match must
+// not be banned (only Block matches and exploit/body detections count).
+func TestLogRuleMatchesDoNotBan(t *testing.T) {
+	s, tc, st := setup(t)
+	ctx := context.Background()
+	raw, _ := json.Marshal(DefaultSettings())
+	_ = st.SetMeta(ctx, "autoban", string(raw))
+	now := time.Now()
+	for i := 0; i < 50; i++ {
+		tc.Add(&traffic.Record{T: float64(now.Unix()) - float64(i), H: "shop.example.com", U: "/products", S: 200, IP: "203.0.113.9", R: "7:log"})
+		tc.Add(&traffic.Record{T: float64(now.Unix()) - float64(i), H: "shop.example.com", U: "/wp-admin", S: 403, IP: "203.0.113.10", R: "8:block"})
+	}
+	got := s.Evaluate(ctx, now)
+	if len(got) != 1 || got[0] != "203.0.113.10" {
+		t.Fatalf("banned %v, want only the IP blocked by a rule", got)
+	}
+}
+
 func TestBanUntil(t *testing.T) {
 	now := time.Date(2026, 11, 4, 0, 0, 0, 0, time.UTC)
 	set := DefaultSettings() // 15 min, doubling, max 7 days

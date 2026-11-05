@@ -11,7 +11,7 @@ ban and unban by hand. Bans apply to all proxy and redirection hosts, not to the
 
 | Setting | Default | Meaning |
 |---|---|---|
-| **Enable automatic bans** | On | Ban IPs whose detections (exploit patterns, security rules, body inspection, including log-only) exceed the threshold |
+| **Enable automatic bans** | On | Ban IPs whose detections (attack patterns and body inspection, also in log-only mode, and security rules that block). Matches of rules in **Log** mode never count exceed the threshold |
 | **Detections** within **minutes** | 20 in 10 min | The threshold |
 | **First ban** | 15 min | Each repeat offense doubles the duration … |
 | **Longest ban** | 7 days | … up to this (at most 30 days) |
