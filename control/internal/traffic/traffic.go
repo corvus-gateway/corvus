@@ -297,8 +297,8 @@ func classify(r *Record) (blocked bool, kinds []string) {
 			kinds = append(kinds, "blocked_rule")
 		case "log":
 			kinds = append(kinds, "rule_logged")
-		// Challenges are neither blocks nor detections: they never count toward
-		// automatic bans or security alerts (see autoban.Kinds, alerts.securityKinds).
+		// Log-mode rule matches and challenges are neither blocks nor attacks: they never
+		// count toward automatic bans or security alerts (see autoban.Kinds, alerts.securityKinds).
 		case "challenge":
 			kinds = append(kinds, "challenge_issued")
 		case "challenge_pass":

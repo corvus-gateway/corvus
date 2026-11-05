@@ -90,6 +90,7 @@ function Overview({ qs, poll, summary, loading, error, hosts, hostsLoading, onHo
   const { t, lang } = useI18n();
   const ts = useResource<Timeseries>(`/api/traffic/timeseries?${qs}`, { poll });
   const paths = useResource<PathTraffic[]>(`/api/traffic/top-paths?${qs}`, { poll });
+  const host = qs.includes("&host=");
   const points = ts.data?.points ?? [];
   const step = ts.data?.step_s || 1;
 
@@ -161,10 +162,10 @@ function Overview({ qs, poll, summary, loading, error, hosts, hostsLoading, onHo
               {paths.data.slice(0, 10).map((p) => {
                 const max = Math.max(...paths.data!.map((x) => x.requests), 1);
                 return (
-                  <li key={p.path} className="relative px-4 py-2.5">
+                  <li key={`${p.host} ${p.path}`} className="relative px-4 py-2.5">
                     <div aria-hidden className="absolute inset-y-0 left-0 bg-brand/[0.06]" style={{ width: `${(p.requests / max) * 100}%` }} />
                     <div className="relative flex items-center justify-between gap-3">
-                      <span className="min-w-0 truncate font-mono text-xs" title={p.path}>{p.path}</span>
+                      <span className="min-w-0 truncate font-mono text-xs" title={host ? p.path : p.host + p.path}>{!host && <span className="text-fg-subtle">{p.host}</span>}{p.path}</span>
                       <span className="flex shrink-0 items-center gap-3 text-xs">
                         {p.errors > 0 && <span className="num text-danger">{fmtNum(p.errors)} err</span>}
                         <span className="num text-fg-subtle">{fmtMs(p.p95)}</span>

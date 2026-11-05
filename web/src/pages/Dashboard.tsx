@@ -187,7 +187,7 @@ export default function Dashboard() {
                       <span className="relative z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full border border-line bg-surface"><m.icon className="h-3.5 w-3.5 text-fg-subtle" aria-hidden /></span>
                       <div className="min-w-0 flex-1 pt-px">
                         <div className="truncate text-sm font-medium text-fg">{actionLabel(a.action, lang)}</div>
-                        <div className="truncate text-xs text-fg-subtle">{a.target ? `${a.target} · ` : ""}{a.email || a.ip} · {relTime(a.ts, lang)}</div>
+                        <div className="truncate text-xs text-fg-subtle">{[a.target, a.email || a.ip, relTime(a.ts, lang)].filter(Boolean).join(" · ")}</div>
                       </div>
                     </li>
                   );

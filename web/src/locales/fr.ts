@@ -343,11 +343,11 @@ export const frRuleLabels: RuleLabels | undefined = {
 export const frAuditLabels: AuditLabels | undefined = {
   dom: {
     proxy_host: "Hôte proxy", stream: "Flux", redirection_host: "Hôte de redirection", waitroom: "File d'accès", certificate: "Certificat", deploy: "Déploiement", auth: "Authentification", setup: "Configuration",
-    rate_limit: "Limitation de débit", access_list: "Authentification Basic", security_rule: "Règle de sécurité", ip_list: "Liste d'IP", geoip: "Base des pays", settings: "Paramètres", network: "Réseau", import: "Importation", mfa: "MFA", user: "Compte",
+    rate_limit: "Limitation de débit", access_list: "Authentification Basic", security_rule: "Règle de sécurité", ip_list: "Liste d'IP", geoip: "Base des pays", settings: "Paramètres", network: "Réseau", import: "Importation", mfa: "MFA", user: "Compte", ban: "Blocage d'IP", autoban: "Blocage automatique", sso: "SSO", token: "Jeton d'API", alert_channel: "Canal d'alerte", alert_rules: "Règles d'alerte", backup: "Sauvegarde", managed_rules: "Règles gérées", page: "Page", retention: "Conservation des données", unknown_hosts: "Hôtes inconnus",
   },
   verb: {
     create: "· création", update: "· modification", delete: "· suppression", upload: "· importation", apply: "· application", rollback: "· retour arrière", login: "· connexion", logout: "· déconnexion",
     login_failed: "· échec de connexion", password_changed: "· changement de mot de passe", admin_created: "· création d'administrateur", renew: "· renouvellement", issue: "· émission",
-    enable: "· activation", disable: "· désactivation", refresh: "· actualisation", mfa_enabled: "· activation MFA", mfa_disabled: "· désactivation MFA", acme: "· émission ACME", reorder: "· réorganisation",
+    enable: "· activation", disable: "· désactivation", refresh: "· actualisation", mfa_enabled: "· activation MFA", mfa_disabled: "· désactivation MFA", acme: "· émission ACME", reorder: "· réorganisation", auto: "· automatique", test: "· test", reset: "· réinitialisation", restore_upload: "· restauration envoyée", restore_confirm: "· restauration confirmée", restore_discard: "· restauration annulée", restore_rejected: "· restauration refusée",
   },
 };

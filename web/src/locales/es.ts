@@ -343,11 +343,11 @@ export const esRuleLabels: RuleLabels | undefined = {
 export const esAuditLabels: AuditLabels | undefined = {
   dom: {
     proxy_host: "Host proxy", stream: "Stream", redirection_host: "Host de redirección", waitroom: "Cola de acceso", certificate: "Certificado", deploy: "Implementación", auth: "Autenticación", setup: "Configuración inicial",
-    rate_limit: "Límite de tasa", access_list: "Autenticación Basic", security_rule: "Regla de seguridad", ip_list: "Lista de IP", geoip: "Base de datos de países", settings: "Configuración", network: "Red", import: "Importación", mfa: "MFA", user: "Cuenta",
+    rate_limit: "Límite de tasa", access_list: "Autenticación Basic", security_rule: "Regla de seguridad", ip_list: "Lista de IP", geoip: "Base de datos de países", settings: "Configuración", network: "Red", import: "Importación", mfa: "MFA", user: "Cuenta", ban: "Bloqueo de IP", autoban: "Bloqueo automático", sso: "SSO", token: "Token de API", alert_channel: "Canal de alertas", alert_rules: "Reglas de alerta", backup: "Copia de seguridad", managed_rules: "Reglas gestionadas", page: "Página", retention: "Retención de datos", unknown_hosts: "Hosts desconocidos",
   },
   verb: {
     create: "creado", update: "actualizado", delete: "eliminado", upload: "subido", apply: "aplicado", rollback: "revertido", login: "inicio de sesión", logout: "cierre de sesión",
     login_failed: "inicio de sesión fallido", password_changed: "contraseña cambiada", admin_created: "administrador creado", renew: "renovado", issue: "emitido",
-    enable: "habilitado", disable: "deshabilitado", refresh: "actualizado", mfa_enabled: "MFA habilitada", mfa_disabled: "MFA deshabilitada", acme: "emitido con ACME", reorder: "reordenado",
+    enable: "habilitado", disable: "deshabilitado", refresh: "actualizado", mfa_enabled: "MFA habilitada", mfa_disabled: "MFA deshabilitada", acme: "emitido con ACME", reorder: "reordenado", auto: "(automático)", test: "probado", reset: "restablecido", restore_upload: "restauración subida", restore_confirm: "restauración confirmada", restore_discard: "restauración descartada", restore_rejected: "restauración rechazada",
   },
 };

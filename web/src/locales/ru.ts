@@ -343,11 +343,11 @@ export const ruRuleLabels: RuleLabels | undefined = {
 export const ruAuditLabels: AuditLabels | undefined = {
   dom: {
     proxy_host: "Прокси-хост", stream: "Поток", redirection_host: "Хост перенаправления", waitroom: "Очередь доступа", certificate: "Сертификат", deploy: "Развёртывание", auth: "Аутентификация", setup: "Настройка",
-    rate_limit: "Ограничение запросов", access_list: "Basic-аутентификация", security_rule: "Правило безопасности", ip_list: "Список IP", geoip: "База стран", settings: "Настройки", network: "Сеть", import: "Импорт", mfa: "MFA", user: "Учётная запись",
+    rate_limit: "Ограничение запросов", access_list: "Basic-аутентификация", security_rule: "Правило безопасности", ip_list: "Список IP", geoip: "База стран", settings: "Настройки", network: "Сеть", import: "Импорт", mfa: "MFA", user: "Учётная запись", ban: "Блокировка IP", autoban: "Автоблокировка", sso: "SSO", token: "API-токен", alert_channel: "Канал оповещений", alert_rules: "Правила оповещений", backup: "Резервная копия", managed_rules: "Управляемые правила", page: "Страница", retention: "Хранение данных", unknown_hosts: "Неизвестные хосты",
   },
   verb: {
     create: "· создание", update: "· изменение", delete: "· удаление", upload: "· загрузка", apply: "· применение", rollback: "· откат", login: "· вход", logout: "· выход",
     login_failed: "· неудачный вход", password_changed: "· смена пароля", admin_created: "· создание администратора", renew: "· продление", issue: "· выпуск",
-    enable: "· включение", disable: "· отключение", refresh: "· обновление", mfa_enabled: "· включение MFA", mfa_disabled: "· отключение MFA", acme: "· выпуск ACME", reorder: "· изменение порядка",
+    enable: "· включение", disable: "· отключение", refresh: "· обновление", mfa_enabled: "· включение MFA", mfa_disabled: "· отключение MFA", acme: "· выпуск ACME", reorder: "· изменение порядка", auto: "· автоматически", test: "· проверка", reset: "· сброс", restore_upload: "· загрузка резервной копии", restore_confirm: "· восстановление подтверждено", restore_discard: "· восстановление отменено", restore_rejected: "· восстановление отклонено",
   },
 };

@@ -39,7 +39,7 @@ optionally ignoring case.
 |---|---|
 | **Block** | Refuse with a status code (`403` default, or `401`, `404`, `410`, `429`, `444` = close the connection) and the [block page](../operations/pages.md) |
 | **Allow** | Let the request through and skip later rules, exploit blocking and rate limits. **Also skip Basic auth** lets it bypass password protection too |
-| **Log** | Only record the match. Use it to try a new rule before you block |
+| **Log** | Only record the match. Use it to try a new rule before you block; matches never lead to [automatic bans](bans.md) |
 | **Challenge** | Show a browser challenge first. See [Challenge & under attack](challenge.md) |
 
 ### Applies to
