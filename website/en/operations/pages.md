@@ -32,6 +32,8 @@ page.
 A request for a host name that no proxy or redirection host serves (a mistyped name, a bare IP
 address, a scanner) is answered according to **Unknown hosts** at the bottom of the page:
 
+![Unknown hosts](../img/unknown-hosts.png){ .shot .panel }
+
 | Option | Answer |
 |---|---|
 | **Not found page (404)** | A short `404` page (default) |

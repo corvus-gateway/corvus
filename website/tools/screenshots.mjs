@@ -87,6 +87,14 @@ const shots = [
       const h = __qa("main *").find(e => [...e.childNodes].some(n => n.nodeType === 3 && /^(Backup & restore|백업 및 복원)$/.test(n.textContent.trim())));
       h.scrollIntoView({ block: "start" }); window.scrollBy(0, -80); await __sleep(300);` },
   { name: "pages", path: "/settings/pages" },
+  { name: "unknown-hosts", path: "/settings/pages", act: `
+    const h = __qa("main *").find(e => [...e.childNodes].some(n => n.nodeType === 3 && /^(Unknown hosts|알 수 없는 호스트)$/.test(n.textContent.trim())));
+    let c = h; while (c && !/rounded|border/.test(c.className || "")) c = c.parentElement;
+    c.id = "__uh";
+    const set = (el, v) => { Object.getOwnPropertyDescriptor(el.constructor.prototype, "value").set.call(el, v); el.dispatchEvent(new Event(el.tagName === "SELECT" ? "change" : "input", { bubbles: true })); };
+    set(c.querySelector("select"), "redirect"); await __sleep(300);
+    set(c.querySelector("input"), "https://www.example.com/"); await __sleep(300);
+    c.scrollIntoView({ block: "center" }); await __sleep(300); return "#__uh";` },
   { name: "deployments", path: "/deployments" },
   { name: "account", path: "/account" },
 ];
@@ -159,6 +167,12 @@ async function main() {
           const r = await send("Runtime.evaluate", { expression: `(async () => { ${s.act} })()`, awaitPromise: true, returnByValue: true });
           if (r.exceptionDetails) console.warn(`${lang}/${s.name}: ${r.exceptionDetails.exception?.description || r.exceptionDetails.text}`);
           await sleep(500);
+          // a returned CSS selector: capture only that element (with a small margin)
+          if (typeof r.result?.value === "string") {
+            const e = await send("Runtime.evaluate", { expression: `JSON.stringify(document.querySelector(${JSON.stringify(r.result.value)})?.getBoundingClientRect())`, returnByValue: true });
+            const b = e.result.value && JSON.parse(e.result.value);
+            if (b) clip = { x: Math.max(0, b.x - 12), y: Math.max(0, b.y - 12), width: b.width + 24, height: b.height + 24, scale: 1 };
+          }
         }
         const params = { format: "png" };
         // Page shots show the content area only (no top bar and sidebar), so text stays readable.
@@ -168,6 +182,7 @@ async function main() {
           const b = r.result.value && JSON.parse(r.result.value);
           if (b) params.clip = { x: b.x, y: b.y, width: b.width, height: b.height, scale: 1 };
         }
+        if (clip) params.clip = clip;
         if (s.full) {
           const m = await send("Page.getLayoutMetrics");
           params.clip = { x: 0, y: 0, width: W, height: Math.ceil(m.cssContentSize.height), scale: 1 };
