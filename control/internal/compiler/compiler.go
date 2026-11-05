@@ -218,6 +218,7 @@ type mainView struct {
 	Redirects  int
 	Streams    int // enabled streams; the stream {} block is rendered only when > 0
 	RateLimits []store.RateLimit
+	Unknown    store.UnknownHosts // what the HTTP default server answers (validated)
 }
 
 type redirectView struct {
@@ -313,6 +314,13 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 	}
 	if !validate.RealIPHeader(network.RealIPHeader) {
 		return fmt.Errorf("network settings: invalid real IP header")
+	}
+	unknown, err := s.UnknownHosts(ctx)
+	if err != nil {
+		return err
+	}
+	if err := validate.UnknownHosts(&unknown); err != nil {
+		return fmt.Errorf("unknown host setting: %w", err)
 	}
 	var cf []string
 	if c.Cloudflare != nil {
@@ -437,7 +445,7 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 	if err := os.WriteFile(filepath.Join(dir, "policy.json"), pj, 0o644); err != nil {
 		return err
 	}
-	return writeTemplate(filepath.Join(dir, "nginx.conf"), "nginx.conf.tmpl", mainView{Dir: slash, Name: filepath.Base(dir), P: c.P, Hosts: n, Redirects: nr, Streams: ns, RateLimits: enabledLimits})
+	return writeTemplate(filepath.Join(dir, "nginx.conf"), "nginx.conf.tmpl", mainView{Dir: slash, Name: filepath.Base(dir), P: c.P, Hosts: n, Redirects: nr, Streams: ns, RateLimits: enabledLimits, Unknown: unknown})
 }
 
 // certDir returns the certificate directory for id, or "" while its files don't exist

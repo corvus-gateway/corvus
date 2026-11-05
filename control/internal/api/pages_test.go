@@ -111,3 +111,50 @@ func TestCustomPagesSaveAndReset(t *testing.T) {
 		t.Errorf("stored pages after reset: %+v", pages)
 	}
 }
+
+func TestUnknownHostsPermissionsAndValidation(t *testing.T) {
+	e := newTestEnv(t)
+	viewer := e.session("viewer@example.com", "viewer")
+	operator := e.session("op@example.com", "operator")
+	w, m := e.do("GET", "/api/settings/pages", nil, withCookie(viewer))
+	if u, _ := m["unknown_hosts"].(map[string]any); w.Code != 200 || u["mode"] != "not_found" {
+		t.Errorf("GET unknown hosts: %d %v", w.Code, m["unknown_hosts"])
+	}
+	body := map[string]string{"mode": "close"}
+	if w, _ := e.do("PUT", "/api/settings/unknown-hosts", body, withCookie(viewer), withCSRF()); w.Code != 403 {
+		t.Errorf("viewer PUT: %d, want 403", w.Code)
+	}
+	for _, b := range []map[string]string{{"mode": "drop"}, {"mode": "redirect"}, {"mode": "redirect", "redirect_url": "https://example.com/$host"}} {
+		if w, _ := e.do("PUT", "/api/settings/unknown-hosts", b, withCookie(operator), withCSRF()); w.Code != 422 {
+			t.Errorf("operator PUT %v: %d, want 422", b, w.Code)
+		}
+	}
+	if u, _ := e.s.Store.UnknownHosts(context.Background()); u.Mode != store.UnknownNotFound {
+		t.Errorf("invalid input stored: %+v", u)
+	}
+}
+
+func TestUnknownHostsSave(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("deployment uses POSIX symlink swaps; run on Linux")
+	}
+	e := newTestEnv(t)
+	dir := t.TempDir()
+	p := compiler.Paths{DataDir: dir, LuaDir: "/opt/corvus/lua", HTMLDir: "/opt/corvus/html", MimeTypes: "mime.types",
+		Resolver: "127.0.0.11", HTTPPort: 80, HTTPSPort: 443, StatusPort: 9180, ACMEPort: 9181}
+	e.s.Paths = p
+	e.s.Deployer = &deploy.Deployer{Store: e.s.Store, Compiler: &compiler.Compiler{P: p}, Runner: okRunner{}, Dir: filepath.Join(dir, "nginx")}
+	operator := e.session("op@example.com", "operator")
+
+	w, m := e.do("PUT", "/api/settings/unknown-hosts", map[string]string{"mode": "redirect", "redirect_url": "https://Example.com/start"}, withCookie(operator), withCSRF())
+	if w.Code != 200 || m["version"] == nil {
+		t.Fatalf("PUT: %d %s", w.Code, w.Body.String())
+	}
+	conf, err := os.ReadFile(filepath.Join(dir, "nginx", "current", "nginx.conf"))
+	if err != nil || !strings.Contains(string(conf), "return 302 https://example.com/start;") {
+		t.Errorf("deployed config: %v\n%s", err, conf)
+	}
+	if u, _ := e.s.Store.UnknownHosts(context.Background()); u != (store.UnknownHosts{Mode: "redirect", RedirectURL: "https://example.com/start"}) {
+		t.Errorf("stored: %+v", u)
+	}
+}

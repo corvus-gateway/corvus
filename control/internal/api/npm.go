@@ -28,6 +28,8 @@ type npmRequest struct {
 	StreamIDs      []int64          `json:"stream_ids"`
 	CertificateIDs []int64          `json:"certificate_ids"`
 	AccessListIDs  []int64          `json:"access_list_ids"`
+	// UnknownHosts imports NPM's default site setting (nil = yes, when there is one).
+	UnknownHosts *bool `json:"unknown_hosts"`
 }
 
 // source resolves and confines the requested paths to the import root.
@@ -362,6 +364,12 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 				}
 				counts["security_rules"]++
 			}
+		}
+		if snap.UnknownHosts != nil && (in.UnknownHosts == nil || *in.UnknownHosts) {
+			if err := tx.SetUnknownHosts(ctx, *snap.UnknownHosts); err != nil {
+				return err
+			}
+			counts["unknown_hosts"]++
 		}
 		return nil
 	})

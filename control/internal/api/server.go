@@ -170,6 +170,7 @@ func (s *Server) Handler() http.Handler {
 	priv("GET /api/settings/pages", s.getPages) // custom block / error pages (pages.go)
 	op("PUT /api/settings/pages/{page}", s.putPage)
 	op("POST /api/settings/pages/{page}/reset", s.putPage)
+	op("PUT /api/settings/unknown-hosts", s.putUnknownHosts)
 	priv("GET /api/ip-lists", s.listIPLists)
 	op("POST /api/ip-lists", s.createIPList)
 	op("PUT /api/ip-lists/{id}", s.updateIPList)

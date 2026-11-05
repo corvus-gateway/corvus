@@ -47,6 +47,7 @@ function ImportNpmInner() {
   const [pv, setPv] = useState<NpmPreview | null>(null);
   const [sel, setSel] = useState<{ h: Set<number>; r: Set<number>; s: Set<number>; c: Set<number>; a: Set<number> }>({ h: new Set(), r: new Set(), s: new Set(), c: new Set(), a: new Set() });
   const [result, setResult] = useState<{ imported: Record<string, number>; skipped: unknown[]; version: number | null } | null>(null);
+  const [unknown, setUnknown] = useState(true);
   const prev = useSubmit();
   const app = useSubmit();
   const missing = isMissing(prev.error);
@@ -55,13 +56,14 @@ function ImportNpmInner() {
     setResult(null);
     const r = await prev.run(() => api.post<NpmPreview>("/api/import/npm/preview", source()), { deployed: false });
     if (!r) return;
-    const norm: NpmPreview = { proxy_hosts: r.proxy_hosts ?? [], redirection_hosts: r.redirection_hosts ?? [], streams: r.streams ?? [], certificates: r.certificates ?? [], access_lists: r.access_lists ?? [], warnings: r.warnings ?? [] };
+    const norm: NpmPreview = { proxy_hosts: r.proxy_hosts ?? [], redirection_hosts: r.redirection_hosts ?? [], streams: r.streams ?? [], certificates: r.certificates ?? [], access_lists: r.access_lists ?? [], unknown_hosts: r.unknown_hosts, warnings: r.warnings ?? [] };
     setPv(norm);
+    setUnknown(!!norm.unknown_hosts);
     setSel({ h: new Set(norm.proxy_hosts.filter((x) => !x.conflict).map((x) => x.npm_id)), r: new Set((norm.redirection_hosts ?? []).filter((x) => !x.conflict).map((x) => x.npm_id)), s: new Set((norm.streams ?? []).filter((x) => !x.conflict).map((x) => x.npm_id)), c: new Set(norm.certificates.map((x) => x.npm_id)), a: new Set(norm.access_lists.map((x) => x.npm_id)) });
   };
   const apply = async () => {
     const r = await app.run(() => api.post<{ imported: Record<string, number>; skipped: unknown[]; version: unknown }>("/api/import/npm/apply", {
-      ...source(), proxy_host_ids: [...sel.h], redirection_host_ids: [...sel.r], stream_ids: [...sel.s], certificate_ids: [...sel.c], access_list_ids: [...sel.a],
+      ...source(), proxy_host_ids: [...sel.h], redirection_host_ids: [...sel.r], stream_ids: [...sel.s], certificate_ids: [...sel.c], access_list_ids: [...sel.a], unknown_hosts: unknown,
     }), { deployed: false });
     if (!r) return;
     const v = deployedVersion(r);
@@ -72,7 +74,7 @@ function ImportNpmInner() {
   };
 
   const toggle = (k: "h" | "r" | "s" | "c" | "a", id: number, v: boolean) => setSel((s) => { const n = new Set(s[k]); if (v) n.add(id); else n.delete(id); return { ...s, [k]: n }; });
-  const total = sel.h.size + sel.r.size + sel.s.size + sel.c.size + sel.a.size;
+  const total = sel.h.size + sel.r.size + sel.s.size + sel.c.size + sel.a.size + (pv?.unknown_hosts && unknown ? 1 : 0);
 
   return (
     <>
@@ -127,6 +129,13 @@ function ImportNpmInner() {
       {pv && (
         <div className="space-y-5">
           {pv.warnings.length > 0 && <Callout tone="warn" icon={AlertTriangle} title={t("warningsN", { n: pv.warnings.length })}><ul className="mt-1 list-disc space-y-0.5 pl-4">{pv.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul></Callout>}
+
+          {pv.unknown_hosts && <Callout tone="info">
+            <label className="flex cursor-pointer items-center gap-2.5">
+              <Check label={t("unknownHosts")} checked={unknown} onChange={setUnknown} />
+              <span>{t("importUnknownHosts", { mode: pv.unknown_hosts.mode === "redirect" ? `${t("unknownRedirect")} (${pv.unknown_hosts.redirect_url})` : t(pv.unknown_hosts.mode === "close" ? "unknownClose" : "unknownNotFound") })}</span>
+            </label>
+          </Callout>}
 
           <Section icon={Globe} title={t("navHosts")} count={pv.proxy_hosts.length} selected={sel.h.size} onAll={(v) => setSel((s) => ({ ...s, h: new Set(v ? pv.proxy_hosts.filter((x) => !x.conflict).map((x) => x.npm_id) : []) }))}>
             <Table>

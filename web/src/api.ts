@@ -234,6 +234,7 @@ export interface NpmPreview {
   streams?: { npm_id: number; incoming_port: number; forward_host: string; forward_port: number; tcp_forwarding: boolean; udp_forwarding: boolean; conflict?: string | boolean }[];
   certificates: { npm_id: number; name?: string; nice_name?: string; domains?: string[] }[];
   access_lists: { npm_id: number; name?: string }[];
+  unknown_hosts?: { mode: "not_found" | "close" | "redirect"; redirect_url: string };
   warnings: string[];
 }
 

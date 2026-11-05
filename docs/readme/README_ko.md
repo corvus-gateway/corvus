@@ -58,6 +58,7 @@ Corvus는 Nginx Proxy Manager의 포크가 아닙니다. 기존 NPM 설정을 **
 - 리디렉션 호스트: 도메인을 다른 도메인으로 보냅니다(301/302/303/307/308, 경로 유지 선택). TLS와 보호 기능도 똑같이 적용됩니다
 - 자동 갱신되는 무료 Let's Encrypt 인증서(HTTP-01, 또는 DNS-01: Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) 또는 직접 업로드한 인증서(갱신 시 그 자리에서 교체 가능)
 - 스트림: TCP/UDP 포트(데이터베이스, SSH, MQTT, 게임 서버)를 다른 호스트로 전달하고, TCP는 TLS 종료도 선택할 수 있습니다
+- 등록되지 않은 호스트 이름에 404 페이지, 연결 끊기, 리디렉션 중 원하는 방식으로 응답
 - Cloudflare 또는 신뢰할 수 있는 프록시 뒤에서도 실제 클라이언트 IP 확인, 호스트별 비밀번호 보호(선택)
 - 호스트별 보안 헤더 프리셋(기본 / 엄격: nosniff, 프레임 및 리퍼러 정책, 보고 전용 CSP, HttpOnly/SameSite/Secure 쿠키 플래그). 애플리케이션이 이미 보내는 헤더는 덮어쓰지 않습니다
 - 텍스트 응답 Gzip 압축(기본 켜짐), 호스트별 업로드 크기 제한과 업스트림 타임아웃
