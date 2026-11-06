@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"bufio"
+	"fmt"
 	"net"
 	"os"
 	"strings"
@@ -73,6 +74,25 @@ func upstreamAddr(host string, hosts map[string]string, hostGW string) string {
 // isIP reports whether an upstream address (IPv6 bracketed) is an IP literal.
 func isIP(addr string) bool {
 	return net.ParseIP(strings.TrimSuffix(strings.TrimPrefix(addr, "["), "]")) != nil
+}
+
+// InternalTarget reports why a forward target (an upstreamAddr result) may not be used:
+// on loopback inside the container, these ports are Corvus's own unauthenticated
+// services (the gateway status/ban endpoints, the ACME challenge server, the access-
+// queue store). "" = allowed.
+func (p Paths) InternalTarget(addr string, port int) string {
+	if !isLoopback(addr) {
+		return ""
+	}
+	for _, r := range []struct {
+		port int
+		what string
+	}{{p.StatusPort, "gateway status"}, {p.ACMEPort, "ACME challenge"}, {p.RedisPort, "access-queue store"}} {
+		if r.port > 0 && port == r.port {
+			return fmt.Sprintf("%s port %d is used internally by Corvus (%s)", strings.Trim(addr, "[]"), port, r.what)
+		}
+	}
+	return ""
 }
 
 // isLoopback reports whether a forward host means "this machine".

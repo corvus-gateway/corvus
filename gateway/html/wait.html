@@ -252,7 +252,9 @@
 
   // Same-origin return path only (resolved exactly as the browser would follow it).
   var ret = "/";
-  try { var u = new URL(params.get("r") || "/", location.origin); if (u.origin === location.origin) ret = u.pathname + u.search + u.hash; } catch (e) { ret = "/"; }
+  // The result is absolute (origin included): a bare path such as "//other.site" (from
+  // "/.//other.site") would otherwise be followed as a link to another site.
+  try { var u = new URL(params.get("r") || "/", location.origin); if (u.origin === location.origin) ret = location.origin + u.pathname + u.search + u.hash; } catch (e) { ret = "/"; }
   var room = location.pathname.split("/").pop();
 
   // ETA only with evidence: at least 3 samples over 20 s with the line moving.
