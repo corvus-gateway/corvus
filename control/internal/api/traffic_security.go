@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"corvus/control/internal/auth"
@@ -439,7 +440,26 @@ func (s *Server) trafficLogs(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(w, 200, map[string]any{"items": items})
 	}
-	s.audit(r, "traffic.logs_viewed", q.Get("host"), map[string]string{"format": q.Get("format"), "status": q.Get("status"), "q": q.Get("q")})
+	// Exports always; viewing at most once per user every 10 minutes (the console polls
+	// the logs every few seconds while the tab is open).
+	if q.Get("format") != "" || s.firstLogView(r) {
+		s.audit(r, "traffic.logs_viewed", q.Get("host"), map[string]string{"format": q.Get("format"), "status": q.Get("status"), "q": q.Get("q")})
+	}
+}
+
+var logViews sync.Map // user id → time of the last audited log view
+
+func (s *Server) firstLogView(r *http.Request) bool {
+	u := userFrom(r)
+	if u == nil {
+		return true
+	}
+	now := time.Now()
+	if last, ok := logViews.Load(u.ID); ok && now.Sub(last.(time.Time)) < 10*time.Minute {
+		return false
+	}
+	logViews.Store(u.ID, now)
+	return true
 }
 
 // csvSafe neutralizes spreadsheet formula injection in attacker-controlled fields.

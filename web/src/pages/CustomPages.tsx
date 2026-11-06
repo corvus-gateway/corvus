@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FileWarning, Globe, RotateCcw, Save } from "lucide-react";
 import { api } from "../api";
 import { ErrorBox, PageHeader, useSubmit } from "../components/common";
@@ -95,8 +95,17 @@ export default function CustomPages() {
   const [confirm, setConfirm] = useState(false);
   const save = useSubmit();
 
+  // a reload (after saving one page) replaces a page's text only if it has no unsaved edits
+  const synced = useRef<Record<PageName, string> | null>(null);
   useEffect(() => {
-    if (res.data) setHtml({ block: res.data.pages.block.html, error: res.data.pages.error.html });
+    if (!res.data) return;
+    const next = { block: res.data.pages.block.html, error: res.data.pages.error.html };
+    const prev = synced.current;
+    setHtml((cur) => ({
+      block: !prev || cur.block === prev.block ? next.block : cur.block,
+      error: !prev || cur.error === prev.error ? next.error : cur.error,
+    }));
+    synced.current = next;
   }, [res.data]);
 
   const view = res.data?.pages[page];

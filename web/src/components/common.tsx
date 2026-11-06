@@ -60,7 +60,9 @@ export function useSubmit() {
       return res;
     } catch (e) {
       setError(e);
-      if (e instanceof ApiError && e.status === 403) toast.error(t("forbidden"));
+      // 403 is also "wrong current password / code" (invalid_credentials): the ErrorBox
+      // shows that message, the permission toast would be misleading
+      if (e instanceof ApiError && e.status === 403 && e.kind !== "invalid_credentials") toast.error(t("forbidden"));
       else if (!o.silentError && !(e instanceof ApiError && (e.kind === "validation" || e.kind === "config_rejected"))) {
         toast.error(e instanceof ApiError ? e.message : t("requestFailed"));
       }

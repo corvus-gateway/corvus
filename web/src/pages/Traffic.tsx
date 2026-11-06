@@ -54,7 +54,9 @@ export default function Traffic() {
     return (<><PageHeader title={t("navTraffic")} description={t("trafficDesc")} /><Card><ComingSoon icon={Activity} /></Card></>);
   }
 
-  const hostOptions = (hostsRes.data ?? []).map((h) => h.host);
+  const listed = (hostsRes.data ?? []).map((h) => h.host);
+  // the active filter stays visible even when that host had no traffic in this range
+  const hostOptions = host && !listed.includes(host) ? [host, ...listed] : listed;
   return (
     <>
       <PageHeader title={t("navTraffic")} description={t("trafficDesc")} actions={
@@ -195,12 +197,13 @@ function Logs({ qs, poll, initialQ = "" }: { qs: string; poll: number; initialQ?
   const [limit, setLimit] = useState(200);
   const [open, setOpen] = useState("");
   const dq = useDebounced(q);
-  const query = `${qs}&limit=${limit}${status ? `&status=${status}` : ""}${dq ? `&q=${encodeURIComponent(dq)}` : ""}`;
+  const filters = `${qs}${status ? `&status=${status}` : ""}${dq ? `&q=${encodeURIComponent(dq)}` : ""}`;
+  const query = `${filters}&limit=${limit}`;
   const res = useResource<{ items: LogLine[] }>(`/api/traffic/logs?${query}`, { poll });
   const exp = useSubmit();
 
   const doExport = async (format: "csv" | "json") => {
-    const text = await exp.run(() => getText(`/api/traffic/logs?${query}&limit=1000&format=${format}`), { deployed: false });
+    const text = await exp.run(() => getText(`/api/traffic/logs?${filters}&limit=1000&format=${format}`), { deployed: false });
     if (text != null) download(`corvus-traffic-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.${format}`, text, format === "csv" ? "text/csv" : "application/json");
   };
   const items = res.data?.items ?? [];
