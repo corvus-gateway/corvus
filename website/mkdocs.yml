@@ -79,7 +79,9 @@ nav:
   - Home: index.md
   - Getting started:
       - Install: getting-started/install.md
+      - Install on a NAS: getting-started/nas.md
       - First proxy host: getting-started/first-host.md
+      - Corvus vs NPM: getting-started/compare-npm.md
       - Migrate from NPM: getting-started/migrate-npm.md
       - Upgrade: getting-started/upgrade.md
   - Proxy:
