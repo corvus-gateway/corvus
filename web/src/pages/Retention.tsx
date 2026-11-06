@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Archive, Download, Save } from "lucide-react";
 import { api } from "../api";
 import { BackupCard } from "../components/BackupCard";
@@ -24,7 +24,14 @@ export default function Retention() {
   const [s, setS] = useState<Settings | null>(null);
   const save = useSubmit();
 
-  useEffect(() => { if (res.data) setS(res.data.settings); }, [res.data]);
+  // refreshes replace the form only while it has no unsaved edits
+  const synced = useRef("");
+  useEffect(() => {
+    if (!res.data) return;
+    const next = res.data.settings;
+    setS((cur) => (cur === null || JSON.stringify(cur) === synced.current ? next : cur));
+    synced.current = JSON.stringify(next);
+  }, [res.data]);
   const dirty = !!s && !!res.data && JSON.stringify(s) !== JSON.stringify(res.data.settings);
   const onSave = async () => {
     if (!s) return;

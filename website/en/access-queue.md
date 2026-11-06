@@ -37,7 +37,9 @@ Waiting visitors see a page with their position, localized in 8 languages, that 
 
 ## During the event
 
-- The dashboard and the **Access queues** page show active and waiting visitors live.
+- The dashboard and the **Access queues** page show active and waiting visitors live. **Active**
+  counts reserved places: it includes visitors whose turn has come but who haven't arrived yet, and
+  visitors who left without closing the page until their inactivity expiry ends.
 - **Emergency release** lets everyone straight through, for example when the spike is over.
   Visitors still on the waiting page go in automatically. **Turn back on** restores the queue.
 - If the cache DB restarts (for example when Corvus is upgraded), visitors who are already inside

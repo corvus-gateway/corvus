@@ -1,6 +1,6 @@
 // Virtual-patch templates (create a security rule from a CVE template) and the managed
 // rule bundle status card.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { FileUp, PackageCheck, RefreshCw, Save } from "lucide-react";
 import { api, type IpList, type ProxyHost } from "../api";
@@ -114,7 +114,16 @@ export function ManagedRulesCard() {
   const save = useSubmit();
   const check = useSubmit();
   const upload = useSubmit();
-  useEffect(() => { if (res.data) { setUrl(res.data.settings.url ?? ""); setAuto(!!res.data.settings.auto_update); } }, [res.data]);
+  // refreshes replace the fields only while they have no unsaved edits
+  const synced = useRef<{ url: string; auto: boolean } | null>(null);
+  useEffect(() => {
+    if (!res.data) return;
+    const next = { url: res.data.settings.url ?? "", auto: !!res.data.settings.auto_update };
+    const prev = synced.current;
+    setUrl((cur) => (!prev || cur === prev.url ? next.url : cur));
+    setAuto((cur) => (!prev || cur === prev.auto ? next.auto : cur));
+    synced.current = next;
+  }, [res.data]);
   const d = res.data;
   const dirty = !!d && (url !== (d.settings.url ?? "") || auto !== !!d.settings.auto_update);
 
