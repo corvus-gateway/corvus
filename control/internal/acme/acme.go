@@ -233,9 +233,10 @@ func (s *Service) Start(id int64) {
 			delete(s.running, id)
 			s.mu.Unlock()
 		}()
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		defer cancel()
-		if err := s.issue(ctx, id); err != nil {
+		// No overall deadline: lego does not honour the context during Obtain (DNS
+		// propagation can take long), and an expired context would then make the
+		// steps after a successful issuance fail and leave the certificate "pending".
+		if err := s.issue(context.Background(), id); err != nil {
 			slog.Warn("ACME issuance failed", "certificate", id, "err", err)
 		}
 	}()
@@ -306,7 +307,15 @@ func (s *Service) RenewLoop(ctx context.Context) {
 			return
 		}
 		for _, c := range list {
-			if c.Kind == "acme" && c.AutoRenew && c.Status != "pending" && time.Until(c.NotAfter) < 30*24*time.Hour {
+			if c.Kind != "acme" {
+				continue
+			}
+			switch {
+			case c.Status == "pending":
+				// an order interrupted by a restart (Start ignores orders still running)
+				slog.Info("resuming ACME order", "certificate", c.ID)
+				s.Start(c.ID)
+			case c.AutoRenew && time.Until(c.NotAfter) < 30*24*time.Hour:
 				slog.Info("renewing ACME certificate", "certificate", c.ID, "not_after", c.NotAfter)
 				s.Start(c.ID)
 			}

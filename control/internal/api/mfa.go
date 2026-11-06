@@ -37,8 +37,11 @@ func (s *Server) verifySecondFactor(ctx context.Context, u *store.User, code str
 	h := auth.RecoveryHash(code)
 	for i, v := range hashes {
 		if v == h {
-			hashes = append(hashes[:i], hashes[i+1:]...)
-			return s.Store.SetRecoveryCodes(ctx, u.ID, hashes) == nil
+			rest := append(append([]string{}, hashes[:i]...), hashes[i+1:]...)
+			// only if the stored codes are still the ones read: two requests using codes
+			// at the same time cannot both succeed or bring a used code back
+			ok, err := s.Store.ReplaceRecoveryCodes(ctx, u.ID, u.RecoveryCodes(), rest)
+			return err == nil && ok
 		}
 	}
 	return false
@@ -82,6 +85,8 @@ func (s *Server) handleLoginMFA(w http.ResponseWriter, r *http.Request) {
 	}
 	s.MFA.Finish(in.MFAToken)
 	s.Limiter.Reset(ip)
+	s.AcctLimiter.Reset(acct)
+	s.AcctLimiter.Reset("acct:" + strings.ToLower(strings.TrimSpace(u.Email)))
 	if err := s.setSession(w, r, u); err != nil {
 		fail(w, err)
 		return
