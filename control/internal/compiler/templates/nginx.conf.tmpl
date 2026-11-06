@@ -146,8 +146,10 @@ http {
 {{- end}}
     }
     # Not limited: exempt networks, or requests a security rule allowed ($corvus_skip).
+    # Counted per client address and host: a policy shared by several hosts gives each
+    # host its own budget.
     map "$corvus_rl{{.ID}}_exempt$corvus_skip" $corvus_rl{{.ID}}_key {
-        "0"     $binary_remote_addr;
+        "0"     $binary_remote_addr$corvus_host;
         default "";
     }
     limit_req_zone $corvus_rl{{.ID}}_key zone=corvus_rl{{.ID}}:10m rate={{.RequestsPerSecond}}r/s;

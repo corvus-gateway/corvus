@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -181,6 +182,9 @@ func (s *Server) createACMECertificate(ctx context.Context, tx *store.Store, nam
 	if err := tx.CreateCertificate(ctx, c); err != nil {
 		return nil, nil, err
 	}
+	// the id may have been used by a rolled-back transaction that wrote files: TLS for
+	// this certificate starts only once its own files are issued
+	_ = os.RemoveAll(s.Paths.CertDir(c.ID))
 	c.Challenge = o.info.Challenge
 	return c, created, nil
 }

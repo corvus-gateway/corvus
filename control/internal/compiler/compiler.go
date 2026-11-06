@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"text/template"
 
@@ -92,10 +91,10 @@ type Compiler struct {
 
 type hostView struct {
 	store.ProxyHost
-	Room            *store.Waitroom
+	Room *store.Waitroom
 	// RoomEndpoints is the room the host is attached to, also while it is disabled, so
 	// visitors still on the waiting page learn that they can go in.
-	RoomEndpoints *store.Waitroom
+	RoomEndpoints   *store.Waitroom
 	CertDir         string
 	HasRootLocation bool
 	Upstream        string // forward host address (see upstreamAddr)
@@ -152,7 +151,7 @@ func (v *hostView) targets(static map[string]string, hostGW string) {
 	for i, l := range v.ProxyHost.Locations {
 		t := mk(fmt.Sprintf("corvus_up_%d_%d", v.ID, i+1), l.ForwardScheme, l.ForwardHost, l.ForwardPort)
 		t.Prefix, t.Path, t.Advanced = l.Path, l.ForwardPath, l.AdvancedConfig
-		if strings.Contains(l.AdvancedConfig, "error_page") {
+		if topLevelDirective(l.AdvancedConfig, "error_page") {
 			t.ErrorCodes = nil // keep the operator's error_page (see the host's advanced config)
 		}
 		v.LocUpstreams = append(v.LocUpstreams, t)
@@ -163,9 +162,6 @@ func (v *hostView) targets(static map[string]string, hostGW string) {
 		}
 	}
 }
-
-// gzipDirective finds a gzip on/off directive in an advanced configuration.
-var gzipDirective = regexp.MustCompile(`(?m)(?:^|[;{])\s*gzip\s`)
 
 // UpstreamErrorCodes are the nginx-generated upstream errors (connection refused,
 // timeouts, invalid responses) answered with the error page. Responses the upstream
@@ -377,13 +373,13 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		v.OwnAccessLog = strings.Contains(hc.AdvancedConfig, "access_log")
 		// Upload size and gzip are server-level directives: an advanced configuration that
 		// sets them itself (common in NPM setups) keeps its own (nginx rejects duplicates).
-		if hc.MaxUploadMB != nil && !strings.Contains(hc.AdvancedConfig, "client_max_body_size") {
+		if hc.MaxUploadMB != nil && !topLevelDirective(hc.AdvancedConfig, "client_max_body_size") {
 			v.UploadLimit = "0"
 			if *hc.MaxUploadMB > 0 {
 				v.UploadLimit = fmt.Sprintf("%dm", *hc.MaxUploadMB)
 			}
 		}
-		v.GzipOff = !hc.Gzip && !gzipDirective.MatchString(hc.AdvancedConfig)
+		v.GzipOff = !hc.Gzip && !topLevelDirective(hc.AdvancedConfig, "gzip")
 		v.CertDir = c.certDir(hc.CertificateID)
 		if hc.WaitroomID != nil {
 			if r := byID[*hc.WaitroomID]; r != nil {
@@ -398,7 +394,7 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		}
 		// Advanced configuration with its own error_page (common in NPM setups) keeps
 		// it: a location-level error_page would override the server-level one.
-		if !strings.Contains(hc.AdvancedConfig, "error_page") {
+		if !topLevelDirective(hc.AdvancedConfig, "error_page") {
 			v.ErrorCodes = errorCodes(v.RateLimit)
 		}
 		v.targets(static, hostGW)

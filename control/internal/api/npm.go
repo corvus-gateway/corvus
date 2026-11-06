@@ -3,9 +3,11 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"corvus/control/internal/acme"
 	"corvus/control/internal/auth"
@@ -238,12 +240,12 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 			if !selected(in.AccessListIDs, a.NPMID) {
 				continue
 			}
-			xa := &store.AccessList{Name: a.Name, Satisfy: "any", Allow: []string{}, Deny: []string{}}
+			xa := &store.AccessList{Name: npmPolicyName(a.Name, a.NPMID), Satisfy: "any", Allow: []string{}, Deny: []string{}}
 			if a.SatisfyAll {
 				xa.Satisfy = "all"
 			}
-			for names[xa.Name] {
-				xa.Name += " (npm)"
+			for i, base := 2, xa.Name; names[xa.Name]; i++ {
+				xa.Name = suffixName(base, fmt.Sprintf("-npm-%d", i))
 			}
 			var allow, deny []string
 			for _, c := range a.Clients {
@@ -304,9 +306,15 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 				Locations:       h.CustomLocations}
 			if id, ok := certMap[h.CertificateID]; ok {
 				xh.CertificateID, xh.SSLForced = &id, h.SSLForced
+			} else if h.CertificateID != 0 {
+				skips = append(skips, skipped{"proxy_host", h.NPMID, fmt.Sprintf("imported without HTTPS: its certificate (NPM #%d) was not imported", h.CertificateID)})
 			}
 			if id, ok := aclMap[h.AccessListID]; ok {
 				xh.AccessListID = &id
+			} else if h.AccessListID != 0 && ipRules[h.AccessListID] == nil {
+				// never publish a protected site without its protection
+				skips = append(skips, skipped{"proxy_host", h.NPMID, fmt.Sprintf("not imported: its access list (NPM #%d) was not imported", h.AccessListID)})
+				continue
 			}
 			if err := checkProxyHost(r, tx, xh); err != nil {
 				skips = append(skips, skipped{"proxy_host", h.NPMID, err.Error()})
@@ -377,6 +385,11 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
+		// the transaction was rolled back (its ids are handed out again): remove the
+		// certificate files written for it so a later certificate cannot pick them up
+		for _, f := range files {
+			_ = os.RemoveAll(s.Paths.CertDir(f.id))
+		}
 		fail(w, err)
 		return
 	}
@@ -418,4 +431,31 @@ func contains(list []string, v string) bool {
 		}
 	}
 	return false
+}
+
+// npmPolicyName turns an NPM access list name into a valid Corvus policy name (letters,
+// digits, space, "_.-"; starting with a letter or digit; at most 64 characters).
+func npmPolicyName(name string, id int64) string {
+	var b strings.Builder
+	for _, r := range strings.TrimSpace(name) {
+		switch {
+		case r < 128 && (unicode.IsLetter(r) || unicode.IsDigit(r) || r == ' ' || r == '_' || r == '.' || r == '-'):
+			b.WriteRune(r)
+		default:
+			b.WriteByte('-')
+		}
+	}
+	out := strings.TrimLeft(b.String(), " _.-")
+	if out == "" {
+		out = fmt.Sprintf("npm-list-%d", id)
+	}
+	return suffixName(out, "")
+}
+
+// suffixName appends suffix, shortening name so the result has at most 64 characters.
+func suffixName(name, suffix string) string {
+	if max := 64 - len(suffix); len(name) > max {
+		name = strings.TrimRight(name[:max], " ")
+	}
+	return name + suffix
 }

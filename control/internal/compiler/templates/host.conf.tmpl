@@ -192,6 +192,12 @@ server {
     set $corvus_https_redirect "";
     if ($scheme = http) { set $corvus_https_redirect 1; }
     add_header Strict-Transport-Security "max-age=31536000" always;
+{{- if .HasRootLocation}}
+    # The advanced configuration defines "location /", which has no Corvus redirect:
+    # redirect at server level (certificate validation excepted).
+    if ($request_uri ~ "^/\.well-known/acme-challenge/") { set $corvus_https_redirect ""; }
+    if ($corvus_https_redirect) { return 301 https://$host$request_uri; }
+{{- end}}
 {{- end}}
 {{- if .RateLimit}}
 

@@ -59,6 +59,7 @@ type bucket struct {
 	start                                  int64
 	count, s2, s3, s4, s5, blocked, queued int64
 	bytes                                  int64
+	banned                                 int64 // refused because the client is banned (part of blocked)
 	hist                                   [nLat]uint32
 }
 
@@ -77,6 +78,9 @@ func (b *bucket) add(r *Record, blocked bool) {
 	if blocked {
 		b.blocked++
 	}
+	if r.BN != "" {
+		b.banned++
+	}
 	if r.WR == "queue" {
 		b.queued++
 	}
@@ -93,6 +97,7 @@ func (b *bucket) merge(o *bucket) {
 	b.s4 += o.s4
 	b.s5 += o.s5
 	b.blocked += o.blocked
+	b.banned += o.banned
 	b.queued += o.queued
 	b.bytes += o.bytes
 	for i := range b.hist {
@@ -126,9 +131,13 @@ func (b *bucket) quantile(q float64) float64 {
 type series struct {
 	fine   [fineSlots]bucket
 	coarse [coarseSlots]bucket
+	last   int64 // unix time of the latest request
 }
 
 func (s *series) add(ts int64, r *Record, blocked bool) {
+	if ts > s.last {
+		s.last = ts
+	}
 	f := &s.fine[(ts/fineStep)%fineSlots]
 	if start := ts - ts%fineStep; f.start != start {
 		*f = bucket{start: start}
@@ -374,7 +383,7 @@ func (c *Collector) Add(r *Record) {
 	c.global.add(ts, r, blocked)
 	hs := c.hosts[r.H]
 	if hs == nil {
-		if len(c.hosts) >= maxHosts {
+		if len(c.hosts) >= maxHosts && !c.evictIdleHost(ts) {
 			r.H = "(other)"
 			hs = c.hosts[r.H]
 		}
@@ -951,9 +960,29 @@ func (c *Collector) Window(host string, d time.Duration, now time.Time) (request
 	end := ts - ts%fineStep // start of the current, incomplete bucket
 	for start := end - n*fineStep; start < end; start += fineStep {
 		if b := &s.fine[(start/fineStep)%fineSlots]; b.start == start {
-			requests += b.count
-			blocked += b.blocked
+			// banned clients are already refused at no cost: they must not keep a host
+			// in "under attack" mode for everyone else
+			requests += b.count - b.banned
+			blocked += b.blocked - b.banned
 		}
 	}
 	return requests, blocked, n * fineStep
+}
+
+// evictIdleHost makes room for a new host name (hosts renamed or removed keep their
+// series otherwise, and later hosts would only be counted as "(other)", invisible to
+// "under attack" auto mode): it drops the series idle for the longest time, if that is
+// over an hour. Caller holds c.mu.
+func (c *Collector) evictIdleHost(now int64) bool {
+	oldest, at := "", now
+	for h, s := range c.hosts {
+		if h != "(other)" && s.last < at {
+			oldest, at = h, s.last
+		}
+	}
+	if oldest == "" || now-at < 3600 {
+		return false
+	}
+	delete(c.hosts, oldest)
+	return true
 }

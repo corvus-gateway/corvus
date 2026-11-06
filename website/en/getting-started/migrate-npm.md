@@ -9,7 +9,9 @@
 It only **reads** NPM's files and database. NPM is not changed, so you can go back at any time.
 
 Not imported: 404 hosts, and advanced configuration that uses NPM-specific variables. The preview
-lists everything that will be skipped.
+lists everything that will be skipped. A host protected by an access list is only imported together
+with that list, so it is never published without its protection; a host whose certificate is not
+imported comes over without HTTPS and is listed in the report.
 
 ![Import from NPM](../img/import.png){ .shot }
 

@@ -63,6 +63,9 @@ func (c *Collector) RestoreCoarse(rows []CoarseRow, now time.Time) {
 				c.hosts[r.Host] = s
 			}
 		}
+		if r.Start > s.last {
+			s.last = r.Start
+		}
 		b := &s.coarse[(r.Start/coarseStep)%coarseSlots]
 		if b.start != r.Start {
 			*b = bucket{start: r.Start}

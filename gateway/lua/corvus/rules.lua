@@ -462,7 +462,9 @@ function _M.rewrite(host_id)
     end
   end
   if host.exploits and ngx.var.corvus_exploit ~= "" then
-    return ngx.exit(403)
+    -- the block page itself: a bare 403 would go through the host's error_page, which
+    -- a rate limit policy answering 403 maps to its "rate limited" response
+    return deny(403)
   end
   -- Request body inspection (virtual patching for body-borne exploits).
   if host.body ~= "off" then
