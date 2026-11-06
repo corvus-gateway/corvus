@@ -391,6 +391,11 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 			v.ErrorCodes = errorCodes(v.RateLimit)
 		}
 		v.targets(static, hostGW)
+		for _, t := range append([]target{v.Host}, v.LocUpstreams...) {
+			if why := c.P.InternalTarget(t.Addr, t.Port); why != "" {
+				return fmt.Errorf("proxy host %d: %s", h.ID, why)
+			}
+		}
 		if hc.AccessListID != nil {
 			if a := aclByID[*hc.AccessListID]; a != nil {
 				v.Access = a

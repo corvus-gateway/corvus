@@ -66,6 +66,9 @@ func (c *Compiler) renderStreams(ctx context.Context, s *store.Store, dir string
 		}
 		v := streamView{Stream: sc, Upstream: upstreamAddr(sc.ForwardHost, static, hostGW)}
 		v.UpstreamResolve = !isIP(v.Upstream)
+		if why := c.P.InternalTarget(v.Upstream, sc.ForwardPort); why != "" {
+			return 0, fmt.Errorf("stream %d: %s", st.ID, why)
+		}
 		if sc.CertificateID != nil {
 			// Never fall back to plain text: the TCP listener waits for the certificate.
 			v.CertDir = c.certDir(sc.CertificateID)
