@@ -1,11 +1,5 @@
 import { Activity, ArrowLeftRight, Cable, Signpost, FileInput, Gauge, Globe, KeyRound, ListChecks, LogIn, Network, ShieldBan, ShieldCheck, UserCog, Users, type LucideIcon } from "lucide-react";
-import type { Lang } from "../i18n";
-import { zhAuditLabels } from "../locales/zh";
-import { jaAuditLabels } from "../locales/ja";
-import { ruAuditLabels } from "../locales/ru";
-import { frAuditLabels } from "../locales/fr";
-import { deAuditLabels } from "../locales/de";
-import { esAuditLabels } from "../locales/es";
+import { localeOf, type Lang } from "../i18n";
 import type { Tone } from "../components/ui/display";
 
 const dom: Partial<Record<Lang, Record<string, string>>> = {
@@ -35,13 +29,13 @@ const verb: Partial<Record<Lang, Record<string, string>>> = {
 
 /** Audit labels for languages other than ko/en come from the locale files. */
 export interface AuditLabels { dom: Record<string, string>; verb: Record<string, string> }
-const extra: Partial<Record<Lang, AuditLabels>> = { zh: zhAuditLabels, ja: jaAuditLabels, ru: ruAuditLabels, fr: frAuditLabels, de: deAuditLabels, es: esAuditLabels };
+const extra = (lang: Lang) => localeOf(lang)?.audit;
 
 export function actionLabel(action: string, lang: Lang): string {
   const i = action.indexOf(".");
   if (i < 0) return action;
   const d = action.slice(0, i), v = action.slice(i + 1);
-  const x = extra[lang];
+  const x = extra(lang);
   const dm = x?.dom ?? dom[lang] ?? dom.en!, vb = x?.verb ?? verb[lang] ?? verb.en!;
   return `${dm[d] ?? dom.en![d] ?? d} ${vb[v] ?? verb.en![v] ?? v.replace(/_/g, " ")}`;
 }

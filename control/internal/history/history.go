@@ -186,7 +186,8 @@ func (s *Service) Restore(ctx context.Context, now time.Time) {
 	s.ruleSeq = s.Collector.RestoreRuleEvents(rules)
 	if len(rows) > 0 {
 		for _, r := range rows {
-			if r.Start > s.coarseAt {
+			// a bucket saved unfinished at shutdown is flushed again once it is complete
+			if r.Start > s.coarseAt && r.Start+traffic.CoarseStep <= now.Unix() {
 				s.coarseAt = r.Start
 			}
 		}
@@ -235,8 +236,13 @@ func (s *Service) Sink(r *traffic.Record, notable bool) {
 }
 
 // Run flushes statistics/events every minute, writes logs and enforces retention.
+//
+// When ctx ends it writes the request lines still queued, saves the statistics of the
+// current (unfinished) bucket too, closes the database and returns; callers wait for it
+// so a restart or upgrade does not lose the last minutes.
 func (s *Service) Run(ctx context.Context) {
-	go s.writeLogs(ctx)
+	logsDone := make(chan struct{})
+	go func() { s.writeLogs(ctx); close(logsDone) }()
 	flush := time.NewTicker(time.Minute)
 	defer flush.Stop()
 	clean := time.NewTicker(time.Hour)
@@ -245,7 +251,9 @@ func (s *Service) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			s.flush(context.Background(), time.Now())
+			<-logsDone
+			// including the current bucket: Restore loads it back and keeps adding to it
+			s.flush(context.Background(), time.Now().Add(traffic.CoarseStep*time.Second))
 			s.db.Close()
 			return
 		case now := <-flush.C:
@@ -336,6 +344,18 @@ func (s *Service) writeLogs(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			for drained := false; !drained; {
+				select {
+				case line := <-s.lines:
+					open(time.Now())
+					if f != nil {
+						w.Write(line)
+						w.WriteByte('\n')
+					}
+				default:
+					drained = true
+				}
+			}
 			if f != nil {
 				w.Flush()
 				f.Close()

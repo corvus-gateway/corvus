@@ -388,6 +388,7 @@ func run() error {
 
 	// Traffic history: statistics/events survive restarts; request logs are archived
 	// per day (compressed) with retention by age and total size.
+	stopHistory := func() {}
 	hist := &history.Service{Dir: filepath.Join(dataDir, "history"), Store: st, Collector: tc}
 	if err := hist.Open(ctx); err != nil {
 		slog.Warn("traffic history disabled", "err", err)
@@ -395,7 +396,18 @@ func run() error {
 	} else {
 		hist.Restore(ctx, time.Now())
 		tc.Sink = hist.Sink
-		go hist.Run(ctx)
+		// own context, so shutdown can wait for the final save (see stopHistory below)
+		histCtx, histStop := context.WithCancel(context.Background())
+		histDone := make(chan struct{})
+		go func() { hist.Run(histCtx); close(histDone) }()
+		stopHistory = func() {
+			histStop()
+			select {
+			case <-histDone:
+			case <-time.After(15 * time.Second):
+				slog.Warn("traffic history: final save timed out")
+			}
+		}
 	}
 
 	rulesSvc.OnUpdated = func(ctx context.Context) {
@@ -501,6 +513,9 @@ func run() error {
 	defer cancel()
 	_ = hs.Shutdown(shutdownCtx)
 	_ = acmeSrv.Shutdown(shutdownCtx)
+	// Save traffic history before stopping OpenResty: a graceful nginx stop can wait for
+	// open WebSockets until the container runtime's own stop timeout (10 s in Docker).
+	stopHistory()
 	if or != nil {
 		or.Stop(10 * time.Second)
 	}

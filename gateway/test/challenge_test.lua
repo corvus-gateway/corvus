@@ -9,6 +9,8 @@ local eq = T.eq
 local hex = crypto.to_hex
 
 -- ---------------------------------------------------------------- primitives
+eq(hex("\0\1\15\16\127\128\255"), "00010f107f80ff", "to_hex byte values")
+eq(hex(""), "", "to_hex empty")
 eq(hex(crypto.sha256_bin("")), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "sha256 empty")
 eq(hex(crypto.sha256_bin("abc")), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "sha256 abc")
 eq(hex(crypto.sha256_bin(string.rep("a", 1000))), "41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3", "sha256 multi-block")

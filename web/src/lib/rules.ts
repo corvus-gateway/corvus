@@ -1,12 +1,6 @@
 // Security-rule metadata, validation and human/expression rendering.
 import type { IpList, RuleCondition, RuleField, RuleOperator, SecurityRule } from "../api";
-import { localeTag, type Lang } from "../i18n";
-import { zhRuleLabels } from "../locales/zh";
-import { jaRuleLabels } from "../locales/ja";
-import { ruRuleLabels } from "../locales/ru";
-import { frRuleLabels } from "../locales/fr";
-import { deRuleLabels } from "../locales/de";
-import { esRuleLabels } from "../locales/es";
+import { localeOf, localeTag, type Lang } from "../i18n";
 
 export const LIMITS = { rules: 200, groups: 10, conds: 10, valueLen: 1024, values: 1000, regex: 512, listItems: 50000, uaItems: 10000, uaEntryMin: 3, uaEntryMax: 256 } as const;
 
@@ -84,14 +78,14 @@ export interface RuleLabels {
   or: string;
   unknownCountry: string;
 }
-const extra: Partial<Record<Lang, RuleLabels>> = { zh: zhRuleLabels, ja: jaRuleLabels, ru: ruRuleLabels, fr: frRuleLabels, de: deRuleLabels, es: esRuleLabels };
+const extra = (lang: Lang) => localeOf(lang)?.rules;
 const pick = <T,>(m: Partial<Record<Lang, T>>, lang: Lang): T => (m[lang] ?? m.en) as T;
-export const fieldLabelFor = (lang: Lang): Record<RuleField, string> => extra[lang]?.field ?? pick(fieldLabels, lang);
-export const opLabelFor = (lang: Lang): Record<RuleOperator, string> => extra[lang]?.op ?? pick(opLabels, lang);
+export const fieldLabelFor = (lang: Lang): Record<RuleField, string> => extra(lang)?.field ?? pick(fieldLabels, lang);
+export const opLabelFor = (lang: Lang): Record<RuleOperator, string> => extra(lang)?.op ?? pick(opLabels, lang);
 const shortFieldFor = (lang: Lang, f: RuleField): string =>
-  (extra[lang] ? extra[lang]!.shortField?.[f] : pick(shortFields, lang)[f]) ?? fieldLabelFor(lang)[f];
-const shortOpFor = (lang: Lang): Record<RuleOperator, string> => extra[lang]?.shortOp ?? pick(shortOps, lang);
-const orWord = (lang: Lang) => extra[lang]?.or ?? (lang === "ko" ? " 또는 " : " or ");
+  (extra(lang) ? extra(lang)!.shortField?.[f] : pick(shortFields, lang)[f]) ?? fieldLabelFor(lang)[f];
+const shortOpFor = (lang: Lang): Record<RuleOperator, string> => extra(lang)?.shortOp ?? pick(shortOps, lang);
+const orWord = (lang: Lang) => extra(lang)?.or ?? (lang === "ko" ? " 또는 " : " or ");
 
 export const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "CONNECT", "TRACE"];
 export const SCHEMES = ["http", "https"];
@@ -109,7 +103,7 @@ export const COUNTRIES = (
 
 const dn: Partial<Record<Lang, Intl.DisplayNames | null>> = {};
 export function countryName(code: string, lang: Lang): string {
-  if (code === "XX") return extra[lang]?.unknownCountry ?? (lang === "ko" ? "판별 불가" : "Unknown");
+  if (code === "XX") return extra(lang)?.unknownCountry ?? (lang === "ko" ? "판별 불가" : "Unknown");
   if (dn[lang] === undefined) {
     try { dn[lang] = new Intl.DisplayNames([localeTag(lang)], { type: "region" }); } catch { dn[lang] = null; }
   }

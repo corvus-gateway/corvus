@@ -16,8 +16,16 @@ function _M.sha256_bin(s)
 end
 local sha256_bin = _M.sha256_bin
 
+-- Lower-case hex of a binary string (table lookup: about 5x faster than gsub + format,
+-- and it runs on every request for User-Agent-bound challenge passes).
+local HEX = {}
+for i = 0, 255 do HEX[i] = format("%02x", i) end
+local concat = table.concat
+
 function _M.to_hex(s)
-  return (s:gsub(".", function(c) return format("%02x", byte(c)) end))
+  local t = {}
+  for i = 1, #s do t[i] = HEX[byte(s, i)] end
+  return concat(t)
 end
 
 -- HMAC-SHA256 (RFC 2104); the padded key blocks are precomputed per key, so each MAC
