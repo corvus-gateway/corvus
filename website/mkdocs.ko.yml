@@ -10,7 +10,9 @@ nav:
   - 홈: index.md
   - 시작하기:
       - 설치: getting-started/install.md
+      - NAS에 설치: getting-started/nas.md
       - 첫 프록시 호스트: getting-started/first-host.md
+      - NPM과 비교: getting-started/compare-npm.md
       - NPM에서 이전: getting-started/migrate-npm.md
       - 업그레이드: getting-started/upgrade.md
   - 프록시:
