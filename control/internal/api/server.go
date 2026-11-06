@@ -434,13 +434,15 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		fail(w, verr)
 		return
 	}
-	if !s.Setup.Consume(strings.TrimSpace(in.Token)) {
+	token := strings.TrimSpace(in.Token)
+	if !s.Setup.Consume(token) {
 		s.Limiter.Fail(ip)
 		writeErr(w, http.StatusForbidden, "invalid_token", "invalid setup token (see the corvus container logs)")
 		return
 	}
 	u, err := s.Store.CreateUser(r.Context(), in.Email, strings.TrimSpace(in.Name), hash, "admin")
 	if err != nil {
+		s.Setup.Restore(token) // nothing was created: the same token can be used again
 		fail(w, err)
 		return
 	}

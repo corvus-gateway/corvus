@@ -16,6 +16,7 @@ type streamView struct {
 	UpstreamResolve bool   // Upstream is a name: resolved at run time
 	CertDir         string // TLS termination ("" = plain TCP)
 	SkipTCP         bool   // TLS requested but the certificate files don't exist yet
+	IPv6            bool   // also listen on IPv6 (Paths.IPv6), like proxy hosts
 }
 
 // StreamConflict reports why st cannot listen on its port: the port is used by Corvus
@@ -64,8 +65,11 @@ func (c *Compiler) renderStreams(ctx context.Context, s *store.Store, dir string
 				return 0, err
 			}
 		}
-		v := streamView{Stream: sc, Upstream: upstreamAddr(sc.ForwardHost, static, hostGW)}
+		v := streamView{Stream: sc, Upstream: upstreamAddr(sc.ForwardHost, static, hostGW), IPv6: c.P.IPv6}
 		v.UpstreamResolve = !isIP(v.Upstream)
+		if why := c.P.InternalTarget(v.Upstream, sc.ForwardPort); why != "" {
+			return 0, fmt.Errorf("stream %d: %s", st.ID, why)
+		}
 		if sc.CertificateID != nil {
 			// Never fall back to plain text: the TCP listener waits for the certificate.
 			v.CertDir = c.certDir(sc.CertificateID)

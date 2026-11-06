@@ -92,6 +92,15 @@ func (s *SetupToken) Value() string {
 	return s.token
 }
 
+// Restore makes a consumed token t valid again (when the setup it was used for failed).
+func (s *SetupToken) Restore(t string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.token == "" {
+		s.token = t
+	}
+}
+
 // Consume returns true (and invalidates the token) if t matches.
 func (s *SetupToken) Consume(t string) bool {
 	s.mu.Lock()

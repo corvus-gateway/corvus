@@ -51,4 +51,8 @@ func TestSetupTokenSingleUse(t *testing.T) {
 	if s.Consume("wrong") || !s.Consume(v) || s.Consume(v) {
 		t.Fatal("setup token must be single use and exact")
 	}
+	s.Restore(v)
+	if !s.Consume(v) {
+		t.Fatal("restored token not accepted")
+	}
 }

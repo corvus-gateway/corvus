@@ -32,6 +32,14 @@
             proxy_set_header X-Forwarded-Proto $scheme;
             # Framework-internal headers clients must never set (Next.js CVE-2025-29927).
             proxy_set_header X-Middleware-Subrequest "";
+{{- if .Console}}
+            # Admin console port: prove to the console that this request comes from the
+            # gateway (a TCP stream to the console could not add it). Key from the environment.
+            set_by_lua_block $corvus_gateway_key { return os.getenv("CORVUS_CONSOLE_KEY") or "" }
+            proxy_set_header X-Corvus-Gateway $corvus_gateway_key;
+{{- else}}
+            proxy_set_header X-Corvus-Gateway "";
+{{- end}}
 {{- if eq .Scheme "https"}}
             proxy_ssl_server_name on;
             proxy_ssl_name {{.Addr}};   # SNI: the forward host (an IP address sends none)

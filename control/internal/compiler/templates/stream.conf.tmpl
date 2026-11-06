@@ -18,6 +18,9 @@ upstream corvus_stream_{{.ID}} {
 
 server {
     listen {{.IncomingPort}}{{if .CertDir}} ssl{{end}};
+{{- if .IPv6}}
+    listen [::]:{{.IncomingPort}}{{if .CertDir}} ssl{{end}};
+{{- end}}
 {{- if .CertDir}}
     ssl_certificate     {{.CertDir}}/fullchain.pem;
     ssl_certificate_key {{.CertDir}}/privkey.pem;
@@ -29,6 +32,9 @@ server {
 
 server {
     listen {{.IncomingPort}} udp;
+{{- if .IPv6}}
+    listen [::]:{{.IncomingPort}} udp;
+{{- end}}
     proxy_pass corvus_stream_{{.ID}};
 }
 {{- end}}
