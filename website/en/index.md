@@ -21,7 +21,8 @@ traffic goes to a third-party cloud.
 
 - :material-swap-horizontal: **[Coming from NPM?](getting-started/migrate-npm.md)**
 
-    Import proxy hosts, certificates, streams and access lists. NPM itself is not changed.
+    See [how Corvus compares](getting-started/compare-npm.md), then import proxy hosts, certificates,
+    streams and access lists. NPM itself is not changed.
 
 - :material-shield-check: **[Protection](security/index.md)**
 
