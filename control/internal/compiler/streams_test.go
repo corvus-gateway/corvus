@@ -145,3 +145,23 @@ func TestStreamConflict(t *testing.T) {
 		}
 	}
 }
+
+// With IPv6, streams listen on [::] too (TCP, TLS and UDP), like proxy hosts.
+func TestRenderStreamsIPv6(t *testing.T) {
+	ctx := context.Background()
+	c, st, _, dir := streamEnv(t)
+	c.P.IPv6 = true
+	if err := st.SaveStream(ctx, &store.Stream{IncomingPort: 5353, TCP: true, UDP: true, ForwardHost: "10.0.0.53", ForwardPort: 53, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "v1")
+	if err := c.Render(ctx, st, out); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(out, "streams", "1.conf"))
+	for _, want := range []string{"listen [::]:5353;", "listen [::]:5353 udp;"} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("missing %q in\n%s", want, b)
+		}
+	}
+}

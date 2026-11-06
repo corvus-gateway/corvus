@@ -3,6 +3,10 @@
 
 worker_processes  auto;
 worker_rlimit_nofile 65535;
+# After a reload, old workers finish their requests; long-lived connections (WebSockets,
+# streams, slow downloads) are closed after this so old workers can't pile up in memory
+# when configuration changes often. Clients reconnect to the new workers.
+worker_shutdown_timeout 10m;
 # JIT-compile the regular expressions known at load time (attack-pattern map, regex
 # locations); Lua patterns use the "j" flag of ngx.re.
 pcre_jit on;
