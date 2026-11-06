@@ -224,6 +224,9 @@ func (s *Server) putSSOSettings(w http.ResponseWriter, r *http.Request) {
 	c := sso.Settings{Enabled: in.Enabled, DisplayName: in.DisplayName, Issuer: in.Issuer, ClientID: in.ClientID, ClientSecret: prev.ClientSecret,
 		Scopes: in.Scopes, AllowedDomains: in.AllowedDomains, RoleClaim: in.RoleClaim, AdminValues: in.AdminValues, OperatorValues: in.OperatorValues,
 		DefaultRole: in.DefaultRole, AutoProvision: in.AutoProvision, SyncRole: prev.SyncRole || prev.Issuer == ""}
+	if strings.TrimRight(in.Issuer, "/") != strings.TrimRight(prev.Issuer, "/") {
+		c.ClientSecret = "" // never send the old provider's secret to a new issuer
+	}
 	if in.SyncRole != nil {
 		c.SyncRole = *in.SyncRole
 	}

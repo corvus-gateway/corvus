@@ -23,6 +23,9 @@ type FieldError struct {
 
 type Errors []FieldError
 
+// braceVarRe matches an nginx ${name} variable reference.
+var braceVarRe = regexp.MustCompile(`^\$\{[A-Za-z0-9_]+\}`)
+
 func (e Errors) Error() string {
 	parts := make([]string, len(e))
 	for i, f := range e {
@@ -323,13 +326,14 @@ func AdvancedConfig(s string) error {
 				i++
 			}
 		case c == '$' && i+1 < len(s) && s[i+1] == '{':
-			end := strings.IndexByte(s[i:], '}')
-			if end < 0 {
-				return fmt.Errorf("unterminated ${...} variable")
+			// ${name}: only a variable name may stand between the braces, as for nginx
+			m := braceVarRe.FindString(s[i:])
+			if m == "" {
+				return fmt.Errorf("invalid ${...} variable: only ${name} is allowed")
 			}
-			tok.WriteString(s[i : i+end+1])
+			tok.WriteString(m)
 			inTok = true
-			i += end
+			i += len(m) - 1
 		case c == '\\' && i+1 < len(s):
 			tok.WriteByte(s[i+1])
 			inTok = true

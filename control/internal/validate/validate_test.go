@@ -151,6 +151,8 @@ func TestAdvancedConfigSecurity(t *testing.T) {
 		"escape server via quote trick": `add_header "X" "a"; } server { listen 1; `,
 		"missing semicolon":             "proxy_read_timeout 30s",
 		"unterminated variable":         "set $a ${b;",
+		"directive hidden in ${...}":    "default_type ${; content_by_lua_block { ngx.exit(200) } add_header A b;",
+		"spaces in ${...}":              "set $a ${b c};",
 	}
 	for name, cfg := range bad {
 		if AdvancedConfig(cfg) == nil {
@@ -158,6 +160,7 @@ func TestAdvancedConfigSecurity(t *testing.T) {
 		}
 	}
 	good := []string{
+		"set $a ${host}_x;",
 		"location /static/ { root /var/www/site; }",
 		"proxy_set_header X-Foo ${host}bar;",
 		`add_header Content-Security-Policy "default-src 'self'; img-src * data:";`,

@@ -467,6 +467,9 @@ function _M.rewrite(host_id)
   -- Request body inspection (virtual patching for body-borne exploits).
   if host.body ~= "off" then
     local sig = body.inspect(host.body_max)
+    -- A compressed body cannot be inspected: hosts in block mode refuse it, hosts that
+    -- only log record it as not inspected (it is not a detection).
+    if sig == "encoded" and host.body ~= "block" then sig = "skip:encoded" end
     if sig then
       if sub(sig, 1, 5) == "skip:" then
         ngx.var.corvus_body = sig            -- not inspected (too large / unreadable): log only

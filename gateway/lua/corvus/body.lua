@@ -136,8 +136,10 @@ local function decode_multipart(acc, s, ct, meta)
     if not hdr_end then hdr_end, body_start = find(part, "\n\n", 1, true) end
     if hdr_end then
       local hdr = lower(sub(part, 1, hdr_end))
-      local name = hdr:match('name="([^"]*)"')
-      local filename = hdr:match('filename="([^"]*)"')
+      -- parameters start after ";" or whitespace: "xfilename=" or the "name=" inside
+      -- "filename=" must not be taken for them
+      local name = hdr:match('[;%s]name="([^"]*)"')
+      local filename = hdr:match('[;%s]filename="([^"]*)"')
       if name then
         add(acc, name)
         local _, depth = gsub(name, "%[", "")
@@ -191,7 +193,9 @@ function _M.text(max)
     return ctx.corvus_body_text, nil, ctx.corvus_body_meta
   end
   local enc = ngx.var.http_content_encoding
-  if enc and enc ~= "" and lower(enc) ~= "identity" then
+  local cl = tonumber(ngx.var.http_content_length or "")
+  local has_body = (cl ~= nil and cl > 0) or (ngx.var.http_transfer_encoding or "") ~= ""
+  if has_body and enc and enc ~= "" and lower(enc) ~= "identity" then
     ctx.corvus_body_text, ctx.corvus_body_err = false, "encoded"
     return nil, "encoded"
   end

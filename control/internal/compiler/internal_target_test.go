@@ -16,6 +16,7 @@ func TestInternalTarget(t *testing.T) {
 		bad  bool
 	}{
 		{"127.0.0.1", 9180, true}, {"localhost", 9181, true}, {"[::1]", 6379, true}, {"127.0.0.2", 9180, true},
+		{"0.0.0.0", 9180, true}, {"0.1.2.3", 9181, true}, {"[::]", 6379, true},
 		{"127.0.0.1", 8080, false}, {"127.0.0.1", 9443, false}, {"172.17.0.1", 9180, false}, {"redis", 6379, false},
 	} {
 		if got := p.InternalTarget(c.addr, c.port) != ""; got != c.bad {

@@ -72,7 +72,11 @@ func sessionOnly(r *http.Request) bool {
 	}
 	return strings.HasPrefix(p, "/api/auth/") || p == "/api/users" || strings.HasPrefix(p, "/api/users/") ||
 		p == "/api/tokens" || strings.HasPrefix(p, "/api/tokens/") ||
-		p == "/api/backup" || strings.HasPrefix(p, "/api/backup/")
+		p == "/api/backup" || strings.HasPrefix(p, "/api/backup/") ||
+		// sign-in and console access settings, and NPM import (reads another database)
+		(p == "/api/settings/sso" && r.Method != http.MethodGet) ||
+		(p == "/api/settings/network" && r.Method != http.MethodGet) ||
+		strings.HasPrefix(p, "/api/import/")
 }
 
 // tokenTouched limits last_used_at writes to once a minute per token.
