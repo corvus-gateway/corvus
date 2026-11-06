@@ -336,7 +336,7 @@ func run() error {
 	}
 
 	setup := auth.NewSetupToken()
-	preset := os.Getenv("CORVUS_SETUP_TOKEN")
+	preset := env("CORVUS_SETUP_TOKEN", "") // trimmed: a stray newline (CRLF env file) could never be typed
 	if preset != "" {
 		if setup, err = auth.PresetSetupToken(preset); err != nil {
 			return fmt.Errorf("CORVUS_SETUP_TOKEN: %w", err)
