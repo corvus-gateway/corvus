@@ -21,6 +21,8 @@ services:
 | `CORVUS_REDIS_PORT` | 127.0.0.1에서 동작하는 내장 접속 대기열 저장소의 포트(기본값 `6379`). `network_mode: host`에서 호스트가 이미 6379를 쓰고 있다면 바꾸세요 |
 | `CORVUS_IMPORT_DIR` | [NPM 가져오기](../getting-started/migrate-npm.md)에 쓸, 읽기 전용 NPM 볼륨이 있는 디렉터리 |
 | `CORVUS_RULES_URL` | 선택 사항. 서명된 관리형 규칙 번들의 URL |
+| `CORVUS_SETUP_TOKEN` | 로그에서 무작위 값을 찾는 대신 일회용 [설정 토큰](../getting-started/install.md)을 직접 정합니다(12자 이상). 관리자가 아직 없을 때만 쓰입니다 |
+| `CORVUS_ADMIN_TLS=false` | 관리 콘솔을 HTTPS 대신 일반 HTTP로 엽니다. 앞단의 리버스 프록시가 TLS를 처리할 때 씁니다. 이때 세션 쿠키에 *Secure* 표시가 붙지 않으므로 9443 포트는 그 프록시나 신뢰하는 네트워크에서만 접근할 수 있게 하세요 |
 | `CORVUS_ADMIN_ALLOW_ANY=1` | 관리 콘솔 접근 허용 목록 때문에 접속이 막혔을 때 쓰는 복구 스위치 |
 | `CORVUS_RESOLVER` | 전달 대상 호스트 이름을 조회할 DNS 서버. 기본값: Docker의 DNS, 호스트 네트워크에서는 `/etc/resolv.conf`의 첫 번째 `nameserver` |
 | `CORVUS_LOOPBACK=container` | 전달 대상 `127.0.0.1`/`localhost`가 Docker 호스트 대신 컨테이너 자신을 가리키게 합니다 |

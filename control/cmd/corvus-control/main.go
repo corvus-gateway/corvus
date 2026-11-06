@@ -336,8 +336,18 @@ func run() error {
 	}
 
 	setup := auth.NewSetupToken()
+	preset := os.Getenv("CORVUS_SETUP_TOKEN")
+	if preset != "" {
+		if setup, err = auth.PresetSetupToken(preset); err != nil {
+			return fmt.Errorf("CORVUS_SETUP_TOKEN: %w", err)
+		}
+	}
 	if n, _ := st.CountUsers(ctx); n == 0 {
-		slog.Warn("no administrator yet — open the admin UI and enter this setup token", "setup_token", setup.Value())
+		if preset != "" {
+			slog.Warn("no administrator yet — open the admin UI and enter the setup token from CORVUS_SETUP_TOKEN")
+		} else {
+			slog.Warn("no administrator yet — open the admin UI and enter this setup token", "setup_token", setup.Value())
+		}
 	}
 
 	acmeSvc := &acme.Service{Store: st, Key: dataKey, CertDir: paths.CertDir, Directory: env("CORVUS_ACME_DIRECTORY", ""),

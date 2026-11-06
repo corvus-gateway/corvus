@@ -45,6 +45,9 @@ The first start prints a one-time token that proves you own the server:
 docker compose logs corvus | grep setup_token
 ```
 
+To choose the token yourself instead, set `CORVUS_SETUP_TOKEN` (at least 12 characters, see
+[Configuration](../reference/configuration.md)).
+
 ## 4. Create the administrator
 
 Open `https://<your-server>:9443` in a browser. The console uses a self-signed certificate at first,

@@ -45,6 +45,9 @@ docker compose up -d
 docker compose logs corvus | grep setup_token
 ```
 
+토큰을 직접 정하고 싶다면 `CORVUS_SETUP_TOKEN`을 설정하세요(12자 이상,
+[설정](../reference/configuration.md) 참고).
+
 ## 4. 관리자 계정 만들기
 
 브라우저에서 `https://<서버 주소>:9443`을 엽니다. 처음에는 관리 콘솔이 자체 서명 인증서를 쓰므로

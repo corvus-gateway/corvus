@@ -35,6 +35,16 @@ func TestLimiter(t *testing.T) {
 	}
 }
 
+func TestPresetSetupToken(t *testing.T) {
+	if _, err := PresetSetupToken("short"); err == nil {
+		t.Fatal("short preset token accepted")
+	}
+	s, err := PresetSetupToken("chosen-by-operator")
+	if err != nil || s.Value() != "chosen-by-operator" || !s.Consume("chosen-by-operator") || s.Consume("chosen-by-operator") {
+		t.Fatalf("preset token: %v", err)
+	}
+}
+
 func TestSetupTokenSingleUse(t *testing.T) {
 	s := NewSetupToken()
 	v := s.Value()

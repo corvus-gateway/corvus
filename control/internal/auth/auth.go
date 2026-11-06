@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -72,6 +73,18 @@ type SetupToken struct {
 }
 
 func NewSetupToken() *SetupToken { return &SetupToken{token: RandomToken(18)} }
+
+// MinPresetSetupToken is the shortest setup token accepted from configuration.
+const MinPresetSetupToken = 12
+
+// PresetSetupToken returns a setup token with a value chosen by the operator
+// (CORVUS_SETUP_TOKEN), e.g. a password an app platform shows its user.
+func PresetSetupToken(v string) (*SetupToken, error) {
+	if len(v) < MinPresetSetupToken {
+		return nil, fmt.Errorf("setup token must be at least %d characters", MinPresetSetupToken)
+	}
+	return &SetupToken{token: v}, nil
+}
 
 func (s *SetupToken) Value() string {
 	s.mu.Lock()
