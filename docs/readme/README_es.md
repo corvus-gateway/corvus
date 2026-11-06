@@ -65,6 +65,7 @@ OpenResty, plano de control en Go, consola en React) que puede **importar una co
 - Ajustes predefinidos de cabeceras de seguridad por host (Básico / Estricto: nosniff, políticas de frame y de referrer, CSP en modo solo informe, atributos de cookie HttpOnly/SameSite/Secure), sin sobrescribir nunca lo que la aplicación ya envía
 - Compresión gzip de las respuestas de texto (activada por defecto), y límite de tamaño de subida y tiempo de espera del upstream por host
 - Cada cambio se valida con `openresty -t`, se aplica de forma atómica y se puede revertir
+- La consola avisa cuando sale una nueva versión de Corvus, con enlace a sus notas (se puede desactivar)
 
 **Corvus Sentinel — motor de seguridad**
 - Reglas de seguridad: coincidencia por IP, lista de IP, país, ruta, query, método, cabecera o lista de User-Agent → bloquear, permitir, registrar o desafiar, de forma global o por host

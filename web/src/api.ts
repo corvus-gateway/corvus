@@ -170,6 +170,8 @@ export interface Overview {
   gateway?: { running: boolean; uptime_s?: number };
   traffic?: TrafficSummary | null;
   certificates_expiring?: number;
+  /** A newer Corvus release (checked on GitHub by the server), or null. */
+  update?: { version: string; url: string } | null;
 }
 
 export interface RateLimit {

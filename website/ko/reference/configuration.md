@@ -22,6 +22,7 @@ services:
 | `CORVUS_IMPORT_DIR` | [NPM 가져오기](../getting-started/migrate-npm.md)에 쓸, 읽기 전용 NPM 볼륨이 있는 디렉터리 |
 | `CORVUS_RULES_URL` | 선택 사항. 서명된 관리형 규칙 번들의 URL |
 | `CORVUS_SETUP_TOKEN` | 로그에서 무작위 값을 찾는 대신 일회용 [설정 토큰](../getting-started/install.md)을 직접 정합니다(12자 이상). 관리자가 아직 없을 때만 쓰입니다 |
+| `CORVUS_UPDATE_CHECK=false` | 새 릴리스 확인을 끕니다. 기본적으로 Corvus는 하루 두 번 GitHub에 최신 릴리스를 묻고(설치 정보는 보내지 않습니다), 새 버전이 있으면 콘솔 사이드바 아래에 릴리스 노트로 가는 **업데이트** 버튼을 보여 줍니다 |
 | `CORVUS_ADMIN_TLS=false` | 관리 콘솔을 HTTPS 대신 일반 HTTP로 엽니다. 앞단의 리버스 프록시가 TLS를 처리할 때 씁니다. 이때 세션 쿠키에 *Secure* 표시가 붙지 않으므로 9443 포트는 그 프록시나 신뢰하는 네트워크에서만 접근할 수 있게 하세요 |
 | `CORVUS_ADMIN_TRUSTED_PROXIES` | 관리 콘솔 앞에 둔 리버스 프록시 중 `X-Forwarded-For`를 믿을 주소. 예: `10.0.0.5,172.30.0.0/16`. Corvus 자체 프록시 호스트는 넣지 않아도 됩니다. 다른 사람이 접속해 올 수 없는 주소만 넣으세요 |
 | `CORVUS_ADMIN_ALLOW_ANY=1` | 관리 콘솔 접근 허용 목록 때문에 접속이 막혔을 때 쓰는 복구 스위치 |

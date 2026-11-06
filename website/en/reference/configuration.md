@@ -23,6 +23,7 @@ services:
 | `CORVUS_IMPORT_DIR` | Directory with read-only NPM volumes for [Import from NPM](../getting-started/migrate-npm.md) |
 | `CORVUS_RULES_URL` | Optional URL of a signed managed-rules bundle |
 | `CORVUS_SETUP_TOKEN` | Choose the one-time [setup token](../getting-started/install.md#3-read-the-setup-token) yourself (at least 12 characters) instead of reading a random one from the logs. Only used while no administrator exists |
+| `CORVUS_UPDATE_CHECK=false` | Don't check for new releases. By default Corvus asks GitHub for the latest release twice a day (nothing about your installation is sent) and shows **Update** with a link to the release notes at the bottom of the console's sidebar |
 | `CORVUS_ADMIN_TLS=false` | Serve the admin console over plain HTTP instead of HTTPS, for a reverse proxy in front of it that handles TLS. Session cookies are then not marked *Secure*: keep port 9443 reachable only from that proxy or a trusted network |
 | `CORVUS_ADMIN_TRUSTED_PROXIES` | Reverse proxies in front of the admin console whose `X-Forwarded-For` is trusted, e.g. `10.0.0.5,172.30.0.0/16`. Corvus's own proxy hosts need no entry. Only list addresses that nobody else can connect from |
 | `CORVUS_ADMIN_ALLOW_ANY=1` | Recovery switch if you locked yourself out with the admin allowlist |

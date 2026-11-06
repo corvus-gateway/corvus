@@ -64,6 +64,7 @@ Go control plane, React console) that can **import an existing NPM setup**.
 - Security header presets per host (basic / strict: nosniff, frame and referrer policy, report-only CSP, HttpOnly/SameSite/Secure cookie flags), never overriding what the app already sends
 - Gzip compression of text responses (on by default), and per-host upload size limit and upstream timeout
 - Every change is validated with `openresty -t`, applied atomically and can be rolled back
+- The console shows when a new Corvus release is out, with a link to its release notes (can be turned off)
 
 **Corvus Sentinel — security engine**
 - Security rules: match IP, IP list, country, path, query, method, header or User-Agent list → block, allow, log or challenge, globally or per host

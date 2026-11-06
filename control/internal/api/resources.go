@@ -74,6 +74,7 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 		"waitrooms": len(rooms), "certificates": len(certList), "certificates_expiring": expiring,
 		"active_version": active, "dirty": dirty, "gateway": gw, "traffic": tr,
 		"redis": s.Live.Ping(ctx), "rooms": liveRooms, "version": s.Version,
+		"update": s.Updates.Available(), // newer release, or null
 	})
 }
 

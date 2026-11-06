@@ -65,6 +65,7 @@ Go-Steuerungsebene, React-Konsole), die ein **bestehendes NPM-Setup importieren*
 - Voreinstellungen für Sicherheits-Header pro Host (Basis / Streng: nosniff, Frame- und Referrer-Policy, CSP im Report-Only-Modus, Cookie-Flags HttpOnly/SameSite/Secure), ohne zu überschreiben, was die Anwendung bereits sendet
 - Gzip-Komprimierung von Textantworten (standardmäßig an) sowie Upload-Größenlimit und Upstream-Timeout pro Host
 - Jede Änderung wird mit `openresty -t` geprüft, atomar angewendet und kann zurückgerollt werden
+- Die Konsole zeigt an, wenn eine neue Corvus-Version erschienen ist, mit Link zu den Versionshinweisen (abschaltbar)
 
 **Corvus Sentinel — Sicherheits-Engine**
 - Sicherheitsregeln: Abgleich nach IP, IP-Liste, Land, Pfad, Query, Methode, Header oder User-Agent-Liste → blockieren, erlauben, protokollieren oder eine Challenge verlangen, global oder pro Host

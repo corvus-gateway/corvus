@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, Navigate, Route, Routes, matchPath, useLocation } from "react-router-dom";
 import * as Dialog from "@radix-ui/react-dialog";
-import { ChevronsLeft, ChevronsRight, Languages, LogOut, Menu as MenuIcon, Monitor, Moon, Sun, UserCog } from "lucide-react";
+import { ArrowUpCircle, ChevronsLeft, ChevronsRight, Languages, LogOut, Menu as MenuIcon, Monitor, Moon, Sun, UserCog } from "lucide-react";
 import { api } from "../../api";
 import { useApp } from "../../lib/app";
 import { LANGS, LANG_NAMES, isLang, useI18n } from "../../i18n";
@@ -126,8 +126,14 @@ export function Shell() {
       <div className="flex min-h-0 flex-1">
         <aside className={cn("hidden shrink-0 flex-col transition-[width] duration-150 lg:flex", SIDEBAR, collapsed ? "w-[56px]" : "w-60")}>
           <NavList collapsed={collapsed} />
-          <div className={cn("flex items-center border-t border-[#3c3f42] p-2", collapsed ? "justify-center" : "justify-between")}>
-            {!collapsed && <span className="px-2 text-xs text-[#8a8d90] num">v{overview?.version ?? "–"}</span>}
+          <div className={cn("flex items-center border-t border-[#3c3f42] p-2", collapsed ? "flex-col justify-center gap-1" : "justify-between")}>
+            {!collapsed && (
+              <span className="flex min-w-0 items-center gap-2 px-2">
+                <span className="text-xs text-[#8a8d90] num">v{overview?.version ?? "–"}</span>
+                {overview?.update && <UpdateLink update={overview.update} />}
+              </span>
+            )}
+            {collapsed && overview?.update && <UpdateLink update={overview.update} iconOnly />}
             <button type="button" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? t("expandSidebar") : t("collapseSidebar")}
               className="grid h-7 w-7 place-items-center text-[#a3a6a9] hover:bg-[#2a2d31] hover:text-white">
               {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
@@ -255,3 +261,17 @@ function UserMenu({ name, email, onLogout }: { name: string; email: string; onLo
   );
 }
 
+
+/** Sidebar notice: a newer release is out; opens its release notes. */
+function UpdateLink({ update, iconOnly }: { update: { version: string; url: string }; iconOnly?: boolean }) {
+  const { t } = useI18n();
+  const title = t("updateTitle", { v: update.version });
+  return (
+    <a href={update.url} target="_blank" rel="noreferrer noopener" title={title} aria-label={title}
+      className={cn("inline-flex items-center gap-1 bg-brand text-[11px] font-medium text-white hover:opacity-90",
+        iconOnly ? "h-7 w-7 justify-center" : "h-5 px-1.5")}>
+      <ArrowUpCircle className="h-3.5 w-3.5" aria-hidden />
+      {!iconOnly && <span>{t("updateBtn")} {update.version}</span>}
+    </a>
+  );
+}

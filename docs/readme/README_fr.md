@@ -65,6 +65,7 @@ OpenResty, plan de contrôle en Go, console React) capable d'**importer une conf
 - Préréglages d'en-têtes de sécurité par hôte (Basique / Strict : nosniff, politiques de frame et de referrer, CSP en mode rapport seul, attributs de cookie HttpOnly/SameSite/Secure), sans jamais écraser ce que l'application envoie déjà
 - Compression gzip des réponses texte (activée par défaut), limite de taille d'envoi et délai d'attente de l'amont par hôte
 - Chaque modification est validée avec `openresty -t`, appliquée de façon atomique et peut être annulée
+- La console signale une nouvelle version de Corvus, avec un lien vers ses notes de version (désactivable)
 
 **Corvus Sentinel — moteur de sécurité**
 - Règles de sécurité : correspondance sur IP, liste d'IP, pays, chemin, requête, méthode, en-tête ou liste de User-Agent → bloquer, autoriser, journaliser ou soumettre à un défi, globalement ou par hôte

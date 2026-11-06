@@ -26,6 +26,7 @@ import (
 	"corvus/control/internal/store"
 	"corvus/control/internal/traffic"
 	"corvus/control/internal/underattack"
+	"corvus/control/internal/update"
 	"corvus/control/internal/validate"
 )
 
@@ -40,6 +41,7 @@ type Server struct {
 	SecureCookie bool
 	Proxies      *ConsoleProxies // who may report the visitor address (nil = nobody)
 	Version      string
+	Updates      *update.Checker // nil when update checks are off
 	Traffic      *traffic.Collector
 	Gateway      func() (running bool, since time.Time) // nil when running without a gateway
 	ACME         ACMEService

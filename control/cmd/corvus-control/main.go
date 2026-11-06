@@ -40,6 +40,7 @@ import (
 	"corvus/control/internal/store"
 	"corvus/control/internal/traffic"
 	"corvus/control/internal/underattack"
+	"corvus/control/internal/update"
 	"corvus/control/internal/webui"
 )
 
@@ -445,13 +446,20 @@ func run() error {
 	}}
 	go listFeeds.Run(ctx)
 
+	// New release notice in the console (GitHub "latest release", twice a day).
+	var updates *update.Checker
+	if envBool("CORVUS_UPDATE_CHECK", true) {
+		updates = &update.Checker{Current: version}
+		go updates.Run(ctx)
+	}
+
 	tlsOn := envBool("CORVUS_ADMIN_TLS", true)
 	adminProxies, err := netcfg.NormalizeTrustedCIDRs(strings.Split(env("CORVUS_ADMIN_TRUSTED_PROXIES", ""), ","))
 	if err != nil {
 		return fmt.Errorf("CORVUS_ADMIN_TRUSTED_PROXIES: %w", err)
 	}
 	srv := &api.Server{Store: st, Deployer: dep, Paths: paths, Live: lv, Setup: setup,
-		Limiter: auth.NewLimiter(10, 10*time.Minute), UI: webui.Handler(), SecureCookie: tlsOn, Version: version, Proxies: api.NewConsoleProxies(adminProxies, consoleKey),
+		Limiter: auth.NewLimiter(10, 10*time.Minute), UI: webui.Handler(), SecureCookie: tlsOn, Version: version, Updates: updates, Proxies: api.NewConsoleProxies(adminProxies, consoleKey),
 		AcctLimiter: auth.NewLimiter(10, 15*time.Minute),
 		Traffic:     tc, ACME: acmeSvc, NPMImportDir: env("CORVUS_IMPORT_DIR", "/import"), DataKey: dataKey, MFA: auth.NewMFAChallenges(), GeoIP: geo, AutoBan: ban, UnderAttack: ua, History: hist, Rules: rulesSvc, Feeds: listFeeds}
 	if or != nil {

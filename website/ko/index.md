@@ -41,7 +41,7 @@ hide:
 | **보안** | 알려진 공격 패턴 기본 차단, [보안 규칙](security/rules.md), [IP·User-Agent 목록](security/ip-lists.md), [브라우저 챌린지와 공격 대응 모드](security/challenge.md), [자동 차단](security/bans.md) |
 | **접속 대기열** | 트래픽 급증에 대비한 [정원 기반 대기실](access-queue.md) |
 | **관제** | [실시간 트래픽, 요청 로그, 보안 이벤트](operations/traffic.md), Slack·Discord·Teams·Telegram 등으로 보내는 [알림](operations/alerts.md) |
-| **운영** | 모든 변경은 검사 후 버전으로 관리, [백업과 복원](operations/backup.md), [역할·MFA·SSO](operations/users.md) |
+| **운영** | 모든 변경은 검사 후 버전으로 관리, [백업과 복원](operations/backup.md), [역할·MFA·SSO](operations/users.md), [새 버전 알림](reference/configuration.md) |
 
 !!! tip "안전한 기본값"
     시작할 때 규칙을 하나도 쓸 필요가 없습니다. 새 호스트마다 기본 공격 탐지가 켜져 있고,

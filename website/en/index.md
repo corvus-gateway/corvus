@@ -42,7 +42,7 @@ traffic goes to a third-party cloud.
 | **Security** | Known attack patterns blocked by default, [security rules](security/rules.md), [IP and User-Agent lists](security/ip-lists.md), [browser challenge and "under attack" mode](security/challenge.md), [automatic bans](security/bans.md) |
 | **Access queue** | [Capacity-based waiting room](access-queue.md) for traffic spikes |
 | **Monitoring** | [Live traffic, request logs and security events](operations/traffic.md), [alerts](operations/alerts.md) to Slack, Discord, Teams, Telegram and more |
-| **Operations** | Every change is tested and versioned, [backup & restore](operations/backup.md), [roles, MFA and SSO](operations/users.md) |
+| **Operations** | Every change is tested and versioned, [backup & restore](operations/backup.md), [roles, MFA and SSO](operations/users.md), [update notices](reference/configuration.md) |
 
 !!! tip "Safe defaults"
     You don't need to write a single rule to get started. Basic attack detection is on for every new
