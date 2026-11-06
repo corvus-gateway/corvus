@@ -65,6 +65,7 @@ const shots = [
   { name: "proxy-host-protection", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^(Protection|보호)$/);`, dialog: true },
   { name: "proxy-host-queue", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^(Access queue|접속 대기열)$/);`, dialog: true },
   { name: "proxy-host-advanced", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^(Advanced|고급)$/);`, dialog: true },
+  { name: "proxy-host-notes", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^(Notes|메모)$/);`, dialog: true },
   { name: "certificates", path: "/certificates" },
   { name: "dns-credentials", path: "/certificates", act: `
     const h = __qa("main *").find(e => [...e.childNodes].some(n => n.nodeType === 3 && /^(DNS credentials|DNS 인증 정보)$/.test(n.textContent.trim())));

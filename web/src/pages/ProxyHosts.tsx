@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api, type AccessList, type Certificate, type ClientIPMode, type ProxyHost, type RateLimit, type SecurityHeaders, type UnderAttackStatus, type Waitroom } from "../api";
 import { UnderAttackFields, uaConfig, UA_DEFAULTS } from "../components/UnderAttackFields";
 import { LocationsFields } from "../components/LocationsFields";
+import { NoteLine, NotesSection, notesMatch } from "../components/NotesField";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
 import { Button, IconButton } from "../components/ui/button";
 import { Badge, Callout, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
@@ -35,7 +36,7 @@ const blank: Form = {
   ssl_forced: false, http2: true, waitroom_id: null, waitroom_path: "/", advanced_config: "", enabled: true,
   client_ip: "direct", rate_limit_id: null, access_list_id: null, block_exploits: true,
   body_inspection: "log", body_max_kb: 1024, security_headers: "off",
-  max_upload_mb: null, upstream_timeout_s: null, gzip: true,
+  max_upload_mb: null, upstream_timeout_s: null, gzip: true, notes: "",
   under_attack: "off", under_attack_config: { ...UA_DEFAULTS }, locations: [],
 };
 
@@ -85,7 +86,7 @@ export default function ProxyHosts() {
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return hosts.data ?? [];
-    return (hosts.data ?? []).filter((h) => h.domains.some((d) => d.toLowerCase().includes(s)) || `${h.forward_host}:${h.forward_port}`.includes(s));
+    return (hosts.data ?? []).filter((h) => h.domains.some((d) => d.toLowerCase().includes(s)) || `${h.forward_host}:${h.forward_port}`.includes(s) || notesMatch(h.notes, s));
   }, [hosts.data, q]);
 
   const open = (h?: ProxyHost) => { setError(null); setEditing({ id: h?.id ?? null, form: h ? toForm(h) : { ...blank }, req: null, auth: authFrom(h) }); };
@@ -183,6 +184,7 @@ export default function ProxyHosts() {
                           {cn_ ? <span className="inline-flex items-center gap-1"><Lock className="h-3 w-3 text-ok" aria-hidden />{cn_}</span> : <span>{t("noTls")}</span>}
                           <span className="hidden sm:inline">· {relTime(h.updated_at, lang)}</span>
                         </div>
+                        <NoteLine notes={h.notes} />
                       </Td>
                       <Td className="hidden md:table-cell">
                         <Mono className="inline-flex items-center gap-1.5 text-fg-muted"><ArrowRight className="h-3 w-3 text-fg-subtle" aria-hidden />{h.forward_scheme}://{h.forward_host}:{h.forward_port}</Mono>
@@ -395,6 +397,8 @@ export default function ProxyHosts() {
               {(id) => <Textarea id={id} rows={7} spellCheck={false} readOnly={!isAdmin} className={cn("font-mono text-xs leading-5", !isAdmin && "bg-surface-2 text-fg-muted")} value={f.advanced_config} onChange={(e) => set({ advanced_config: e.target.value })} placeholder={"# proxy_set_header X-Foo bar;"} invalid={!!fieldErr(error, "advanced_config")} />}
             </IdField>
           </FormSection>
+
+          <NotesSection value={f.notes ?? ""} onChange={(v) => set({ notes: v })} error={error} disabled={!can} />
 
           <FormSection title={t("status")}>
             <SwitchRow label={t("enabled")} description={t("hostEnabledDesc")} checked={f.enabled} onChange={(v) => set({ enabled: v })} />

@@ -4,6 +4,7 @@ import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
 import { streamsStrings } from "./streams.i18n";
+import { notesStrings } from "./notes.i18n";
 import { headersStrings } from "./headers.i18n";
 import { locationsStrings } from "./locations.i18n";
 import { limitsStrings } from "./limits.i18n";
@@ -213,6 +214,7 @@ export const en: Record<keyof typeof ko, string> = {
   ...tokensStrings.en,
   ...redirectsStrings.en,
   ...streamsStrings.en,
+  ...notesStrings.en,
   ...headersStrings.en,
   ...locationsStrings.en,
   ...limitsStrings.en,

@@ -15,6 +15,7 @@
 | **프로토콜** | TCP, UDP 또는 둘 다 |
 | **전달 대상** | 서비스의 호스트 / IP와 포트(프록시 호스트와 같은 [전달 대상](proxy-hosts.md#forward-targets)) |
 | **인증서** | 선택 사항, TCP 전용: Corvus가 TLS를 종료하고 평문 TCP로 전달합니다. 인증서가 발급되면 TCP 포트가 열립니다 |
+| **메모** | 선택 사항, 사람이 보는 용도([프록시 호스트와 같음](proxy-hosts.md#notes)) |
 
 ## 포트 공개 { #publish-the-port }
 

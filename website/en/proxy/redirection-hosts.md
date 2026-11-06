@@ -15,6 +15,7 @@ Click **Add redirection** and set:
 | **Status code** | `301` permanent (default), `302` temporary, `303`, `307` / `308` (keep the request method) |
 | **Preserve path** | Appends the request path and query to the target: `old.example.com/a?b=1` → `new.example.com/a?b=1`. When off, every request goes to the target address |
 | **TLS** | Certificate, Force HTTPS and HTTP/2, as for proxy hosts |
+| **Notes** | Optional, for people only ([as for proxy hosts](proxy-hosts.md#notes)) |
 
 IP bans, security rules that apply to all hosts, and exploit-path blocking protect redirection hosts
 too.

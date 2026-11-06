@@ -4,6 +4,7 @@ import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
 import { streamsStrings } from "./streams.i18n";
+import { notesStrings } from "./notes.i18n";
 import { headersStrings } from "./headers.i18n";
 import { locationsStrings } from "./locations.i18n";
 import { limitsStrings } from "./limits.i18n";
@@ -313,6 +314,7 @@ export const de: Partial<Record<keyof typeof ko, string>> = {
   ...tokensStrings.de,
   ...redirectsStrings.de,
   ...streamsStrings.de,
+  ...notesStrings.de,
   ...headersStrings.de,
   ...locationsStrings.de,
   ...limitsStrings.de,

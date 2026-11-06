@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, ArrowRight, Copy, ExternalLink, Loader2, Lock, Pencil, Plus, ShieldAlert, Signpost, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, type Certificate, type RedirectionHost, type RedirectScheme } from "../api";
+import { NoteLine, NotesSection, notesMatch } from "../components/NotesField";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Badge, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
@@ -22,7 +23,7 @@ type Form = Omit<RedirectionHost, "id" | "created_at" | "updated_at">;
 
 const blank: Form = {
   domains: [], forward_scheme: "auto", forward_domain: "", http_code: 301, preserve_path: true, certificate_id: null,
-  ssl_forced: false, http2: true, block_exploits: true, advanced_config: "", enabled: true,
+  ssl_forced: false, http2: true, block_exploits: true, advanced_config: "", enabled: true, notes: "",
 };
 
 const CODES: { code: number; label: Key }[] = [
@@ -61,7 +62,7 @@ export default function RedirectionHosts() {
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return hosts.data ?? [];
-    return (hosts.data ?? []).filter((h) => h.domains.some((d) => d.toLowerCase().includes(s)) || h.forward_domain.toLowerCase().includes(s));
+    return (hosts.data ?? []).filter((h) => h.domains.some((d) => d.toLowerCase().includes(s)) || h.forward_domain.toLowerCase().includes(s) || notesMatch(h.notes, s));
   }, [hosts.data, q]);
 
   const open = (h?: RedirectionHost) => { setError(null); setEditing({ id: h?.id ?? null, form: h ? toForm(h) : { ...blank }, req: null }); };
@@ -135,6 +136,7 @@ export default function RedirectionHosts() {
                           {cn_ ? <span className="inline-flex items-center gap-1"><Lock className="h-3 w-3 text-ok" aria-hidden />{cn_}</span> : <span>{t("noTls")}</span>}
                           <span className="hidden sm:inline">· {relTime(h.updated_at, lang)}</span>
                         </div>
+                        <NoteLine notes={h.notes} />
                       </Td>
                       <Td className="hidden md:table-cell">
                         <Mono className="inline-flex items-center gap-1.5 text-fg-muted"><Badge>{h.http_code}</Badge><ArrowRight className="h-3 w-3 text-fg-subtle" aria-hidden />{target(h)}</Mono>
@@ -241,6 +243,8 @@ export default function RedirectionHosts() {
               {(id) => <Textarea id={id} rows={5} spellCheck={false} readOnly={!isAdmin} className={cn("font-mono text-xs leading-5", !isAdmin && "bg-surface-2 text-fg-muted")} value={f.advanced_config} onChange={(e) => set({ advanced_config: e.target.value })} placeholder={"# add_header X-Robots-Tag noindex;"} invalid={!!fieldErr(error, "advanced_config")} />}
             </IdField>
           </FormSection>
+
+          <NotesSection value={f.notes ?? ""} onChange={(v) => set({ notes: v })} error={error} disabled={!can} />
 
           <FormSection title={t("status")}>
             <SwitchRow label={t("enabled")} description={t("redirectEnabledDesc")} checked={f.enabled} onChange={(v) => set({ enabled: v })} />

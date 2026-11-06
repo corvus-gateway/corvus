@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ArrowRight, Cable, Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import { api, type Certificate, type Stream } from "../api";
+import { NoteLine, NotesSection, notesMatch } from "../components/NotesField";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Badge, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
@@ -15,7 +16,7 @@ import { relTime } from "../lib/utils";
 type Form = Omit<Stream, "id" | "created_at" | "updated_at">;
 type Proto = "tcp" | "udp" | "both";
 
-const blank: Form = { incoming_port: NaN, tcp_forwarding: true, udp_forwarding: false, forward_host: "", forward_port: NaN, certificate_id: null, enabled: true };
+const blank: Form = { incoming_port: NaN, tcp_forwarding: true, udp_forwarding: false, forward_host: "", forward_port: NaN, certificate_id: null, enabled: true, notes: "" };
 
 function toForm(s: Stream): Form {
   const { id: _i, created_at: _c, updated_at: _u, ...rest } = s;
@@ -42,7 +43,7 @@ export default function Streams() {
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return streams.data ?? [];
-    return (streams.data ?? []).filter((x) => String(x.incoming_port).includes(s) || x.forward_host.toLowerCase().includes(s) || String(x.forward_port).includes(s));
+    return (streams.data ?? []).filter((x) => String(x.incoming_port).includes(s) || x.forward_host.toLowerCase().includes(s) || String(x.forward_port).includes(s) || notesMatch(x.notes, s));
   }, [streams.data, q]);
 
   const open = (s?: Stream) => { setError(null); setEditing({ id: s?.id ?? null, form: s ? toForm(s) : { ...blank } }); };
@@ -97,6 +98,7 @@ export default function Streams() {
                       <Td>
                         <div className="flex items-center gap-2"><Mono className="font-medium text-fg">{s.incoming_port}</Mono><Badge>{protoLabel(s)}</Badge></div>
                         <div className="mt-0.5 text-xs text-fg-subtle">{relTime(s.updated_at, lang)}</div>
+                        <NoteLine notes={s.notes} />
                       </Td>
                       <Td className="hidden md:table-cell">
                         <Mono className="inline-flex items-center gap-1.5 text-fg-muted"><ArrowRight className="h-3 w-3 text-fg-subtle" aria-hidden />{s.forward_host}:{s.forward_port}</Mono>
@@ -160,6 +162,8 @@ export default function Streams() {
               )}
             </IdField>
           </FormSection>
+
+          <NotesSection value={f.notes ?? ""} onChange={(v) => set({ notes: v })} error={error} disabled={!can} />
 
           <FormSection title={t("status")}>
             <SwitchRow label={t("enabled")} description={t("streamEnabledDesc")} checked={f.enabled} onChange={(v) => set({ enabled: v })} />

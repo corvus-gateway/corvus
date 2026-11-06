@@ -22,18 +22,19 @@ type RedirectionHost struct {
 	BlockExploits  bool      `json:"block_exploits"`
 	AdvancedConfig string    `json:"advanced_config"`
 	Enabled        bool      `json:"enabled"`
+	Notes          string    `json:"notes"` // free text for people; not used by the gateway
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
-const rhCols = `id, domains, forward_scheme, forward_domain, http_code, preserve_path, certificate_id, ssl_forced, http2, block_exploits, advanced_config, enabled, created_at, updated_at`
+const rhCols = `id, domains, forward_scheme, forward_domain, http_code, preserve_path, certificate_id, ssl_forced, http2, block_exploits, advanced_config, enabled, notes, created_at, updated_at`
 
 func scanRedirectionHost(row interface{ Scan(...any) error }) (*RedirectionHost, error) {
 	h := &RedirectionHost{}
 	var domains string
 	var pp, ssl, h2, be, en int
 	var cert sql.NullInt64
-	if err := row.Scan(&h.ID, &domains, &h.ForwardScheme, &h.ForwardDomain, &h.HTTPCode, &pp, &cert, &ssl, &h2, &be, &h.AdvancedConfig, &en, &h.CreatedAt, &h.UpdatedAt); err != nil {
+	if err := row.Scan(&h.ID, &domains, &h.ForwardScheme, &h.ForwardDomain, &h.HTTPCode, &pp, &cert, &ssl, &h2, &be, &h.AdvancedConfig, &en, &h.Notes, &h.CreatedAt, &h.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -71,10 +72,10 @@ func (s *Store) RedirectionHostByID(ctx context.Context, id int64) (*Redirection
 func (s *Store) SaveRedirectionHost(ctx context.Context, h *RedirectionHost) error {
 	t := now()
 	if h.ID == 0 {
-		res, err := s.q.ExecContext(ctx, `INSERT INTO redirection_hosts(domains, forward_scheme, forward_domain, http_code, preserve_path, certificate_id, ssl_forced, http2, block_exploits, advanced_config, enabled, created_at, updated_at)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		res, err := s.q.ExecContext(ctx, `INSERT INTO redirection_hosts(domains, forward_scheme, forward_domain, http_code, preserve_path, certificate_id, ssl_forced, http2, block_exploits, advanced_config, enabled, notes, created_at, updated_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			toJSON(h.Domains), h.ForwardScheme, h.ForwardDomain, h.HTTPCode, b2i(h.PreservePath), h.CertificateID, b2i(h.SSLForced), b2i(h.HTTP2),
-			b2i(h.BlockExploits), h.AdvancedConfig, b2i(h.Enabled), t, t)
+			b2i(h.BlockExploits), h.AdvancedConfig, b2i(h.Enabled), h.Notes, t, t)
 		if err != nil {
 			return err
 		}
@@ -82,9 +83,9 @@ func (s *Store) SaveRedirectionHost(ctx context.Context, h *RedirectionHost) err
 		h.CreatedAt, h.UpdatedAt = t, t
 		return nil
 	}
-	res, err := s.q.ExecContext(ctx, `UPDATE redirection_hosts SET domains=?, forward_scheme=?, forward_domain=?, http_code=?, preserve_path=?, certificate_id=?, ssl_forced=?, http2=?, block_exploits=?, advanced_config=?, enabled=?, updated_at=? WHERE id=?`,
+	res, err := s.q.ExecContext(ctx, `UPDATE redirection_hosts SET domains=?, forward_scheme=?, forward_domain=?, http_code=?, preserve_path=?, certificate_id=?, ssl_forced=?, http2=?, block_exploits=?, advanced_config=?, enabled=?, notes=?, updated_at=? WHERE id=?`,
 		toJSON(h.Domains), h.ForwardScheme, h.ForwardDomain, h.HTTPCode, b2i(h.PreservePath), h.CertificateID, b2i(h.SSLForced), b2i(h.HTTP2),
-		b2i(h.BlockExploits), h.AdvancedConfig, b2i(h.Enabled), t, h.ID)
+		b2i(h.BlockExploits), h.AdvancedConfig, b2i(h.Enabled), h.Notes, t, h.ID)
 	if err != nil {
 		return err
 	}

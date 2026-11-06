@@ -90,6 +90,8 @@ export interface ProxyHost {
   /** Upstream read/send timeout in seconds; null = default (60 s, WebSocket 1 h). */
   upstream_timeout_s?: number | null;
   gzip?: boolean;
+  /** Free text shown in the console only. */
+  notes?: string;
   under_attack?: UnderAttackMode;
   under_attack_config?: UnderAttackConfig;
   locations?: ProxyLocation[];
@@ -122,13 +124,13 @@ export type RedirectScheme = "auto" | "http" | "https";
 export interface RedirectionHost {
   id: number; domains: string[]; forward_scheme: RedirectScheme; forward_domain: string; http_code: number; preserve_path: boolean;
   certificate_id: number | null; ssl_forced: boolean; http2: boolean; block_exploits: boolean; advanced_config: string; enabled: boolean;
-  created_at: string; updated_at: string;
+  notes?: string; created_at: string; updated_at: string;
 }
 
 /** TCP/UDP port forwarding (GET /api/streams). */
 export interface Stream {
   id: number; incoming_port: number; tcp_forwarding: boolean; udp_forwarding: boolean; forward_host: string; forward_port: number;
-  certificate_id: number | null; enabled: boolean; created_at: string; updated_at: string;
+  certificate_id: number | null; enabled: boolean; notes?: string; created_at: string; updated_at: string;
 }
 
 export interface LiveStats { name: string; available: boolean; active: number; waiting: number; capacity: number }

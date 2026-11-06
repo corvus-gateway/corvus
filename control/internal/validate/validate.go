@@ -64,6 +64,7 @@ const (
 
 func ProxyHost(h *store.ProxyHost) error {
 	var errs Errors
+	notes(&errs, &h.Notes)
 	switch h.BodyInspection {
 	case "":
 		h.BodyInspection = "log" // baseline: detect (log only) unless explicitly turned off
@@ -178,6 +179,7 @@ var redirectTargetRe = regexp.MustCompile(`^(` + labelRe + `\.)*` + labelRe + `(
 // RedirectionHost normalizes and validates a redirection host in place.
 func RedirectionHost(h *store.RedirectionHost) error {
 	var errs Errors
+	notes(&errs, &h.Notes)
 	h.Domains = hostDomains(&errs, h.Domains)
 	h.ForwardScheme = strings.ToLower(strings.TrimSpace(h.ForwardScheme))
 	if h.ForwardScheme == "" || h.ForwardScheme == "$scheme" {

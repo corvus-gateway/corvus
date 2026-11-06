@@ -89,6 +89,14 @@ Attach an [access queue](../access-queue.md) and choose the **Protected path** (
 | **Gzip compression** | On | Compresses text responses (HTML, CSS, JS, JSON …). Responses that are already compressed pass unchanged |
 | **Advanced nginx config** | empty | Nginx directives inserted into the host's `server` block (administrators only) |
 
+### Notes
+
+![Notes section](../img/proxy-host-notes.png){ .shot .panel }
+
+Optional free text, up to 1000 characters: what the host is for, who asked for it, why it has a
+special rule. The first line is shown under the domain in the list, and the search box also
+searches notes. Notes are only shown in the console; they don't change the gateway configuration.
+
 ### Status
 
 When **Enabled** is off, the host's settings are kept but it is removed from the gateway.

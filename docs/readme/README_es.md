@@ -55,6 +55,7 @@ OpenResty, plano de control en Go, consola en React) que puede **importar una co
 
 **Proxy y TLS**
 - Hosts proxy con comodines, WebSocket, HTTP/2, HTTPS forzado y fragmentos de Nginx personalizados
+- Notas en hosts y streams para recordar para qué sirve cada uno (con búsqueda)
 - Ubicaciones personalizadas: rutas (p. ej. `/api`) hacia su propio upstream, con las protecciones del host
 - Hosts de redirección: envíe dominios a otro dominio (301/302/303/307/308, conservando opcionalmente la ruta), con el mismo TLS y la misma protección
 - Certificados gratuitos de Let's Encrypt (HTTP-01 o DNS-01 mediante Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap, con credenciales del proveedor guardadas y reutilizables) con renovación automática, o suba los suyos (y reemplácelos en su sitio al renovarlos)

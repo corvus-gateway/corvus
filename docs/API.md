@@ -129,9 +129,12 @@ Proxy host fields: `domains` (array), `forward_scheme` (`http`/`https`), `forwar
 `client_ip` (`direct`, `cloudflare`, `trusted_proxies`), `waitroom_id`, `waitroom_path`,
 `rate_limit_id`, `access_list_id` or `basic_auth`, `block_exploits`, `body_inspection`
 (`off`, `log`, `block`), `body_max_kb`, `security_headers`, `under_attack`, `under_attack_config`,
-`max_upload_mb`, `upstream_timeout_s`, `gzip`, `advanced_config`, `locations`, `enabled`.
-`under_attack`, `under_attack_config` and `locations` keep their stored value when omitted from a
-`PUT` (`"locations": []` removes all locations).
+`max_upload_mb`, `upstream_timeout_s`, `gzip`, `advanced_config`, `locations`, `notes`, `enabled`.
+`under_attack`, `under_attack_config`, `locations` and `notes` keep their stored value when omitted
+from a `PUT` (`"locations": []` removes all locations).
+
+`notes` (proxy hosts, redirection hosts and streams) is free text for people, at most 1000
+characters; it is not used by the gateway configuration.
 
 | Field | Default | Meaning |
 |---|---|---|

@@ -17,17 +17,18 @@ type Stream struct {
 	ForwardPort   int       `json:"forward_port"`
 	CertificateID *int64    `json:"certificate_id"` // TLS termination (TCP only); nil = plain
 	Enabled       bool      `json:"enabled"`
+	Notes         string    `json:"notes"` // free text for people; not used by the gateway
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
-const streamCols = `id, incoming_port, tcp_forwarding, udp_forwarding, forward_host, forward_port, certificate_id, enabled, created_at, updated_at`
+const streamCols = `id, incoming_port, tcp_forwarding, udp_forwarding, forward_host, forward_port, certificate_id, enabled, notes, created_at, updated_at`
 
 func scanStream(row interface{ Scan(...any) error }) (*Stream, error) {
 	st := &Stream{}
 	var tcp, udp, en int
 	var cert sql.NullInt64
-	if err := row.Scan(&st.ID, &st.IncomingPort, &tcp, &udp, &st.ForwardHost, &st.ForwardPort, &cert, &en, &st.CreatedAt, &st.UpdatedAt); err != nil {
+	if err := row.Scan(&st.ID, &st.IncomingPort, &tcp, &udp, &st.ForwardHost, &st.ForwardPort, &cert, &en, &st.Notes, &st.CreatedAt, &st.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -64,9 +65,9 @@ func (s *Store) StreamByID(ctx context.Context, id int64) (*Stream, error) {
 func (s *Store) SaveStream(ctx context.Context, st *Stream) error {
 	t := now()
 	if st.ID == 0 {
-		res, err := s.q.ExecContext(ctx, `INSERT INTO streams(incoming_port, tcp_forwarding, udp_forwarding, forward_host, forward_port, certificate_id, enabled, created_at, updated_at)
-			VALUES (?,?,?,?,?,?,?,?,?)`,
-			st.IncomingPort, b2i(st.TCP), b2i(st.UDP), st.ForwardHost, st.ForwardPort, st.CertificateID, b2i(st.Enabled), t, t)
+		res, err := s.q.ExecContext(ctx, `INSERT INTO streams(incoming_port, tcp_forwarding, udp_forwarding, forward_host, forward_port, certificate_id, enabled, notes, created_at, updated_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?)`,
+			st.IncomingPort, b2i(st.TCP), b2i(st.UDP), st.ForwardHost, st.ForwardPort, st.CertificateID, b2i(st.Enabled), st.Notes, t, t)
 		if err != nil {
 			return err
 		}
@@ -74,8 +75,8 @@ func (s *Store) SaveStream(ctx context.Context, st *Stream) error {
 		st.CreatedAt, st.UpdatedAt = t, t
 		return nil
 	}
-	res, err := s.q.ExecContext(ctx, `UPDATE streams SET incoming_port=?, tcp_forwarding=?, udp_forwarding=?, forward_host=?, forward_port=?, certificate_id=?, enabled=?, updated_at=? WHERE id=?`,
-		st.IncomingPort, b2i(st.TCP), b2i(st.UDP), st.ForwardHost, st.ForwardPort, st.CertificateID, b2i(st.Enabled), t, st.ID)
+	res, err := s.q.ExecContext(ctx, `UPDATE streams SET incoming_port=?, tcp_forwarding=?, udp_forwarding=?, forward_host=?, forward_port=?, certificate_id=?, enabled=?, notes=?, updated_at=? WHERE id=?`,
+		st.IncomingPort, b2i(st.TCP), b2i(st.UDP), st.ForwardHost, st.ForwardPort, st.CertificateID, b2i(st.Enabled), st.Notes, t, st.ID)
 	if err != nil {
 		return err
 	}
