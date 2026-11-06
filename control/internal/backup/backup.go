@@ -515,6 +515,17 @@ func Confirm(dataDir string) (*Manifest, error) {
 }
 
 // Discard removes an unconfirmed upload and a confirmed, not yet applied restore.
+// DiscardUpload removes an uploaded backup that was not confirmed yet; a restore already
+// confirmed (pending) is kept.
+func DiscardUpload(dataDir string) error {
+	for _, d := range []string{UploadDir, UploadDir + ".tmp"} {
+		if err := os.RemoveAll(filepath.Join(dataDir, d)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func Discard(dataDir string) error {
 	for _, d := range []string{UploadDir, UploadDir + ".tmp", PendingDir} {
 		if err := os.RemoveAll(filepath.Join(dataDir, d)); err != nil {

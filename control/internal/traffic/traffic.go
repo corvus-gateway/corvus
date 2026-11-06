@@ -48,7 +48,20 @@ const (
 	pathMinutes = 60
 	pathCap     = 2000
 	ipCap       = 20000
+	srcStep     = 10    // seconds
+	srcSlots    = 360   // one hour
+	srcIPCap    = 20000 // client IPs tracked per slot
 )
+
+type srcSlot struct {
+	start int64
+	ips   map[string]*srcAct
+}
+
+type srcAct struct {
+	kinds map[string]int64
+	hosts map[string]bool
+}
 
 // latency histogram upper bounds in milliseconds (last bucket = +Inf)
 var latBounds = []float64{1, 2, 3, 5, 8, 12, 18, 27, 40, 60, 90, 135, 200, 300, 450, 700, 1000, 1500, 2200, 3300, 5000, 7500, 11000, 16000, 24000, 36000, 60000}
@@ -198,6 +211,10 @@ type Collector struct {
 	events  []Event
 	evIndex map[string]int // key → index in events for the current minute
 	evMin   int64
+	// event counts per client IP in 10-second slots, for automatic bans and alerts:
+	// unlike the display ring above (eventCap entries), it keeps the full hour during a
+	// wide attack
+	src     [srcSlots]srcSlot
 	started time.Time
 	dropped int64
 
@@ -462,6 +479,7 @@ func (c *Collector) Add(r *Record) {
 			c.events = append(c.events, Event{TS: r.T, Kind: kind, Host: r.H, Path: r.U, IP: r.IP, Rule: r.X, Count: 1, seq: c.evSeq})
 			c.evIndex[ek] = len(c.events) - 1
 		}
+		c.countSource(ts, kind, r.H, r.IP, 1)
 	}
 }
 
@@ -913,19 +931,31 @@ func (c *Collector) EventsByIP(since time.Time, kinds ...string) map[string]*Sou
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	out := map[string]*SourceActivity{}
-	ts := float64(since.UnixMilli()) / 1000
-	for _, e := range c.events {
-		if !want[e.Kind] || e.TS < ts || e.IP == "" {
+	// 10-second slots that start at or after since: the partly covered first slot is
+	// left out (an undercount of at most 10 s, never counting events from before since)
+	from := float64(since.UnixMilli()) / 1000
+	for i := range c.src {
+		b := &c.src[i]
+		if b.ips == nil || float64(b.start) < from {
 			continue
 		}
-		a := out[e.IP]
-		if a == nil {
-			a = &SourceActivity{Hosts: map[string]bool{}, Kinds: map[string]bool{}}
-			out[e.IP] = a
+		for ip, s := range b.ips {
+			for k, n := range s.kinds {
+				if !want[k] {
+					continue
+				}
+				a := out[ip]
+				if a == nil {
+					a = &SourceActivity{Hosts: map[string]bool{}, Kinds: map[string]bool{}}
+					out[ip] = a
+				}
+				a.Count += n
+				a.Kinds[k] = true
+				for h := range s.hosts {
+					a.Hosts[h] = true
+				}
+			}
 		}
-		a.Count += e.Count
-		a.Hosts[e.Host] = true
-		a.Kinds[e.Kind] = true
 	}
 	return out
 }
@@ -956,4 +986,30 @@ func (c *Collector) Window(host string, d time.Duration, now time.Time) (request
 		}
 	}
 	return requests, blocked, n * fineStep
+}
+
+// countSource adds n events of kind from ip at unix time ts to the per-IP slots (caller
+// holds c.mu). Slots older than an hour are overwritten.
+func (c *Collector) countSource(ts int64, kind, host, ip string, n int64) {
+	if ip == "" || n <= 0 {
+		return
+	}
+	start := ts - ts%srcStep
+	b := &c.src[(start/srcStep)%srcSlots]
+	if b.start != start || b.ips == nil {
+		if b.start > start && b.ips != nil {
+			return // a newer slot already uses this place (restored event older than an hour)
+		}
+		b.start, b.ips = start, map[string]*srcAct{}
+	}
+	a := b.ips[ip]
+	if a == nil {
+		if len(b.ips) >= srcIPCap {
+			return
+		}
+		a = &srcAct{kinds: map[string]int64{}, hosts: map[string]bool{}}
+		b.ips[ip] = a
+	}
+	a.kinds[kind] += n
+	a.hosts[host] = true
 }

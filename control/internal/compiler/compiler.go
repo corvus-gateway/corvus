@@ -92,10 +92,10 @@ type Compiler struct {
 
 type hostView struct {
 	store.ProxyHost
-	Room            *store.Waitroom
+	Room *store.Waitroom
 	// RoomEndpoints is the room the host is attached to, also while it is disabled, so
 	// visitors still on the waiting page learn that they can go in.
-	RoomEndpoints *store.Waitroom
+	RoomEndpoints   *store.Waitroom
 	CertDir         string
 	HasRootLocation bool
 	Upstream        string // forward host address (see upstreamAddr)

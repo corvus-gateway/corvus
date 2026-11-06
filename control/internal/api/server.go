@@ -494,6 +494,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Limiter.Reset(ip)
+	s.AcctLimiter.Reset(acct) // earlier failures no longer count against the account
 	if err := s.setSession(w, r, u); err != nil {
 		fail(w, err)
 		return

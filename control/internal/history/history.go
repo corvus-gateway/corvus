@@ -85,6 +85,7 @@ type Service struct {
 	lines   chan []byte
 	dropped atomic.Int64
 	mode    atomic.Value // string: current log mode (read on the hot path)
+	openLog atomic.Value // string: path of the day file writeLogs is appending to
 
 	mu       sync.Mutex
 	coarseAt int64 // last persisted bucket start
@@ -338,6 +339,7 @@ func (s *Service) writeLogs(ctx context.Context) {
 		}
 		w = bufio.NewWriterSize(f, 256<<10)
 		day = d
+		s.openLog.Store(f.Name())
 	}
 	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()
@@ -378,8 +380,17 @@ func (s *Service) writeLogs(ctx context.Context) {
 	}
 }
 
+// compressMu serialises compression: the midnight rotation, the hourly cleanup and a
+// retention change may pick the same file, and two writers of one .gz.tmp corrupt it.
+var compressMu sync.Mutex
+
 // compress gzips a finished day file and removes the original.
 func compress(path string) {
+	compressMu.Lock()
+	defer compressMu.Unlock()
+	if _, err := os.Stat(path); err != nil {
+		return // already compressed by an earlier call
+	}
 	in, err := os.Open(path)
 	if err != nil {
 		return
@@ -477,8 +488,9 @@ func (s *Service) cleanup(ctx context.Context, now time.Time) {
 		m := logName.FindStringSubmatch(a.Name)
 		if m[1] < cutDay {
 			os.Remove(filepath.Join(s.logDir(), a.Name))
-		} else if m[2] == "" && m[1] < today {
-			compress(filepath.Join(s.logDir(), a.Name))
+		} else if p := filepath.Join(s.logDir(), a.Name); m[2] == "" && m[1] < today && p != s.openLog.Load() {
+			// not the file still being written (just after midnight, before rotation)
+			compress(p)
 		}
 	}
 	arch := s.Archives()

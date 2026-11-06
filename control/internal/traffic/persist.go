@@ -103,6 +103,7 @@ func (c *Collector) RestoreEvents(evs []Event) int64 {
 		c.evSeq++
 		e.seq = c.evSeq
 		c.events = append(c.events, e)
+		c.countSource(int64(e.TS), e.Kind, e.Host, e.IP, e.Count)
 	}
 	return c.evSeq
 }

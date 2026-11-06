@@ -268,6 +268,31 @@ func run() error {
 		slog.Warn("traffic collector disabled", "err", err)
 	}
 
+	// Traffic history: statistics/events survive restarts; request logs are archived
+	// per day (compressed) with retention by age and total size. Restored before the
+	// gateway starts, so live events come after the restored ones.
+	stopHistory := func() {}
+	hist := &history.Service{Dir: filepath.Join(dataDir, "history"), Store: st, Collector: tc}
+	if err := hist.Open(ctx); err != nil {
+		slog.Warn("traffic history disabled", "err", err)
+		hist = nil
+	} else {
+		hist.Restore(ctx, time.Now())
+		tc.Sink = hist.Sink
+		// own context, so shutdown can wait for the final save (see stopHistory below)
+		histCtx, histStop := context.WithCancel(context.Background())
+		histDone := make(chan struct{})
+		go func() { hist.Run(histCtx); close(histDone) }()
+		stopHistory = func() {
+			histStop()
+			select {
+			case <-histDone:
+			case <-time.After(15 * time.Second):
+				slog.Warn("traffic history: final save timed out")
+			}
+		}
+	}
+
 	// Managed rule bundle: body signatures + virtual-patch templates (signed updates).
 	rulesSvc := &sigs.Service{Dir: filepath.Join(dataDir, "rules"), Store: st}
 	if err := rulesSvc.Init(); err != nil {
@@ -359,7 +384,7 @@ func run() error {
 	acmeSvc := &acme.Service{Store: st, Key: dataKey, CertDir: paths.CertDir, Directory: env("CORVUS_ACME_DIRECTORY", ""),
 		DirectorySuffix: env("CORVUS_ACME_DIRECTORY_SUFFIX", ""),
 		OnIssued: func(ctx context.Context) {
-			if _, err := dep.Apply(ctx, nil, "certificate issued/renewed", nil); err != nil {
+			if err := dep.Refresh(ctx, "certificate issued/renewed"); err != nil {
 				slog.Error("redeploy after certificate issuance failed", "err", err)
 			}
 		}}
@@ -380,38 +405,14 @@ func run() error {
 	geo := &geoip.Service{Dir: filepath.Join(dataDir, "geoip"), URL: env("CORVUS_GEOIP_URL", ""),
 		Disabled: strings.EqualFold(env("CORVUS_GEOIP", "on"), "off"),
 		OnUpdated: func(ctx context.Context) {
-			if _, err := dep.Apply(ctx, nil, "country database updated", nil); err != nil {
+			if err := dep.Refresh(ctx, "country database updated"); err != nil {
 				slog.Error("redeploy after country database update failed", "err", err)
 			}
 		}}
 	go geo.Run(ctx)
 
-	// Traffic history: statistics/events survive restarts; request logs are archived
-	// per day (compressed) with retention by age and total size.
-	stopHistory := func() {}
-	hist := &history.Service{Dir: filepath.Join(dataDir, "history"), Store: st, Collector: tc}
-	if err := hist.Open(ctx); err != nil {
-		slog.Warn("traffic history disabled", "err", err)
-		hist = nil
-	} else {
-		hist.Restore(ctx, time.Now())
-		tc.Sink = hist.Sink
-		// own context, so shutdown can wait for the final save (see stopHistory below)
-		histCtx, histStop := context.WithCancel(context.Background())
-		histDone := make(chan struct{})
-		go func() { hist.Run(histCtx); close(histDone) }()
-		stopHistory = func() {
-			histStop()
-			select {
-			case <-histDone:
-			case <-time.After(15 * time.Second):
-				slog.Warn("traffic history: final save timed out")
-			}
-		}
-	}
-
 	rulesSvc.OnUpdated = func(ctx context.Context) {
-		if _, err := dep.Apply(ctx, nil, "rule bundle updated", nil); err != nil {
+		if err := dep.Refresh(ctx, "rule bundle updated"); err != nil {
 			slog.Error("redeploy after rule bundle update failed", "err", err)
 		}
 	}
@@ -434,6 +435,11 @@ func run() error {
 
 	// Lists fed from a URL (e.g. Tor exit nodes, bad-bot User-Agents).
 	listFeeds := &feeds.Service{Store: st, Apply: func(ctx context.Context, msg string, mutate func(tx *store.Store) error) error {
+		if dep.RollbackActive(ctx) {
+			// keep the operator's rollback: store the new list, deploy it later
+			slog.Warn("rollback active: list stored, not deployed", "reason", msg)
+			return st.WithTx(ctx, mutate)
+		}
 		_, err := dep.Apply(ctx, nil, msg, mutate)
 		return err
 	}}

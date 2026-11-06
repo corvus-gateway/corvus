@@ -85,7 +85,11 @@ func TestErrorRateFireCooldownResolve(t *testing.T) {
 	if h.n() != 1 {
 		t.Fatalf("cooldown violated: %d messages", h.n())
 	}
-	e.Evaluate(ctx, now.Add(20*time.Minute)) // window passed, traffic gone → resolved
+	e.Evaluate(ctx, now.Add(20*time.Minute)) // window passed, traffic gone: one quiet round is not enough
+	if h.n() != 1 {
+		t.Fatalf("resolved after a single quiet round: %d messages", h.n())
+	}
+	e.Evaluate(ctx, now.Add(20*time.Minute+30*time.Second)) // second quiet round → resolved
 	if h.n() != 2 || !strings.Contains(h.msgs[1]["attachments"].([]any)[0].(map[string]any)["title"].(string), "Resolved") {
 		t.Fatalf("expected resolved message, got %d", h.n())
 	}
@@ -168,4 +172,24 @@ func TestWebhookSignatureAndSSRF(t *testing.T) {
 		t.Fatalf("metadata address must be refused: %v", err)
 	}
 	_ = fmt.Sprint
+}
+
+// A condition that drops out for one round and comes back is not resolved and fired again.
+func TestErrorRateFlapping(t *testing.T) {
+	e, tc, h, _ := setup(t)
+	ctx := context.Background()
+	now := time.Now()
+	feed(tc, now, 80, 200)
+	feed(tc, now, 20, 502)
+	e.Evaluate(ctx, now)
+	e.Evaluate(ctx, now.Add(20*time.Minute)) // gone for one round
+	feed(tc, now.Add(20*time.Minute+30*time.Second), 80, 200)
+	feed(tc, now.Add(20*time.Minute+30*time.Second), 20, 502)
+	e.Evaluate(ctx, now.Add(20*time.Minute+30*time.Second)) // back
+	for i := 1; i < h.n(); i++ { // an "ongoing" reminder after the cooldown is fine
+		title := h.msgs[i]["attachments"].([]any)[0].(map[string]any)["title"].(string)
+		if strings.Contains(title, "Resolved") || !strings.Contains(title, "Still firing") {
+			t.Fatalf("flapping condition sent %q", title)
+		}
+	}
 }

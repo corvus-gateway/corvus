@@ -381,6 +381,17 @@ func (s *Store) SetMFA(ctx context.Context, userID int64, enabled bool, recovery
 	return err
 }
 
+// ReplaceRecoveryCodes stores hashes only when the stored value is still old (compare and
+// swap); it reports whether it did.
+func (s *Store) ReplaceRecoveryCodes(ctx context.Context, userID int64, old string, hashes []string) (bool, error) {
+	res, err := s.q.ExecContext(ctx, `UPDATE users SET recovery_codes = ? WHERE id = ? AND recovery_codes = ?`, toJSON(hashes), userID, old)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
+}
+
 func (s *Store) SetRecoveryCodes(ctx context.Context, userID int64, hashes []string) error {
 	_, err := s.q.ExecContext(ctx, `UPDATE users SET recovery_codes = ? WHERE id = ?`, toJSON(hashes), userID)
 	return err
