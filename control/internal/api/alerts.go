@@ -20,8 +20,8 @@ type channelInput struct {
 	MinSeverity string   `json:"min_severity"`
 	Events      []string `json:"events"`
 	URL         string   `json:"url"`
-	Username    string   `json:"username"`
-	Channel     string   `json:"channel"`
+	Username    *string  `json:"username"` // Mattermost; omitted = unchanged
+	Channel     *string  `json:"channel"`  // Mattermost; omitted = unchanged
 	BotToken    string   `json:"bot_token"`
 	ChatID      string   `json:"chat_id"`
 	Secret      string   `json:"secret"`
@@ -79,7 +79,12 @@ func (s *Server) buildChannel(in channelInput, c *store.AlertChannel) error {
 	set(&t.BotToken, in.BotToken)
 	set(&t.ChatID, in.ChatID)
 	set(&t.Secret, in.Secret)
-	t.Username, t.Channel = strings.TrimSpace(in.Username), strings.TrimSpace(in.Channel)
+	if in.Username != nil {
+		t.Username = strings.TrimSpace(*in.Username)
+	}
+	if in.Channel != nil {
+		t.Channel = strings.TrimSpace(*in.Channel)
+	}
 	if c.Kind == "telegram" {
 		t.URL = ""
 	} else {

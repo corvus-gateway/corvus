@@ -141,7 +141,7 @@ function Channels({ res }: { res: ReturnType<typeof useResource<AlertChannel[]>>
       const ch = ((r as { channel?: AlertChannel })?.channel ?? r) as AlertChannel;
       if (ch && typeof ch.id === "number") { setCreated(ch); return; }
     }
-    toast.success(t("save"));
+    toast.success(t("savedOk"));
   };
   const test = async (c: AlertChannel) => {
     try {
@@ -284,6 +284,8 @@ function Rules() {
   return (
     <fieldset disabled={!can} className="min-w-0 space-y-5">
       <ErrorBox error={error} />
+      {/* the API reports rule settings errors under the field "settings" */}
+      {fieldErr(error, "settings") && <p role="alert" className="text-sm text-danger">{fieldErr(error, "settings")}</p>}
       <Card>
         <CardHeader icon={Bell} title={t("globalSettings")} />
         <div className="grid gap-5 px-4 pb-4 pt-1 md:grid-cols-2">
