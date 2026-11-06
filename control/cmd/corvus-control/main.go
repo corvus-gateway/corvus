@@ -288,6 +288,12 @@ func run() error {
 		}}
 	var runner gateway.Runner = gateway.Noop{}
 	var or *gateway.OpenResty
+	// Per-start key with which the gateway marks requests it proxies to the console;
+	// the console trusts X-Forwarded-For from local peers only with it (api.ConsoleProxies).
+	consoleKey := ""
+	if withGateway {
+		consoleKey = auth.RandomToken(32)
+	}
 	dep := &deploy.Deployer{Store: st, Compiler: comp, Dir: filepath.Join(dataDir, "nginx"), Keep: 20}
 	if withGateway {
 		or = &gateway.OpenResty{
@@ -295,7 +301,7 @@ func run() error {
 			CurrentConf: dep.CurrentConf(),
 			StatusURL:   "http://127.0.0.1:9180/version",
 			Env: []string{
-				"CORVUS_WR_SECRET=" + wrSecret, "CORVUS_DEBUG_KEY=" + debugKey,
+				"CORVUS_WR_SECRET=" + wrSecret, "CORVUS_DEBUG_KEY=" + debugKey, "CORVUS_CONSOLE_KEY=" + consoleKey,
 				"CORVUS_REDIS_HOST=" + redisHost, "CORVUS_REDIS_PORT=" + redisPort, "CORVUS_REDIS_SCRIPT=" + redisScript,
 				"CORVUS_REDIS_USER=" + redisUser, "CORVUS_REDIS_PASSWORD=" + redisPass,
 			},
@@ -427,7 +433,7 @@ func run() error {
 		return fmt.Errorf("CORVUS_ADMIN_TRUSTED_PROXIES: %w", err)
 	}
 	srv := &api.Server{Store: st, Deployer: dep, Paths: paths, Live: lv, Setup: setup,
-		Limiter: auth.NewLimiter(10, 10*time.Minute), UI: webui.Handler(), SecureCookie: tlsOn, Version: version, Proxies: api.NewConsoleProxies(adminProxies),
+		Limiter: auth.NewLimiter(10, 10*time.Minute), UI: webui.Handler(), SecureCookie: tlsOn, Version: version, Proxies: api.NewConsoleProxies(adminProxies, consoleKey),
 		AcctLimiter: auth.NewLimiter(10, 15*time.Minute),
 		Traffic:     tc, ACME: acmeSvc, NPMImportDir: env("CORVUS_IMPORT_DIR", "/import"), DataKey: dataKey, MFA: auth.NewMFAChallenges(), GeoIP: geo, AutoBan: ban, UnderAttack: ua, History: hist, Rules: rulesSvc, Feeds: listFeeds}
 	if or != nil {

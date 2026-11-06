@@ -124,6 +124,9 @@ type target struct {
 	Resolve   bool   // Addr is a name: resolved at run time (server … resolve)
 	Path      string // forward path replacing the location prefix ("" = URI unchanged)
 	Websocket bool
+	// Console: the target is on the admin console port, so the request carries the
+	// gateway key that lets the console trust X-Forwarded-For (see api.ConsoleProxies).
+	Console bool
 	// UpstreamTimeoutS is the host's upstream read/send timeout (nil = default).
 	UpstreamTimeoutS *int
 	ErrorCodes       []int
@@ -137,6 +140,7 @@ func (v *hostView) targets(static map[string]string, hostGW string) {
 	mk := func(name, scheme, host string, port int) target {
 		addr := upstreamAddr(host, static, hostGW)
 		return target{Name: name, Scheme: scheme, Addr: addr, Port: port, Resolve: !isIP(addr),
+			Console:   v.P.AdminPort > 0 && port == v.P.AdminPort,
 			Websocket: v.Websocket, UpstreamTimeoutS: v.UpstreamTimeoutS, ErrorCodes: v.ErrorCodes, RateLimit: v.RateLimit}
 	}
 	v.Host = mk(fmt.Sprintf("corvus_up_%d", v.ID), v.ForwardScheme, v.ForwardHost, v.ForwardPort)
