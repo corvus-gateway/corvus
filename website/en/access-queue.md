@@ -38,8 +38,10 @@ Waiting visitors see a page with their position, localized in 8 languages, that 
 ## During the event
 
 - The dashboard and the **Access queues** page show active and waiting visitors live.
-- **Emergency release** lets everyone straight through, for example when the spike is over. **Turn
-  back on** restores the queue.
+- **Emergency release** lets everyone straight through, for example when the spike is over.
+  Visitors still on the waiting page go in automatically. **Turn back on** restores the queue.
+- If the cache DB restarts (for example when Corvus is upgraded), visitors who are already inside
+  stay inside, and the line starts again from the visitors who check in first.
 - An [alert](operations/alerts.md) can notify you when the backlog grows.
 
 ## APIs and apps
@@ -50,7 +52,9 @@ such as `fetch`/XHR calls or apps, get **`429 Too Many Requests`** with a `Retry
 small JSON body while they wait. They don't count as server errors.
 
 !!! warning "Cross-site clients"
-    The admission cookie is `SameSite=Lax`. A client on **another site** (for example a web app on
-    `app.example.org` calling `api.example.com`) won't send it and stays queued. Protect only the
-    paths people open in a browser (e.g. `/` of the web shop) or put the API on a host without a
+    Over HTTPS the queue cookies are `SameSite=None`, so visitors who come back from another site
+    (for example a payment provider's 3-D Secure step) keep their place. Over plain HTTP they are
+    `SameSite=Lax` and such returns are queued again. A web app on **another site** (for example
+    `app.example.org` calling `api.example.com`) must send credentials (`credentials: "include"`);
+    otherwise protect only the paths people open in a browser, or put the API on a host without a
     queue.

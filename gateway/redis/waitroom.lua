@@ -80,6 +80,8 @@ local function promote()
     if seen and (now - seen) <= queue_ttl then
       admit(m, grant_ttl)
       redis.call('ZADD', K_GRANTED, ticket, m)
+      -- the abandonment time for a lapsed turn counts from when the turn lapses
+      redis.call('ZADD', K_SEEN, now + grant_ttl, m)
     else
       redis.call('ZREM', K_SEEN, m)
     end
@@ -141,7 +143,12 @@ if op == 'heartbeat' then
     redis.call('ZADD', K_ACTIVE, 'XX', now + active_ttl, sid)
     return finish(ACTIVE, sid)
   end
-  return finish(NOT_FOUND, sid)
+  -- The gateway only sends a heartbeat for a valid, signed admission token that has not
+  -- expired, so a missing entry means the store lost its state (restart). The visitor
+  -- was inside: let them back in instead of sending them to the back of the line.
+  admit(sid, active_ttl)
+  claimed(sid)
+  return finish(ACTIVE, sid)
 end
 
 if op ~= 'enter' and op ~= 'poll' then

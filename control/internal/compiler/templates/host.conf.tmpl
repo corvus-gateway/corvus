@@ -242,10 +242,10 @@ server {
         content_by_lua_block { require("corvus.rules").upstream_error({{.}}) }
     }
 {{- end}}
-{{- if .Room}}
+{{- if .RoomEndpoints}}
 
-    # Waiting room "{{.Room.Name}}" (capacity {{.Room.Capacity}}, fail-{{.Room.FailMode}})
-    set $corvus_host_room "{{.Room.Name}}";
+    # Waiting room "{{.RoomEndpoints.Name}}" (capacity {{.RoomEndpoints.Capacity}}, fail-{{.RoomEndpoints.FailMode}}{{if not .Room}}, disabled: status endpoints only{{end}})
+    set $corvus_host_room "{{.RoomEndpoints.Name}}";
 
     # Waiting room endpoints get the same access list / exploit / rate-limit guard as
     # the site, plus a dedicated per-IP limit for the status API (F2).
@@ -263,7 +263,7 @@ server {
         add_header Cache-Control "public, max-age=60" always;
         try_files /wait.html =404;
     }
-{{- if ne .WaitroomPath "/"}}
+{{- if and .Room (ne .WaitroomPath "/")}}
 
     # Protected path: case-insensitive and ";"-parameter aware so backends with
     # different path semantics cannot be used to bypass the waiting room (F4).

@@ -271,7 +271,7 @@
   function show(s) {
     st.last = s;
     if (st.first === null || s.rank > st.first) st.first = s.rank;
-    $("rank").textContent = fmt.format(Math.max(0, s.rank));
+    $("rank").textContent = fmt.format(Math.max(0, s.rank - 1)); // rank 1 = first in line, nobody ahead
     $("ticket").textContent = s.ticket ? "#" + fmt.format(s.ticket) : "–";
     $("waiting").textContent = fmt.format(s.waiting || 0) + t("people");
     var e = etaText(s.etaMin);
@@ -330,6 +330,7 @@
     fetch("/__corvus/wr/" + encodeURIComponent(room) + "/status", { credentials: "same-origin", cache: "no-store" })
       .then(function (r) {
         if (r.status === 429) { var e = new Error("busy"); e.busy = true; throw e; }
+        if (r.status === 404) return { status: "active" }; // room removed: nothing to wait for
         if (!r.ok && r.status !== 503) throw new Error(String(r.status));
         return r.json();
       })

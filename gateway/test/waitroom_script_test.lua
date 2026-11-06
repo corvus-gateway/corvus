@@ -140,4 +140,29 @@ run("stats", "")
 eq(zset("granted").e, nil, "an abandoned pending turn is cleaned up")
 eq(run("poll", "e").code, NOT_FOUND, "an abandoned visitor is not restored")
 
+-- ---------------------------------------------------------------- abandonment counts from the lapse
+for k in pairs(db) do db[k] = nil end
+at(1000)
+run("enter", "p")                         -- p inside
+eq(run("enter", "q").code, WAITING, "q waits")
+eq(run("enter", "r").code, WAITING, "r waits behind q")
+at(1100)                                  -- q last checked in at t=1000 (within queue_ttl)
+run("poll", "r")                          -- r keeps polling
+run("release", "p")                       -- q promoted at t=1100, turn lapses at t=1130
+at(1131)
+eq(run("poll", "r").code, ACTIVE, "the lapsed slot goes to r")
+at(1200)                                  -- 200 s after q's last poll, 70 s after the lapse
+local qb = run("poll", "q")
+eq(qb.code .. ":" .. qb.rank, WAITING .. ":1", "q is restored at the front (window counts from the lapse)")
+
+-- ---------------------------------------------------------------- store lost its state
+for k in pairs(db) do db[k] = nil end
+at(2000)
+eq(run("enter", "w").code, ACTIVE, "w inside")
+eq(run("enter", "x").code, WAITING, "x waits")
+for k in pairs(db) do db[k] = nil end    -- Valkey restarted: everything is gone
+eq(run("enter", "x").code, ACTIVE, "after the restart x comes back first and gets the slot")
+eq(run("heartbeat", "w").code, ACTIVE, "w (valid admission token) is let back in, not queued")
+eq(zset("active").w ~= nil, true, "w holds a slot again")
+
 T.done("waitroom_script_test")

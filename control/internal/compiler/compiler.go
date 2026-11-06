@@ -93,6 +93,9 @@ type Compiler struct {
 type hostView struct {
 	store.ProxyHost
 	Room            *store.Waitroom
+	// RoomEndpoints is the room the host is attached to, also while it is disabled, so
+	// visitors still on the waiting page learn that they can go in.
+	RoomEndpoints *store.Waitroom
 	CertDir         string
 	HasRootLocation bool
 	Upstream        string // forward host address (see upstreamAddr)
@@ -245,6 +248,7 @@ type policyRoom struct {
 	MaxQueue  int    `json:"max_queue"`
 	MaxNewIP  int    `json:"max_new_per_ip"`
 	BindIP    bool   `json:"bind_ip"`
+	Enabled   bool   `json:"enabled"`
 }
 
 // Render writes a complete configuration into dir (which must not exist yet).
@@ -267,7 +271,7 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		if err := validate.Waitroom(&rc); err != nil {
 			return fmt.Errorf("access queue %d: %w", r.ID, err)
 		}
-		policy["waitrooms"][r.Name] = policyRoom{r.Capacity, r.ActiveTTL, r.GrantTTL, r.QueueTTL, r.Refresh, r.AdmitRate, r.FailMode, r.MaxQueue, r.MaxNewIP, r.BindIP}
+		policy["waitrooms"][r.Name] = policyRoom{r.Capacity, r.ActiveTTL, r.GrantTTL, r.QueueTTL, r.Refresh, r.AdmitRate, r.FailMode, r.MaxQueue, r.MaxNewIP, r.BindIP, r.Enabled}
 	}
 
 	limits, err := s.ListRateLimits(ctx)
@@ -382,8 +386,11 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		v.GzipOff = !hc.Gzip && !gzipDirective.MatchString(hc.AdvancedConfig)
 		v.CertDir = c.certDir(hc.CertificateID)
 		if hc.WaitroomID != nil {
-			if r := byID[*hc.WaitroomID]; r != nil && r.Enabled {
-				v.Room = r
+			if r := byID[*hc.WaitroomID]; r != nil {
+				v.RoomEndpoints = r
+				if r.Enabled {
+					v.Room = r
+				}
 			}
 		}
 		if hc.RateLimitID != nil {
