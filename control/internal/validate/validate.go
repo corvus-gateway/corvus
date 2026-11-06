@@ -6,6 +6,7 @@ package validate
 import (
 	"fmt"
 	"net"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -231,6 +232,24 @@ var deniedDirective = regexp.MustCompile(`^(?:.*_by_lua(?:_block|_file)?|lua_\S+
 // sensitivePath: root/alias may not expose the data volume or system directories.
 var sensitivePath = regexp.MustCompile(`^/(?:$|data|etc|proc|sys|root|run|usr|opt|tmp|dev|bin|sbin|lib|lib64|home|var/(?:lib|run|log|cache|spool|tmp))(?:/|$)`)
 
+// webRootError checks the directory of a root/alias directive: it must be a literal
+// absolute path (no variables, which are resolved per request) and, once cleaned the
+// way the file system reads it ("//data", "/./data", "/x/../data" are all /data), stay
+// out of the data volume and system directories.
+func webRootError(name, v string) error {
+	v = strings.Trim(v, `"'`)
+	if strings.ContainsAny(v, "$\\") {
+		return fmt.Errorf("%s must be a plain directory path without variables", name)
+	}
+	if !strings.HasPrefix(v, "/") {
+		return fmt.Errorf("%s must be an absolute path", name)
+	}
+	if sensitivePath.MatchString(path.Clean(v)) {
+		return fmt.Errorf("%s may not point to %s", name, v)
+	}
+	return nil
+}
+
 // AdvancedConfig checks raw nginx snippets inserted into a server block. It
 // tokenizes the way nginx does (quotes with escapes, "#" comments only at a
 // token start, ${var} inside tokens) so braces cannot be hidden from the check,
@@ -262,8 +281,10 @@ func AdvancedConfig(s string) error {
 		if deniedDirective.MatchString(name) {
 			return fmt.Errorf("directive %q is not allowed in advanced configuration", stmt[0])
 		}
-		if (name == "root" || name == "alias") && len(stmt) > 1 && sensitivePath.MatchString(strings.Trim(stmt[1], `"'`)) {
-			return fmt.Errorf("%s may not point to %s", name, stmt[1])
+		if (name == "root" || name == "alias") && len(stmt) > 1 {
+			if err := webRootError(name, stmt[1]); err != nil {
+				return err
+			}
 		}
 		return nil
 	}

@@ -20,7 +20,8 @@ hide:
 
 - :material-swap-horizontal: **[NPM을 쓰고 계신가요?](getting-started/migrate-npm.md)**
 
-    프록시 호스트, 인증서, 스트림, 접근 목록을 가져옵니다. NPM 자체는 변경하지 않습니다.
+    [Corvus와 무엇이 다른지](getting-started/compare-npm.md) 확인하고 프록시 호스트, 인증서, 스트림,
+    접근 목록을 가져오세요. NPM 자체는 변경하지 않습니다.
 
 - :material-shield-check: **[보호](security/index.md)**
 
