@@ -280,7 +280,7 @@ func (d *Deployer) rendersSame(ctx context.Context, dirName string) bool {
 		return false
 	}
 	defer os.RemoveAll(tmp)
-	out := filepath.Join(tmp, "v")
+	out := filepath.Join(tmp, dirName) // same name: the gateway reports it as its version
 	if err := d.Compiler.Render(ctx, d.Store, out); err != nil {
 		return false
 	}
@@ -295,7 +295,12 @@ func sameTree(a, b string) bool {
 			return err
 		}
 		rel, _ := filepath.Rel(a, p)
-		files[rel], err = os.ReadFile(p)
+		data, err := os.ReadFile(p)
+		// rendered files name their own directory: compare as if rendered into b
+		for _, form := range []func(string) string{filepath.ToSlash, filepath.FromSlash} {
+			data = bytes.ReplaceAll(data, []byte(form(a)), []byte(form(b)))
+		}
+		files[rel] = data
 		return err
 	})
 	if err != nil {
