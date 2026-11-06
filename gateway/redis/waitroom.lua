@@ -8,12 +8,13 @@
 --   3 seen    ZSET  member=sid  score=last_poll_ms    (abandonment detection)
 --   4 seq     STRING ticket counter
 --   5 rate    HASH  s=epoch_sec n=admitted_in_sec     (admission rate limit)
+--   6 granted ZSET  member=sid  score=ticket          (promoted, turn not yet claimed)
 -- ARGV: op, sid, capacity, active_ttl_ms, grant_ttl_ms, queue_ttl_ms, admit_rate_per_sec(0=off), promote_max, max_queue(0=off)
 -- Returns: {code, rank, ticket, queue_len, active_count}
 --   code: 0=NOT_FOUND 1=ACTIVE 2=WAITING 3=RELEASED 4=FULL (queue at max_queue)
 -- Time comes from Redis TIME so all gateways share one clock.
 
-local K_ACTIVE, K_QUEUE, K_SEEN, K_SEQ, K_RATE = KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[5]
+local K_ACTIVE, K_QUEUE, K_SEEN, K_SEQ, K_RATE, K_GRANTED = KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[5], KEYS[6]
 local op, sid = ARGV[1], ARGV[2]
 local cap = tonumber(ARGV[3])
 local active_ttl = tonumber(ARGV[4])
@@ -37,6 +38,7 @@ local stale = redis.call('ZRANGEBYSCORE', K_SEEN, '-inf', now - queue_ttl, 'LIMI
 for i = 1, #stale do
   redis.call('ZREM', K_QUEUE, stale[i])
   redis.call('ZREM', K_SEEN, stale[i])
+  redis.call('ZREM', K_GRANTED, stale[i])
 end
 
 local rate_sec = math.floor(now / 1000)
@@ -65,18 +67,44 @@ end
 -- Move the head of the FIFO queue into free slots. Waiters that stopped polling
 -- (seen older than queue_ttl) are dropped instead of being granted a slot.
 -- A promoted waiter gets a short grant_ttl; it is extended to active_ttl when claimed.
+-- Until then it stays in `granted` (with its ticket) and `seen`, so a turn that lapses
+-- before the visitor checks in again is not lost: see restore_lapsed().
 local function promote()
   local scanned = 0
   while scanned < promote_max and budget() > 0 do
     local head = redis.call('ZPOPMIN', K_QUEUE)
     if #head == 0 then break end
     scanned = scanned + 1
-    local m = head[1]
+    local m, ticket = head[1], head[2]
     local seen = tonumber(redis.call('ZSCORE', K_SEEN, m))
-    redis.call('ZREM', K_SEEN, m)
     if seen and (now - seen) <= queue_ttl then
       admit(m, grant_ttl)
+      redis.call('ZADD', K_GRANTED, ticket, m)
+    else
+      redis.call('ZREM', K_SEEN, m)
     end
+  end
+end
+
+-- The visitor claims its slot (or is inside anyway): forget the pending turn.
+local function claimed(member)
+  redis.call('ZREM', K_GRANTED, member)
+  redis.call('ZREM', K_SEEN, member)
+end
+
+-- A promoted visitor whose turn lapsed (slot expired before it checked in) and who is
+-- back within queue_ttl goes back into the line with its original ticket, i.e. ahead
+-- of everyone who came later, instead of rejoining at the back.
+local function restore_lapsed(member)
+  local ticket = redis.call('ZSCORE', K_GRANTED, member)
+  if not ticket or redis.call('ZSCORE', K_ACTIVE, member) then return end
+  redis.call('ZREM', K_GRANTED, member)
+  local seen = tonumber(redis.call('ZSCORE', K_SEEN, member))
+  if seen and (now - seen) <= queue_ttl then
+    redis.call('ZADD', K_QUEUE, ticket, member)
+    redis.call('ZADD', K_SEEN, now, member)
+  else
+    redis.call('ZREM', K_SEEN, member)
   end
 end
 
@@ -102,6 +130,7 @@ if op == 'release' then
   redis.call('ZREM', K_ACTIVE, sid)
   redis.call('ZREM', K_QUEUE, sid)
   redis.call('ZREM', K_SEEN, sid)
+  redis.call('ZREM', K_GRANTED, sid)
   promote()
   return finish(RELEASED, sid)
 end
@@ -119,11 +148,13 @@ if op ~= 'enter' and op ~= 'poll' then
   return redis.error_reply('Corvus unknown op')
 end
 
+restore_lapsed(sid)
 promote()
 
 -- Already admitted/granted (also covers multiple tabs sharing one session): claim and extend.
 if redis.call('ZSCORE', K_ACTIVE, sid) then
   redis.call('ZADD', K_ACTIVE, 'XX', now + active_ttl, sid)
+  claimed(sid)
   return finish(ACTIVE, sid)
 end
 

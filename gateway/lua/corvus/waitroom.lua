@@ -226,13 +226,13 @@ local function run(room, op, sid)
   end
   local p = "corvus:wr:{" .. room.name .. "}:"
   local res
-  res, err = red:evalsha(SCRIPT_SHA, 5,
-    p .. "active", p .. "queue", p .. "seen", p .. "seq", p .. "rate",
+  res, err = red:evalsha(SCRIPT_SHA, 6,
+    p .. "active", p .. "queue", p .. "seen", p .. "seq", p .. "rate", p .. "granted",
     op, sid or "", room.capacity, room.active_ttl * 1000, room.grant_ttl * 1000,
     room.queue_ttl * 1000, room.admit_rate, PROMOTE_MAX, room.max_queue)
   if not res and err and err:find("NOSCRIPT", 1, true) then
-    res, err = red:eval(SCRIPT, 5,
-      p .. "active", p .. "queue", p .. "seen", p .. "seq", p .. "rate",
+    res, err = red:eval(SCRIPT, 6,
+      p .. "active", p .. "queue", p .. "seen", p .. "seq", p .. "rate", p .. "granted",
       op, sid or "", room.capacity, room.active_ttl * 1000, room.grant_ttl * 1000,
       room.queue_ttl * 1000, room.admit_rate, PROMOTE_MAX, room.max_queue)
   end
@@ -255,9 +255,14 @@ end
 
 -- ---------------------------------------------------------------- responses
 
+-- Suggested seconds until the next status check: longer far back in the line, but
+-- short enough that a promoted visitor usually claims its turn within grant_ttl and a
+-- waiter is never dropped as abandoned (queue_ttl) while following the suggestion.
 local function poll_interval(room, rank)
   local s = room.poll_min + math.floor((rank or 0) / 500)
-  if s > room.poll_max then s = room.poll_max end
+  local cap = math.min(room.poll_max, math.floor(room.grant_ttl / 2), math.floor(room.queue_ttl / 3))
+  if s > cap then s = cap end
+  if s < 1 then s = 1 end
   return s
 end
 
@@ -500,7 +505,7 @@ function _M.endpoint()
     local ok, err = redis_connect(red)
     if not ok then return send_json(503, { status = "unavailable", error = tostring(err) }) end
     local p = "corvus:wr:{" .. room.name .. "}:"
-    red:del(p .. "active", p .. "queue", p .. "seen", p .. "seq", p .. "rate")
+    red:del(p .. "active", p .. "queue", p .. "seen", p .. "seq", p .. "rate", p .. "granted")
     red:set_keepalive(10000, 512)
     return send_json(200, { status = "reset", room = room.name })
   end

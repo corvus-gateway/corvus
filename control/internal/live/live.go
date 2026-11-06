@@ -47,7 +47,7 @@ func (l *Live) Room(ctx context.Context, w store.Waitroom) Stats {
 	defer cancel()
 	p := "corvus:wr:{" + w.Name + "}:"
 	res, err := l.script.Run(ctx, l.rdb,
-		[]string{p + "active", p + "queue", p + "seen", p + "seq", p + "rate"},
+		[]string{p + "active", p + "queue", p + "seen", p + "seq", p + "rate", p + "granted"},
 		"stats", "", w.Capacity, w.ActiveTTL*1000, w.GrantTTL*1000, w.QueueTTL*1000, w.AdmitRate, 200).Int64Slice()
 	if err != nil || len(res) < 5 {
 		return st

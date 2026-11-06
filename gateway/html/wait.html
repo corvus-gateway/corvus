@@ -296,7 +296,8 @@
   }
 
   render();
-  function schedule(fn, sec) { setTimeout(fn, Math.max(1, sec) * 1000 * (0.8 + Math.random() * 0.4)); }
+  var timer = null, inflight = false;
+  function schedule(fn, sec) { clearTimeout(timer); timer = setTimeout(fn, Math.max(1, sec) * 1000 * (0.8 + Math.random() * 0.4)); }
 
   if (preview) {
     var demo = { rank: 128, ticket: 1342, waiting: 692 };
@@ -322,6 +323,8 @@
 
   var backoff = 0;
   function poll() {
+    if (inflight) return;
+    inflight = true; clearTimeout(timer);
     fetch("/__corvus/wr/" + encodeURIComponent(room) + "/status", { credentials: "same-origin", cache: "no-store" })
       .then(function (r) {
         if (r.status === 429) { var e = new Error("busy"); e.busy = true; throw e; }
@@ -329,7 +332,7 @@
         return r.json();
       })
       .then(function (s) {
-        backoff = 0; st.updated = Date.now(); note(t("keep"), false);
+        inflight = false; backoff = 0; st.updated = Date.now(); note(t("keep"), false);
         if (s.status === "active") {
           show({ rank: 0, ticket: st.last ? st.last.ticket : 0, waiting: s.waiting || 0 }); entering();
           setTimeout(function () { location.replace(ret); }, 800); return;
@@ -339,11 +342,14 @@
         schedule(poll, s.retry_after || 10);
       })
       .catch(function (e) {
-        backoff = Math.min(60, backoff ? backoff * 2 : (e && e.busy ? 3 : 5));
+        inflight = false; backoff = Math.min(60, backoff ? backoff * 2 : (e && e.busy ? 3 : 5));
         note(e && e.busy ? t("busy") : t("retry"), true);
         schedule(poll, backoff);
       });
   }
+  // Browsers throttle timers in hidden tabs: check at once when the tab is shown again,
+  // so a turn that came while the visitor looked elsewhere is claimed right away.
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) poll(); });
   poll();
 })();
 </script>
