@@ -242,6 +242,13 @@ server {
         content_by_lua_block { require("corvus.rules").upstream_error({{.}}) }
     }
 {{- end}}
+
+
+    # Other /__corvus/ paths do not exist. Answer them here: the security rules leave
+    # this prefix alone (it is the gateway's own), so it must never reach the upstream.
+    location ^~ /__corvus/ {
+        return 404;
+    }
 {{- if .RoomEndpoints}}
 
     # Waiting room "{{.RoomEndpoints.Name}}" (capacity {{.RoomEndpoints.Capacity}}, fail-{{.RoomEndpoints.FailMode}}{{if not .Room}}, disabled: status endpoints only{{end}})
@@ -255,7 +262,7 @@ server {
         limit_req_status 429;
         content_by_lua_block { require("corvus.waitroom").endpoint() }
     }
-    location ~ ^/__corvus/wait/[a-z0-9-]+$ {
+    location ^~ /__corvus/wait/ {
 {{- template "guard" .}}
         root {{.P.HTMLDir}};
         default_type text/html;

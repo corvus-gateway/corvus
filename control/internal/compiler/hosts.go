@@ -102,7 +102,14 @@ func isLoopback(host string) bool {
 		return true
 	}
 	ip := net.ParseIP(h)
-	return ip != nil && ip.IsLoopback()
+	if ip == nil {
+		return false
+	}
+	// 0.0.0.0 / :: (and 0.0.0.0/8) connect to the local machine as well
+	if ip4 := ip.To4(); ip4 != nil && ip4[0] == 0 {
+		return true
+	}
+	return ip.IsLoopback() || ip.IsUnspecified()
 }
 
 // HostGateway returns the address of the Docker host as seen from this container, or ""

@@ -434,3 +434,20 @@ func TestNewAPITokenUnique(t *testing.T) {
 		seen[tok] = true
 	}
 }
+
+// API tokens cannot change how people sign in or reach the console, or import from NPM.
+func TestSessionOnlySettings(t *testing.T) {
+	for _, c := range []struct {
+		method, path string
+		want         bool
+	}{
+		{"PUT", "/api/settings/sso", true}, {"GET", "/api/settings/sso", false},
+		{"PUT", "/api/settings/network", true}, {"GET", "/api/settings/network", false},
+		{"POST", "/api/import/npm/apply", true}, {"POST", "/api/import/npm/preview", true},
+		{"POST", "/api/settings/network/cloudflare/refresh", false}, {"GET", "/api/proxy-hosts", false},
+	} {
+		if got := sessionOnly(httptest.NewRequest(c.method, c.path, nil)); got != c.want {
+			t.Errorf("%s %s: session only = %v, want %v", c.method, c.path, got, c.want)
+		}
+	}
+}
