@@ -65,15 +65,29 @@ func TestDNSCredentialsAPI(t *testing.T) {
 	if code != 202 || m["dns_credential_id"] == nil {
 		t.Fatalf("request with new credentials: %d %s", code, body)
 	}
+	// retyping a saved token reuses that credential; an explicit name still saves a new one
+	code, body, m = do("POST", "/api/certificates/acme", map[string]any{"domains": []string{"*.third.com"}, "email": "ops@example.com", "challenge": "dns-01",
+		"dns_provider": "cloudflare", "dns_credentials_ini": "dns_cloudflare_api_token=" + secret})
+	if code != 202 || m["dns_credential_id"] == nil || int64(m["dns_credential_id"].(float64)) != id {
+		t.Fatalf("retyped saved token: %d %s", code, body)
+	}
+	code, body, m = do("POST", "/api/certificates/acme", map[string]any{"domains": []string{"*.fourth.com"}, "email": "ops@example.com", "challenge": "dns-01",
+		"dns_provider": "cloudflare", "dns_credentials_ini": "dns_cloudflare_api_token=" + secret, "dns_credential_name": "Copy"})
+	if code != 202 || m["dns_credential_id"] == nil || int64(m["dns_credential_id"].(float64)) == id {
+		t.Fatalf("named copy: %d %s", code, body)
+	}
+	if cp, err := e.s.Store.DNSCredentialByID(ctx, int64(m["dns_credential_id"].(float64))); err != nil || cp.Name != "Copy" {
+		t.Fatalf("named copy stored: %+v %v", cp, err)
+	}
 	if code, _, _ := do("POST", "/api/certificates/acme", map[string]any{"domains": []string{"*.x.com"}, "email": "ops@example.com", "challenge": "dns-01", "dns_credential_id": 999}); code != 422 {
 		t.Fatalf("unknown credential: %d", code)
 	}
-	if len(rec.started) != 2 {
+	if len(rec.started) != 4 {
 		t.Fatalf("issuance started %d times", len(rec.started))
 	}
 
 	code, body, _ = do("GET", "/api/dns-credentials", nil)
-	if code != 200 || strings.Contains(body, secret) || strings.Contains(body, "second") || !strings.Contains(body, `"name":"Cloudflare"`) || !strings.Contains(body, `"used_by":1`) {
+	if code != 200 || strings.Contains(body, secret) || strings.Contains(body, "second") || !strings.Contains(body, `"name":"Cloudflare"`) || !strings.Contains(body, `"used_by":2`) {
 		t.Fatalf("list: %d %s", code, body)
 	}
 
@@ -86,7 +100,7 @@ func TestDNSCredentialsAPI(t *testing.T) {
 	if cred, err := acme.OpenCredential(e.s.DataKey, saved); err != nil || cred.APIToken != "rotated" || saved.Name != "Zone A" {
 		t.Fatalf("stored after replace: %+v %v", cred, err)
 	}
-	if len(rec.started) != 2 {
+	if len(rec.started) != 4 {
 		t.Fatal("replacing a secret started issuance")
 	}
 	// rename only keeps the secret
@@ -100,11 +114,13 @@ func TestDNSCredentialsAPI(t *testing.T) {
 
 	// in use: refused with the number of certificates
 	code, body, _ = do("DELETE", fmt.Sprintf("/api/dns-credentials/%d", id), nil)
-	if code != 422 || !strings.Contains(body, "in_use") || !strings.Contains(body, "1 certificate") {
+	if code != 422 || !strings.Contains(body, "in_use") || !strings.Contains(body, "2 certificate") {
 		t.Fatalf("delete in use: %d %s", code, body)
 	}
-	if err := e.s.Store.DeleteCertificate(ctx, 1); err != nil {
-		t.Fatal(err)
+	for _, cid := range []int64{1, 3} {
+		if err := e.s.Store.DeleteCertificate(ctx, cid); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if code, body, _ := do("DELETE", fmt.Sprintf("/api/dns-credentials/%d", id), nil); code != 200 {
 		t.Fatalf("delete unused: %d %s", code, body)
@@ -119,7 +135,7 @@ func TestDNSCredentialsAPI(t *testing.T) {
 			n++
 		}
 	}
-	if n != 5 { // create, create (with certificate), update, update, delete
+	if n != 6 { // create, create (with certificate), create (named copy), update, update, delete
 		t.Fatalf("audit entries: %d", n)
 	}
 }

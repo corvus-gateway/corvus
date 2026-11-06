@@ -34,7 +34,8 @@ Cloudflare: permission *Zone → DNS → Edit*). The token is stored encrypted a
 You enter a token only once. The first time, it is saved as a **DNS credential** named after the
 provider (*Cloudflare*, then *Cloudflare 2*, …). Next time, the form shows a **DNS credential**
 list: pick the saved one, or choose **Enter new credentials** and optionally give them a
-**Credential name**. This works the same on the Certificates page and when you request a
+**Credential name**. If you type a token that is already saved without giving a name, the saved
+credential is used instead of a copy. This works the same on the Certificates page and when you request a
 certificate from a proxy or redirection host form.
 
 ![DNS credential in the request form](../img/certificate-dns.png){ .shot .panel }

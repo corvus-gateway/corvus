@@ -151,17 +151,28 @@ func credentialNameError(ctx context.Context, st *store.Store, name string, id i
 	return ""
 }
 
-// createACMECertificate saves the order's new credential (if any) and a pending
-// certificate inside tx; the returned credential is the one created, if any.
+// createACMECertificate saves the order's new credential (if any, reusing a saved one
+// with the same secret when no name is given) and a pending certificate inside tx; the
+// returned credential is the one created, if any.
 func (s *Server) createACMECertificate(ctx context.Context, tx *store.Store, name string, o acmeOrder) (*store.Certificate, *store.DNSCredential, error) {
 	var created *store.DNSCredential
 	credID := o.credID
 	if o.newCred != nil {
+		// Without a name, a token that is already saved is reused instead of duplicated.
+		var saved *store.DNSCredential
 		var err error
-		if created, err = acme.SaveCredential(ctx, tx, s.DataKey, o.credName, o.info.DNSProvider, *o.newCred); err != nil {
+		if o.credName == "" {
+			var isNew bool
+			if saved, isNew, err = acme.ReuseOrSaveCredential(ctx, tx, s.DataKey, o.info.DNSProvider, *o.newCred); err == nil && isNew {
+				created = saved
+			}
+		} else if saved, err = acme.SaveCredential(ctx, tx, s.DataKey, o.credName, o.info.DNSProvider, *o.newCred); err == nil {
+			created = saved
+		}
+		if err != nil {
 			return nil, nil, err
 		}
-		credID = &created.ID
+		credID = &saved.ID
 	}
 	if name == "" {
 		name = o.domains[0]
