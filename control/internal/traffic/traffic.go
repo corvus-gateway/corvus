@@ -201,6 +201,10 @@ type Collector struct {
 	started time.Time
 	dropped int64
 
+	// uniq caches unique-IP counts per host and window (see Summary): counting means
+	// merging up to an hour of per-minute IP sets, too costly for every 4 s dashboard poll.
+	uniq map[string]uniqCount
+
 	ruleStats  map[int64]*ruleStat
 	ruleEvents []RuleEvent
 	rulePos    int
@@ -531,8 +535,31 @@ type Summary struct {
 	UniqueIPs int     `json:"unique_ips"` // over min(range, 1h)
 }
 
+type uniqCount struct {
+	at time.Time
+	n  int
+}
+
+// uniqTTL is how long a unique-IP count is reused.
+const uniqTTL = 5 * time.Second
+
+// Summary is SummaryFor plus the number of unique client IPs (over min(range, 1h)),
+// for the API. The count is cached for uniqTTL.
 func (c *Collector) Summary(rangeName, host string, now time.Time) Summary {
-	out := c.SummaryFor(Range(rangeName), host, now)
+	d := Range(rangeName)
+	out := c.SummaryFor(d, host, now)
+	c.mu.Lock()
+	key := host + "|" + d.String()
+	if u, ok := c.uniq[key]; ok && now.Sub(u.at) >= 0 && now.Sub(u.at) < uniqTTL {
+		out.UniqueIPs = u.n
+	} else {
+		out.UniqueIPs = c.uniqueIPs(host, now.Unix(), d)
+		if c.uniq == nil || len(c.uniq) > 1000 {
+			c.uniq = map[string]uniqCount{}
+		}
+		c.uniq[key] = uniqCount{at: now, n: out.UniqueIPs}
+	}
+	c.mu.Unlock()
 	out.Range = rangeName
 	if out.Range == "" {
 		out.Range = "15m"
@@ -540,7 +567,8 @@ func (c *Collector) Summary(rangeName, host string, now time.Time) Summary {
 	return out
 }
 
-// SummaryFor aggregates an arbitrary window (rounded to the bucket size).
+// SummaryFor aggregates an arbitrary window (rounded to the bucket size). It leaves
+// UniqueIPs at 0 (see Summary): the alert engine calls it for every host and rule.
 func (c *Collector) SummaryFor(d time.Duration, host string, now time.Time) Summary {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -566,7 +594,6 @@ func (c *Collector) SummaryFor(d time.Duration, host string, now time.Time) Summ
 	if b := &s.fine[(last/fineStep)%fineSlots]; b.start == last {
 		out.RPS = round2(float64(b.count) / fineStep)
 	}
-	out.UniqueIPs = c.uniqueIPs(host, ts, d)
 	return out
 }
 

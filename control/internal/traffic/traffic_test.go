@@ -116,3 +116,28 @@ func TestChallengeEvents(t *testing.T) {
 		t.Errorf("rule events: %+v", ev)
 	}
 }
+
+// Unique IPs are counted for the API (Summary), cached for uniqTTL, and skipped by
+// SummaryFor, which the alert engine calls for every host and rule.
+func TestUniqueIPsCached(t *testing.T) {
+	c := New()
+	now := time.Now()
+	add := func(ip string) {
+		c.Ingest([]byte(fmt.Sprintf(`<190>corvus: {"t":%d,"h":"a.example","m":"GET","u":"/","s":200,"b":0,"rt":0,"ip":"%s","wr":"-","x":"","rl":"","ua":"t"}`, now.Unix()-10, ip)))
+	}
+	add("10.0.0.1")
+	add("10.0.0.2")
+	if f := c.SummaryFor(5*time.Minute, "", now); f.Requests != 2 || f.UniqueIPs != 0 {
+		t.Fatalf("SummaryFor: %+v", f)
+	}
+	if s := c.Summary("5m", "", now); s.UniqueIPs != 2 {
+		t.Fatalf("unique IPs: %d", s.UniqueIPs)
+	}
+	add("10.0.0.3")
+	if s := c.Summary("5m", "", now.Add(time.Second)); s.UniqueIPs != 2 {
+		t.Fatalf("cached unique IPs: %d", s.UniqueIPs)
+	}
+	if s := c.Summary("5m", "", now.Add(uniqTTL)); s.UniqueIPs != 3 {
+		t.Fatalf("recomputed unique IPs: %d", s.UniqueIPs)
+	}
+}
