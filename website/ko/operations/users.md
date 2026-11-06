@@ -38,6 +38,10 @@
   다음, 변수를 다시 지우세요.
 - 이름이나 다른 IP로 콘솔에 접속하려면 `CORVUS_ADMIN_HOSTS`로 콘솔 인증서에 추가하세요
   ([환경 변수](../reference/configuration.md) 참고).
+- 프록시 호스트(예: `https://corvus.example.com`)로 콘솔에 접속한다면 대상을 `https`, `corvus`(컨테이너
+  이름), 포트 `9443`으로 지정하세요. 그러면 콘솔이 로그인 시도 제한, 접근 허용 네트워크, 세션, 감사
+  로그에서 방문자 각자의 주소를 봅니다. 다른 리버스 프록시 뒤에 둔다면 그 프록시 주소를
+  `CORVUS_ADMIN_TRUSTED_PROXIES`에 넣으세요.
 
 ## 감사 로그
 

@@ -24,6 +24,7 @@ services:
 | `CORVUS_RULES_URL` | Optional URL of a signed managed-rules bundle |
 | `CORVUS_SETUP_TOKEN` | Choose the one-time [setup token](../getting-started/install.md#3-read-the-setup-token) yourself (at least 12 characters) instead of reading a random one from the logs. Only used while no administrator exists |
 | `CORVUS_ADMIN_TLS=false` | Serve the admin console over plain HTTP instead of HTTPS, for a reverse proxy in front of it that handles TLS. Session cookies are then not marked *Secure*: keep port 9443 reachable only from that proxy or a trusted network |
+| `CORVUS_ADMIN_TRUSTED_PROXIES` | Reverse proxies in front of the admin console whose `X-Forwarded-For` is trusted, e.g. `10.0.0.5,172.30.0.0/16`. Corvus's own proxy hosts need no entry. Only list addresses that nobody else can connect from |
 | `CORVUS_ADMIN_ALLOW_ANY=1` | Recovery switch if you locked yourself out with the admin allowlist |
 | `CORVUS_RESOLVER` | DNS server for forward hosts. Default: Docker's DNS, or the first `nameserver` of `/etc/resolv.conf` with host networking |
 | `CORVUS_LOOPBACK=container` | Make `127.0.0.1`/`localhost` forward hosts point at the container itself instead of the Docker host |

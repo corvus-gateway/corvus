@@ -422,8 +422,12 @@ func run() error {
 	go listFeeds.Run(ctx)
 
 	tlsOn := envBool("CORVUS_ADMIN_TLS", true)
+	adminProxies, err := netcfg.NormalizeTrustedCIDRs(strings.Split(env("CORVUS_ADMIN_TRUSTED_PROXIES", ""), ","))
+	if err != nil {
+		return fmt.Errorf("CORVUS_ADMIN_TRUSTED_PROXIES: %w", err)
+	}
 	srv := &api.Server{Store: st, Deployer: dep, Paths: paths, Live: lv, Setup: setup,
-		Limiter: auth.NewLimiter(10, 10*time.Minute), UI: webui.Handler(), SecureCookie: tlsOn, Version: version,
+		Limiter: auth.NewLimiter(10, 10*time.Minute), UI: webui.Handler(), SecureCookie: tlsOn, Version: version, Proxies: api.NewConsoleProxies(adminProxies),
 		AcctLimiter: auth.NewLimiter(10, 15*time.Minute),
 		Traffic:     tc, ACME: acmeSvc, NPMImportDir: env("CORVUS_IMPORT_DIR", "/import"), DataKey: dataKey, MFA: auth.NewMFAChallenges(), GeoIP: geo, AutoBan: ban, UnderAttack: ua, History: hist, Rules: rulesSvc, Feeds: listFeeds}
 	if or != nil {

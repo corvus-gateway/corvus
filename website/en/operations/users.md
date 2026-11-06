@@ -38,6 +38,10 @@ creator's role, and is shown only once. See the [HTTP API](../reference/api.md).
   and remove the variable again.
 - To reach the console under a name or another IP, add them to its certificate with
   `CORVUS_ADMIN_HOSTS` (see [Configuration](../reference/configuration.md)).
+- Opening the console through a proxy host (e.g. `https://corvus.example.com`)? Forward it to
+  `corvus` (the container name) port `9443` over `https`. The console then sees each visitor's own
+  address for login limits, the allowed networks, sessions and the audit log. Behind another reverse
+  proxy, list its address in `CORVUS_ADMIN_TRUSTED_PROXIES`.
 
 ## Audit log
 

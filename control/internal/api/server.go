@@ -38,6 +38,7 @@ type Server struct {
 	Limiter      *auth.Limiter
 	UI           http.Handler
 	SecureCookie bool
+	Proxies      *ConsoleProxies // who may report the visitor address (nil = nobody)
 	Version      string
 	Traffic      *traffic.Collector
 	Gateway      func() (running bool, since time.Time) // nil when running without a gateway
@@ -240,7 +241,7 @@ func (s *Server) Handler() http.Handler {
 	if s.UI != nil {
 		mux.Handle("/", s.UI)
 	}
-	return securityHeaders(s.adminAllow(s.csrf(mux)))
+	return securityHeaders(s.realIP(s.adminAllow(s.csrf(mux))))
 }
 
 // ------------------------------------------------------------------ middleware
