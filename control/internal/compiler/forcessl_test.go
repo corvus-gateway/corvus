@@ -16,6 +16,7 @@ import (
 // (common in NPM setups): the redirect moves to server level.
 func TestForceSSLWithOwnRootLocation(t *testing.T) {
 	c, st := renderPagesEnv(t)
+	c.P.DataDir = filepath.ToSlash(t.TempDir()) // certificate files are written below it
 	ctx := context.Background()
 	cert := &store.Certificate{Name: "c", Kind: "custom", Domains: []string{"a.example.com"}, NotAfter: time.Now().Add(90 * 24 * time.Hour), Status: "valid"}
 	if err := st.CreateCertificate(ctx, cert); err != nil {
