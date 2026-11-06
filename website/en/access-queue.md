@@ -25,7 +25,7 @@ Waiting visitors see a page with their position, localized in 8 languages, that 
 | **Admission rate** | How many new visitors per second are let in (0 = as soon as a slot frees up) |
 | **Inactivity expiry** | A visitor's slot is released after this long without requests |
 | **Turn validity** | A visitor whose turn has come must enter within this time. If they miss it (e.g. a background tab) and check in again within the queue abandonment time, they go back to the front of the line |
-| **Queue abandonment** | Waiting visitors who stop checking in are removed |
+| **Queue abandonment** | Waiting visitors who stop checking in for this long are removed (default 5 minutes for new queues: phones pause pages in the background, so a visitor who switches apps briefly keeps the place) |
 | **When the cache DB is down** | **Let everyone in** (fail-open, favours availability) or **Block access** (fail-closed, protects capacity) |
 | **Max queue length** | Beyond this, new visitors are asked to come back later (0 = unlimited) |
 | **Queue joins per IP** | New queue entries one IP may create per minute |

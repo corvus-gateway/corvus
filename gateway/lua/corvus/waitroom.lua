@@ -29,7 +29,7 @@ local DEFAULTS = {
   capacity   = 500,   -- max concurrently admitted sessions
   active_ttl = 120,   -- s; an admitted session with no request for this long frees its slot
   grant_ttl  = 30,    -- s; time a promoted waiter has to come back and claim the slot
-  queue_ttl  = 120,   -- s; a waiter that stops polling for this long loses its place
+  queue_ttl  = 300,   -- s; a waiter that stops polling for this long loses its place
   refresh    = 15,    -- s; token age after which the gateway re-checks Redis (revocation lag)
   admit_rate = 0,     -- admissions per second (0 = unlimited, capacity only)
   fail       = "open",-- behaviour when Redis is unavailable: "open" | "closed"
