@@ -11,6 +11,7 @@ import (
 // are checked by the caller (they depend on the runtime configuration).
 func Stream(st *store.Stream) error {
 	var errs Errors
+	notes(&errs, &st.Notes)
 	if st.IncomingPort < 1 || st.IncomingPort > 65535 {
 		errs.add("incoming_port", "invalid", "port must be 1-65535")
 	}

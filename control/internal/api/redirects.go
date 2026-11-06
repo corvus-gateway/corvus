@@ -23,6 +23,7 @@ type redirectionHostInput struct {
 	BlockExploits  *bool    `json:"block_exploits"`
 	AdvancedConfig string   `json:"advanced_config"`
 	Enabled        *bool    `json:"enabled"`
+	Notes          *string  `json:"notes"` // omitted = unchanged
 	// CertificateRequest orders a new ACME certificate for the host's domains; it replaces certificate_id.
 	CertificateRequest *certRequest `json:"certificate_request"`
 }
@@ -34,6 +35,9 @@ func (in redirectionHostInput) apply(h *store.RedirectionHost) {
 	h.HTTP2 = in.HTTP2 == nil || *in.HTTP2
 	h.BlockExploits = in.BlockExploits == nil || *in.BlockExploits
 	h.Enabled = in.Enabled == nil || *in.Enabled
+	if in.Notes != nil {
+		h.Notes = *in.Notes
+	}
 }
 
 // checkRedirectionHost validates a redirection host against the rest of the configuration (inside the tx).

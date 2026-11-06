@@ -15,6 +15,7 @@ Click **Add stream** and set:
 | **Protocol** | TCP, UDP or both |
 | **Forward to** | Host / IP and port of the service (same [forward targets](proxy-hosts.md#forward-targets) as proxy hosts) |
 | **Certificate** | Optional, TCP only: Corvus terminates TLS and forwards plain TCP. The TCP port opens once the certificate is issued |
+| **Notes** | Optional, for people only ([as for proxy hosts](proxy-hosts.md#notes)) |
 
 ## Publish the port
 

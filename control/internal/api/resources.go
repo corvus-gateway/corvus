@@ -110,6 +110,8 @@ type proxyHostInput struct {
 	UpstreamTimeoutS *int  `json:"upstream_timeout_s"` // null = default (60 s, WebSocket 1 h)
 	Gzip             *bool `json:"gzip"`               // omitted = on
 
+	Notes *string `json:"notes"` // omitted = unchanged
+
 	// BasicAuth edits the host's password protection; when present it replaces access_list_id.
 	BasicAuth      *basicAuthInput `json:"basic_auth"`
 	BasicAuthUsers []string        `json:"basic_auth_users"` // read-only; accepted and ignored
@@ -159,6 +161,9 @@ func (in proxyHostInput) apply(h *store.ProxyHost) {
 	}
 	if in.Locations != nil {
 		h.Locations = *in.Locations
+	}
+	if in.Notes != nil {
+		h.Notes = *in.Notes
 	}
 }
 

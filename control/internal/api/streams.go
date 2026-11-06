@@ -12,19 +12,23 @@ import (
 // ------------------------------------------------------------------ streams (TCP/UDP)
 
 type streamInput struct {
-	IncomingPort  int    `json:"incoming_port"`
-	TCP           *bool  `json:"tcp_forwarding"`
-	UDP           bool   `json:"udp_forwarding"`
-	ForwardHost   string `json:"forward_host"`
-	ForwardPort   int    `json:"forward_port"`
-	CertificateID *int64 `json:"certificate_id"`
-	Enabled       *bool  `json:"enabled"`
+	IncomingPort  int     `json:"incoming_port"`
+	TCP           *bool   `json:"tcp_forwarding"`
+	UDP           bool    `json:"udp_forwarding"`
+	ForwardHost   string  `json:"forward_host"`
+	ForwardPort   int     `json:"forward_port"`
+	CertificateID *int64  `json:"certificate_id"`
+	Enabled       *bool   `json:"enabled"`
+	Notes         *string `json:"notes"` // omitted = unchanged
 }
 
 func (in streamInput) apply(st *store.Stream) {
 	st.IncomingPort, st.UDP, st.ForwardHost, st.ForwardPort, st.CertificateID = in.IncomingPort, in.UDP, in.ForwardHost, in.ForwardPort, in.CertificateID
 	st.TCP = in.TCP == nil || *in.TCP
 	st.Enabled = in.Enabled == nil || *in.Enabled
+	if in.Notes != nil {
+		st.Notes = *in.Notes
+	}
 }
 
 // checkStream validates a stream against the rest of the configuration (inside the tx).
