@@ -96,6 +96,8 @@ export default function Certificates() {
                 const st = statusOf(c);
                 const d = daysUntil(c.not_after);
                 const soon = st === "valid" && d !== null && d <= 30;
+                // a failed renewal keeps the still-valid certificate in use ("valid") with its error
+                const renewErr = st === "valid" && c.kind === "acme" && !!c.last_error;
                 return (
                   <Tr key={c.id}>
                     <Td>
@@ -106,9 +108,10 @@ export default function Certificates() {
                     <Td>
                       {st === "pending" ? <Badge tone="info" icon={Loader2} className="[&_svg]:animate-spin">{t("certPending")}</Badge>
                         : st === "error" ? <Tip label={c.last_error || t("certError")}><span><Badge tone="danger" icon={AlertCircle}>{t("certError")}</Badge></span></Tip>
+                          : renewErr ? <Tip label={t("renewFailedTip", { e: c.last_error! })}><span><Badge tone={d !== null && d <= 7 ? "danger" : "warn"} icon={AlertCircle}>{t("renewFailed")}</Badge></span></Tip>
                           : soon ? <Badge tone={d! <= 7 ? "danger" : "warn"} dot>{d! < 0 ? t("expired") : t("expiringSoon")}</Badge>
                             : <Badge tone="ok" dot>{t("certValid")}</Badge>}
-                      {st === "error" && c.last_error && <div className="mt-1 max-w-[16rem] truncate text-xs text-danger">{c.last_error}</div>}
+                      {(st === "error" || renewErr) && c.last_error && <div className={cn("mt-1 max-w-[16rem] truncate text-xs", st === "error" ? "text-danger" : "text-warn")}>{c.last_error}</div>}
                     </Td>
                     <Td className="hidden sm:table-cell">
                       {c.not_after && d !== null ? <><div className="num text-sm">{new Date(c.not_after).toLocaleDateString(localeTag(lang))}</div>

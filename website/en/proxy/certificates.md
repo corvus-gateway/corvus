@@ -70,7 +70,20 @@ To use a CA other than Let's Encrypt (for example a private step-ca), set
 `CORVUS_ACME_DIRECTORY`, and `LEGO_CA_CERTIFICATES` if the CA is private. See
 [Configuration](../reference/configuration.md).
 
-## Expiry warnings
+## Expiry warnings and failed renewals
 
 The dashboard lists certificates that expire within 30 days, and the
 [alert](../operations/alerts.md) for certificate problems notifies you when a renewal fails.
+
+When issuing or renewing fails, Corvus keeps the CA's full error message, for example which domain
+failed validation and what the CA received. You see it in three places:
+
+- **Certificates page**: a certificate that could not be issued shows **Error**. A certificate whose
+  renewal failed while it is still valid shows **Renewal failed**; it stays in use until it
+  expires. The first line of the error is shown under the badge; hover over the badge for all of it.
+- **Container log** (`docker compose logs corvus`): `ACME issuance failed` with the certificate ID
+  and the error.
+- **Alerts**: the certificate problem alert includes the error.
+
+To retry without counting against Let's Encrypt's rate limits, issue a test certificate with the
+**Use the staging environment** option first.
