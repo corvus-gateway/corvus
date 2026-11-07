@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -134,10 +135,20 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		revoke = revoke || id != me.ID
-		s.audit(r, "user.password_reset", u.Email, nil)
+		var detail any
+		if id != me.ID {
+			// an administrator resets someone's password when the account may be in the
+			// wrong hands: the API tokens it created end too, like its sessions
+			if n, err := s.Store.DeleteUserAPITokens(ctx, id); err == nil && n > 0 {
+				detail = map[string]any{"tokens_revoked": n}
+			}
+		}
+		s.audit(r, "user.password_reset", u.Email, detail)
 	}
-	if err := s.Store.UpdateUser(ctx, id, name, role, disabled); err != nil {
-		fail(w, err)
+	if err := s.Store.KeepingAdmin(ctx, func(tx *store.Store) error {
+		return tx.UpdateUser(ctx, id, name, role, disabled)
+	}); err != nil {
+		fail(w, lastAdminErr(err))
 		return
 	}
 	if revoke {
@@ -169,8 +180,10 @@ func (s *Server) deleteUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := s.Store.DeleteUser(ctx, id); err != nil { // sessions cascade
-		fail(w, err)
+	if err := s.Store.KeepingAdmin(ctx, func(tx *store.Store) error {
+		return tx.DeleteUser(ctx, id) // sessions cascade
+	}); err != nil {
+		fail(w, lastAdminErr(err))
 		return
 	}
 	s.audit(r, "user.delete", u.Email, nil)
@@ -203,4 +216,32 @@ func advancedAllowed(r *http.Request, before, after string) error {
 		return nil
 	}
 	return validate.Errors{{Field: "advanced_config", Code: "forbidden", Message: fmt.Sprintf("only administrators can change the advanced configuration")}}
+}
+
+// locationsAdvancedAllowed: the same for the advanced configuration of custom locations
+// (compared by path; other location fields may be changed by operators).
+func locationsAdvancedAllowed(r *http.Request, before, after []store.Location) error {
+	if store.RoleAtLeast(userFrom(r).Role, "admin") {
+		return nil
+	}
+	was := map[string]string{}
+	for _, l := range before {
+		was[strings.TrimSpace(l.Path)] = strings.TrimSpace(l.AdvancedConfig)
+	}
+	var errs validate.Errors
+	for i, l := range after {
+		if snip := strings.TrimSpace(l.AdvancedConfig); snip != "" && snip != was[strings.TrimSpace(l.Path)] {
+			errs = append(errs, validate.FieldError{Field: fmt.Sprintf("locations[%d].advanced_config", i), Code: "forbidden",
+				Message: "only administrators can change the advanced configuration"})
+		}
+	}
+	return errs.OrNil()
+}
+
+// lastAdminErr turns store.ErrLastAdmin into a 409 like the up-front check.
+func lastAdminErr(err error) error {
+	if errors.Is(err, store.ErrLastAdmin) {
+		return conflictError{err.Error()}
+	}
+	return err
 }

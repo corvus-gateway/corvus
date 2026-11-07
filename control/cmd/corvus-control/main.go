@@ -30,6 +30,7 @@ import (
 	"corvus/control/internal/certs"
 	"corvus/control/internal/compiler"
 	"corvus/control/internal/deploy"
+	"corvus/control/internal/feeds"
 	"corvus/control/internal/gateway"
 	"corvus/control/internal/geoip"
 	"corvus/control/internal/history"
@@ -38,6 +39,8 @@ import (
 	"corvus/control/internal/sigs"
 	"corvus/control/internal/store"
 	"corvus/control/internal/traffic"
+	"corvus/control/internal/underattack"
+	"corvus/control/internal/update"
 	"corvus/control/internal/webui"
 )
 
@@ -83,6 +86,40 @@ func defaultResolver(resolvConf string) string {
 		return "127.0.0.11"
 	}
 	return first
+}
+
+// ipv6Settings turns CORVUS_IPV6 into the gateway's IPv6 behaviour:
+//   - "auto" (default): listen on IPv6 when the system has it; the resolver keeps
+//     returning IPv4 addresses only.
+//   - "on": always listen on IPv6, and let the resolver return IPv6 (AAAA) addresses
+//     for forward hosts (IPv6-only upstreams).
+//   - "off": IPv4 only.
+//
+// Docker bridge networks usually have IPv6 disabled; nginx then refuses to start if it
+// is told to listen on [::], so "auto" checks first.
+func ipv6Settings(mode string, available func() bool) (listen, resolver bool) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "on", "1", "true", "yes":
+		return true, true
+	case "off", "0", "false", "no":
+		return false, false
+	}
+	return available(), false
+}
+
+// ipv6Available reports whether an interface has an IPv6 address and an IPv6 socket
+// can be bound.
+func ipv6Available() bool {
+	b, err := os.ReadFile("/proc/net/if_inet6")
+	if err != nil || len(strings.TrimSpace(string(b))) == 0 {
+		return false
+	}
+	l, err := net.Listen("tcp6", "[::]:0")
+	if err != nil {
+		return false
+	}
+	l.Close()
+	return true
 }
 
 func envBool(key string, def bool) bool {
@@ -157,6 +194,8 @@ func run() error {
 		ACMEPort:    9181,
 		DefaultCert: filepath.ToSlash(filepath.Join(dataDir, "certs", "default")),
 	}
+	paths.IPv6, paths.ResolverIPv6 = ipv6Settings(env("CORVUS_IPV6", "auto"), ipv6Available)
+	slog.Info("gateway IPv6", "listen", paths.IPv6, "resolver_aaaa", paths.ResolverIPv6)
 	adminHosts := []string{"localhost", "127.0.0.1"}
 	for _, h := range strings.Split(env("CORVUS_ADMIN_HOSTS", ""), ",") {
 		if h = strings.TrimSpace(h); h != "" {
@@ -181,6 +220,14 @@ func run() error {
 	// CORVUS_REDIS_HOST to use an external Redis instead (shared by several gateways).
 	redisHost, redisPort := env("CORVUS_REDIS_HOST", ""), env("CORVUS_REDIS_PORT", "6379")
 	embeddedRedis := redisHost == "" && withGateway
+	// Ports Corvus listens on itself may not be taken by streams (TCP/UDP forwarding).
+	adminListen := env("CORVUS_ADMIN_LISTEN", ":9443")
+	if _, port, err := net.SplitHostPort(adminListen); err == nil {
+		paths.AdminPort, _ = strconv.Atoi(port)
+	}
+	if embeddedRedis {
+		paths.RedisPort, _ = strconv.Atoi(redisPort)
+	}
 	if redisHost == "" {
 		redisHost = "127.0.0.1"
 	}
@@ -222,6 +269,31 @@ func run() error {
 		slog.Warn("traffic collector disabled", "err", err)
 	}
 
+	// Traffic history: statistics/events survive restarts; request logs are archived
+	// per day (compressed) with retention by age and total size. Restored before the
+	// gateway starts, so live events come after the restored ones.
+	stopHistory := func() {}
+	hist := &history.Service{Dir: filepath.Join(dataDir, "history"), Store: st, Collector: tc}
+	if err := hist.Open(ctx); err != nil {
+		slog.Warn("traffic history disabled", "err", err)
+		hist = nil
+	} else {
+		hist.Restore(ctx, time.Now())
+		tc.Sink = hist.Sink
+		// own context, so shutdown can wait for the final save (see stopHistory below)
+		histCtx, histStop := context.WithCancel(context.Background())
+		histDone := make(chan struct{})
+		go func() { hist.Run(histCtx); close(histDone) }()
+		stopHistory = func() {
+			histStop()
+			select {
+			case <-histDone:
+			case <-time.After(15 * time.Second):
+				slog.Warn("traffic history: final save timed out")
+			}
+		}
+	}
+
 	// Managed rule bundle: body signatures + virtual-patch templates (signed updates).
 	rulesSvc := &sigs.Service{Dir: filepath.Join(dataDir, "rules"), Store: st}
 	if err := rulesSvc.Init(); err != nil {
@@ -242,6 +314,12 @@ func run() error {
 		}}
 	var runner gateway.Runner = gateway.Noop{}
 	var or *gateway.OpenResty
+	// Per-start key with which the gateway marks requests it proxies to the console;
+	// the console trusts X-Forwarded-For from local peers only with it (api.ConsoleProxies).
+	consoleKey := ""
+	if withGateway {
+		consoleKey = auth.RandomToken(32)
+	}
 	dep := &deploy.Deployer{Store: st, Compiler: comp, Dir: filepath.Join(dataDir, "nginx"), Keep: 20}
 	if withGateway {
 		or = &gateway.OpenResty{
@@ -249,7 +327,7 @@ func run() error {
 			CurrentConf: dep.CurrentConf(),
 			StatusURL:   "http://127.0.0.1:9180/version",
 			Env: []string{
-				"CORVUS_WR_SECRET=" + wrSecret, "CORVUS_DEBUG_KEY=" + debugKey,
+				"CORVUS_WR_SECRET=" + wrSecret, "CORVUS_DEBUG_KEY=" + debugKey, "CORVUS_CONSOLE_KEY=" + consoleKey,
 				"CORVUS_REDIS_HOST=" + redisHost, "CORVUS_REDIS_PORT=" + redisPort, "CORVUS_REDIS_SCRIPT=" + redisScript,
 				"CORVUS_REDIS_USER=" + redisUser, "CORVUS_REDIS_PASSWORD=" + redisPass,
 			},
@@ -290,14 +368,24 @@ func run() error {
 	}
 
 	setup := auth.NewSetupToken()
+	preset := env("CORVUS_SETUP_TOKEN", "") // trimmed: a stray newline (CRLF env file) could never be typed
+	if preset != "" {
+		if setup, err = auth.PresetSetupToken(preset); err != nil {
+			return fmt.Errorf("CORVUS_SETUP_TOKEN: %w", err)
+		}
+	}
 	if n, _ := st.CountUsers(ctx); n == 0 {
-		slog.Warn("no administrator yet — open the admin UI and enter this setup token", "setup_token", setup.Value())
+		if preset != "" {
+			slog.Warn("no administrator yet — open the admin UI and enter the setup token from CORVUS_SETUP_TOKEN")
+		} else {
+			slog.Warn("no administrator yet — open the admin UI and enter this setup token", "setup_token", setup.Value())
+		}
 	}
 
 	acmeSvc := &acme.Service{Store: st, Key: dataKey, CertDir: paths.CertDir, Directory: env("CORVUS_ACME_DIRECTORY", ""),
 		DirectorySuffix: env("CORVUS_ACME_DIRECTORY_SUFFIX", ""),
 		OnIssued: func(ctx context.Context) {
-			if _, err := dep.Apply(ctx, nil, "certificate issued/renewed", nil); err != nil {
+			if err := dep.Refresh(ctx, "certificate issued/renewed"); err != nil {
 				slog.Error("redeploy after certificate issuance failed", "err", err)
 			}
 		}}
@@ -307,6 +395,10 @@ func run() error {
 			slog.Error("ACME challenge server", "err", err)
 		}
 	}()
+	// Per-certificate DNS secrets of older versions become saved DNS credentials.
+	if _, err := acmeSvc.AdoptLegacyCredentials(ctx); err != nil {
+		slog.Warn("moving per-certificate DNS credentials failed; they keep working as they are", "err", err)
+	}
 	go acmeSvc.RenewLoop(ctx)
 
 	// Country database for security rules (DB-IP Lite, monthly). CORVUS_GEOIP=off disables
@@ -314,26 +406,14 @@ func run() error {
 	geo := &geoip.Service{Dir: filepath.Join(dataDir, "geoip"), URL: env("CORVUS_GEOIP_URL", ""),
 		Disabled: strings.EqualFold(env("CORVUS_GEOIP", "on"), "off"),
 		OnUpdated: func(ctx context.Context) {
-			if _, err := dep.Apply(ctx, nil, "country database updated", nil); err != nil {
+			if err := dep.Refresh(ctx, "country database updated"); err != nil {
 				slog.Error("redeploy after country database update failed", "err", err)
 			}
 		}}
 	go geo.Run(ctx)
 
-	// Traffic history: statistics/events survive restarts; request logs are archived
-	// per day (compressed) with retention by age and total size.
-	hist := &history.Service{Dir: filepath.Join(dataDir, "history"), Store: st, Collector: tc}
-	if err := hist.Open(ctx); err != nil {
-		slog.Warn("traffic history disabled", "err", err)
-		hist = nil
-	} else {
-		hist.Restore(ctx, time.Now())
-		tc.Sink = hist.Sink
-		go hist.Run(ctx)
-	}
-
 	rulesSvc.OnUpdated = func(ctx context.Context) {
-		if _, err := dep.Apply(ctx, nil, "rule bundle updated", nil); err != nil {
+		if err := dep.Refresh(ctx, "rule bundle updated"); err != nil {
 			slog.Error("redeploy after rule bundle update failed", "err", err)
 		}
 	}
@@ -343,20 +423,52 @@ func run() error {
 	ban := &autoban.Service{Store: st, Traffic: tc}
 	if withGateway {
 		ban.PushURL = "http://127.0.0.1:9180/bans"
+		ban.HitsURL = "http://127.0.0.1:9180/bad-behaviour"
 	}
 	go ban.Run(ctx)
 
+	// "Under attack" mode, automatic activations pushed to the gateway's shared memory.
+	ua := &underattack.Service{Store: st, Traffic: tc}
+	if withGateway {
+		ua.PushURL = "http://127.0.0.1:9180/under-attack"
+	}
+	go ua.Run(ctx)
+
+	// Lists fed from a URL (e.g. Tor exit nodes, bad-bot User-Agents).
+	listFeeds := &feeds.Service{Store: st, Apply: func(ctx context.Context, msg string, mutate func(tx *store.Store) error) error {
+		if dep.RollbackActive(ctx) {
+			// keep the operator's rollback: store the new list, deploy it later
+			slog.Warn("rollback active: list stored, not deployed", "reason", msg)
+			return st.WithTx(ctx, mutate)
+		}
+		_, err := dep.Apply(ctx, nil, msg, mutate)
+		return err
+	}}
+	go listFeeds.Run(ctx)
+
+	// New release notice in the console (GitHub "latest release", twice a day).
+	var updates *update.Checker
+	if envBool("CORVUS_UPDATE_CHECK", true) {
+		updates = &update.Checker{Current: version}
+		go updates.Run(ctx)
+	}
+
 	tlsOn := envBool("CORVUS_ADMIN_TLS", true)
+	adminProxies, err := netcfg.NormalizeTrustedCIDRs(strings.Split(env("CORVUS_ADMIN_TRUSTED_PROXIES", ""), ","))
+	if err != nil {
+		return fmt.Errorf("CORVUS_ADMIN_TRUSTED_PROXIES: %w", err)
+	}
 	srv := &api.Server{Store: st, Deployer: dep, Paths: paths, Live: lv, Setup: setup,
-		Limiter: auth.NewLimiter(10, 10*time.Minute), UI: webui.Handler(), SecureCookie: tlsOn, Version: version,
+		Limiter: auth.NewLimiter(10, 10*time.Minute), UI: webui.Handler(), SecureCookie: tlsOn, Version: version, Updates: updates, Proxies: api.NewConsoleProxies(adminProxies, consoleKey),
 		AcctLimiter: auth.NewLimiter(10, 15*time.Minute),
-		Traffic:     tc, ACME: acmeSvc, NPMImportDir: env("CORVUS_IMPORT_DIR", "/import"), DataKey: dataKey, MFA: auth.NewMFAChallenges(), GeoIP: geo, AutoBan: ban, History: hist, Rules: rulesSvc}
+		Traffic:     tc, ACME: acmeSvc, NPMImportDir: env("CORVUS_IMPORT_DIR", "/import"), DataKey: dataKey, MFA: auth.NewMFAChallenges(), GeoIP: geo, AutoBan: ban, UnderAttack: ua, History: hist, Rules: rulesSvc, Feeds: listFeeds}
 	if or != nil {
 		srv.Gateway = or.Status
 	}
 	srv.Alerts = &alerts.Engine{Store: st, Key: dataKey, Src: alerts.Sources{
-		Traffic: tc,
-		RedisUp: lv.Ping,
+		Traffic:     tc,
+		RedisUp:     lv.Ping,
+		UnderAttack: ua.Drain,
 		Rooms: func(ctx context.Context) []live.Stats {
 			rooms, err := st.ListWaitrooms(ctx)
 			if err != nil {
@@ -378,7 +490,7 @@ func run() error {
 	go srv.PurgeLoop(ctx)
 
 	hs := &http.Server{
-		Addr:              env("CORVUS_ADMIN_LISTEN", ":9443"),
+		Addr:              adminListen,
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
@@ -415,6 +527,9 @@ func run() error {
 	defer cancel()
 	_ = hs.Shutdown(shutdownCtx)
 	_ = acmeSrv.Shutdown(shutdownCtx)
+	// Save traffic history before stopping OpenResty: a graceful nginx stop can wait for
+	// open WebSockets until the container runtime's own stop timeout (10 s in Docker).
+	stopHistory()
 	if or != nil {
 		or.Stop(10 * time.Second)
 	}

@@ -156,3 +156,27 @@ func TestStoreRoundTrip(t *testing.T) {
 		t.Fatal("acme account upsert")
 	}
 }
+
+// A recovery code can be used once even when two requests use codes at the same time.
+func TestReplaceRecoveryCodesCAS(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	u, err := s.CreateUser(ctx, "a@example.com", "A", "x", "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetRecoveryCodes(ctx, u.ID, []string{"h1", "h2"}); err != nil {
+		t.Fatal(err)
+	}
+	cur, _ := s.UserByID(ctx, u.ID)
+	old := cur.RecoveryCodes()
+	if ok, err := s.ReplaceRecoveryCodes(ctx, u.ID, old, []string{"h2"}); !ok || err != nil {
+		t.Fatalf("first use: %v %v", ok, err)
+	}
+	if ok, _ := s.ReplaceRecoveryCodes(ctx, u.ID, old, []string{"h1"}); ok {
+		t.Fatal("a second request with the stale list succeeded")
+	}
+	if cur, _ = s.UserByID(ctx, u.ID); cur.RecoveryCodes() != `["h2"]` {
+		t.Fatalf("codes = %s", cur.RecoveryCodes())
+	}
+}

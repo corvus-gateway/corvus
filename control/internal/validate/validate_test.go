@@ -35,6 +35,35 @@ func TestProxyHostNormalizes(t *testing.T) {
 	}
 }
 
+func TestProxyHostLimits(t *testing.T) {
+	n := func(v int) *int { return &v }
+	for _, tc := range []struct {
+		upload, timeout *int
+		field           string
+	}{
+		{nil, nil, ""},
+		{n(0), n(1), ""},
+		{n(MaxUploadMB), n(MaxUpstreamTimeoutS), ""},
+		{n(-1), nil, "max_upload_mb"},
+		{n(MaxUploadMB + 1), nil, "max_upload_mb"},
+		{nil, n(0), "upstream_timeout_s"},
+		{nil, n(MaxUpstreamTimeoutS + 1), "upstream_timeout_s"},
+	} {
+		h := validHost()
+		h.MaxUploadMB, h.UpstreamTimeoutS = tc.upload, tc.timeout
+		err := ProxyHost(&h)
+		if tc.field == "" {
+			if err != nil {
+				t.Errorf("%v/%v: %v", tc.upload, tc.timeout, err)
+			}
+			continue
+		}
+		if fe, ok := err.(Errors); !ok || len(fe) != 1 || fe[0].Field != tc.field {
+			t.Errorf("expected a %s error, got %v", tc.field, err)
+		}
+	}
+}
+
 func TestProxyHostSecurityHeaders(t *testing.T) {
 	h := validHost()
 	if err := ProxyHost(&h); err != nil || h.SecurityHeaders != "off" {
@@ -122,6 +151,8 @@ func TestAdvancedConfigSecurity(t *testing.T) {
 		"escape server via quote trick": `add_header "X" "a"; } server { listen 1; `,
 		"missing semicolon":             "proxy_read_timeout 30s",
 		"unterminated variable":         "set $a ${b;",
+		"directive hidden in ${...}":    "default_type ${; content_by_lua_block { ngx.exit(200) } add_header A b;",
+		"spaces in ${...}":              "set $a ${b c};",
 	}
 	for name, cfg := range bad {
 		if AdvancedConfig(cfg) == nil {
@@ -129,6 +160,7 @@ func TestAdvancedConfigSecurity(t *testing.T) {
 		}
 	}
 	good := []string{
+		"set $a ${host}_x;",
 		"location /static/ { root /var/www/site; }",
 		"proxy_set_header X-Foo ${host}bar;",
 		`add_header Content-Security-Policy "default-src 'self'; img-src * data:";`,

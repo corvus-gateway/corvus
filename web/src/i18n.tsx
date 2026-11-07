@@ -1,12 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ko } from "./locales/ko";
 import { en } from "./locales/en";
-import { zh } from "./locales/zh";
-import { ja } from "./locales/ja";
-import { ru } from "./locales/ru";
-import { fr } from "./locales/fr";
-import { de } from "./locales/de";
-import { es } from "./locales/es";
+import type { ko } from "./locales/ko";
+import type { RuleLabels } from "./lib/rules";
+import type { AuditLabels } from "./lib/audit";
 
 /** Supported console languages. English is the default and the fallback for missing keys. */
 export const LANGS = ["en", "ko", "zh", "ja", "ru", "fr", "de", "es"] as const;
@@ -24,11 +20,39 @@ export const LOCALE_TAG: Record<Lang, string> = {
 };
 export const localeTag = (l: Lang) => LOCALE_TAG[l] ?? "en-US";
 
-const dicts: Record<Lang, Partial<Record<Key, string>>> = { en, ko, zh, ja, ru, fr, de, es };
+/** A console language: its strings, plus rule and audit labels for languages other than ko/en. */
+export interface Locale { dict: Partial<Record<Key, string>>; rules?: RuleLabels; audit?: AuditLabels }
+
+// English is built in (it is the fallback); the other languages are separate chunks loaded
+// when chosen, so the first page load does not download every translation.
+const loaders: Record<Exclude<Lang, "en">, () => Promise<Locale>> = {
+  ko: () => import("./locales/ko").then((m) => ({ dict: m.ko })),
+  zh: () => import("./locales/zh").then((m) => ({ dict: m.zh, rules: m.zhRuleLabels, audit: m.zhAuditLabels })),
+  ja: () => import("./locales/ja").then((m) => ({ dict: m.ja, rules: m.jaRuleLabels, audit: m.jaAuditLabels })),
+  ru: () => import("./locales/ru").then((m) => ({ dict: m.ru, rules: m.ruRuleLabels, audit: m.ruAuditLabels })),
+  fr: () => import("./locales/fr").then((m) => ({ dict: m.fr, rules: m.frRuleLabels, audit: m.frAuditLabels })),
+  de: () => import("./locales/de").then((m) => ({ dict: m.de, rules: m.deRuleLabels, audit: m.deAuditLabels })),
+  es: () => import("./locales/es").then((m) => ({ dict: m.es, rules: m.esRuleLabels, audit: m.esAuditLabels })),
+};
+const loaded: Partial<Record<Lang, Locale>> = { en: { dict: en } };
+
+/** The loaded locale of a language (undefined until loadLang resolved). */
+export const localeOf = (l: Lang): Locale | undefined => loaded[l];
+
+/** Loads a language's strings; resolves to false when the chunk could not be loaded. */
+export async function loadLang(l: Lang): Promise<boolean> {
+  if (loaded[l]) return true;
+  try {
+    loaded[l] = await loaders[l as Exclude<Lang, "en">]();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export const isLang = (v: unknown): v is Lang => typeof v === "string" && (LANGS as readonly string[]).includes(v);
 
-function initialLang(): Lang {
+export function initialLang(): Lang {
   try {
     const saved = localStorage.getItem("corvus.lang");
     if (isLang(saved)) return saved;
@@ -40,14 +64,15 @@ export type TFn = (k: Key, vars?: Record<string, string | number>) => string;
 const Ctx = createContext<{ lang: Lang; setLang: (l: Lang) => void; t: TFn }>(null!);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(initialLang);
+  // main.tsx loads the saved language before the first render; English if that failed.
+  const [lang, setLangState] = useState<Lang>(() => { const l = initialLang(); return loaded[l] ? l : "en"; });
   useEffect(() => { document.documentElement.lang = lang; }, [lang]);
   const setLang = useCallback((l: Lang) => {
-    setLangState(l);
     try { localStorage.setItem("corvus.lang", l); } catch { /* ignore */ }
+    void loadLang(l).then((ok) => ok && setLangState(l));
   }, []);
   const t = useCallback<TFn>((k, vars) => {
-    const s = dicts[lang][k] ?? en[k] ?? k;
+    const s = loaded[lang]?.dict[k] ?? en[k] ?? k;
     return vars ? s.replace(/\{(\w+)\}/g, (_, n) => String(vars[n] ?? "")) : s;
   }, [lang]);
   const value = useMemo(() => ({ lang, setLang, t }), [lang, setLang, t]);

@@ -24,7 +24,12 @@ func TestDefaultBundleTemplatesValidate(t *testing.T) {
 	for _, tpl := range b.Templates {
 		for _, exempt := range []int64{0, 7} {
 			r := tpl.Rule("log", 403, "all", nil, exempt)
-			if err := validate.SecurityRule(&r, func(id int64) bool { return id == 7 }, nil); err != nil {
+			if err := validate.SecurityRule(&r, func(id int64) string {
+				if id == 7 {
+					return store.ListKindIP
+				}
+				return ""
+			}, nil); err != nil {
 				t.Errorf("template %s (exempt %d): %v", tpl.ID, exempt, err)
 			}
 		}

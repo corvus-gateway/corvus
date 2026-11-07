@@ -14,7 +14,8 @@ import { useI18n } from "../i18n";
 import { fmtDateTime, relTime } from "../lib/utils";
 
 interface IPBan { id: number; ip: string; reason: string; source: "auto" | "manual"; offenses: number; created_at: string; expires_at: string | null }
-interface AutoBan { enabled: boolean; threshold: number; window_s: number; duration_s: number; max_duration_s: number; permanent_after: number; include_scans: boolean; scan_threshold: number; exempt: string[] }
+interface AutoBan { enabled: boolean; threshold: number; window_s: number; duration_s: number; max_duration_s: number; permanent_after: number; include_scans: boolean; scan_threshold: number; exempt: string[];
+  bad_behaviour: boolean; bad_behaviour_codes: number[]; bad_behaviour_threshold: number; bad_behaviour_window_s: number }
 
 const DURATIONS: { v: number; k: "dur15m" | "dur1h" | "dur24h" | "dur7d" | "durForever" }[] = [
   { v: 900, k: "dur15m" }, { v: 3600, k: "dur1h" }, { v: 86400, k: "dur24h" }, { v: 7 * 86400, k: "dur7d" }, { v: 0, k: "durForever" },
@@ -85,6 +86,17 @@ export default function Bans() {
                       {s.include_scans && (
                         <div className="sm:w-1/3">
                           <IdField label={t("banScanThreshold")}>{(id) => <NumberInput id={id} min={20} max={100000} value={s.scan_threshold} onChange={(v) => setS({ ...s, scan_threshold: v })} />}</IdField>
+                        </div>
+                      )}
+                      <SwitchRow label={t("banBadBehaviour")} description={t("banBadBehaviourDesc")} checked={!!s.bad_behaviour} onChange={(v) => setS({ ...s, bad_behaviour: v })} />
+                      {s.bad_behaviour && (
+                        <div className="grid gap-4 sm:grid-cols-3">
+                          <IdField label={t("banBbThreshold")}>{(id) => <NumberInput id={id} min={3} max={100000} value={s.bad_behaviour_threshold || 10} onChange={(v) => setS({ ...s, bad_behaviour_threshold: v })} />}</IdField>
+                          <IdField label={t("banBbWindow")}>{(id) => <NumberInput id={id} min={10} max={3600} value={s.bad_behaviour_window_s || 60} onChange={(v) => setS({ ...s, bad_behaviour_window_s: v })} />}</IdField>
+                          <Field label={t("banBbCodes")}>
+                            <TagInput label={t("banBbCodes")} value={(s.bad_behaviour_codes ?? []).map(String)} validate={(v) => /^[45]\d\d$/.test(v.trim())}
+                              onChange={(v) => setS({ ...s, bad_behaviour_codes: [...new Set(v.map((x) => Number(x.trim())))].filter((n) => n >= 400 && n <= 599) })} placeholder="404, 403" />
+                          </Field>
                         </div>
                       )}
                       <Field label={t("banExempt")} hint={t("banExemptHint")} error={fieldErr(saveSettings.error, "autoban")}>

@@ -6,6 +6,7 @@ package validate
 import (
 	"fmt"
 	"net"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -21,6 +22,9 @@ type FieldError struct {
 }
 
 type Errors []FieldError
+
+// braceVarRe matches an nginx ${name} variable reference.
+var braceVarRe = regexp.MustCompile(`^\$\{[A-Za-z0-9_]+\}`)
 
 func (e Errors) Error() string {
 	parts := make([]string, len(e))
@@ -55,8 +59,15 @@ func Domain(d string) bool {
 }
 
 // ProxyHost normalizes and validates a proxy host in place.
+// Upper bounds of a proxy host's upload size (MB, 1 TB) and upstream timeout (s, 1 day).
+const (
+	MaxUploadMB         = 1048576
+	MaxUpstreamTimeoutS = 86400
+)
+
 func ProxyHost(h *store.ProxyHost) error {
 	var errs Errors
+	notes(&errs, &h.Notes)
 	switch h.BodyInspection {
 	case "":
 		h.BodyInspection = "log" // baseline: detect (log only) unless explicitly turned off
@@ -71,11 +82,18 @@ func ProxyHost(h *store.ProxyHost) error {
 	default:
 		errs.add("security_headers", "invalid", "security headers must be off, basic or strict")
 	}
+	underAttack(&errs, h)
 	if h.BodyMaxKB == 0 {
 		h.BodyMaxKB = 1024
 	}
 	if h.BodyMaxKB < 16 || h.BodyMaxKB > 8192 {
 		errs.add("body_max_kb", "invalid", "body inspection limit must be 16-8192 KiB")
+	}
+	if h.MaxUploadMB != nil && (*h.MaxUploadMB < 0 || *h.MaxUploadMB > MaxUploadMB) {
+		errs.add("max_upload_mb", "invalid", "maximum upload size must be 0 (unlimited) to %d MB", MaxUploadMB)
+	}
+	if h.UpstreamTimeoutS != nil && (*h.UpstreamTimeoutS < 1 || *h.UpstreamTimeoutS > MaxUpstreamTimeoutS) {
+		errs.add("upstream_timeout_s", "invalid", "upstream timeout must be 1-%d seconds", MaxUpstreamTimeoutS)
 	}
 	h.Domains = hostDomains(&errs, h.Domains)
 
@@ -86,14 +104,7 @@ func ProxyHost(h *store.ProxyHost) error {
 	if h.ForwardScheme != "http" && h.ForwardScheme != "https" {
 		errs.add("forward_scheme", "invalid", "scheme must be http or https")
 	}
-	h.ForwardHost = strings.ToLower(strings.TrimSpace(h.ForwardHost))
-	if ip := net.ParseIP(h.ForwardHost); ip != nil {
-		if ip.To4() == nil {
-			errs.add("forward_host", "ipv6_unsupported", "IPv6 upstreams are not supported yet")
-		}
-	} else if !upstreamRe.MatchString(h.ForwardHost) {
-		errs.add("forward_host", "invalid", "invalid upstream host %q", h.ForwardHost)
-	}
+	h.ForwardHost = forwardHost(&errs, "forward_host", h.ForwardHost)
 	if h.ForwardPort < 1 || h.ForwardPort > 65535 {
 		errs.add("forward_port", "invalid", "port must be 1-65535")
 	}
@@ -119,7 +130,21 @@ func ProxyHost(h *store.ProxyHost) error {
 	if err := AdvancedConfig(h.AdvancedConfig); err != nil {
 		errs.add("advanced_config", "invalid", "%s", err.Error())
 	}
+	locations(&errs, h)
 	return errs.OrNil()
+}
+
+// forwardHost normalizes and checks an upstream host name or IPv4 address.
+func forwardHost(errs *Errors, field, host string) string {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.To4() == nil {
+			errs.add(field, "ipv6_unsupported", "IPv6 upstreams are not supported yet")
+		}
+	} else if !upstreamRe.MatchString(host) {
+		errs.add(field, "invalid", "invalid upstream host %q", host)
+	}
+	return host
 }
 
 // hostDomains normalizes a host's server names (lower case, trimmed, deduplicated).
@@ -157,6 +182,7 @@ var redirectTargetRe = regexp.MustCompile(`^(` + labelRe + `\.)*` + labelRe + `(
 // RedirectionHost normalizes and validates a redirection host in place.
 func RedirectionHost(h *store.RedirectionHost) error {
 	var errs Errors
+	notes(&errs, &h.Notes)
 	h.Domains = hostDomains(&errs, h.Domains)
 	h.ForwardScheme = strings.ToLower(strings.TrimSpace(h.ForwardScheme))
 	if h.ForwardScheme == "" || h.ForwardScheme == "$scheme" {
@@ -211,6 +237,24 @@ var deniedDirective = regexp.MustCompile(`^(?:.*_by_lua(?:_block|_file)?|lua_\S+
 // sensitivePath: root/alias may not expose the data volume or system directories.
 var sensitivePath = regexp.MustCompile(`^/(?:$|data|etc|proc|sys|root|run|usr|opt|tmp|dev|bin|sbin|lib|lib64|home|var/(?:lib|run|log|cache|spool|tmp))(?:/|$)`)
 
+// webRootError checks the directory of a root/alias directive: it must be a literal
+// absolute path (no variables, which are resolved per request) and, once cleaned the
+// way the file system reads it ("//data", "/./data", "/x/../data" are all /data), stay
+// out of the data volume and system directories.
+func webRootError(name, v string) error {
+	v = strings.Trim(v, `"'`)
+	if strings.ContainsAny(v, "$\\") {
+		return fmt.Errorf("%s must be a plain directory path without variables", name)
+	}
+	if !strings.HasPrefix(v, "/") {
+		return fmt.Errorf("%s must be an absolute path", name)
+	}
+	if sensitivePath.MatchString(path.Clean(v)) {
+		return fmt.Errorf("%s may not point to %s", name, v)
+	}
+	return nil
+}
+
 // AdvancedConfig checks raw nginx snippets inserted into a server block. It
 // tokenizes the way nginx does (quotes with escapes, "#" comments only at a
 // token start, ${var} inside tokens) so braces cannot be hidden from the check,
@@ -242,8 +286,10 @@ func AdvancedConfig(s string) error {
 		if deniedDirective.MatchString(name) {
 			return fmt.Errorf("directive %q is not allowed in advanced configuration", stmt[0])
 		}
-		if (name == "root" || name == "alias") && len(stmt) > 1 && sensitivePath.MatchString(strings.Trim(stmt[1], `"'`)) {
-			return fmt.Errorf("%s may not point to %s", name, stmt[1])
+		if (name == "root" || name == "alias") && len(stmt) > 1 {
+			if err := webRootError(name, stmt[1]); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -280,13 +326,14 @@ func AdvancedConfig(s string) error {
 				i++
 			}
 		case c == '$' && i+1 < len(s) && s[i+1] == '{':
-			end := strings.IndexByte(s[i:], '}')
-			if end < 0 {
-				return fmt.Errorf("unterminated ${...} variable")
+			// ${name}: only a variable name may stand between the braces, as for nginx
+			m := braceVarRe.FindString(s[i:])
+			if m == "" {
+				return fmt.Errorf("invalid ${...} variable: only ${name} is allowed")
 			}
-			tok.WriteString(s[i : i+end+1])
+			tok.WriteString(m)
 			inTok = true
-			i += end
+			i += len(m) - 1
 		case c == '\\' && i+1 < len(s):
 			tok.WriteByte(s[i+1])
 			inTok = true
@@ -336,7 +383,7 @@ var rootLocationRe = regexp.MustCompile(`(?m)^\s*location\s+/\s*\{`)
 
 func HasRootLocation(s string) bool { return rootLocationRe.MatchString(s) }
 
-// Waitroom normalizes and validates a access queue in place.
+// Waitroom normalizes and validates an access queue in place.
 func Waitroom(w *store.Waitroom) error {
 	var errs Errors
 	w.Name = strings.ToLower(strings.TrimSpace(w.Name))

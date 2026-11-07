@@ -7,6 +7,7 @@ import (
 	"net"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"corvus/control/internal/netcfg"
 	"corvus/control/internal/store"
@@ -20,6 +21,8 @@ type rulesFile struct {
 	Geo       string              `json:"geo"`
 	BlockPage string              `json:"block_page"`
 	ErrorPage string              `json:"error_page"` // upstream errors 502/503/504
+	// Page for the "challenge" rule action (built-in only).
+	ChallengePage string `json:"challenge_page"`
 	// Request-body signatures from the active rule bundle (empty: built-in list in Lua).
 	BodySignatures []sigJSON `json:"body_signatures,omitempty"`
 }
@@ -36,6 +39,15 @@ type ruleJSON struct {
 	Status   int          `json:"status"`
 	SkipAuth bool         `json:"skip_auth"`
 	Groups   [][]condJSON `json:"groups"`
+	// Only for action "challenge" (gateway corvus/challenge.lua).
+	Challenge *challengeJSON `json:"challenge,omitempty"`
+}
+
+type challengeJSON struct {
+	Mode       string `json:"mode"`       // js | cookie
+	Difficulty int    `json:"difficulty"` // leading zero bits (js)
+	TTL        int    `json:"ttl"`        // pass cookie lifetime, seconds
+	Bind       string `json:"bind"`       // ip | ip_ua
 }
 
 type condJSON struct {
@@ -52,6 +64,15 @@ type hostJSON struct {
 	Exploits bool   `json:"exploits"`
 	Body     string `json:"body"`     // off | log | block
 	BodyMax  int    `json:"body_max"` // bytes
+	// "Under attack" challenge settings (proxy hosts whose mode is not off). On: always
+	// active; otherwise active while corvus-control has pushed an auto activation for
+	// the host (corvus/underattack.lua).
+	UnderAttack *underAttackJSON `json:"under_attack,omitempty"`
+}
+
+type underAttackJSON struct {
+	On bool `json:"on"`
+	challengeJSON
 }
 
 // GeoFile is where the country database lives (written by internal/geoip).
@@ -72,20 +93,22 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 		return nil, err
 	}
 	listByID := map[int64][]string{}
+	listKind := map[int64]string{}
 	for _, l := range lists {
 		lc := l
 		if err := validate.IPList(&lc); err != nil {
-			return nil, fmt.Errorf("IP list %d: %w", l.ID, err)
+			return nil, fmt.Errorf("list %d: %w", l.ID, err)
 		}
-		listByID[l.ID] = lc.Items
+		listByID[l.ID], listKind[l.ID] = lc.Items, lc.Kind
 	}
 	hostIDs := map[int64]bool{}
 	for _, h := range hosts {
 		hostIDs[h.ID] = true
 	}
 	out := &rulesFile{Rules: []ruleJSON{}, Hosts: map[string]hostJSON{}, Geo: c.P.GeoFile(),
-		BlockPage: filepath.ToSlash(filepath.Join(c.P.HTMLDir, "blocked.html")),
-		ErrorPage: filepath.ToSlash(filepath.Join(c.P.HTMLDir, "error.html"))}
+		BlockPage:     filepath.ToSlash(filepath.Join(c.P.HTMLDir, "blocked.html")),
+		ErrorPage:     filepath.ToSlash(filepath.Join(c.P.HTMLDir, "error.html")),
+		ChallengePage: filepath.ToSlash(filepath.Join(c.P.HTMLDir, "challenge.html"))}
 	if c.Bundle != nil {
 		if b := c.Bundle(); b != nil {
 			for _, sg := range b.Signatures {
@@ -118,10 +141,13 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 		}
 		rc := r
 		// Defense in depth: never render a rule that would not pass validation.
-		if err := validate.SecurityRule(&rc, func(id int64) bool { _, ok := listByID[id]; return ok }, func(id int64) bool { return hostIDs[id] }); err != nil {
+		if err := validate.SecurityRule(&rc, func(id int64) string { return listKind[id] }, func(id int64) bool { return hostIDs[id] }); err != nil {
 			return nil, fmt.Errorf("security rule %d: %w", r.ID, err)
 		}
 		rj := ruleJSON{ID: rc.ID, Action: rc.Action, Status: rc.StatusCode, SkipAuth: rc.SkipBasicAuth}
+		if rc.Action == "challenge" {
+			rj.Challenge = &challengeJSON{Mode: rc.ChallengeMode, Difficulty: rc.ChallengeDifficulty, TTL: rc.ChallengeTTL, Bind: rc.ChallengeBind}
+		}
 		for _, g := range rc.Expression.Groups {
 			var cg []condJSON
 			for _, cond := range g {
@@ -132,6 +158,9 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 						return nil, fmt.Errorf("security rule %d: %w", r.ID, err)
 					}
 					cj.V = nets
+				}
+				if cond.Field == "http.user_agent_list" {
+					cj.V = uaEntries(cond.Value, listByID)
 				}
 				cg = append(cg, cj)
 			}
@@ -149,6 +178,12 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 			continue
 		}
 		hj := hostJSON{Rules: []int{}, CF: h.ClientIP == "cloudflare", Exploits: h.BlockExploits, Body: h.BodyInspection, BodyMax: h.BodyMaxKB * 1024}
+		if h.UnderAttack == "on" || h.UnderAttack == "auto" {
+			uc := h.UnderAttackConfig
+			validate.UnderAttackDefaults(&uc)
+			hj.UnderAttack = &underAttackJSON{On: h.UnderAttack == "on",
+				challengeJSON: challengeJSON{Mode: uc.Mode, Difficulty: uc.Difficulty, TTL: uc.TTL, Bind: uc.Bind}}
+		}
 		for i, sc := range scopes {
 			if sc.all || sc.hosts[h.ID] {
 				hj.Rules = append(hj.Rules, i+1)
@@ -171,6 +206,27 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 		out.Hosts[redirectRuleKey(h.ID)] = hj
 	}
 	return out, nil
+}
+
+// uaEntries expands User-Agent list references into lower-cased, de-duplicated
+// substrings (matched case-insensitively by the gateway, see corvus/ualist.lua).
+func uaEntries(values []string, lists map[int64][]string) []string {
+	out := []string{}
+	seen := map[string]bool{}
+	for _, v := range values {
+		id, ok := store.ListRef(v)
+		if !ok {
+			continue
+		}
+		for _, e := range lists[id] {
+			e = strings.ToLower(e)
+			if !seen[e] {
+				seen[e] = true
+				out = append(out, e)
+			}
+		}
+	}
+	return out
 }
 
 // encodeNets expands IP list references and encodes every network as

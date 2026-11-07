@@ -139,16 +139,21 @@ func (o *OpenResty) WaitActive(ctx context.Context, name string, timeout time.Du
 	}
 	client := &http.Client{Timeout: time.Second, Transport: &http.Transport{DisableKeepAlives: true}}
 	deadline := time.Now().Add(timeout)
+	serving := ""
 	for {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, o.StatusURL, nil)
 		if resp, err := client.Do(req); err == nil {
 			b, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
 			resp.Body.Close()
-			if strings.TrimSpace(string(b)) == name {
+			serving = strings.TrimSpace(string(b))
+			if serving == name {
 				return nil
 			}
 		}
 		if time.Now().After(deadline) {
+			if serving != "" {
+				return &NotAcceptedError{Want: name, Serving: serving}
+			}
 			return fmt.Errorf("gateway did not report version %s within %s", name, timeout)
 		}
 		select {
@@ -157,6 +162,15 @@ func (o *OpenResty) WaitActive(ctx context.Context, name string, timeout time.Du
 		case <-time.After(50 * time.Millisecond):
 		}
 	}
+}
+
+// NotAcceptedError: after a reload the gateway kept serving another version, i.e. it
+// rejected the new configuration at run time (for example a port that is already in
+// use; `nginx -t` does not open sockets).
+type NotAcceptedError struct{ Want, Serving string }
+
+func (e *NotAcceptedError) Error() string {
+	return fmt.Sprintf("the gateway kept the previous configuration (%s) instead of %s; see the gateway log (for example a port that is already in use)", e.Serving, e.Want)
 }
 
 // Noop is used when running the control plane without a gateway (development).

@@ -31,7 +31,7 @@ fetch() { # url sha256 file
 fetch "https://openresty.org/download/openresty-${OPENRESTY_VERSION}.tar.gz" "$OPENRESTY_SHA256" openresty.tar.gz
 fetch "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" "$OPENSSL_SHA256" openssl.tar.gz
 fetch "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-${PCRE2_VERSION}/pcre2-${PCRE2_VERSION}.tar.gz" "$PCRE2_SHA256" pcre2.tar.gz
-fetch "https://zlib.net/zlib-${ZLIB_VERSION}.tar.gz" "$ZLIB_SHA256" zlib.tar.gz
+fetch "https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${ZLIB_VERSION}.tar.gz" "$ZLIB_SHA256" zlib.tar.gz
 for f in *.tar.gz; do tar xzf "$f"; done
 
 cd "openresty-${OPENRESTY_VERSION}"

@@ -3,10 +3,21 @@ import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
+import { streamsStrings } from "./streams.i18n";
+import { notesStrings } from "./notes.i18n";
+import { updateStrings } from "./update.i18n";
 import { headersStrings } from "./headers.i18n";
+import { locationsStrings } from "./locations.i18n";
+import { limitsStrings } from "./limits.i18n";
+import { certReplaceStrings } from "./certreplace.i18n";
+import { dnsCredsStrings } from "./dnscreds.i18n";
+import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import { pagesStrings } from "./pages.i18n";
+import { consoleHostStrings } from "./consolehost.i18n";
+import { challengeStrings } from "./challenge.i18n";
+import { underAttackStrings } from "./underattack.i18n";
 import type { ko } from "./ko";
 import type { RuleLabels } from "../lib/rules";
 import type { AuditLabels } from "../lib/audit";
@@ -243,7 +254,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   editUser: "编辑用户", userSheetDesc: "设置账号信息和角色。", initialPassword: "初始密码", generatePassword: "生成", copyPassword: "复制",
   initialPasswordHint: "至少 10 个字符。请安全地告知用户，并要求其首次登录后修改。", passwordKeepBlank: "留空则保留当前密码",
   roleSelf: "无法更改自己的角色。", userSaved: "用户已保存", userDeletedToast: "用户已删除",
-  resetPassword: "重置密码", resetPasswordDesc: "设置新密码后，该用户的所有会话将立即结束。", passwordResetDone: "密码已重置",
+  resetPassword: "重置密码", resetPasswordDesc: "设置新密码后，该用户的所有会话将立即结束，其 API 令牌也会被删除。", passwordResetDone: "密码已重置",
   resetMfa: "重置 MFA", resetMfaTitle: "确定重置两步验证？", resetMfaDesc: "将关闭该用户的两步验证，用户需要重新设置。", mfaResetDone: "MFA 已重置",
   disableUser: "停用", enableUser: "启用", userDisabledToast: "用户已停用", userEnabledToast: "用户已启用",
   disableUserDesc: "停用的用户无法登录，当前会话将立即结束。", deleteUser: "删除", deleteUserTitle: "删除用户", deleteUserDesc: "账号将被永久删除。审计记录将保留。",
@@ -304,18 +315,29 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   ...bansStrings.zh,
   ...tokensStrings.zh,
   ...redirectsStrings.zh,
+  ...streamsStrings.zh,
+  ...notesStrings.zh,
+  ...updateStrings.zh,
   ...headersStrings.zh,
+  ...locationsStrings.zh,
+  ...limitsStrings.zh,
+  ...certReplaceStrings.zh,
+  ...dnsCredsStrings.zh,
+  ...listFeedsStrings.zh,
   ...ssoStrings.zh,
   ...retentionStrings.zh,
   ...templatesStrings.zh,
   ...backupStrings.zh,
   ...pagesStrings.zh,
+  ...consoleHostStrings.zh,
+  ...challengeStrings.zh,
+  ...underAttackStrings.zh,
 };
 
 export const zhRuleLabels: RuleLabels | undefined = {
   field: {
     "ip.src": "IP 地址", "ip.country": "国家/地区", "http.host": "主机", "http.path": "路径", "http.query": "查询字符串",
-    "http.method": "方法", "http.user_agent": "User-Agent", "http.referer": "Referer", "http.header": "请求头", "http.body": "请求体", "http.scheme": "协议",
+    "http.method": "方法", "http.user_agent": "User-Agent", "http.user_agent_list": "User-Agent 列表", "http.referer": "Referer", "http.header": "请求头", "http.body": "请求体", "http.scheme": "协议",
   },
   op: {
     in: "属于", not_in: "不属于", eq: "等于", ne: "不等于", contains: "包含", not_contains: "不包含",
@@ -329,12 +351,12 @@ export const zhRuleLabels: RuleLabels | undefined = {
 
 export const zhAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "代理主机", redirection_host: "重定向主机", waitroom: "访问排队", certificate: "证书", deploy: "部署", auth: "认证", setup: "初始设置",
-    rate_limit: "速率限制", access_list: "Basic 认证", security_rule: "安全规则", ip_list: "IP 列表", geoip: "国家/地区数据库", settings: "设置", network: "网络", import: "导入", mfa: "MFA", user: "账号",
+    proxy_host: "代理主机", stream: "流转发", redirection_host: "重定向主机", waitroom: "访问排队", certificate: "证书", dns_credential: "DNS 凭据", deploy: "部署", auth: "认证", setup: "初始设置",
+    rate_limit: "速率限制", access_list: "Basic 认证", security_rule: "安全规则", ip_list: "IP 列表", geoip: "国家/地区数据库", settings: "设置", network: "网络", import: "导入", mfa: "MFA", user: "账号", ban: "IP 封禁", autoban: "自动封禁", sso: "SSO", token: "API 令牌", alert_channel: "告警渠道", alert_rules: "告警规则", backup: "备份", managed_rules: "托管规则", page: "页面", retention: "数据保留", unknown_hosts: "未知主机",
   },
   verb: {
     create: "已创建", update: "已更新", delete: "已删除", upload: "已上传", apply: "已应用", rollback: "已回滚", login: "登录", logout: "退出登录",
     login_failed: "登录失败", password_changed: "密码已修改", admin_created: "管理员已创建", renew: "已续期", issue: "已签发",
-    enable: "已启用", disable: "已停用", refresh: "已刷新", mfa_enabled: "MFA 已启用", mfa_disabled: "MFA 已停用", acme: "ACME 已签发", reorder: "顺序已调整",
+    enable: "已启用", disable: "已停用", refresh: "已刷新", mfa_enabled: "MFA 已启用", mfa_disabled: "MFA 已停用", acme: "ACME 已签发", reorder: "顺序已调整", auto: "(自动)", test: "已测试", reset: "已重置", restore_upload: "已上传恢复文件", restore_confirm: "已确认恢复", restore_discard: "已放弃恢复", restore_rejected: "已拒绝恢复",
   },
 };

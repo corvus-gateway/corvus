@@ -2,6 +2,8 @@ package validate
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"regexp"
 	"strings"
 	"unicode"
@@ -20,6 +22,13 @@ const (
 	MaxValues        = 1000
 	MaxRegexLen      = 512
 	MaxIPListItems   = 50000
+	MaxUAListItems   = 10000 // User-Agent lists are matched by a linear scan
+	MaxUAEntryLen    = 256
+	MinUAEntryLen    = 3 // shorter substrings match far too much
+	MinListRefreshS  = 300
+	MaxListRefreshS  = 7 * 86400
+	DefListRefreshS  = 3600
+	MaxListURLLen    = 2048
 	maxRuleNameRunes = 100
 )
 
@@ -40,9 +49,11 @@ var RuleFields = map[string]struct{ set, str, exists bool }{
 	"http.path":       {str: true},
 	"http.query":      {str: true},
 	"http.user_agent": {str: true, exists: true},
-	"http.referer":    {str: true, exists: true},
-	"http.header":     {str: true, exists: true},
-	"http.body":       {str: true},
+	// User-Agent contains (case-insensitive) any entry of a User-Agent list.
+	"http.user_agent_list": {set: true},
+	"http.referer":         {str: true, exists: true},
+	"http.header":          {str: true, exists: true},
+	"http.body":            {str: true},
 }
 
 // bodyOps: request bodies are matched as normalised text (see gateway corvus/body.lua).
@@ -67,9 +78,10 @@ func DisplayName(s string, max int) bool {
 	return true
 }
 
-// SecurityRule validates and normalises a rule. listExists reports whether an IP list id exists;
-// hostExists whether a proxy host id exists.
-func SecurityRule(r *store.SecurityRule, listExists, hostExists func(int64) bool) error {
+// SecurityRule validates and normalises a rule. listKind returns the kind of a list id
+// ("" when it does not exist; nil skips the check); hostExists reports whether a proxy
+// host id exists.
+func SecurityRule(r *store.SecurityRule, listKind func(int64) string, hostExists func(int64) bool) error {
 	var errs Errors
 	r.Name = strings.TrimSpace(r.Name)
 	r.Description = strings.TrimSpace(r.Description)
@@ -91,11 +103,12 @@ func SecurityRule(r *store.SecurityRule, listExists, hostExists func(int64) bool
 		r.SkipBasicAuth = false
 	case "allow":
 		r.StatusCode = 403
-	case "log":
+	case "log", "challenge":
 		r.StatusCode, r.SkipBasicAuth = 403, false
 	default:
-		errs.add("action", "invalid", "action must be block, allow or log")
+		errs.add("action", "invalid", "action must be block, allow, log or challenge")
 	}
+	challengeSettings(r, &errs)
 	switch r.Scope {
 	case "", "all":
 		r.Scope, r.HostIDs = "all", []int64{}
@@ -132,7 +145,7 @@ func SecurityRule(r *store.SecurityRule, listExists, hostExists func(int64) bool
 			errs.add("expression", "too_many", "at most %d conditions per group", MaxConditions)
 		}
 		for ci := range groups[gi] {
-			if err := condition(&groups[gi][ci], listExists); err != nil {
+			if err := condition(&groups[gi][ci], listKind); err != nil {
 				errs.add(fmt.Sprintf("expression.groups.%d.%d", gi, ci), "invalid", "%s", err.Error())
 			}
 		}
@@ -140,7 +153,52 @@ func SecurityRule(r *store.SecurityRule, listExists, hostExists func(int64) bool
 	return errs.OrNil()
 }
 
-func condition(c *store.Condition, listExists func(int64) bool) error {
+// Challenge limits: proof-of-work difficulty in leading zero bits (each bit doubles
+// the browser's work: 16 ≈ 65k hashes, 24 ≈ 17M) and the pass cookie lifetime.
+const (
+	MinChallengeDifficulty = 12
+	MaxChallengeDifficulty = 24
+	MinChallengeTTL        = 300
+	MaxChallengeTTL        = 7 * 86400
+)
+
+// challengeSettings validates the challenge fields of a challenge rule and resets them
+// to the defaults for other actions.
+func challengeSettings(r *store.SecurityRule, errs *Errors) {
+	if r.Action != "challenge" {
+		r.ChallengeMode, r.ChallengeDifficulty = store.DefaultChallengeMode, store.DefaultChallengeDifficulty
+		r.ChallengeTTL, r.ChallengeBind = store.DefaultChallengeTTL, store.DefaultChallengeBind
+		return
+	}
+	switch r.ChallengeMode {
+	case "":
+		r.ChallengeMode = store.DefaultChallengeMode
+	case "js", "cookie":
+	default:
+		errs.add("challenge_mode", "invalid", "challenge mode must be js or cookie")
+	}
+	if r.ChallengeDifficulty == 0 || r.ChallengeMode == "cookie" {
+		r.ChallengeDifficulty = store.DefaultChallengeDifficulty // not used in cookie mode
+	}
+	if r.ChallengeDifficulty < MinChallengeDifficulty || r.ChallengeDifficulty > MaxChallengeDifficulty {
+		errs.add("challenge_difficulty", "invalid", "difficulty must be %d-%d bits", MinChallengeDifficulty, MaxChallengeDifficulty)
+	}
+	if r.ChallengeTTL == 0 {
+		r.ChallengeTTL = store.DefaultChallengeTTL
+	}
+	if r.ChallengeTTL < MinChallengeTTL || r.ChallengeTTL > MaxChallengeTTL {
+		errs.add("challenge_ttl_s", "invalid", "challenge lifetime must be %d-%d seconds (5 minutes to 7 days)", MinChallengeTTL, MaxChallengeTTL)
+	}
+	switch r.ChallengeBind {
+	case "":
+		r.ChallengeBind = store.DefaultChallengeBind
+	case "ip", "ip_ua":
+	default:
+		errs.add("challenge_bind", "invalid", "challenge binding must be ip or ip_ua")
+	}
+}
+
+func condition(c *store.Condition, listKind func(int64) string) error {
 	f, ok := RuleFields[c.Field]
 	if !ok {
 		return fmt.Errorf("unknown field %q", c.Field)
@@ -185,8 +243,8 @@ func condition(c *store.Condition, listExists func(int64) bool) error {
 		var cidrs []string
 		for _, v := range vals {
 			if id, ok := store.ListRef(v); ok {
-				if listExists != nil && !listExists(id) {
-					return fmt.Errorf("IP list %d does not exist", id)
+				if err := checkListRef(id, store.ListKindIP, listKind); err != nil {
+					return err
 				}
 				continue
 			}
@@ -194,6 +252,16 @@ func condition(c *store.Condition, listExists func(int64) bool) error {
 		}
 		if _, err := netcfg.NormalizeCIDRs(cidrs); err != nil {
 			return err
+		}
+	case "http.user_agent_list":
+		for _, v := range vals {
+			id, ok := store.ListRef(v)
+			if !ok {
+				return fmt.Errorf("select a User-Agent list")
+			}
+			if err := checkListRef(id, store.ListKindUserAgent, listKind); err != nil {
+				return err
+			}
 		}
 	case "ip.country":
 		for i, v := range vals {
@@ -226,6 +294,23 @@ func condition(c *store.Condition, listExists func(int64) bool) error {
 	return nil
 }
 
+func checkListRef(id int64, want string, listKind func(int64) string) error {
+	if listKind == nil {
+		return nil
+	}
+	switch k := listKind(id); k {
+	case "":
+		return fmt.Errorf("list %d does not exist", id)
+	case want:
+		return nil
+	default:
+		if want == store.ListKindIP {
+			return fmt.Errorf("list %d is not an IP list", id)
+		}
+		return fmt.Errorf("list %d is not a User-Agent list", id)
+	}
+}
+
 // RuleRegex accepts patterns that are valid RE2 (no backreferences or lookaround), which
 // PCRE also understands. Backtracking at runtime is additionally capped by
 // lua_regex_match_limit in the gateway.
@@ -243,7 +328,7 @@ func RuleRegex(p string) error {
 	return nil
 }
 
-// IPList validates and normalises an IP list.
+// IPList validates and normalises a list (either kind) and its feed settings.
 func IPList(l *store.IPList) error {
 	var errs Errors
 	l.Name = strings.TrimSpace(l.Name)
@@ -254,12 +339,133 @@ func IPList(l *store.IPList) error {
 	if utf8.RuneCountInString(l.Description) > 500 {
 		errs.add("description", "invalid", "description must be at most 500 characters")
 	}
-	if len(l.Items) > MaxIPListItems {
-		errs.add("items", "too_many", "at most %d entries", MaxIPListItems)
-	} else if items, err := netcfg.NormalizeCIDRs(l.Items); err != nil {
-		errs.add("items", "invalid", "%s", err.Error())
-	} else {
-		l.Items = items
+	if l.Kind == "" {
+		l.Kind = store.ListKindIP
+	}
+	l.SourceURL = strings.TrimSpace(l.SourceURL)
+	if l.SourceURL != "" {
+		if err := FeedURL(l.SourceURL); err != nil {
+			errs.add("source_url", "invalid", "%s", err.Error())
+		}
+		if l.RefreshS == 0 {
+			l.RefreshS = DefListRefreshS
+		}
+		if l.RefreshS < MinListRefreshS || l.RefreshS > MaxListRefreshS {
+			errs.add("refresh_s", "invalid", "refresh interval must be %d seconds to 7 days", MinListRefreshS)
+		}
+	} else if l.RefreshS == 0 {
+		l.RefreshS = DefListRefreshS
+	}
+	switch l.Kind {
+	case store.ListKindIP:
+		if len(l.Items) > MaxIPListItems {
+			errs.add("items", "too_many", "at most %d entries", MaxIPListItems)
+		} else if items, err := netcfg.NormalizeCIDRs(l.Items); err != nil {
+			errs.add("items", "invalid", "%s", err.Error())
+		} else {
+			l.Items = items
+		}
+	case store.ListKindUserAgent:
+		if len(l.Items) > MaxUAListItems {
+			errs.add("items", "too_many", "at most %d entries", MaxUAListItems)
+		} else if items, err := NormalizeUAEntries(l.Items); err != nil {
+			errs.add("items", "invalid", "%s", err.Error())
+		} else {
+			l.Items = items
+		}
+	default:
+		errs.add("kind", "invalid", "kind must be ip or user_agent")
 	}
 	return errs.OrNil()
 }
+
+// UAEntry validates one User-Agent list entry: a plain, case-insensitive substring
+// (no wildcards or regular expressions), 3-256 bytes, printable.
+func UAEntry(v string) error {
+	if len(v) < MinUAEntryLen || len(v) > MaxUAEntryLen {
+		return fmt.Errorf("User-Agent entry %q must be %d-%d bytes", v, MinUAEntryLen, MaxUAEntryLen)
+	}
+	if !utf8.ValidString(v) {
+		return fmt.Errorf("User-Agent entry %q is not valid UTF-8", v)
+	}
+	for _, r := range v {
+		if unicode.IsControl(r) {
+			return fmt.Errorf("User-Agent entry %q contains control characters", v)
+		}
+	}
+	return nil
+}
+
+// NormalizeUAEntries trims, validates and de-duplicates (case-insensitively) entries.
+func NormalizeUAEntries(in []string) ([]string, error) {
+	out := []string{}
+	seen := map[string]bool{}
+	for _, v := range in {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		if err := UAEntry(v); err != nil {
+			return nil, err
+		}
+		k := strings.ToLower(v)
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, v)
+		}
+	}
+	return out, nil
+}
+
+// FeedURL checks the syntax of a list feed URL: https only, a host name, no credentials.
+// Where it may point is checked again when connecting (see internal/feeds).
+func FeedURL(raw string) error {
+	if len(raw) > MaxListURLLen {
+		return fmt.Errorf("URL must be at most %d characters", MaxListURLLen)
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.Hostname() == "" {
+		return fmt.Errorf("invalid URL")
+	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("only https:// URLs are allowed")
+	}
+	if u.User != nil {
+		return fmt.Errorf("credentials in the URL are not allowed")
+	}
+	if strings.ContainsAny(raw, " \t\r\n") {
+		return fmt.Errorf("invalid URL")
+	}
+	if ip := net.ParseIP(u.Hostname()); ip != nil && !PublicIP(ip) {
+		return fmt.Errorf("the URL must point to a public address")
+	}
+	if h := strings.ToLower(u.Hostname()); h == "localhost" || strings.HasSuffix(h, ".localhost") {
+		return fmt.Errorf("the URL must point to a public address")
+	}
+	return nil
+}
+
+// PublicIP reports whether ip is a globally routable unicast address (not loopback,
+// private, link-local, CGNAT, unspecified, multicast or documentation/benchmark ranges).
+func PublicIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsInterfaceLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() {
+		return false
+	}
+	for _, n := range nonPublic {
+		if n.Contains(ip) {
+			return false
+		}
+	}
+	return true
+}
+
+var nonPublic = func() []*net.IPNet {
+	var out []*net.IPNet
+	for _, c := range []string{"0.0.0.0/8", "100.64.0.0/10", "192.0.0.0/24", "192.0.2.0/24", "198.18.0.0/15",
+		"198.51.100.0/24", "203.0.113.0/24", "240.0.0.0/4", "100::/64", "2001:db8::/32"} {
+		_, n, _ := net.ParseCIDR(c)
+		out = append(out, n)
+	}
+	return out
+}()

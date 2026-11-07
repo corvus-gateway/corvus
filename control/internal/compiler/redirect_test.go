@@ -70,7 +70,7 @@ func TestRenderRedirectionHosts(t *testing.T) {
 	for _, want := range []string{
 		"server_name old.example.com www.old.example.com;",
 		"listen 443 ssl;", "http2 on;", "ssl_certificate     " + p.CertDir(issued.ID) + "/fullchain.pem;",
-		"location ^~ /.well-known/acme-challenge/ {\n        proxy_pass http://127.0.0.1:9181;",
+		"location ^~ /.well-known/acme-challenge/ {\n        proxy_http_version 1.1;\n        proxy_set_header Connection \"\";\n        proxy_pass http://corvus_acme;",
 		"if ($corvus_https_redirect) { return 301 https://$host$request_uri; }",
 		`set $corvus_redirect "https://new.example.com$request_uri";`, "return ngx.redirect(ngx.var.corvus_redirect, 301)",
 		`require("corvus.rules").rewrite("r1")`,

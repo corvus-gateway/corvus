@@ -85,9 +85,36 @@ export interface ProxyHost {
   client_ip?: ClientIPMode; rate_limit_id?: number | null; access_list_id?: number | null; block_exploits?: boolean;
   body_inspection?: "off" | "log" | "block"; body_max_kb?: number;
   security_headers?: SecurityHeaders;
+  /** null = global default (100 MB), 0 = unlimited. */
+  max_upload_mb?: number | null;
+  /** Upstream read/send timeout in seconds; null = default (60 s, WebSocket 1 h). */
+  upstream_timeout_s?: number | null;
+  gzip?: boolean;
+  /** Free text shown in the console only. */
+  notes?: string;
+  under_attack?: UnderAttackMode;
+  under_attack_config?: UnderAttackConfig;
+  locations?: ProxyLocation[];
   /** Read-only: usernames of the host's password protection (HTTP Basic auth). */
   basic_auth_users?: string[];
   created_at: string; updated_at: string;
+}
+
+/** Custom location of a proxy host: a path prefix routed to its own upstream. */
+export interface ProxyLocation {
+  path: string; forward_scheme: "http" | "https"; forward_host: string; forward_port: number;
+  forward_path: string; advanced_config: string;
+}
+
+/** "Under attack" mode of a proxy host (gateway/lua/corvus/underattack.lua). */
+export type UnderAttackMode = "off" | "on" | "auto";
+export interface UnderAttackConfig {
+  mode: "js" | "cookie"; difficulty: number; ttl_s: number; bind: "ip" | "ip_ua";
+  rps: number; blocked_pct: number; window_s: number; duration_s: number;
+}
+/** GET /api/under-attack */
+export interface UnderAttackStatus {
+  host_id: number; host: string; mode: "on" | "auto"; active: boolean; since?: string; until?: string; reason?: string;
 }
 
 /** Security header preset of a proxy host (gateway/lua/corvus/headers.lua). */
@@ -97,7 +124,13 @@ export type RedirectScheme = "auto" | "http" | "https";
 export interface RedirectionHost {
   id: number; domains: string[]; forward_scheme: RedirectScheme; forward_domain: string; http_code: number; preserve_path: boolean;
   certificate_id: number | null; ssl_forced: boolean; http2: boolean; block_exploits: boolean; advanced_config: string; enabled: boolean;
-  created_at: string; updated_at: string;
+  notes?: string; created_at: string; updated_at: string;
+}
+
+/** TCP/UDP port forwarding (GET /api/streams). */
+export interface Stream {
+  id: number; incoming_port: number; tcp_forwarding: boolean; udp_forwarding: boolean; forward_host: string; forward_port: number;
+  certificate_id: number | null; enabled: boolean; notes?: string; created_at: string; updated_at: string;
 }
 
 export interface LiveStats { name: string; available: boolean; active: number; waiting: number; capacity: number }
@@ -111,8 +144,11 @@ export interface Waitroom {
 
 export interface Certificate {
   id: number; name: string; kind: "selfsigned" | "custom" | "acme" | string; domains: string[]; not_after: string; created_at: string;
-  status?: "valid" | "pending" | "error"; last_error?: string; auto_renew?: boolean; challenge?: string;
+  status?: "valid" | "pending" | "error"; last_error?: string; auto_renew?: boolean; challenge?: string; dns_credential_id?: number;
 }
+
+/** Saved DNS-01 provider credential; the secret is never returned. */
+export interface DnsCredential { id: number; name: string; provider: string; used_by: number; created_at: string; updated_at: string }
 
 export interface Version {
   id: number; created_at: string; created_by: number | null; email: string; status: string; message: string;
@@ -134,6 +170,8 @@ export interface Overview {
   gateway?: { running: boolean; uptime_s?: number };
   traffic?: TrafficSummary | null;
   certificates_expiring?: number;
+  /** A newer Corvus release (checked on GitHub by the server), or null. */
+  update?: { version: string; url: string } | null;
 }
 
 export interface RateLimit {
@@ -154,25 +192,35 @@ export interface AccessList {
 
 export type RuleField =
   | "ip.src" | "ip.country" | "http.host" | "http.path" | "http.query" | "http.method"
-  | "http.user_agent" | "http.referer" | "http.header" | "http.scheme" | "http.body";
+  | "http.user_agent" | "http.user_agent_list" | "http.referer" | "http.header" | "http.scheme" | "http.body";
 export type RuleOperator =
   | "in" | "not_in" | "eq" | "ne" | "contains" | "not_contains" | "starts_with" | "ends_with"
   | "matches" | "not_matches" | "exists" | "not_exists";
 export interface RuleCondition { field: RuleField; name?: string; operator: RuleOperator; value: string[]; ci?: boolean }
-export type RuleAction = "block" | "allow" | "log";
+export type RuleAction = "block" | "allow" | "log" | "challenge";
+/** Rule event actions: rule actions plus the outcome of a challenge answer. */
+export type RuleEventAction = RuleAction | "challenge_pass" | "challenge_fail";
+export type ChallengeMode = "js" | "cookie";
+export type ChallengeBind = "ip" | "ip_ua";
 export interface SecurityRule {
   id: number; name: string; description: string; enabled: boolean; position: number;
   action: RuleAction; status_code: number; skip_basic_auth: boolean;
+  challenge_mode: ChallengeMode; challenge_difficulty: number; challenge_ttl_s: number; challenge_bind: ChallengeBind;
   scope: "all" | "hosts"; host_ids: number[];
   expression: { groups: RuleCondition[][] };
   hits_24h?: number; last_hit_at?: string | null; created_at?: string; updated_at?: string;
 }
 export interface RuleEvent {
-  t: number | string; rule_id: number; rule: string; action: RuleAction; host: string; ip: string;
+  t: number | string; rule_id: number; rule: string; action: RuleEventAction; host: string; ip: string;
   country?: string; method?: string; path?: string; ua?: string; status?: number;
 }
 export interface GeoipStatus { available: boolean; source?: string; updated_at?: string | null; ranges?: number; error?: string; attribution?: string }
-export interface IpList { id: number; name: string; description: string; items: string[]; rules?: number; created_at?: string; updated_at?: string }
+export type ListKind = "ip" | "user_agent";
+/** A list for security rules: IPs/CIDRs or User-Agent substrings; optionally fed from a URL (then read-only). */
+export interface IpList {
+  id: number; name: string; description: string; kind?: ListKind; items: string[]; rules?: number; created_at?: string; updated_at?: string;
+  source_url?: string; refresh_s?: number; fetched_at?: string | null; checked_at?: string | null; fetch_error?: string; fetch_warning?: string;
+}
 
 export interface TimePoint {
   t: number | string; requests: number; s2xx: number; s3xx: number; s4xx: number; s5xx: number; blocked: number;
@@ -180,17 +228,20 @@ export interface TimePoint {
 }
 export interface Timeseries { step_s: number; points: TimePoint[] }
 export interface HostTraffic { host: string; requests: number; rps: number; s4xx: number; s5xx: number; error_rate: number; p95: number; bytes_out: number; blocked: number }
-export interface PathTraffic { path: string; requests: number; errors: number; p95: number }
-export interface LogLine { ts: number | string; host: string; method: string; path: string; status: number; rt_ms: number; bytes: number; ip: string; wr?: string; ua?: string }
+export interface PathTraffic { host: string; path: string; requests: number; errors: number; p95: number }
+export interface LogLine { ts: number | string; host: string; method: string; path: string; status: number; rt_ms: number; bytes: number; ip: string; wr?: string; ua?: string; rule?: string }
 export type EventKind = "rate_limited" | "blocked_exploit" | "server_error" | "waitroom_queue" | "waitroom_fail"
-  | "exploit_detected" | "blocked_rule" | "rule_logged" | "blocked_body" | "body_detected" | "banned" | "rate_limit_dry_run";
+  | "exploit_detected" | "blocked_rule" | "rule_logged" | "blocked_body" | "body_detected" | "banned" | "rate_limit_dry_run"
+  | "challenge_issued" | "challenge_passed" | "challenge_failed";
 export interface TrafficEvent { ts: number | string; kind: EventKind; host: string; path: string; ip: string; count: number }
 
 export interface NpmPreview {
   proxy_hosts: { npm_id: number; domains: string[]; forward?: string; conflict?: string | boolean }[];
   redirection_hosts?: { npm_id: number; domains: string[]; forward?: string; conflict?: string | boolean }[];
+  streams?: { npm_id: number; incoming_port: number; forward_host: string; forward_port: number; tcp_forwarding: boolean; udp_forwarding: boolean; conflict?: string | boolean }[];
   certificates: { npm_id: number; name?: string; nice_name?: string; domains?: string[] }[];
   access_lists: { npm_id: number; name?: string }[];
+  unknown_hosts?: { mode: "not_found" | "close" | "redirect"; redirect_url: string };
   warnings: string[];
 }
 

@@ -3,10 +3,21 @@ import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
+import { streamsStrings } from "./streams.i18n";
+import { notesStrings } from "./notes.i18n";
+import { updateStrings } from "./update.i18n";
 import { headersStrings } from "./headers.i18n";
+import { locationsStrings } from "./locations.i18n";
+import { limitsStrings } from "./limits.i18n";
+import { certReplaceStrings } from "./certreplace.i18n";
+import { dnsCredsStrings } from "./dnscreds.i18n";
+import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import { pagesStrings } from "./pages.i18n";
+import { consoleHostStrings } from "./consolehost.i18n";
+import { challengeStrings } from "./challenge.i18n";
+import { underAttackStrings } from "./underattack.i18n";
 import { enSecurity } from "./security.en";
 import { enUsers } from "./users.en";
 import type { ko } from "./ko";
@@ -48,7 +59,7 @@ export const en: Record<keyof typeof ko, string> = {
   setupToken: "Setup token", setupTokenHint: "Find it in the corvus container logs (docker compose logs corvus).", createAdmin: "Create administrator",
   mfaTitle: "Two-step verification", mfaSub: "Enter the 6-digit code from your authenticator app.", mfaRecoverySub: "Enter one of your saved recovery codes.",
   recoveryCode: "Recovery code", verify: "Verify", useRecovery: "Use a recovery code", useAuthenticator: "Use authenticator code",
-  brandHeadline: "Protect, route, and observe your traffic.", brandSub: "From proxy and TLS management to real-time monitoring, rate limiting and a access queue, run it all from a single gateway.",
+  brandHeadline: "Protect, route, and observe your traffic.", brandSub: "From proxy and TLS management to real-time monitoring, rate limiting and an access queue, run it all from a single gateway.",
   valueTrafficTitle: "Real-time traffic monitoring", valueTrafficDesc: "See requests, errors and latency by the second and spot anomalies instantly.",
   valueRoomTitle: "Virtual access queue", valueRoomDesc: "Stay up under sudden surges by admitting visitors within your capacity.",
   valueSecTitle: "Enterprise-grade security", valueSecDesc: "Security rules, rate limits, automatic certificate renewal and an audit trail of every change.",
@@ -61,7 +72,7 @@ export const en: Record<keyof typeof ko, string> = {
   liveTraffic: "Live traffic", liveTrafficDesc: "Requests by status class", perStep: "{s}s buckets", noTrafficYet: "No traffic recorded yet",
   noTrafficYetDesc: "Requests to your proxy hosts will show up here.",
   liveRooms: "Access queues", activeLabel: "Active", waitingLabel: "Waiting", capacityLabel: "Capacity", occupancy: "full", liveUnavailable: "Live state unavailable (check the cache DB)",
-  noRooms: "No access queues", noRoomsDesc: "Create a access queue to see its live status here.",
+  noRooms: "No access queues", noRoomsDesc: "Create an access queue to see its live status here.",
   systemHealth: "System health", controlPlane: "Control server",
   redisDown: "Cannot reach the cache DB. Access queues follow their own failure policy (fail-open / fail-closed).",
   cacheDb: "Cache DB",
@@ -92,7 +103,7 @@ export const en: Record<keyof typeof ko, string> = {
   hostEnabledDesc: "When off, the configuration is kept but excluded from the gateway.",
   // rooms
   roomsDesc: "During sudden surges, admit only up to your capacity and queue the rest in order.",
-  addRoom: "Add access queue", editRoom: "Edit access queue", roomSheetDesc: "Set capacity, admission rate and expiry times.", noRoomsDescLong: "Create a access queue and attach it to a proxy host to handle events and flash sales safely.",
+  addRoom: "Add access queue", editRoom: "Edit access queue", roomSheetDesc: "Set capacity, admission rate and expiry times.", noRoomsDescLong: "Create an access queue and attach it to a proxy host to handle events and flash sales safely.",
   roomActive: "Active", roomReleasedBadge: "Released", roomEnabled: "Access queue turned back on", roomReleased: "Access queue released. All requests now pass without waiting",
   noAttachedHosts: "No hosts attached", secBasic: "Basics", roomName: "Name", roomNameHint: "Lowercase letters, digits and hyphens. Cannot be changed after creation.",
   roomNameImmutable: "The name cannot be changed after creation.", roomDisabledNote: "When off, everyone passes without waiting (emergency release).",
@@ -164,7 +175,7 @@ export const en: Record<keyof typeof ko, string> = {
   lastUpdated: "Last updated", cfNoInfo: "Cloudflare IP list information is unavailable.", cfUsageHint: "Used when a proxy host's 'Client IP' is set to Cloudflare.",
   // traffic
   trafficDesc: "Watch requests, errors and latency in real time, and search or export logs.", allHosts: "All hosts", live: "Live", tabOverview: "Overview", tabLogs: "Request logs", tabEvents: "Events",
-  queuedRequests: "Queued", queuedHint: "Sent to a access queue", egress: "Egress", requestsByStatus: "Requests by status", latency: "Response latency", latencyDesc: "Percentiles",
+  queuedRequests: "Queued", queuedHint: "Sent to an access queue", egress: "Egress", requestsByStatus: "Requests by status", latency: "Response latency", latencyDesc: "Percentiles",
   byHost: "By host", topPaths: "Top paths", searchLogs: "Search path or IP", allStatus: "All statuses", noLogs: "No logs to show", noLogsDesc: "Change the filters or widen the range.",
   responseTime: "Response time", eventType: "Event type", allEvents: "All events", noEvents: "No events", noEventsDesc: "Blocks, errors and queueing show up here in chronological order.",
   evRateLimited: "Rate limited", evBlockedExploit: "Exploit path blocked", evServerError: "Server error (5xx)", evWaitroomQueue: "Visitors waiting in access queue", evWaitroomFail: "Access queue failure policy applied",
@@ -203,10 +214,21 @@ export const en: Record<keyof typeof ko, string> = {
   ...bansStrings.en,
   ...tokensStrings.en,
   ...redirectsStrings.en,
+  ...streamsStrings.en,
+  ...notesStrings.en,
+  ...updateStrings.en,
   ...headersStrings.en,
+  ...locationsStrings.en,
+  ...limitsStrings.en,
+  ...certReplaceStrings.en,
+  ...dnsCredsStrings.en,
+  ...listFeedsStrings.en,
   ...ssoStrings.en,
   ...retentionStrings.en,
   ...templatesStrings.en,
   ...backupStrings.en,
   ...pagesStrings.en,
+  ...consoleHostStrings.en,
+  ...challengeStrings.en,
+  ...underAttackStrings.en,
 };

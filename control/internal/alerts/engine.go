@@ -14,6 +14,7 @@ import (
 	"corvus/control/internal/seal"
 	"corvus/control/internal/store"
 	"corvus/control/internal/traffic"
+	"corvus/control/internal/underattack"
 )
 
 // Sources are the signals the engine evaluates.
@@ -21,6 +22,9 @@ type Sources struct {
 	Traffic *traffic.Collector
 	RedisUp func(ctx context.Context) bool
 	Rooms   func(ctx context.Context) []live.Stats
+	// UnderAttack returns the automatic under-attack activations and deactivations
+	// since the last call (underattack.Service.Drain).
+	UnderAttack func() []underattack.Transition
 }
 
 type Engine struct {
@@ -31,6 +35,7 @@ type Engine struct {
 
 	mu          sync.Mutex
 	state       map[string]*active
+	resolved    map[string]time.Time // recently resolved alerts (re-firing within the cooldown is quiet)
 	lastVersion int64
 	started     time.Time
 }
@@ -44,6 +49,7 @@ type active struct {
 	Since    time.Time `json:"since"`
 	lastSent time.Time
 	msg      Message
+	missed   int // evaluation rounds in a row without the condition
 }
 
 // finding is one detected condition in an evaluation round.
@@ -58,6 +64,9 @@ type finding struct {
 func (e *Engine) init() {
 	if e.state == nil {
 		e.state = map[string]*active{}
+	}
+	if e.resolved == nil {
+		e.resolved = map[string]time.Time{}
 	}
 }
 
@@ -114,7 +123,15 @@ func (e *Engine) Evaluate(ctx context.Context, now time.Time) {
 		m := Message{Rule: f.rule, Severity: r.Severity, Status: "firing", Title: f.title, Text: f.text, Fields: f.fields,
 			Labels: map[string]string{"rule": f.rule, "key": f.key}, Link: link(set.PublicURL, f.rule), Time: now}
 		a, ok := e.state[id]
+		if ok {
+			a.missed = 0
+		}
 		switch {
+		case !ok && !f.oneShot && now.Sub(e.resolved[id]) < cooldown:
+			// back within the cooldown of its last resolution (a flapping condition):
+			// track it again without a new notification
+			e.state[id] = &active{Rule: f.rule, Key: f.key, Severity: r.Severity, Title: f.title, Text: f.text, Since: now, lastSent: e.resolved[id], msg: m}
+			delete(e.resolved, id)
 		case !ok:
 			if !f.oneShot {
 				e.state[id] = &active{Rule: f.rule, Key: f.key, Severity: r.Severity, Title: f.title, Text: f.text, Since: now, lastSent: now, msg: m}
@@ -132,13 +149,23 @@ func (e *Engine) Evaluate(ctx context.Context, now time.Time) {
 		if seen[id] {
 			continue
 		}
+		// one round without the condition can be noise: resolve after two in a row
+		if a.missed++; a.missed < 2 {
+			continue
+		}
 		delete(e.state, id)
+		e.resolved[id] = now
 		if set.SendResolved {
 			m := a.msg
 			m.Status, m.Time = "resolved", now
 			m.Title = tr["resolved"] + " · " + a.Title
 			m.Text = fmt.Sprintf(tr["resolvedText"], humanDuration(now.Sub(a.Since), set.Language))
 			send = append(send, m)
+		}
+	}
+	for id, t := range e.resolved {
+		if now.Sub(t) >= cooldown {
+			delete(e.resolved, id)
 		}
 	}
 	e.mu.Unlock()
@@ -161,6 +188,8 @@ func link(base, rule string) string {
 		return base + "/audit"
 	case "waitroom_queue", "redis_down":
 		return base + "/waitrooms"
+	case "under_attack":
+		return base + "/proxy-hosts"
 	}
 	return base + "/traffic"
 }
@@ -235,6 +264,13 @@ func (e *Engine) detect(ctx context.Context, set Settings, tr map[string]string,
 		out = append(out, securityFindings(c, on, win, mins, tr, now)...)
 	}
 
+	if e.Src.UnderAttack != nil {
+		events := e.Src.UnderAttack() // drained every round, also while the rule is off
+		if _, ok := on("under_attack"); ok {
+			out = append(out, underAttackFindings(events, tr, set.Language)...)
+		}
+	}
+
 	if e.Src.Rooms != nil {
 		rooms := e.Src.Rooms(ctx)
 		if r, ok := on("waitroom_queue"); ok {
@@ -265,7 +301,8 @@ func (e *Engine) detect(ctx context.Context, set Settings, tr map[string]string,
 			}
 			key := fmt.Sprint(c.ID)
 			days := time.Until(c.NotAfter).Hours() / 24
-			if expOn && c.Status == "valid" && days <= r1.Threshold {
+			// also after failed renewals (status "error" once expired); not while pending
+			if expOn && c.Status != "pending" && !c.NotAfter.IsZero() && days <= r1.Threshold {
 				out = append(out, finding{rule: "cert_expiry", key: key, title: fmt.Sprintf(tr["cert_expiry"], name),
 					text:   fmt.Sprintf(tr["cert_expiryText"], days, c.NotAfter.Format("2006-01-02"), map[bool]string{true: tr["autoRenewOn"], false: tr["autoRenewOff"]}[c.AutoRenew]),
 					fields: [][2]string{{tr["certificate"], name}, {tr["expires"], c.NotAfter.Format("2006-01-02")}}})
@@ -282,7 +319,12 @@ func (e *Engine) detect(ctx context.Context, set Settings, tr map[string]string,
 		after := e.lastVersion
 		e.mu.Unlock()
 		if vs, err := e.Store.FailedVersionsSince(ctx, after); err == nil {
+			// advance only past what was read: a failure recorded meanwhile is not skipped
+			last := after
 			for _, v := range vs {
+				if v.ID > last {
+					last = v.ID
+				}
 				who := v.Email
 				if who == "" {
 					who = "system"
@@ -290,10 +332,8 @@ func (e *Engine) detect(ctx context.Context, set Settings, tr map[string]string,
 				out = append(out, finding{rule: "deploy_failed", key: fmt.Sprint(v.ID), oneShot: true, title: fmt.Sprintf(tr["deploy_failed"], v.ID),
 					text: trim(v.TestOutput, 500), fields: [][2]string{{tr["change"], v.Message}, {tr["by"], who}}})
 			}
-		}
-		if id, err := e.Store.MaxVersionID(ctx); err == nil {
 			e.mu.Lock()
-			e.lastVersion = id
+			e.lastVersion = last
 			e.mu.Unlock()
 		}
 	}

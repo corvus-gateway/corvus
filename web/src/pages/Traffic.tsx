@@ -1,6 +1,6 @@
 import { useSearchParams } from "react-router-dom";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Activity, AlertOctagon, Ban, Download, Gauge, Hourglass, ListFilter, Radio, ScrollText, ServerCrash, TimerReset, type LucideIcon } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Activity, AlertOctagon, Ban, BadgeCheck, Download, Gauge, Hourglass, ListFilter, Puzzle, Radio, ScrollText, ServerCrash, TimerReset, type LucideIcon } from "lucide-react";
 import { getText, type EventKind, type HostTraffic, type LogLine, type PathTraffic, type Timeseries, type TrafficEvent, type TrafficSummary } from "../api";
 import { ChartLegend, StackBar, TimeChart, type Series } from "../components/charts";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
@@ -54,7 +54,9 @@ export default function Traffic() {
     return (<><PageHeader title={t("navTraffic")} description={t("trafficDesc")} /><Card><ComingSoon icon={Activity} /></Card></>);
   }
 
-  const hostOptions = (hostsRes.data ?? []).map((h) => h.host);
+  const listed = (hostsRes.data ?? []).map((h) => h.host);
+  // the active filter stays visible even when that host had no traffic in this range
+  const hostOptions = host && !listed.includes(host) ? [host, ...listed] : listed;
   return (
     <>
       <PageHeader title={t("navTraffic")} description={t("trafficDesc")} actions={
@@ -90,6 +92,7 @@ function Overview({ qs, poll, summary, loading, error, hosts, hostsLoading, onHo
   const { t, lang } = useI18n();
   const ts = useResource<Timeseries>(`/api/traffic/timeseries?${qs}`, { poll });
   const paths = useResource<PathTraffic[]>(`/api/traffic/top-paths?${qs}`, { poll });
+  const host = qs.includes("&host=");
   const points = ts.data?.points ?? [];
   const step = ts.data?.step_s || 1;
 
@@ -161,10 +164,10 @@ function Overview({ qs, poll, summary, loading, error, hosts, hostsLoading, onHo
               {paths.data.slice(0, 10).map((p) => {
                 const max = Math.max(...paths.data!.map((x) => x.requests), 1);
                 return (
-                  <li key={p.path} className="relative px-4 py-2.5">
+                  <li key={`${p.host} ${p.path}`} className="relative px-4 py-2.5">
                     <div aria-hidden className="absolute inset-y-0 left-0 bg-brand/[0.06]" style={{ width: `${(p.requests / max) * 100}%` }} />
                     <div className="relative flex items-center justify-between gap-3">
-                      <span className="min-w-0 truncate font-mono text-xs" title={p.path}>{p.path}</span>
+                      <span className="min-w-0 truncate font-mono text-xs" title={host ? p.path : p.host + p.path}>{!host && <span className="text-fg-subtle">{p.host}</span>}{p.path}</span>
                       <span className="flex shrink-0 items-center gap-3 text-xs">
                         {p.errors > 0 && <span className="num text-danger">{fmtNum(p.errors)} err</span>}
                         <span className="num text-fg-subtle">{fmtMs(p.p95)}</span>
@@ -192,13 +195,15 @@ function Logs({ qs, poll, initialQ = "" }: { qs: string; poll: number; initialQ?
   const [status, setStatus] = useState("");
   const [q, setQ] = useState(initialQ);
   const [limit, setLimit] = useState(200);
+  const [open, setOpen] = useState("");
   const dq = useDebounced(q);
-  const query = `${qs}&limit=${limit}${status ? `&status=${status}` : ""}${dq ? `&q=${encodeURIComponent(dq)}` : ""}`;
+  const filters = `${qs}${status ? `&status=${status}` : ""}${dq ? `&q=${encodeURIComponent(dq)}` : ""}`;
+  const query = `${filters}&limit=${limit}`;
   const res = useResource<{ items: LogLine[] }>(`/api/traffic/logs?${query}`, { poll });
   const exp = useSubmit();
 
   const doExport = async (format: "csv" | "json") => {
-    const text = await exp.run(() => getText(`/api/traffic/logs?${query}&limit=1000&format=${format}`), { deployed: false });
+    const text = await exp.run(() => getText(`/api/traffic/logs?${filters}&limit=1000&format=${format}`), { deployed: false });
     if (text != null) download(`corvus-traffic-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.${format}`, text, format === "csv" ? "text/csv" : "application/json");
   };
   const items = res.data?.items ?? [];
@@ -221,8 +226,12 @@ function Logs({ qs, poll, initialQ = "" }: { qs: string; poll: number; initialQ?
         <Table>
           <THead><tr><Th>{t("when")}</Th><Th>{t("request")}</Th><Th>{t("status")}</Th><Th className="hidden text-right sm:table-cell">{t("responseTime")}</Th><Th className="hidden text-right md:table-cell">{t("size")}</Th><Th className="hidden lg:table-cell">IP</Th><Th className="hidden xl:table-cell">{t("waitroom")}</Th></tr></THead>
           <tbody>
-            {items.map((l, i) => (
-              <Tr key={i}>
+            {items.map((l, i) => {
+              const id = `${l.ts}|${l.ip}|${l.method}|${l.path}`;
+              const isOpen = open === id;
+              return (
+              <Fragment key={i}>
+              <Tr className="cursor-pointer" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? "" : id)}>
                 <Td className="whitespace-nowrap font-mono text-xs text-fg-muted" title={fmtDateTime(toMs(l.ts), lang)}>{fmtClock(toMs(l.ts))}</Td>
                 <Td className="max-w-[28rem]"><div className="flex items-baseline gap-1"><span className={methodCls}>{l.method}</span><span className="truncate font-mono text-xs" title={l.path}>{l.path}</span></div><div className="text-xs text-fg-subtle">{l.host}</div></Td>
                 <Td><Badge tone={statusTone(l.status)}>{l.status}</Badge></Td>
@@ -231,11 +240,36 @@ function Logs({ qs, poll, initialQ = "" }: { qs: string; poll: number; initialQ?
                 <Td className="hidden font-mono text-xs text-fg-muted lg:table-cell">{l.ip}</Td>
                 <Td className="hidden text-xs xl:table-cell">{l.wr ? <Badge tone="brand">{l.wr}</Badge> : <span className="text-fg-subtle">–</span>}</Td>
               </Tr>
-            ))}
+              {isOpen && (
+                <tr className="bg-surface-2/50">
+                  <td colSpan={7} className="px-4 py-3">
+                    <dl className="grid gap-x-6 gap-y-1.5 text-xs sm:grid-cols-[max-content_1fr]">
+                      <LogField label={t("when")}>{fmtDateTime(toMs(l.ts), lang)}</LogField>
+                      <LogField label={t("request")}>{l.method} {l.host}{l.path}</LogField>
+                      <LogField label="IP">{l.ip}</LogField>
+                      {l.wr && <LogField label={t("waitroom")}>{l.wr}</LogField>}
+                      {l.rule && <LogField label={t("rule")}>{l.rule}</LogField>}
+                      <LogField label="User-Agent">{l.ua || "–"}</LogField>
+                    </dl>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
+              );
+            })}
           </tbody>
         </Table>
       )}
     </Card>
+  );
+}
+
+function LogField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <>
+      <dt className="text-fg-subtle">{label}</dt>
+      <dd className="break-all font-mono text-fg-muted">{children}</dd>
+    </>
   );
 }
 
@@ -252,6 +286,9 @@ const eventMeta: Record<EventKind, { icon: LucideIcon; tone: Tone; key: Key }> =
   server_error: { icon: ServerCrash, tone: "danger", key: "evServerError" },
   waitroom_queue: { icon: Hourglass, tone: "info", key: "evWaitroomQueue" },
   waitroom_fail: { icon: AlertOctagon, tone: "warn", key: "evWaitroomFail" },
+  challenge_issued: { icon: Puzzle, tone: "info", key: "evChallengeIssued" },
+  challenge_passed: { icon: BadgeCheck, tone: "ok", key: "evChallengePassed" },
+  challenge_failed: { icon: Puzzle, tone: "warn", key: "evChallengeFailed" },
 };
 
 function Events({ qs, poll }: { qs: string; poll: number }) {

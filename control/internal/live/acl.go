@@ -10,7 +10,7 @@ import (
 )
 
 // Commands the access queue needs: the atomic script (EVALSHA/EVAL) and the commands
-// it runs, DEL for the test-only reset endpoint, and connection housekeeping. Redis 7
+// it runs, DEL for the test-only reset endpoint and for removed queues, and connection housekeeping. Redis 7
 // checks ACLs for commands run inside scripts too, so this list is the whole surface.
 var aclCommands = []string{
 	"evalsha", "eval", "time",

@@ -6,8 +6,6 @@
 package traffic
 
 import (
-	"bytes"
-	"encoding/json"
 	"log/slog"
 	"math"
 	"net"
@@ -19,7 +17,7 @@ import (
 	"time"
 )
 
-// Record is one access log entry as emitted by the gateway (log_format corvus_json).
+// Record is one access log entry as emitted by the gateway (log_format corvus_log, parse.go).
 type Record struct {
 	T  float64 `json:"t"`  // $msec
 	H  string  `json:"h"`  // configured host name ($corvus_host)
@@ -33,7 +31,7 @@ type Record struct {
 	X  string  `json:"x"`  // exploit rule matched (detect-only unless the host blocks)
 	RL string  `json:"rl"` // $limit_req_status
 	UA string  `json:"ua"`
-	R  string  `json:"r"`  // security rule match "<id>:<action>" ($corvus_rule)
+	R  string  `json:"r"`  // security rule match "<id>:<action>" ($corvus_rule; challenge, challenge_pass, challenge_fail for challenges)
 	CC string  `json:"cc"` // client country used by rules ($corvus_cc)
 	BD string  `json:"bd"` // body inspection "<signature>:<log|block>" ($corvus_body)
 	BN string  `json:"bn"` // "1" when the client address is banned ($corvus_ban)
@@ -50,7 +48,20 @@ const (
 	pathMinutes = 60
 	pathCap     = 2000
 	ipCap       = 20000
+	srcStep     = 10    // seconds
+	srcSlots    = 360   // one hour
+	srcIPCap    = 20000 // client IPs tracked per slot
 )
+
+type srcSlot struct {
+	start int64
+	ips   map[string]*srcAct
+}
+
+type srcAct struct {
+	kinds map[string]int64
+	hosts map[string]bool
+}
 
 // latency histogram upper bounds in milliseconds (last bucket = +Inf)
 var latBounds = []float64{1, 2, 3, 5, 8, 12, 18, 27, 40, 60, 90, 135, 200, 300, 450, 700, 1000, 1500, 2200, 3300, 5000, 7500, 11000, 16000, 24000, 36000, 60000}
@@ -61,6 +72,7 @@ type bucket struct {
 	start                                  int64
 	count, s2, s3, s4, s5, blocked, queued int64
 	bytes                                  int64
+	banned                                 int64 // refused because the client is banned (part of blocked)
 	hist                                   [nLat]uint32
 }
 
@@ -79,6 +91,9 @@ func (b *bucket) add(r *Record, blocked bool) {
 	if blocked {
 		b.blocked++
 	}
+	if r.BN != "" {
+		b.banned++
+	}
 	if r.WR == "queue" {
 		b.queued++
 	}
@@ -95,6 +110,7 @@ func (b *bucket) merge(o *bucket) {
 	b.s4 += o.s4
 	b.s5 += o.s5
 	b.blocked += o.blocked
+	b.banned += o.banned
 	b.queued += o.queued
 	b.bytes += o.bytes
 	for i := range b.hist {
@@ -128,9 +144,13 @@ func (b *bucket) quantile(q float64) float64 {
 type series struct {
 	fine   [fineSlots]bucket
 	coarse [coarseSlots]bucket
+	last   int64 // unix time of the latest request
 }
 
 func (s *series) add(ts int64, r *Record, blocked bool) {
+	if ts > s.last {
+		s.last = ts
+	}
 	f := &s.fine[(ts/fineStep)%fineSlots]
 	if start := ts - ts%fineStep; f.start != start {
 		*f = bucket{start: start}
@@ -200,8 +220,16 @@ type Collector struct {
 	events  []Event
 	evIndex map[string]int // key → index in events for the current minute
 	evMin   int64
+	// event counts per client IP in 10-second slots, for automatic bans and alerts:
+	// unlike the display ring above (eventCap entries), it keeps the full hour during a
+	// wide attack
+	src     [srcSlots]srcSlot
 	started time.Time
 	dropped int64
+
+	// uniq caches unique-IP counts per host and window (see Summary): counting means
+	// merging up to an hour of per-minute IP sets, too costly for every 4 s dashboard poll.
+	uniq map[string]uniqCount
 
 	ruleStats  map[int64]*ruleStat
 	ruleEvents []RuleEvent
@@ -242,7 +270,7 @@ func (c *Collector) Listen(path string, stop <-chan struct{}) error {
 	go func() {
 		buf := make([]byte, 64<<10)
 		for {
-			n, _, err := conn.ReadFromUnix(buf)
+			n, err := conn.Read(buf)
 			if err != nil {
 				select {
 				case <-stop:
@@ -259,20 +287,13 @@ func (c *Collector) Listen(path string, stop <-chan struct{}) error {
 	return nil
 }
 
-// Ingest parses one syslog datagram ("<pri>... tag: {json}") and records it.
+// Ingest parses one datagram (see parseDatagram) and records its entries.
 func (c *Collector) Ingest(msg []byte) {
-	i := bytes.IndexByte(msg, '{')
-	if i < 0 {
-		return
-	}
-	var r Record
-	if err := json.Unmarshal(msg[i:], &r); err != nil {
+	if bad := parseDatagram(msg, c.Add); bad > 0 {
 		c.mu.Lock()
-		c.dropped++
+		c.dropped += int64(bad)
 		c.mu.Unlock()
-		return
 	}
-	c.Add(&r)
 }
 
 // classify returns whether the gateway blocked the request and every notable
@@ -280,7 +301,7 @@ func (c *Collector) Ingest(msg []byte) {
 // dry-run rate limit at the same time).
 func classify(r *Record) (blocked bool, kinds []string) {
 	switch {
-	case r.RL == "REJECTED" || r.S == 429:
+	case r.RL == "REJECTED" || (r.S == 429 && !waitroomHeld(r.WR)):
 		blocked = true
 		kinds = append(kinds, "rate_limited")
 	case r.RL == "REJECTED_DRY_RUN":
@@ -299,13 +320,21 @@ func classify(r *Record) (blocked bool, kinds []string) {
 			kinds = append(kinds, "body_detected")
 		}
 	}
-	if _, action, ok := parseRule(r.R); ok {
+	if action, ok := ruleAction(r.R); ok {
 		switch action {
 		case "block":
 			blocked = true
 			kinds = append(kinds, "blocked_rule")
 		case "log":
 			kinds = append(kinds, "rule_logged")
+		// Log-mode rule matches and challenges are neither blocks nor attacks: they never
+		// count toward automatic bans or security alerts (see autoban.Kinds, alerts.securityKinds).
+		case "challenge":
+			kinds = append(kinds, "challenge_issued")
+		case "challenge_pass":
+			kinds = append(kinds, "challenge_passed")
+		case "challenge_fail":
+			kinds = append(kinds, "challenge_failed")
 		}
 	}
 	if r.X != "" {
@@ -326,6 +355,19 @@ func classify(r *Record) (blocked bool, kinds []string) {
 		kinds = append(kinds, "server_error")
 	}
 	return blocked, kinds
+}
+
+// waitroomHeld reports whether the access queue answered the request itself (cookie
+// check, waiting, queue full; 429 + Retry-After): visitors told to wait, not rate limited.
+func waitroomHeld(wr string) bool {
+	return wr == "cookie-check" || wr == "queue" || wr == "full"
+}
+
+// isChallenge reports whether the gateway answered with a challenge page (issued, or
+// re-issued after a failed answer) instead of the site's response.
+func isChallenge(r *Record) bool {
+	action, ok := ruleAction(r.R)
+	return ok && (action == "challenge" || action == "challenge_fail")
 }
 
 func (c *Collector) Add(r *Record) {
@@ -358,7 +400,7 @@ func (c *Collector) Add(r *Record) {
 	c.global.add(ts, r, blocked)
 	hs := c.hosts[r.H]
 	if hs == nil {
-		if len(c.hosts) >= maxHosts {
+		if len(c.hosts) >= maxHosts && !c.evictIdleHost(ts) {
 			r.H = "(other)"
 			hs = c.hosts[r.H]
 		}
@@ -407,8 +449,8 @@ func (c *Collector) Add(r *Record) {
 		}
 		if st != nil {
 			st.n++
-			if r.S >= 400 && r.S < 500 {
-				st.s4++
+			if r.S >= 400 && r.S < 500 && !isChallenge(r) {
+				st.s4++ // scanner detection: challenge pages are not counted
 			}
 			st.host = r.H
 		}
@@ -446,6 +488,7 @@ func (c *Collector) Add(r *Record) {
 			c.events = append(c.events, Event{TS: r.T, Kind: kind, Host: r.H, Path: r.U, IP: r.IP, Rule: r.X, Count: 1, seq: c.evSeq})
 			c.evIndex[ek] = len(c.events) - 1
 		}
+		c.countSource(ts, kind, r.H, r.IP, 1)
 	}
 }
 
@@ -519,8 +562,31 @@ type Summary struct {
 	UniqueIPs int     `json:"unique_ips"` // over min(range, 1h)
 }
 
+type uniqCount struct {
+	at time.Time
+	n  int
+}
+
+// uniqTTL is how long a unique-IP count is reused.
+const uniqTTL = 5 * time.Second
+
+// Summary is SummaryFor plus the number of unique client IPs (over min(range, 1h)),
+// for the API. The count is cached for uniqTTL.
 func (c *Collector) Summary(rangeName, host string, now time.Time) Summary {
-	out := c.SummaryFor(Range(rangeName), host, now)
+	d := Range(rangeName)
+	out := c.SummaryFor(d, host, now)
+	c.mu.Lock()
+	key := host + "|" + d.String()
+	if u, ok := c.uniq[key]; ok && now.Sub(u.at) >= 0 && now.Sub(u.at) < uniqTTL {
+		out.UniqueIPs = u.n
+	} else {
+		out.UniqueIPs = c.uniqueIPs(host, now.Unix(), d)
+		if c.uniq == nil || len(c.uniq) > 1000 {
+			c.uniq = map[string]uniqCount{}
+		}
+		c.uniq[key] = uniqCount{at: now, n: out.UniqueIPs}
+	}
+	c.mu.Unlock()
 	out.Range = rangeName
 	if out.Range == "" {
 		out.Range = "15m"
@@ -528,7 +594,8 @@ func (c *Collector) Summary(rangeName, host string, now time.Time) Summary {
 	return out
 }
 
-// SummaryFor aggregates an arbitrary window (rounded to the bucket size).
+// SummaryFor aggregates an arbitrary window (rounded to the bucket size). It leaves
+// UniqueIPs at 0 (see Summary): the alert engine calls it for every host and rule.
 func (c *Collector) SummaryFor(d time.Duration, host string, now time.Time) Summary {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -554,7 +621,6 @@ func (c *Collector) SummaryFor(d time.Duration, host string, now time.Time) Summ
 	if b := &s.fine[(last/fineStep)%fineSlots]; b.start == last {
 		out.RPS = round2(float64(b.count) / fineStep)
 	}
-	out.UniqueIPs = c.uniqueIPs(host, ts, d)
 	return out
 }
 
@@ -874,19 +940,105 @@ func (c *Collector) EventsByIP(since time.Time, kinds ...string) map[string]*Sou
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	out := map[string]*SourceActivity{}
-	ts := float64(since.UnixMilli()) / 1000
-	for _, e := range c.events {
-		if !want[e.Kind] || e.TS < ts || e.IP == "" {
+	// 10-second slots that start at or after since: the partly covered first slot is
+	// left out (an undercount of at most 10 s, never counting events from before since)
+	from := float64(since.UnixMilli()) / 1000
+	for i := range c.src {
+		b := &c.src[i]
+		if b.ips == nil || float64(b.start) < from {
 			continue
 		}
-		a := out[e.IP]
-		if a == nil {
-			a = &SourceActivity{Hosts: map[string]bool{}, Kinds: map[string]bool{}}
-			out[e.IP] = a
+		for ip, s := range b.ips {
+			for k, n := range s.kinds {
+				if !want[k] {
+					continue
+				}
+				a := out[ip]
+				if a == nil {
+					a = &SourceActivity{Hosts: map[string]bool{}, Kinds: map[string]bool{}}
+					out[ip] = a
+				}
+				a.Count += n
+				a.Kinds[k] = true
+				for h := range s.hosts {
+					a.Hosts[h] = true
+				}
+			}
 		}
-		a.Count += e.Count
-		a.Hosts[e.Host] = true
-		a.Kinds[e.Kind] = true
 	}
 	return out
+}
+
+// Window sums the requests and blocked requests (blocks and rate limits) of host over
+// the complete 10-second buckets of the last d (rounded up to 10 s, at most 1 h); the
+// bucket still being filled is left out. secs is the time span covered.
+func (c *Collector) Window(host string, d time.Duration, now time.Time) (requests, blocked int64, secs int64) {
+	n := (int64(d.Seconds()) + fineStep - 1) / fineStep
+	if n < 1 {
+		n = 1
+	}
+	if n > fineSlots-1 {
+		n = fineSlots - 1
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	s := c.hosts[host]
+	if s == nil {
+		return 0, 0, n * fineStep
+	}
+	ts := now.Unix()
+	end := ts - ts%fineStep // start of the current, incomplete bucket
+	for start := end - n*fineStep; start < end; start += fineStep {
+		if b := &s.fine[(start/fineStep)%fineSlots]; b.start == start {
+			// banned clients are already refused at no cost: they must not keep a host
+			// in "under attack" mode for everyone else
+			requests += b.count - b.banned
+			blocked += b.blocked - b.banned
+		}
+	}
+	return requests, blocked, n * fineStep
+}
+
+// evictIdleHost makes room for a new host name (hosts renamed or removed keep their
+// series otherwise, and later hosts would only be counted as "(other)", invisible to
+// "under attack" auto mode): it drops the series idle for the longest time, if that is
+// over an hour. Caller holds c.mu.
+func (c *Collector) evictIdleHost(now int64) bool {
+	oldest, at := "", now
+	for h, s := range c.hosts {
+		if h != "(other)" && s.last < at {
+			oldest, at = h, s.last
+		}
+	}
+	if oldest == "" || now-at < 3600 {
+		return false
+	}
+	delete(c.hosts, oldest)
+	return true
+}
+
+// countSource adds n events of kind from ip at unix time ts to the per-IP slots (caller
+// holds c.mu). Slots older than an hour are overwritten.
+func (c *Collector) countSource(ts int64, kind, host, ip string, n int64) {
+	if ip == "" || n <= 0 {
+		return
+	}
+	start := ts - ts%srcStep
+	b := &c.src[(start/srcStep)%srcSlots]
+	if b.start != start || b.ips == nil {
+		if b.start > start && b.ips != nil {
+			return // a newer slot already uses this place (restored event older than an hour)
+		}
+		b.start, b.ips = start, map[string]*srcAct{}
+	}
+	a := b.ips[ip]
+	if a == nil {
+		if len(b.ips) >= srcIPCap {
+			return
+		}
+		a = &srcAct{kinds: map[string]int64{}, hosts: map[string]bool{}}
+		b.ips[ip] = a
+	}
+	a.kinds[kind] += n
+	a.hosts[host] = true
 }

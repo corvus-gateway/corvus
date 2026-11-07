@@ -105,8 +105,8 @@ func NormalizeCIDRs(in []string) ([]string, error) {
 			if ip == nil {
 				return nil, fmt.Errorf("invalid IP %q", v)
 			}
-			if ip.To4() != nil {
-				v += "/32"
+			if ip4 := ip.To4(); ip4 != nil {
+				v = ip4.String() + "/32" // also ::ffff:a.b.c.d
 			} else {
 				v += "/128"
 			}
@@ -115,11 +115,30 @@ func NormalizeCIDRs(in []string) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid CIDR %q", v)
 		}
-		c := n.String()
+		c, ok := cidrString(n)
+		if !ok {
+			continue
+		}
 		if !seen[c] {
 			seen[c] = true
 			out = append(out, c)
 		}
 	}
 	return out, nil
+}
+
+// cidrString formats a parsed network. Go prints an IPv4-mapped IPv6 network
+// (::ffff:a.b.c.d/p) in IPv4 form with the 128-bit mask, so ::ffff:0:0/96 would become
+// 0.0.0.0/0 (all of IPv4). A mapped network of IPv4 /8 or narrower becomes that IPv4
+// network; broader ones (special-use entries of IPv6 lists, which never match a client
+// address the gateway sees) are left out (ok = false).
+func cidrString(n *net.IPNet) (string, bool) {
+	ones, bits := n.Mask.Size()
+	if bits == 128 && n.IP.To4() != nil {
+		if ones < 104 {
+			return "", false
+		}
+		return (&net.IPNet{IP: n.IP.To4(), Mask: net.CIDRMask(ones-96, 32)}).String(), true
+	}
+	return n.String(), true
 }

@@ -82,7 +82,7 @@ func TestApplyRenderTestAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	conf := readCurrent(t, d, "hosts/1.conf")
-	for _, want := range []string{"server_name shop.example.com;", `set $corvus_upstream "app";`, `location ~* "^/event(?:[/;]|$)" {`, `set $corvus_room "event";`, "proxy_pass http://$corvus_upstream:8080;"} {
+	for _, want := range []string{"server_name shop.example.com;", `set $corvus_upstream "app";`, `location ~* "^/event(?:[/;]|$)" {`, `set $corvus_room "event";`, "server app:8080 max_fails=0 resolve;", "proxy_pass http://corvus_up_1;"} {
 		if !strings.Contains(conf, want) {
 			t.Errorf("host config missing %q:\n%s", want, conf)
 		}

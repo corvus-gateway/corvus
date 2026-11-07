@@ -31,10 +31,22 @@ type Settings struct {
 	IncludeScans   bool     `json:"include_scans"`   // also ban "possible scanner" IPs (many 4xx)
 	ScanThreshold  int      `json:"scan_threshold"`
 	Exempt         []string `json:"exempt"` // CIDRs never banned automatically
+
+	// Bad behaviour (BunkerWeb-style): the gateway counts responses with one of these
+	// status codes per client IP and proxy host, and bans the IP immediately once
+	// BadBehaviourThreshold is reached within BadBehaviourWindowS. Requires Enabled.
+	BadBehaviour          bool  `json:"bad_behaviour"`
+	BadBehaviourCodes     []int `json:"bad_behaviour_codes"`
+	BadBehaviourThreshold int   `json:"bad_behaviour_threshold"`
+	BadBehaviourWindowS   int   `json:"bad_behaviour_window_s"`
 }
 
+// DefaultBadBehaviourCodes are the response codes counted as bad behaviour by default.
+var DefaultBadBehaviourCodes = []int{400, 401, 403, 404, 405, 429, 444}
+
 func DefaultSettings() Settings {
-	return Settings{Enabled: true, Threshold: 20, WindowS: 600, DurationS: 900, MaxDurationS: 7 * 86400, IncludeScans: false, ScanThreshold: 200, Exempt: []string{}}
+	return Settings{Enabled: true, Threshold: 20, WindowS: 600, DurationS: 900, MaxDurationS: 7 * 86400, IncludeScans: false, ScanThreshold: 200, Exempt: []string{},
+		BadBehaviour: false, BadBehaviourCodes: append([]int(nil), DefaultBadBehaviourCodes...), BadBehaviourThreshold: 10, BadBehaviourWindowS: 60}
 }
 
 // maxDuration is the upper limit for any automatic ban; offense history is kept as long
@@ -42,7 +54,9 @@ func DefaultSettings() Settings {
 const maxDuration = 30 * 24 * time.Hour
 
 // Detection kinds that count toward a ban (bans themselves do not).
-var Kinds = []string{"blocked_exploit", "exploit_detected", "blocked_rule", "rule_logged", "blocked_body", "body_detected"}
+// Matches of security rules in Log mode ("rule_logged") are not counted: operators use Log to
+// try a rule on real traffic, and the visitors it matches are not attackers.
+var Kinds = []string{"blocked_exploit", "exploit_detected", "blocked_rule", "blocked_body", "body_detected"}
 
 func Load(ctx context.Context, s *store.Store) Settings {
 	set := DefaultSettings()
@@ -81,6 +95,37 @@ func Validate(s *Settings) error {
 	if s.ScanThreshold < 20 {
 		return fmt.Errorf("scanner threshold must be at least 20")
 	}
+	if len(s.BadBehaviourCodes) == 0 {
+		s.BadBehaviourCodes = append([]int(nil), DefaultBadBehaviourCodes...)
+	}
+	seen := map[int]bool{}
+	codes := make([]int, 0, len(s.BadBehaviourCodes))
+	for _, c := range s.BadBehaviourCodes {
+		if c < 400 || c > 599 {
+			return fmt.Errorf("bad behaviour status codes must be 400-599")
+		}
+		if !seen[c] {
+			seen[c] = true
+			codes = append(codes, c)
+		}
+	}
+	if len(codes) > 30 {
+		return fmt.Errorf("at most 30 bad behaviour status codes")
+	}
+	sort.Ints(codes)
+	s.BadBehaviourCodes = codes
+	if s.BadBehaviourThreshold == 0 {
+		s.BadBehaviourThreshold = 10
+	}
+	if s.BadBehaviourThreshold < 3 || s.BadBehaviourThreshold > 100000 {
+		return fmt.Errorf("bad behaviour threshold must be 3-100000")
+	}
+	if s.BadBehaviourWindowS == 0 {
+		s.BadBehaviourWindowS = 60
+	}
+	if s.BadBehaviourWindowS < 10 || s.BadBehaviourWindowS > 3600 {
+		return fmt.Errorf("bad behaviour window must be 10-3600 seconds")
+	}
 	ex, err := netcfg.NormalizeCIDRs(s.Exempt)
 	if err != nil {
 		return err
@@ -93,10 +138,12 @@ type Service struct {
 	Store   *store.Store
 	Traffic *traffic.Collector
 	PushURL string // gateway status endpoint, e.g. http://127.0.0.1:9180/bans
+	HitsURL string // pending bad-behaviour bans, e.g. http://127.0.0.1:9180/bad-behaviour
 	Client  *http.Client
 
 	mu      sync.Mutex
 	trigger chan struct{}
+	acks    map[string]string // processed gateway hits (ip → hit id), confirmed with the next push
 }
 
 // Trigger re-evaluates and pushes soon (after manual changes).
@@ -129,6 +176,11 @@ func (s *Service) Run(ctx context.Context) {
 		case <-ch:
 		}
 		now := time.Now()
+		if hits, err := s.Pull(ctx); err != nil {
+			slog.Debug("bad behaviour poll failed", "err", err)
+		} else if len(hits) > 0 {
+			s.RecordHits(ctx, now, hits)
+		}
 		s.Evaluate(ctx, now)
 		if err := s.Push(ctx, now); err != nil {
 			slog.Debug("ban push failed", "err", err)
@@ -140,19 +192,8 @@ func (s *Service) Run(ctx context.Context) {
 	}
 }
 
-func exempt(ip net.IP, nets []*net.IPNet) bool {
-	if ip == nil || ip.IsLoopback() {
-		return true
-	}
-	for _, n := range nets {
-		if n.Contains(ip) {
-			return true
-		}
-	}
-	return false
-}
-
-// Evaluate bans IPs over the thresholds; returns the IPs banned in this round.
+// Evaluate bans clients over the thresholds (IPv4 addresses, IPv6 /64s); returns the
+// bans made in this round.
 func (s *Service) Evaluate(ctx context.Context, now time.Time) []string {
 	set := Load(ctx, s.Store)
 	if !set.Enabled || s.Traffic == nil {
@@ -176,7 +217,7 @@ func (s *Service) Evaluate(ctx context.Context, now time.Time) []string {
 	}
 	var cands []cand
 	window := time.Duration(set.WindowS) * time.Second
-	for ip, a := range s.Traffic.EventsByIP(now.Add(-window), Kinds...) {
+	for ip, a := range eventsByKey(s.Traffic, now.Add(-window), Kinds...) {
 		if a.Count >= int64(set.Threshold) {
 			kinds := make([]string, 0, len(a.Kinds))
 			for k := range a.Kinds {
@@ -187,7 +228,7 @@ func (s *Service) Evaluate(ctx context.Context, now time.Time) []string {
 		}
 	}
 	if set.IncludeScans {
-		for ip, a := range s.Traffic.IPCounts(window, now) {
+		for ip, a := range countsByKey(s.Traffic, window, now) {
 			if a.S4xx >= int64(set.ScanThreshold) && a.S4xx*2 >= a.Requests {
 				cands = append(cands, cand{ip, fmt.Sprintf("possible scanner: %d of %d responses were 4xx in %s", a.S4xx, a.Requests, window), a.S4xx})
 			}
@@ -195,8 +236,7 @@ func (s *Service) Evaluate(ctx context.Context, now time.Time) []string {
 	}
 	var banned []string
 	for _, c := range cands {
-		ip := net.ParseIP(c.ip)
-		if active[c.ip] || exempt(ip, nets) {
+		if active[c.ip] || exemptKey(c.ip, nets) {
 			continue
 		}
 		offenses := 1
@@ -206,7 +246,7 @@ func (s *Service) Evaluate(ctx context.Context, now time.Time) []string {
 			// only detections after it ended count, so an unbanned IP is not re-banned
 			// for what it did before.
 			if old.ExpiresAt != nil && old.ExpiresAt.After(now.Add(-window)) {
-				a := s.Traffic.EventsByIP(*old.ExpiresAt, Kinds...)[c.ip]
+				a := eventsByKey(s.Traffic, *old.ExpiresAt, Kinds...)[c.ip]
 				if a == nil || a.Count < int64(set.Threshold) {
 					continue
 				}
@@ -229,7 +269,12 @@ func (s *Service) Evaluate(ctx context.Context, now time.Time) []string {
 	return banned
 }
 
-// Push sends the full active ban list to the gateway: {"ips": {"<ip>": <expires unix or 0>}}.
+// Push sends the full active ban list to the gateway:
+//
+//	{"ips": {"<ip>": <expires unix or 0>}, "now": <unix>,
+//	 "bb": <bad-behaviour configuration>, "ack": {"<ip>": "<hit id>"}}
+//
+// Gateway-local bad-behaviour bans that are not acknowledged yet survive the push.
 func (s *Service) Push(ctx context.Context, now time.Time) error {
 	if s.PushURL == "" {
 		return nil
@@ -244,13 +289,16 @@ func (s *Service) Push(ctx context.Context, now time.Time) error {
 		if b.ExpiresAt != nil {
 			exp = b.ExpiresAt.Unix()
 		}
-		ips[b.IP] = exp
+		ips[GatewayKey(b.IP)] = exp
 	}
-	body, _ := json.Marshal(map[string]any{"ips": ips, "now": now.Unix()})
-	c := s.Client
-	if c == nil {
-		c = &http.Client{Timeout: 3 * time.Second}
+	s.mu.Lock()
+	acks := s.acks
+	s.mu.Unlock()
+	if acks == nil {
+		acks = map[string]string{}
 	}
+	body, _ := json.Marshal(map[string]any{"ips": ips, "now": now.Unix(), "bb": gatewayConfig(Load(ctx, s.Store)), "ack": acks})
+	c := s.client()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, s.PushURL, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -264,7 +312,21 @@ func (s *Service) Push(ctx context.Context, now time.Time) error {
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("gateway answered %d", resp.StatusCode)
 	}
+	s.mu.Lock()
+	for ip, id := range acks {
+		if s.acks[ip] == id {
+			delete(s.acks, ip)
+		}
+	}
+	s.mu.Unlock()
 	return nil
+}
+
+func (s *Service) client() *http.Client {
+	if s.Client != nil {
+		return s.Client
+	}
+	return &http.Client{Timeout: 3 * time.Second}
 }
 
 // banUntil returns when the automatic ban for the given offense ends; nil = permanent.

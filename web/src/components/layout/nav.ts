@@ -1,5 +1,5 @@
 import {
-  Activity, Archive, ArrowLeftRight, Ban, Bell, FileInput, FileWarning, Fingerprint, Gauge, Globe, KeySquare, LayoutDashboard, ListChecks, ShieldBan, Network, ScrollText, ShieldCheck, Signpost, UserCog, Users, UsersRound, type LucideIcon,
+  Activity, Archive, ArrowLeftRight, Ban, Bell, Cable, FileInput, FileWarning, Fingerprint, Gauge, Globe, KeySquare, LayoutDashboard, ListChecks, ShieldBan, Network, ScrollText, ShieldCheck, Signpost, UserCog, Users, UsersRound, type LucideIcon,
 } from "lucide-react";
 import type { Key } from "../../i18n";
 
@@ -12,6 +12,7 @@ export const groups: NavGroup[] = [
     label: "navGroupTraffic", items: [
       { to: "/proxy-hosts", label: "navHosts", icon: Globe },
       { to: "/redirection-hosts", label: "navRedirects", icon: Signpost },
+      { to: "/streams", label: "navStreams", icon: Cable },
       { to: "/waitrooms", label: "navRooms", icon: Users },
       { to: "/traffic", label: "navTraffic", icon: Activity },
       { to: "/rate-limits", label: "navRateLimits", icon: Gauge },

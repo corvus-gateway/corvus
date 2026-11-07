@@ -1,0 +1,10 @@
+/* Screenshots: a thin frame so light console images stand out on a light page. */
+.md-typeset img.shot {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .08);
+}
+.md-typeset figure { margin: 1.2em auto; }
+.md-typeset figcaption { font-size: .75rem; color: var(--md-default-fg-color--light); }
+/* Sidebar-width panel screenshots (edit forms) stay readable instead of stretching. */
+.md-typeset img.panel { max-width: 560px; width: 100%; }

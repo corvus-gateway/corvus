@@ -1,0 +1,3 @@
+# Documentation site build (CI only — nothing here ships in the product image)
+mkdocs-material==9.7.7
+mkdocs==1.6.1

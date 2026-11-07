@@ -3,10 +3,21 @@ import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
+import { streamsStrings } from "./streams.i18n";
+import { notesStrings } from "./notes.i18n";
+import { updateStrings } from "./update.i18n";
 import { headersStrings } from "./headers.i18n";
+import { locationsStrings } from "./locations.i18n";
+import { limitsStrings } from "./limits.i18n";
+import { certReplaceStrings } from "./certreplace.i18n";
+import { dnsCredsStrings } from "./dnscreds.i18n";
+import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import { pagesStrings } from "./pages.i18n";
+import { consoleHostStrings } from "./consolehost.i18n";
+import { challengeStrings } from "./challenge.i18n";
+import { underAttackStrings } from "./underattack.i18n";
 import type { ko } from "./ko";
 import type { RuleLabels } from "../lib/rules";
 import type { AuditLabels } from "../lib/audit";
@@ -242,7 +253,7 @@ export const ru: Partial<Record<keyof typeof ko, string>> = {
   editUser: "Изменить пользователя", userSheetDesc: "Задайте данные учётной записи и роль.", initialPassword: "Начальный пароль", generatePassword: "Сгенерировать", copyPassword: "Копировать",
   initialPasswordHint: "Не менее 10 символов. Передайте пароль безопасным способом и попросите пользователя сменить его после первого входа.", passwordKeepBlank: "Оставьте пустым, чтобы сохранить текущий пароль",
   roleSelf: "Нельзя изменить собственную роль.", userSaved: "Пользователь сохранён", userDeletedToast: "Пользователь удалён",
-  resetPassword: "Сбросить пароль", resetPasswordDesc: "Установка нового пароля немедленно завершает все сеансы пользователя.", passwordResetDone: "Пароль сброшен",
+  resetPassword: "Сбросить пароль", resetPasswordDesc: "Установка нового пароля немедленно завершает все сеансы пользователя и удаляет его API-токены.", passwordResetDone: "Пароль сброшен",
   resetMfa: "Сбросить MFA", resetMfaTitle: "Сбросить двухэтапную проверку?", resetMfaDesc: "Двухэтапная проверка для этого пользователя будет отключена, и ему потребуется настроить её заново.", mfaResetDone: "MFA сброшена",
   disableUser: "Отключить", enableUser: "Включить", userDisabledToast: "Пользователь отключён", userEnabledToast: "Пользователь включён",
   disableUserDesc: "Отключённый пользователь не может войти, а его текущие сеансы немедленно завершаются.", deleteUser: "Удалить", deleteUserTitle: "Удаление пользователя", deleteUserDesc: "Учётная запись будет удалена безвозвратно. Записи аудита сохраняются.",
@@ -303,18 +314,29 @@ export const ru: Partial<Record<keyof typeof ko, string>> = {
   ...bansStrings.ru,
   ...tokensStrings.ru,
   ...redirectsStrings.ru,
+  ...streamsStrings.ru,
+  ...notesStrings.ru,
+  ...updateStrings.ru,
   ...headersStrings.ru,
+  ...locationsStrings.ru,
+  ...limitsStrings.ru,
+  ...certReplaceStrings.ru,
+  ...dnsCredsStrings.ru,
+  ...listFeedsStrings.ru,
   ...ssoStrings.ru,
   ...retentionStrings.ru,
   ...templatesStrings.ru,
   ...backupStrings.ru,
   ...pagesStrings.ru,
+  ...consoleHostStrings.ru,
+  ...challengeStrings.ru,
+  ...underAttackStrings.ru,
 };
 
 export const ruRuleLabels: RuleLabels | undefined = {
   field: {
     "ip.src": "IP-адрес", "ip.country": "Страна", "http.host": "Хост", "http.path": "Путь", "http.query": "Строка запроса",
-    "http.method": "Метод", "http.user_agent": "User-Agent", "http.referer": "Referer", "http.header": "Заголовок запроса", "http.body": "Тело запроса", "http.scheme": "Схема",
+    "http.method": "Метод", "http.user_agent": "User-Agent", "http.user_agent_list": "Список User-Agent", "http.referer": "Referer", "http.header": "Заголовок запроса", "http.body": "Тело запроса", "http.scheme": "Схема",
   },
   op: {
     in: "входит в", not_in: "не входит в", eq: "равно", ne: "не равно", contains: "содержит", not_contains: "не содержит",
@@ -328,12 +350,12 @@ export const ruRuleLabels: RuleLabels | undefined = {
 
 export const ruAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "Прокси-хост", redirection_host: "Хост перенаправления", waitroom: "Очередь доступа", certificate: "Сертификат", deploy: "Развёртывание", auth: "Аутентификация", setup: "Настройка",
-    rate_limit: "Ограничение запросов", access_list: "Basic-аутентификация", security_rule: "Правило безопасности", ip_list: "Список IP", geoip: "База стран", settings: "Настройки", network: "Сеть", import: "Импорт", mfa: "MFA", user: "Учётная запись",
+    proxy_host: "Прокси-хост", stream: "Поток", redirection_host: "Хост перенаправления", waitroom: "Очередь доступа", certificate: "Сертификат", dns_credential: "Учётные данные DNS", deploy: "Развёртывание", auth: "Аутентификация", setup: "Настройка",
+    rate_limit: "Ограничение запросов", access_list: "Basic-аутентификация", security_rule: "Правило безопасности", ip_list: "Список IP", geoip: "База стран", settings: "Настройки", network: "Сеть", import: "Импорт", mfa: "MFA", user: "Учётная запись", ban: "Блокировка IP", autoban: "Автоблокировка", sso: "SSO", token: "API-токен", alert_channel: "Канал оповещений", alert_rules: "Правила оповещений", backup: "Резервная копия", managed_rules: "Управляемые правила", page: "Страница", retention: "Хранение данных", unknown_hosts: "Неизвестные хосты",
   },
   verb: {
     create: "· создание", update: "· изменение", delete: "· удаление", upload: "· загрузка", apply: "· применение", rollback: "· откат", login: "· вход", logout: "· выход",
     login_failed: "· неудачный вход", password_changed: "· смена пароля", admin_created: "· создание администратора", renew: "· продление", issue: "· выпуск",
-    enable: "· включение", disable: "· отключение", refresh: "· обновление", mfa_enabled: "· включение MFA", mfa_disabled: "· отключение MFA", acme: "· выпуск ACME", reorder: "· изменение порядка",
+    enable: "· включение", disable: "· отключение", refresh: "· обновление", mfa_enabled: "· включение MFA", mfa_disabled: "· отключение MFA", acme: "· выпуск ACME", reorder: "· изменение порядка", auto: "· автоматически", test: "· проверка", reset: "· сброс", restore_upload: "· загрузка резервной копии", restore_confirm: "· восстановление подтверждено", restore_discard: "· восстановление отменено", restore_rejected: "· восстановление отклонено",
   },
 };

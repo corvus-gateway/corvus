@@ -33,8 +33,10 @@ und **überwacht, schützt und steuert** zusätzlich den durchlaufenden Datenver
 Angriffsabwehr, Ratenbegrenzung und eine Zugriffswarteschlange für Lastspitzen. Alles läuft auf
 Ihrem eigenen Server; es wird kein Traffic an eine Drittanbieter-Cloud gesendet.
 
+<p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
+
 - [Schnellstart](#schnellstart)
-- [Vollständige Einrichtung](#vollständige-einrichtung)
+- [Dokumentation](https://corvus-gateway.github.io/corvus/)
 - [Screenshots](#screenshots)
 
 ## Projektziel
@@ -53,16 +55,27 @@ Go-Steuerungsebene, React-Konsole), die ein **bestehendes NPM-Setup importieren*
 
 **Proxy & TLS**
 - Proxy-Hosts mit Wildcards, WebSocket, HTTP/2, erzwungenem HTTPS und benutzerdefinierten Nginx-Snippets
-- Kostenlose Let's-Encrypt-Zertifikate (HTTP-01 oder DNS-01 über Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) mit automatischer Erneuerung oder eigene Zertifikate per Upload
+- Notizen zu Hosts und Streams, damit klar bleibt, wofür jeder da ist (durchsuchbar)
+- Eigene Locations: Pfade (z. B. `/api`) an einen eigenen Upstream weiterleiten, mit dem Schutz des Hosts
+- Weiterleitungs-Hosts: Domains auf eine andere Domain umleiten (301/302/303/307/308, optional mit Beibehaltung des Pfads), mit demselben TLS und Schutz
+- Kostenlose Let's-Encrypt-Zertifikate (HTTP-01 oder DNS-01 über Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap, mit gespeicherten, wiederverwendbaren Anbieter-Zugangsdaten) mit automatischer Erneuerung oder eigene Zertifikate per Upload (bei Erneuerung direkt ersetzbar)
+- Streams: TCP/UDP-Ports (Datenbanken, SSH, MQTT, Spieleserver) an einen anderen Host weiterleiten, für TCP optional mit TLS-Terminierung
+- Unbekannte Hostnamen erhalten wahlweise eine 404-Seite, eine geschlossene Verbindung oder eine Weiterleitung
 - Echte Client-IP hinter Cloudflare oder vertrauenswürdigen Proxys; optionaler Passwortschutz pro Host
+- Voreinstellungen für Sicherheits-Header pro Host (Basis / Streng: nosniff, Frame- und Referrer-Policy, CSP im Report-Only-Modus, Cookie-Flags HttpOnly/SameSite/Secure), ohne zu überschreiben, was die Anwendung bereits sendet
+- Gzip-Komprimierung von Textantworten (standardmäßig an) sowie Upload-Größenlimit und Upstream-Timeout pro Host
 - Jede Änderung wird mit `openresty -t` geprüft, atomar angewendet und kann zurückgerollt werden
+- Die Konsole zeigt an, wenn eine neue Corvus-Version erschienen ist, mit Link zu den Versionshinweisen (abschaltbar)
 
 **Corvus Sentinel — Sicherheits-Engine**
-- Sicherheitsregeln: Abgleich nach IP, IP-Liste, Land, Pfad, Query, Methode oder Header → blockieren, erlauben oder protokollieren, global oder pro Host
+- Sicherheitsregeln: Abgleich nach IP, IP-Liste, Land, Pfad, Query, Methode, Header oder User-Agent-Liste → blockieren, erlauben, protokollieren oder eine Challenge verlangen, global oder pro Host
+- IP- und User-Agent-Listen, die über eine URL aktuell gehalten werden (z. B. Tor-Exit-Nodes, Listen bösartiger Bots; Voreinstellungen enthalten), im Hintergrund aktualisiert und nur bei Änderungen neu ausgerollt
+- Browser-Challenge ohne Drittanbieterdienste: ein JavaScript-Proof-of-Work (einstellbare Schwierigkeit) oder eine leichtgewichtige Cookie-Prüfung, mit einem signierten, an die IP gebundenen Pass-Cookie
+- „Angriffsmodus“ pro Host: jeder Besucher muss die Challenge bestehen — manuell eingeschaltet oder automatisch, solange die Anfragen pro Sekunde oder der Anteil blockierter Anfragen einen Schwellenwert überschreiten (mit Benachrichtigungen beim Ein- und Ausschalten)
 - Prüfung des Request-Bodys für JSON-, Formular- und Multipart-Inhalte (protokollieren oder blockieren)
 - **Virtuelle Patches** per Klick für aktuelle CVEs (React2Shell, wp2shell, PHP-CGI, Vite, n8n …)
 - Verwaltete Signatur-Updates, die nur akzeptiert werden, wenn sie signiert und neuer sind (keine Manipulation, kein Downgrade)
-- Automatische IP-Sperren für Wiederholungstäter, mit Eskalation und Ausnahmen
+- Automatische IP-Sperren für Wiederholungstäter, mit Eskalation und Ausnahmen; optional sofortige Sperren bei auffälligem Verhalten (zu viele 4xx-Antworten pro IP und Website)
 - Ratenbegrenzungen mit Dry-Run-Modus; Blockierung von Exploit-Pfaden ab Werk
 
 **Zugriffswarteschlange**
@@ -117,7 +130,7 @@ services:
 ```
 
 Das ist die gesamte Installation: Gateway, Admin-Konsole und Speicher für die Zugriffswarteschlange laufen in
-diesem einen Container. Optionen finden Sie unter [Vollständige Einrichtung](#vollständige-einrichtung).
+diesem einen Container. Optionen finden Sie in der [Dokumentation](https://corvus-gateway.github.io/corvus/).
 
 3. Starten Sie Ihren Stack mit
 
@@ -149,150 +162,35 @@ docker compose up -d
 Einstellungen, Zertifikate und der Verlauf in `./data` bleiben erhalten; Datenbankänderungen werden beim
 Start automatisch angewendet.
 
-## Vollständige Einrichtung
+## Dokumentation
 
-### Ports
+Konfiguration, gehärtete Installation, Ziel-Hosts, Streams, Backups, Migration von Nginx Proxy Manager,
+Sicherheitsregeln, Zugriffswarteschlange und Fehlerbehebung beschreibt die **[Dokumentation](https://corvus-gateway.github.io/corvus/)**
+(auf Englisch und Koreanisch).
 
-| Port | Zweck |
-|---|---|
-| 80 / 443 | Gateway — Proxy-Datenverkehr |
-| 9443 | Admin-Konsole und API — nur für vertrauenswürdige Netzwerke freigeben (Firewall oder *Netzwerk → Zugelassene Netze für die Admin-Konsole*) |
+## Leistung
 
-### Daten und Backups
+Gemessen mit dem [Benchmark-Workflow](../benchmark.md) auf einem von GitHub gehosteten `ubuntu-24.04`-Runner
+(4 vCPU AMD EPYC 9V45): Corvus auf **2 vCPU** festgelegt, wrk und das Backend auf den anderen beiden,
+64 Keep-Alive-Verbindungen, `GET /` mit einer 3-Byte-Antwort.
 
-Der gesamte Zustand liegt in `./data`: die Einstellungsdatenbank, der Verlauf der generierten Konfiguration,
-Zertifikate, der Traffic-Verlauf und `secrets/`. **Sichern Sie `secrets/`** — dort liegen die Schlüssel, mit denen
-MFA-Secrets und DNS-Tokens in der Datenbank verschlüsselt werden. Der Container läuft als unprivilegierter
-Benutzer `10001` und übernimmt beim ersten Start den Besitz von `./data`.
+| Szenario | req/s | p50 | p99 | Speicher |
+|---|---:|---:|---:|---:|
+| nginx 1.28 als Reverse Proxy (Vergleichswert) | 97,227 | 0.63 ms | 1.16 ms | 17 MB |
+| Corvus, Standard-Host | 75,473 | 0.79 ms | 1.83 ms | 72 MB |
+| Corvus, 30 Regeln + Liste mit 1,000 CIDRs + Exploit-Blockierung + Header + Ratenbegrenzung | 54,585 | 1.12 ms | 2.29 ms | 77 MB |
+| Corvus, HTTPS (ECDSA P-256), Keep-Alive | 59,697 | 1.00 ms | 2.18 ms | 80 MB |
+| Corvus, HTTPS, neuer TLS-Handshake pro Anfrage | 4,348 handshakes/s | 5.88 ms | 11.62 ms | 88 MB |
+| Corvus, Zugriffswarteschlange (eingelassene Besucher) | 57,954 | 1.05 ms | 2.22 ms | 84 MB |
+| Corvus, Challenge-Regel (Besucher mit Pass) | 62,901 | 0.96 ms | 1.94 ms | 88 MB |
 
-### Gehärtete Installation
-
-[`deploy/docker-compose.hardened.yml`](../../deploy/docker-compose.hardened.yml) startet dasselbe Image mit einem
-schreibgeschützten Root-Dateisystem, ohne Linux-Capabilities und ohne Rechteausweitung. Legen Sie zuerst das
-Datenverzeichnis für den Benutzer `10001` an:
-
-```bash
-mkdir -p data && sudo chown 10001:10001 data
-docker compose -f docker-compose.hardened.yml up -d
-```
-
-### Konfiguration
-
-Setzen Sie diese Variablen unter `environment:` in `docker-compose.yml`.
-
-| Variable | Beschreibung |
-|---|---|
-| `CORVUS_ADMIN_HOSTS` | Zusätzliche Namen/IPs für das Admin-Zertifikat, z. B. `corvus.example.com,203.0.113.10` |
-| `CORVUS_DB_URL` | PostgreSQL statt SQLite verwenden, z. B. `postgres://corvus:…@db:5432/corvus` |
-| `CORVUS_REDIS_HOST` | Externes Redis/Valkey für die Zugriffswarteschlange verwenden (mehrere Gateways teilen sich eine Warteschlange); zusammen mit `CORVUS_REDIS_PASSWORD`. Standard: integriert |
-| `CORVUS_IMPORT_DIR` | Verzeichnis mit schreibgeschützten NPM-Volumes für *Import aus NPM* |
-| `CORVUS_RULES_URL` | Optionale URL eines signierten Bundles mit verwalteten Regeln |
-| `CORVUS_ADMIN_ALLOW_ANY=1` | Notfallschalter, falls Sie sich mit der Admin-Zulassungsliste ausgesperrt haben |
-| `CORVUS_REDIS_PORT` | Port des integrierten Speichers der Zugriffswarteschlange auf 127.0.0.1 (Standard `6379`); bei `network_mode: host` ändern, wenn der Host 6379 bereits belegt |
-| `CORVUS_RESOLVER` | DNS-Server für Ziel-Hosts. Standard: der DNS von Docker bzw. bei Host-Networking der erste `nameserver` aus `/etc/resolv.conf` |
-| `CORVUS_LOOPBACK=container` | Ziel-Hosts `127.0.0.1`/`localhost` zeigen auf den Container selbst statt auf den Docker-Host |
-
-### Ziel-Hosts
-
-Ein Proxy-Host kann weiterleiten an:
-
-- **einen anderen Container** über seinen Namen, z. B. `xoshop-web` Port `80` — Corvus muss sich mit ihm
-  ein Docker-Netzwerk teilen (fügen Sie dieses Netzwerk dem Dienst `corvus` hinzu);
-- **eine private oder öffentliche IP**, z. B. `10.3.2.39` Port `8084`;
-- **einen Dienst auf dem Docker-Host selbst** als `127.0.0.1` oder `localhost`, wie in NPM. Innerhalb eines
-  Containers bezeichnen diese Adressen den Docker-Host, `host.docker.internal` ist also nicht nötig. Der Dienst
-  muss auf einer für den Container erreichbaren Adresse lauschen (`0.0.0.0` oder die Docker-Bridge, nicht nur
-  `127.0.0.1`), und eine Host-Firewall muss Verbindungen aus Docker-Netzwerken zulassen.
-
-Um Dienste zu erreichen, die nur auf `127.0.0.1` des Hosts lauschen, oder um ein NPM-Setup mit
-`network_mode: host` unverändert zu übernehmen, betreiben Sie Corvus mit Host-Networking: Ersetzen Sie
-`ports:` und `networks:` durch `network_mode: host` (und setzen Sie `CORVUS_REDIS_PORT`, falls 6379 auf dem
-Host belegt ist).
-
-### Migration von Nginx Proxy Manager
-
-*Import aus NPM* in der Konsole übernimmt **Proxy-Hosts, Zertifikate** (Let's Encrypt und eigene,
-einschließlich Cloudflare-DNS-Tokens) und **Zugriffslisten** (Benutzer und IP-Regeln) aus einer
-bestehenden NPM-Installation. Dabei werden nur die Dateien und die Datenbank von NPM gelesen – NPM selbst
-bleibt unverändert, Sie können also jederzeit zurückwechseln.
-
-Nicht importiert werden: Streams (TCP/UDP), Weiterleitungs-Hosts, 404-Hosts, benutzerdefinierte Locations
-und erweiterte Konfiguration mit NPM-spezifischen Variablen. Die Vorschau listet alles auf, was übersprungen
-wird.
-
-**Prüfen Sie, welche Datenbank Ihr NPM verwendet.** Öffnen Sie die `docker-compose.yml` von NPM:
-
-- keine `DB_MYSQL_*`- / `DB_POSTGRES_*`-Variablen und `data/database.sqlite` vorhanden → **SQLite** (NPM-Standard)
-- `DB_MYSQL_HOST`, `DB_MYSQL_USER`, … und meist ein separater `db`-Dienst → **MySQL / MariaDB**
-- `DB_POSTGRES_*` → PostgreSQL wird vom Import nicht unterstützt; legen Sie die Hosts in der Konsole neu an
-
-In beiden Fällen müssen die Verzeichnisse `data` und `letsencrypt` von NPM schreibgeschützt in Corvus
-eingebunden werden (dort liegen die Zertifikatsdateien):
-
-```yml
-services:
-  corvus:
-    image: 'ghcr.io/corvus-gateway/gateway:latest'
-    restart: unless-stopped
-    ports:
-      - '80:80'
-      - '443:443'
-      - '9443:9443'
-    environment:
-      CORVUS_IMPORT_DIR: /import
-    volumes:
-      - ./data:/data
-      - /path/to/npm/data:/import/npm/data:ro
-      - /path/to/npm/letsencrypt:/import/npm/letsencrypt:ro
-```
-
-Verwenden Sie die Host-Pfade der NPM-Volumes `./data` und `./letsencrypt`. NPM und Corvus benötigen beide
-die Ports 80/443 und können daher nicht gleichzeitig laufen.
-
-#### NPM mit SQLite (Standard)
-
-```bash
-cd /path/to/npm && docker compose down        # NPM stoppen (gibt 80/443 frei)
-cd /path/to/corvus && docker compose up -d     # Corvus mit den obigen Mounts starten
-```
-
-Öffnen Sie in der Konsole *Import aus NPM*, belassen Sie **SQLite**, klicken Sie auf *Vorschau*, wählen Sie
-aus, was importiert werden soll, und klicken Sie auf *Auswahl importieren*. Meldet die Vorschau
-`permission denied`, machen Sie die Dateien für Corvus lesbar (es läuft als uid 10001): `sudo chmod o+rx /path/to/npm/data && sudo chmod o+r /path/to/npm/data/database.sqlite`.
-
-#### NPM mit MySQL / MariaDB
-
-Corvus muss die NPM-Datenbank während des Imports erreichen. Stoppen Sie daher nur den Proxy-Dienst von NPM
-und lassen Sie die Datenbank weiterlaufen:
-
-```bash
-cd /path/to/npm && docker compose stop app     # der NPM-Dienst, der 80/443 belegt (oft "app")
-cd /path/to/corvus && docker compose up -d
-
-# Corvus für den Import mit dem Docker-Netzwerk von NPM verbinden
-docker network ls | grep -i npm                # z. B. npm_default
-docker network connect npm_default $(docker compose ps -q corvus)
-```
-
-Wählen Sie in *Import aus NPM* **MySQL / MariaDB** und geben Sie die Datenbankeinstellungen von NPM ein:
-Host = Name des Datenbankdienstes (meist `db`), Port `3306` sowie die Werte von `DB_MYSQL_NAME`,
-`DB_MYSQL_USER` und `DB_MYSQL_PASSWORD`. Die Verbindung ist schreibgeschützt, das Passwort wird nicht
-gespeichert. Danach *Vorschau* → *Auswahl importieren*.
-
-Nach Abschluss des Imports:
-
-```bash
-docker network disconnect npm_default $(docker compose ps -q corvus)
-cd /path/to/npm && docker compose down         # auch die NPM-Datenbank stoppen
-```
-
-#### Nach dem Import
-
-- Prüfen Sie die importierten Hosts, entfernen Sie dann `CORVUS_IMPORT_DIR` und die beiden `/import`-Mounts
-  und führen Sie erneut `docker compose up -d` aus.
-- Zertifikate werden in Corvus weiter erneuert. Hosts mit einem nicht unterstützten DNS-Anbieter werden ohne
-  automatische Erneuerung importiert – die Vorschau weist darauf hin.
-- **Zurückwechseln:** `docker compose down` in Corvus, dann `docker compose up -d` in NPM.
+Auf dem grundlegenden Anfragepfad erreicht Corvus etwa drei Viertel des Durchsatzes von reinem nginx
+(Keep-Alive-Pools zum Upstream, Access-Log pro Worker gebündelt); der vollständige Schutz — 30 Regeln mit
+einer Liste von 1,000 CIDRs, Exploit-Blockierung, Sicherheits-Header und Ratenbegrenzung — kostet zusätzlich
+etwa 28 %. **Einschränkung:** ein geteilter CI-Runner, auf dem auch der
+Lastgenerator läuft, und winzige Antworten — die Zahlen sind konservativ und zum Vergleich von Szenarien und
+Versionen gedacht, nicht als Kapazitätsgarantie. Der Speicher umfasst die Steuerungsebene und das eingebettete
+Valkey.
 
 ## Entwicklung
 

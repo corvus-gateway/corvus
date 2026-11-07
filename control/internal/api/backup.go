@@ -131,7 +131,7 @@ func (s *Server) uploadRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if m.DBEngine != s.Store.Dialect() {
-		_ = backup.Discard(s.dataDir())
+		_ = backup.DiscardUpload(s.dataDir())
 		writeErr(w, http.StatusUnprocessableEntity, "invalid_backup",
 			"the backup was made with the "+m.DBEngine+" database engine, but this installation uses "+s.Store.Dialect())
 		return

@@ -5,11 +5,12 @@ import { Toaster } from "sonner";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./index.css";
 import App from "./App";
-import { I18nProvider } from "./i18n";
+import { I18nProvider, initialLang, loadLang } from "./i18n";
 import { ThemeProvider, initTheme, useTheme } from "./lib/theme";
 import { TooltipProvider } from "./components/ui/overlay";
 
 initTheme();
+await loadLang(initialLang());
 
 function Toasts() {
   const { resolved } = useTheme();

@@ -8,9 +8,11 @@
 package deploy
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -168,9 +170,15 @@ func (d *Deployer) EnsureCurrent(ctx context.Context) error {
 		return err
 	}
 	_, statErr := os.Stat(filepath.Join(d.versionsDir(), v.Dir, "nginx.conf"))
-	dirty, _ := d.Dirty(ctx)
-	if statErr == nil && dirty {
+	if statErr == nil && v.RollbackOf != nil {
 		slog.Info("keeping rolled-back configuration", "version", v.ID)
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		return d.swapLink(v.Dir)
+	}
+	// Nothing changed since the active version was rendered (same settings, same
+	// templates): keep it. Restarting does not create versions (and prune old ones).
+	if statErr == nil && d.rendersSame(ctx, v.Dir) {
 		d.mu.Lock()
 		defer d.mu.Unlock()
 		return d.swapLink(v.Dir)
@@ -203,7 +211,15 @@ func (d *Deployer) activate(dirName string) error {
 	if w, ok := d.Runner.(interface {
 		WaitActive(ctx context.Context, name string, timeout time.Duration) error
 	}); ok {
-		if err := w.WaitActive(context.Background(), dirName, 10*time.Second); err != nil {
+		if err := w.WaitActive(context.Background(), dirName, 15*time.Second); err != nil {
+			var na *gateway.NotAcceptedError
+			if errors.As(err, &na) {
+				// nginx keeps running the old configuration: point the link back to it
+				if prev != "" {
+					_ = d.swapLink(filepath.Base(prev))
+				}
+				return err
+			}
 			slog.Warn("reload confirmation timed out", "version", dirName, "err", err)
 		}
 	}
@@ -254,4 +270,77 @@ func (d *Deployer) Dirty(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return v.ConfigRev != rev, nil
+}
+
+// rendersSame reports whether rendering the stored settings now gives exactly the files
+// of version directory dirName.
+func (d *Deployer) rendersSame(ctx context.Context, dirName string) bool {
+	tmp, err := os.MkdirTemp(d.Dir, "render-check-")
+	if err != nil {
+		return false
+	}
+	defer os.RemoveAll(tmp)
+	out := filepath.Join(tmp, dirName) // same name: the gateway reports it as its version
+	if err := d.Compiler.Render(ctx, d.Store, out); err != nil {
+		return false
+	}
+	return sameTree(out, filepath.Join(d.versionsDir(), dirName))
+}
+
+// sameTree compares two directory trees file by file (names and contents).
+func sameTree(a, b string) bool {
+	files := map[string][]byte{}
+	err := filepath.WalkDir(a, func(p string, e fs.DirEntry, err error) error {
+		if err != nil || e.IsDir() {
+			return err
+		}
+		rel, _ := filepath.Rel(a, p)
+		data, err := os.ReadFile(p)
+		// rendered files name their own directory: compare as if rendered into b
+		for _, form := range []func(string) string{filepath.ToSlash, filepath.FromSlash} {
+			data = bytes.ReplaceAll(data, []byte(form(a)), []byte(form(b)))
+		}
+		files[rel] = data
+		return err
+	})
+	if err != nil {
+		return false
+	}
+	n := 0
+	err = filepath.WalkDir(b, func(p string, e fs.DirEntry, err error) error {
+		if err != nil || e.IsDir() {
+			return err
+		}
+		rel, _ := filepath.Rel(b, p)
+		want, ok := files[rel]
+		got, rerr := os.ReadFile(p)
+		if !ok || rerr != nil || !bytes.Equal(want, got) {
+			return errDiffers
+		}
+		n++
+		return nil
+	})
+	return err == nil && n == len(files)
+}
+
+var errDiffers = errors.New("differs")
+
+// RollbackActive reports whether the active version is a rollback.
+func (d *Deployer) RollbackActive(ctx context.Context) bool {
+	v, err := d.Store.ActiveVersion(ctx)
+	return err == nil && v.RollbackOf != nil
+}
+
+// Refresh redeploys after a background change (certificate issued, country database or
+// rule bundle updated). While a rollback is active it only reloads the gateway, so the
+// operator's rollback stays in place and renewed certificate files are still picked up.
+func (d *Deployer) Refresh(ctx context.Context, message string) error {
+	if d.RollbackActive(ctx) {
+		slog.Warn("rollback active: not redeploying the stored settings", "reason", message)
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		return d.Runner.Reload()
+	}
+	_, err := d.Apply(ctx, nil, message, nil)
+	return err
 }

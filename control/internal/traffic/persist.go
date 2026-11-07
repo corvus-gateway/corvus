@@ -63,6 +63,9 @@ func (c *Collector) RestoreCoarse(rows []CoarseRow, now time.Time) {
 				c.hosts[r.Host] = s
 			}
 		}
+		if r.Start > s.last {
+			s.last = r.Start
+		}
 		b := &s.coarse[(r.Start/coarseStep)%coarseSlots]
 		if b.start != r.Start {
 			*b = bucket{start: r.Start}
@@ -103,6 +106,7 @@ func (c *Collector) RestoreEvents(evs []Event) int64 {
 		c.evSeq++
 		e.seq = c.evSeq
 		c.events = append(c.events, e)
+		c.countSource(int64(e.TS), e.Kind, e.Host, e.IP, e.Count)
 	}
 	return c.evSeq
 }

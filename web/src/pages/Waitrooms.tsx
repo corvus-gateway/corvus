@@ -13,7 +13,7 @@ import { useI18n } from "../i18n";
 import { cn } from "../lib/utils";
 
 type Form = Omit<Waitroom, "id" | "created_at" | "updated_at" | "live">;
-const blank: Form = { name: "", enabled: true, capacity: 500, active_ttl: 120, grant_ttl: 30, queue_ttl: 120, refresh: 15, admit_rate: 0, fail_mode: "open", max_queue: 100000, max_new_per_ip: 60, bind_ip: false };
+const blank: Form = { name: "", enabled: true, capacity: 500, active_ttl: 120, grant_ttl: 30, queue_ttl: 300, refresh: 15, admit_rate: 0, fail_mode: "open", max_queue: 100000, max_new_per_ip: 60, bind_ip: false };
 const pick = (w: Waitroom): Form => ({
   name: w.name, enabled: w.enabled, capacity: w.capacity, active_ttl: w.active_ttl, grant_ttl: w.grant_ttl,
   queue_ttl: w.queue_ttl, refresh: w.refresh, admit_rate: w.admit_rate, fail_mode: w.fail_mode,
