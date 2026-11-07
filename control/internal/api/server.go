@@ -471,7 +471,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusTooManyRequests, "rate_limited", "too many failed logins, try again later")
 		return
 	}
-	acct := "acct:" + strings.ToLower(strings.TrimSpace(in.Email))
+	acct := s.accountKey(r, in.Email) // a known browser counts on its own (#142)
 	if blocked, wait := s.AcctLimiter.Blocked(acct); blocked {
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
 		s.audit(r, "auth.login_locked", strings.ToLower(strings.TrimSpace(in.Email)), nil)
@@ -501,6 +501,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	s.rememberDevice(w, r, u.Email)
 	_ = s.Store.TouchLogin(r.Context(), u.ID)
 	r = r.WithContext(context.WithValue(r.Context(), ctxKey{}, u))
 	s.audit(r, "auth.login", u.Email, nil)

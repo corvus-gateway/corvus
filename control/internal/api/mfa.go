@@ -86,11 +86,12 @@ func (s *Server) handleLoginMFA(w http.ResponseWriter, r *http.Request) {
 	s.MFA.Finish(in.MFAToken)
 	s.Limiter.Reset(ip)
 	s.AcctLimiter.Reset(acct)
-	s.AcctLimiter.Reset("acct:" + strings.ToLower(strings.TrimSpace(u.Email)))
+	s.AcctLimiter.Reset(s.accountKey(r, u.Email))
 	if err := s.setSession(w, r, u); err != nil {
 		fail(w, err)
 		return
 	}
+	s.rememberDevice(w, r, u.Email)
 	_ = s.Store.TouchLogin(r.Context(), u.ID)
 	r = r.WithContext(context.WithValue(r.Context(), ctxKey{}, u))
 	s.audit(r, "auth.login", u.Email, map[string]bool{"mfa": true})

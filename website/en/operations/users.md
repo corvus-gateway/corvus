@@ -33,6 +33,9 @@ user's sessions end and the API tokens they created are deleted. See the [HTTP A
 
 ## Protect the console
 
+- Failed sign-ins are limited per address and per account. After 10 failures to an account in 15
+  minutes, the account is locked for a while. A browser that signed in to the account before keeps
+  its own count, so failures from elsewhere don't lock you out.
 - Allow port 9443 only from trusted networks: with a firewall, or with **Admin console allowed
   networks** on the *Network* page.
 - Locked out by that list? Start the container once with `CORVUS_ADMIN_ALLOW_ANY=1`, fix the list,
