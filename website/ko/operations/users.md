@@ -28,7 +28,8 @@
 
 스크립트와 Prometheus는 `Authorization: Bearer cvs_…` 헤더와 함께 **API 토큰**(*API 토큰* 페이지에서
 생성)을 사용합니다. 토큰에는 역할과 만료일(선택)이 있고, 만든 사람의 역할을 넘을 수 없으며, 한 번만
-표시됩니다. [HTTP API](../reference/api.md)를 참고하세요.
+표시됩니다. 관리자가 사용자의 비밀번호를 재설정하면 그 사용자의 세션이 종료되고 그 사용자가 만든 API
+토큰도 삭제됩니다. [HTTP API](../reference/api.md)를 참고하세요.
 
 ## 콘솔 보호 { #protect-the-console }
 

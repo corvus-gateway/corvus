@@ -134,7 +134,15 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		revoke = revoke || id != me.ID
-		s.audit(r, "user.password_reset", u.Email, nil)
+		var detail any
+		if id != me.ID {
+			// an administrator resets someone's password when the account may be in the
+			// wrong hands: the API tokens it created end too, like its sessions
+			if n, err := s.Store.DeleteUserAPITokens(ctx, id); err == nil && n > 0 {
+				detail = map[string]any{"tokens_revoked": n}
+			}
+		}
+		s.audit(r, "user.password_reset", u.Email, detail)
 	}
 	if err := s.Store.UpdateUser(ctx, id, name, role, disabled); err != nil {
 		fail(w, err)

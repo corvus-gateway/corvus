@@ -253,7 +253,7 @@ export const de: Partial<Record<keyof typeof ko, string>> = {
   editUser: "Benutzer bearbeiten", userSheetDesc: "Kontodaten und Rolle festlegen.", initialPassword: "Initialpasswort", generatePassword: "Generieren", copyPassword: "Kopieren",
   initialPasswordHint: "Mindestens 10 Zeichen. Geben Sie es sicher weiter und bitten Sie den Benutzer, es nach der ersten Anmeldung zu ändern.", passwordKeepBlank: "Leer lassen, um das aktuelle Passwort beizubehalten",
   roleSelf: "Sie können Ihre eigene Rolle nicht ändern.", userSaved: "Benutzer gespeichert", userDeletedToast: "Benutzer gelöscht",
-  resetPassword: "Passwort zurücksetzen", resetPasswordDesc: "Durch das Festlegen eines neuen Passworts werden alle Sitzungen des Benutzers sofort beendet.", passwordResetDone: "Passwort zurückgesetzt",
+  resetPassword: "Passwort zurücksetzen", resetPasswordDesc: "Durch das Festlegen eines neuen Passworts werden alle Sitzungen des Benutzers sofort beendet und seine API-Tokens gelöscht.", passwordResetDone: "Passwort zurückgesetzt",
   resetMfa: "MFA zurücksetzen", resetMfaTitle: "Zweistufige Verifizierung zurücksetzen?", resetMfaDesc: "Die zweistufige Verifizierung wird für diesen Benutzer deaktiviert und muss erneut eingerichtet werden.", mfaResetDone: "MFA zurückgesetzt",
   disableUser: "Deaktivieren", enableUser: "Aktivieren", userDisabledToast: "Benutzer deaktiviert", userEnabledToast: "Benutzer aktiviert",
   disableUserDesc: "Ein deaktivierter Benutzer kann sich nicht anmelden, und aktuelle Sitzungen werden sofort beendet.", deleteUser: "Löschen", deleteUserTitle: "Benutzer löschen", deleteUserDesc: "Das Konto wird dauerhaft gelöscht. Audit-Einträge bleiben erhalten.",

@@ -106,3 +106,12 @@ func (s *Store) DeleteAPIToken(ctx context.Context, id int64) error {
 	}
 	return nil
 }
+
+// DeleteUserAPITokens removes every API token the user created and returns how many.
+func (s *Store) DeleteUserAPITokens(ctx context.Context, userID int64) (int64, error) {
+	res, err := s.q.ExecContext(ctx, `DELETE FROM api_tokens WHERE created_by = ?`, userID)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}

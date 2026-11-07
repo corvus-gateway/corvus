@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -568,6 +569,10 @@ func (s *Server) deleteWaitroom(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fail(w, err)
 		return
+	}
+	// the gateway no longer serves the queue: drop its Redis state (best effort)
+	if err := s.Live.Forget(r.Context(), before.Name); err != nil {
+		slog.Warn("access queue state not removed", "queue", before.Name, "err", err)
 	}
 	s.audit(r, "waitroom.delete", "waitroom:"+before.Name, before)
 	writeJSON(w, 200, map[string]any{"version": v})
