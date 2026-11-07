@@ -61,6 +61,7 @@ var Catalog = []RuleInfo{
 	{"acme_failed", Rule{true, "warning", 0, 0, 0}, nil, ""},
 	{"deploy_failed", Rule{true, "warning", 0, 0, 0}, nil, ""},
 	{"login_failed", Rule{true, "warning", 10, 600, 0}, []string{"threshold", "window_s"}, ""},
+	{"under_attack", Rule{true, "warning", 0, 0, 0}, nil, ""},
 }
 
 func DefaultSettings() Settings {

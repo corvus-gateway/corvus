@@ -9,14 +9,15 @@ import { ConfirmDialog, RowMenu, Sheet, Tip } from "../components/ui/overlay";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
 import { useResource } from "../hooks/useResource";
 import { useDnsProviders } from "../hooks/useDnsProviders";
-import { DnsFields } from "../components/DnsFields";
+import { DnsFields, dnsReady, dnsRequest, newDnsChoice, useDnsCredentials, type DnsChoice } from "../components/DnsFields";
+import { DnsCredentialsCard } from "../components/DnsCredentialsCard";
 import { useCan } from "../lib/rbac";
 import { localeTag, useI18n } from "../i18n";
 import { cn, daysUntil } from "../lib/utils";
 
 type Challenge = "http-01" | "dns-01";
-interface Acme { domains: string[]; email: string; challenge: Challenge; provider: string; creds: string; staging: boolean }
-const acmeBlank: Acme = { domains: [], email: "", challenge: "http-01", provider: "cloudflare", creds: "", staging: false };
+interface Acme { domains: string[]; email: string; challenge: Challenge; dnsc: DnsChoice; staging: boolean }
+const acmeBlank: Acme = { domains: [], email: "", challenge: "http-01", dnsc: { provider: "cloudflare", creds: "", name: "" }, staging: false };
 
 function statusOf(c: Certificate): "valid" | "pending" | "error" {
   return c.status ?? "valid";
@@ -31,10 +32,12 @@ export default function Certificates() {
   const anyPending = list.data?.some((c) => c.status === "pending") ?? false;
   useEffect(() => { setPoll(anyPending ? 3000 : 0); }, [anyPending]);
 
-  const [upload, setUpload] = useState<{ name: string; certificate: string; private_key: string } | null>(null);
+  // id set: replace that uploaded certificate in place (PUT) instead of uploading a new one.
+  const [upload, setUpload] = useState<{ id?: number; name: string; certificate: string; private_key: string } | null>(null);
   const [wizard, setWizard] = useState<{ step: 0 | 1 | 2; form: Acme } | null>(null);
   const [deleting, setDeleting] = useState<Certificate | null>(null);
   const providers = useDnsProviders();
+  const creds = useDnsCredentials();
   const up = useSubmit();
   const ac = useSubmit();
   const row = useSubmit();
@@ -44,16 +47,18 @@ export default function Certificates() {
 
   const doUpload = async () => {
     if (!upload) return;
-    const r = await up.run(() => api.post("/api/certificates", upload), { success: t("certUploaded"), deployed: false });
+    const { id, ...body } = upload;
+    const r = await up.run(() => (id ? api.put(`/api/certificates/${id}`, body) : api.post("/api/certificates", body)),
+      id ? { success: t("certReplaced") } : { success: t("certUploaded"), deployed: false });
     if (r !== undefined) { setUpload(null); list.reload(); window.dispatchEvent(new Event("corvus:refresh")); }
   };
   const doAcme = async () => {
     if (!wizard) return;
     const f = wizard.form;
     const body: Record<string, unknown> = { domains: f.domains, email: f.email, challenge: f.challenge, staging: f.staging };
-    if (f.challenge === "dns-01") { body.dns_provider = f.provider; body.dns_credentials_ini = f.creds; }
+    if (f.challenge === "dns-01") Object.assign(body, dnsRequest(f.dnsc));
     const r = await ac.run(() => api.post("/api/certificates/acme", body), { success: t("acmeStarted"), deployed: false });
-    if (r !== undefined) { setWizard(null); list.reload(); }
+    if (r !== undefined) { setWizard(null); list.reload(); creds.reload(); }
   };
   const renew = async (c: Certificate) => {
     const r = await row.run(() => api.post(`/api/certificates/${c.id}/renew`), { success: t("renewStarted"), deployed: false });
@@ -69,7 +74,7 @@ export default function Certificates() {
   const wf = w?.form;
   const wildcard = wf?.domains.some((d) => d.startsWith("*.")) ?? false;
   const step0Ok = !!wf && wf.domains.length > 0 && /.+@.+\..+/.test(wf.email);
-  const step1Ok = !!wf && (wf.challenge === "http-01" ? !wildcard : wf.creds.trim().length > 0);
+  const step1Ok = !!wf && (wf.challenge === "http-01" ? !wildcard : dnsReady(wf.dnsc));
   const setW = (p: Partial<Acme>) => setWizard((x) => (x ? { ...x, form: { ...x.form, ...p } } : x));
   const steps = [t("acmeStepDomains"), t("acmeStepChallenge"), t("acmeStepReview")];
 
@@ -91,6 +96,8 @@ export default function Certificates() {
                 const st = statusOf(c);
                 const d = daysUntil(c.not_after);
                 const soon = st === "valid" && d !== null && d <= 30;
+                // a failed renewal keeps the still-valid certificate in use ("valid") with its error
+                const renewErr = st === "valid" && c.kind === "acme" && !!c.last_error;
                 return (
                   <Tr key={c.id}>
                     <Td>
@@ -101,9 +108,10 @@ export default function Certificates() {
                     <Td>
                       {st === "pending" ? <Badge tone="info" icon={Loader2} className="[&_svg]:animate-spin">{t("certPending")}</Badge>
                         : st === "error" ? <Tip label={c.last_error || t("certError")}><span><Badge tone="danger" icon={AlertCircle}>{t("certError")}</Badge></span></Tip>
+                          : renewErr ? <Tip label={t("renewFailedTip", { e: c.last_error! })}><span><Badge tone={d !== null && d <= 7 ? "danger" : "warn"} icon={AlertCircle}>{t("renewFailed")}</Badge></span></Tip>
                           : soon ? <Badge tone={d! <= 7 ? "danger" : "warn"} dot>{d! < 0 ? t("expired") : t("expiringSoon")}</Badge>
                             : <Badge tone="ok" dot>{t("certValid")}</Badge>}
-                      {st === "error" && c.last_error && <div className="mt-1 max-w-[16rem] truncate text-xs text-danger">{c.last_error}</div>}
+                      {(st === "error" || renewErr) && c.last_error && <div className={cn("mt-1 max-w-[16rem] truncate text-xs", st === "error" ? "text-danger" : "text-warn")}>{c.last_error}</div>}
                     </Td>
                     <Td className="hidden sm:table-cell">
                       {c.not_after && d !== null ? <><div className="num text-sm">{new Date(c.not_after).toLocaleDateString(localeTag(lang))}</div>
@@ -112,7 +120,8 @@ export default function Certificates() {
                     <Td className="hidden lg:table-cell">{c.kind === "acme" ? (c.auto_renew ? <Badge tone="ok" icon={Check}>{t("on")}</Badge> : <Badge>{t("off")}</Badge>) : <span className="text-fg-subtle">–</span>}</Td>
                     <Td className="text-right"><RowMenu items={[
                       { label: t("renewNow"), icon: RefreshCw, hidden: c.kind !== "acme", disabled: st === "pending", onSelect: () => renew(c) },
-                      { label: t("delete"), icon: Trash2, danger: true, separatorBefore: c.kind === "acme", onSelect: () => setDeleting(c) },
+                      { label: t("replaceCertAction"), icon: Upload, hidden: c.kind !== "custom", onSelect: () => { up.setError(null); setUpload({ id: c.id, name: c.name, certificate: "", private_key: "" }); } },
+                      { label: t("delete"), icon: Trash2, danger: true, separatorBefore: c.kind === "acme" || c.kind === "custom", onSelect: () => setDeleting(c) },
                     ]} /></Td>
                   </Tr>
                 );
@@ -122,8 +131,10 @@ export default function Certificates() {
         )}
       </Card>
 
-      <Sheet open={!!upload} onOpenChange={(o) => !o && setUpload(null)} onSubmit={doUpload} title={t("uploadCert")} description={t("uploadCertDesc")}
-        footer={<><Button onClick={() => setUpload(null)}>{t("cancel")}</Button><Button type="submit" variant="primary" loading={up.busy}>{t("upload")}</Button></>}>
+      <DnsCredentialsCard list={creds} providers={providers} />
+
+      <Sheet open={!!upload} onOpenChange={(o) => !o && setUpload(null)} onSubmit={doUpload} title={upload?.id ? t("replaceCertTitle") : t("uploadCert")} description={upload?.id ? t("replaceCertDesc") : t("uploadCertDesc")}
+        footer={<><Button onClick={() => setUpload(null)}>{t("cancel")}</Button><Button type="submit" variant="primary" loading={up.busy}>{upload?.id ? t("replaceCertAction") : t("upload")}</Button></>}>
         {upload && <>
           {up.error && <div className="px-6 pt-5"><ErrorBox error={up.error} /></div>}
           <FormSection title={t("secBasic")}>
@@ -171,7 +182,7 @@ export default function Certificates() {
                   { v: "http-01" as const, icon: Globe, title: "HTTP-01", desc: t("http01Desc") },
                   { v: "dns-01" as const, icon: Cloud, title: t("dns01Title"), desc: t("dns01Desc") },
                 ]).map((o) => (
-                  <button key={o.v} type="button" role="radio" aria-checked={wf.challenge === o.v} onClick={() => setW(o.v === "dns-01" && !wf.creds ? { challenge: o.v, provider: providers[0].id, creds: providers[0].credentials_template } : { challenge: o.v })}
+                  <button key={o.v} type="button" role="radio" aria-checked={wf.challenge === o.v} onClick={() => setW(o.v === "dns-01" && !wf.dnsc.creds ? { challenge: o.v, dnsc: { ...newDnsChoice(providers[0]), credential: wf.dnsc.credential } } : { challenge: o.v })}
                     className={cn("flex items-start gap-3 rounded-xl border p-4 text-left transition", wf.challenge === o.v ? "border-brand bg-brand/5 ring-1 ring-brand/40" : "border-line hover:border-line-strong hover:bg-surface-2")}>
                     <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-lg", wf.challenge === o.v ? "bg-brand/15 text-brand" : "bg-surface-3 text-fg-muted")}><o.icon className="h-4 w-4" /></span>
                     <span><span className="block text-sm font-semibold">{o.title}</span><span className="mt-0.5 block text-xs leading-5 text-fg-muted">{o.desc}</span></span>
@@ -180,7 +191,7 @@ export default function Certificates() {
               </div>
               {wf.challenge === "http-01" && wildcard && <Callout tone="warn">{t("wildcardNeedsDns")}</Callout>}
               {wf.challenge === "dns-01" && (
-                <DnsFields providers={providers} provider={wf.provider} creds={wf.creds} onChange={(x) => setW(x)} error={fieldErr(ac.error, "dns_credentials_ini", "dns_credentials")} />
+                <DnsFields providers={providers} value={wf.dnsc} onChange={(dnsc) => setW({ dnsc })} fieldError={(f) => fieldErr(ac.error, f)} />
               )}
               <SwitchRow label={t("acmeStaging")} description={t("acmeStagingDesc")} checked={wf.staging} onChange={(v) => setW({ staging: v })} />
             </FormSection>
@@ -190,7 +201,7 @@ export default function Certificates() {
               <dl className="divide-y divide-line rounded-xl border border-line text-sm">
                 <div className="flex justify-between gap-4 px-4 py-2.5"><dt className="text-fg-subtle">{t("domains")}</dt><dd className="flex flex-wrap justify-end gap-1">{wf.domains.map((d) => <span key={d} className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">{d}</span>)}</dd></div>
                 <div className="flex justify-between gap-4 px-4 py-2.5"><dt className="text-fg-subtle">{t("acmeEmail")}</dt><dd>{wf.email}</dd></div>
-                <div className="flex justify-between gap-4 px-4 py-2.5"><dt className="text-fg-subtle">{t("acmeStepChallenge")}</dt><dd>{wf.challenge === "http-01" ? "HTTP-01" : "DNS-01 · Cloudflare"}</dd></div>
+                <div className="flex justify-between gap-4 px-4 py-2.5"><dt className="text-fg-subtle">{t("acmeStepChallenge")}</dt><dd>{wf.challenge === "http-01" ? "HTTP-01" : `DNS-01 · ${wf.dnsc.credential ? creds.data?.find((c) => c.id === wf.dnsc.credential)?.name ?? "" : providers.find((p) => p.id === wf.dnsc.provider)?.name ?? wf.dnsc.provider}`}</dd></div>
                 <div className="flex justify-between gap-4 px-4 py-2.5"><dt className="text-fg-subtle">{t("acmeStaging")}</dt><dd>{wf.staging ? <Badge tone="warn">staging</Badge> : <Badge tone="ok">production</Badge>}</dd></div>
               </dl>
               <Callout tone="info" icon={FileKey}>{t("acmeAsyncNote")}</Callout>

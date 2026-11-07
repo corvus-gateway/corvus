@@ -32,7 +32,8 @@ import (
 	"corvus/control/internal/store"
 )
 
-// Credentials for DNS providers (stored sealed in the certificate's ACME info).
+// Credentials for DNS providers (stored sealed in a saved DNS credential; older
+// versions kept them in the certificate's ACME info).
 type Credentials struct {
 	// Cloudflare (kept in named fields for compatibility with stored certificates)
 	APIToken string `json:"api_token,omitempty"`
@@ -232,9 +233,10 @@ func (s *Service) Start(id int64) {
 			delete(s.running, id)
 			s.mu.Unlock()
 		}()
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		defer cancel()
-		if err := s.issue(ctx, id); err != nil {
+		// No overall deadline: lego does not honour the context during Obtain (DNS
+		// propagation can take long), and an expired context would then make the
+		// steps after a successful issuance fail and leave the certificate "pending".
+		if err := s.issue(context.Background(), id); err != nil {
 			slog.Warn("ACME issuance failed", "certificate", id, "err", err)
 		}
 	}()
@@ -260,13 +262,11 @@ func (s *Service) issue(ctx context.Context, id int64) error {
 	}
 	switch c.ACME.Challenge {
 	case "dns-01":
-		credJSON, err := seal.Open(s.Key, c.ACME.Credentials)
+		provider, cred, err := s.dnsCredentials(ctx, c)
 		if err != nil {
 			return fail(err)
 		}
-		var cred Credentials
-		_ = json.Unmarshal([]byte(credJSON), &cred)
-		p, err := dnsProvider(c.ACME.DNSProvider, cred)
+		p, err := dnsProvider(provider, cred)
 		if err != nil {
 			return fail(err)
 		}
@@ -307,7 +307,15 @@ func (s *Service) RenewLoop(ctx context.Context) {
 			return
 		}
 		for _, c := range list {
-			if c.Kind == "acme" && c.AutoRenew && c.Status != "pending" && time.Until(c.NotAfter) < 30*24*time.Hour {
+			if c.Kind != "acme" {
+				continue
+			}
+			switch {
+			case c.Status == "pending":
+				// an order interrupted by a restart (Start ignores orders still running)
+				slog.Info("resuming ACME order", "certificate", c.ID)
+				s.Start(c.ID)
+			case c.AutoRenew && time.Until(c.NotAfter) < 30*24*time.Hour:
 				slog.Info("renewing ACME certificate", "certificate", c.ID, "not_after", c.NotAfter)
 				s.Start(c.ID)
 			}

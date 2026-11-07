@@ -3,10 +3,21 @@ import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
+import { streamsStrings } from "./streams.i18n";
+import { notesStrings } from "./notes.i18n";
+import { updateStrings } from "./update.i18n";
 import { headersStrings } from "./headers.i18n";
+import { locationsStrings } from "./locations.i18n";
+import { limitsStrings } from "./limits.i18n";
+import { certReplaceStrings } from "./certreplace.i18n";
+import { dnsCredsStrings } from "./dnscreds.i18n";
+import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import { pagesStrings } from "./pages.i18n";
+import { consoleHostStrings } from "./consolehost.i18n";
+import { challengeStrings } from "./challenge.i18n";
+import { underAttackStrings } from "./underattack.i18n";
 import type { ko } from "./ko";
 import type { RuleLabels } from "../lib/rules";
 import type { AuditLabels } from "../lib/audit";
@@ -242,7 +253,7 @@ export const de: Partial<Record<keyof typeof ko, string>> = {
   editUser: "Benutzer bearbeiten", userSheetDesc: "Kontodaten und Rolle festlegen.", initialPassword: "Initialpasswort", generatePassword: "Generieren", copyPassword: "Kopieren",
   initialPasswordHint: "Mindestens 10 Zeichen. Geben Sie es sicher weiter und bitten Sie den Benutzer, es nach der ersten Anmeldung zu ändern.", passwordKeepBlank: "Leer lassen, um das aktuelle Passwort beizubehalten",
   roleSelf: "Sie können Ihre eigene Rolle nicht ändern.", userSaved: "Benutzer gespeichert", userDeletedToast: "Benutzer gelöscht",
-  resetPassword: "Passwort zurücksetzen", resetPasswordDesc: "Durch das Festlegen eines neuen Passworts werden alle Sitzungen des Benutzers sofort beendet.", passwordResetDone: "Passwort zurückgesetzt",
+  resetPassword: "Passwort zurücksetzen", resetPasswordDesc: "Durch das Festlegen eines neuen Passworts werden alle Sitzungen des Benutzers sofort beendet und seine API-Tokens gelöscht.", passwordResetDone: "Passwort zurückgesetzt",
   resetMfa: "MFA zurücksetzen", resetMfaTitle: "Zweistufige Verifizierung zurücksetzen?", resetMfaDesc: "Die zweistufige Verifizierung wird für diesen Benutzer deaktiviert und muss erneut eingerichtet werden.", mfaResetDone: "MFA zurückgesetzt",
   disableUser: "Deaktivieren", enableUser: "Aktivieren", userDisabledToast: "Benutzer deaktiviert", userEnabledToast: "Benutzer aktiviert",
   disableUserDesc: "Ein deaktivierter Benutzer kann sich nicht anmelden, und aktuelle Sitzungen werden sofort beendet.", deleteUser: "Löschen", deleteUserTitle: "Benutzer löschen", deleteUserDesc: "Das Konto wird dauerhaft gelöscht. Audit-Einträge bleiben erhalten.",
@@ -303,18 +314,29 @@ export const de: Partial<Record<keyof typeof ko, string>> = {
   ...bansStrings.de,
   ...tokensStrings.de,
   ...redirectsStrings.de,
+  ...streamsStrings.de,
+  ...notesStrings.de,
+  ...updateStrings.de,
   ...headersStrings.de,
+  ...locationsStrings.de,
+  ...limitsStrings.de,
+  ...certReplaceStrings.de,
+  ...dnsCredsStrings.de,
+  ...listFeedsStrings.de,
   ...ssoStrings.de,
   ...retentionStrings.de,
   ...templatesStrings.de,
   ...backupStrings.de,
   ...pagesStrings.de,
+  ...consoleHostStrings.de,
+  ...challengeStrings.de,
+  ...underAttackStrings.de,
 };
 
 export const deRuleLabels: RuleLabels | undefined = {
   field: {
     "ip.src": "IP-Adresse", "ip.country": "Land", "http.host": "Host", "http.path": "Pfad", "http.query": "Query-String",
-    "http.method": "Methode", "http.user_agent": "User-Agent", "http.referer": "Referer", "http.header": "Anfrage-Header", "http.body": "Anfrage-Body", "http.scheme": "Schema",
+    "http.method": "Methode", "http.user_agent": "User-Agent", "http.user_agent_list": "User-Agent-Liste", "http.referer": "Referer", "http.header": "Anfrage-Header", "http.body": "Anfrage-Body", "http.scheme": "Schema",
   },
   op: {
     in: "ist eines von", not_in: "ist keines von", eq: "gleich", ne: "ungleich", contains: "enthält", not_contains: "enthält nicht",
@@ -328,12 +350,12 @@ export const deRuleLabels: RuleLabels | undefined = {
 
 export const deAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "Proxy-Host", redirection_host: "Weiterleitungs-Host", waitroom: "Zugriffswarteschlange", certificate: "Zertifikat", deploy: "Bereitstellung", auth: "Authentifizierung", setup: "Einrichtung",
-    rate_limit: "Ratenbegrenzung", access_list: "Basic-Authentifizierung", security_rule: "Sicherheitsregel", ip_list: "IP-Liste", geoip: "Länderdatenbank", settings: "Einstellungen", network: "Netzwerk", import: "Import", mfa: "MFA", user: "Konto",
+    proxy_host: "Proxy-Host", stream: "Stream", redirection_host: "Weiterleitungs-Host", waitroom: "Zugriffswarteschlange", certificate: "Zertifikat", dns_credential: "DNS-Zugangsdaten", deploy: "Bereitstellung", auth: "Authentifizierung", setup: "Einrichtung",
+    rate_limit: "Ratenbegrenzung", access_list: "Basic-Authentifizierung", security_rule: "Sicherheitsregel", ip_list: "IP-Liste", geoip: "Länderdatenbank", settings: "Einstellungen", network: "Netzwerk", import: "Import", mfa: "MFA", user: "Konto", ban: "IP-Sperre", autoban: "Automatische Sperre", sso: "SSO", token: "API-Token", alert_channel: "Alarmkanal", alert_rules: "Alarmregeln", backup: "Sicherung", managed_rules: "Verwaltete Regeln", page: "Seite", retention: "Datenaufbewahrung", unknown_hosts: "Unbekannte Hosts",
   },
   verb: {
     create: "erstellt", update: "geändert", delete: "gelöscht", upload: "hochgeladen", apply: "angewendet", rollback: "zurückgesetzt", login: "angemeldet", logout: "abgemeldet",
     login_failed: "Anmeldung fehlgeschlagen", password_changed: "Passwort geändert", admin_created: "Administrator erstellt", renew: "erneuert", issue: "ausgestellt",
-    enable: "aktiviert", disable: "deaktiviert", refresh: "aktualisiert", mfa_enabled: "MFA aktiviert", mfa_disabled: "MFA deaktiviert", acme: "per ACME ausgestellt", reorder: "neu angeordnet",
+    enable: "aktiviert", disable: "deaktiviert", refresh: "aktualisiert", mfa_enabled: "MFA aktiviert", mfa_disabled: "MFA deaktiviert", acme: "per ACME ausgestellt", reorder: "neu angeordnet", auto: "(automatisch)", test: "getestet", reset: "zurückgesetzt", restore_upload: "Wiederherstellung hochgeladen", restore_confirm: "Wiederherstellung bestätigt", restore_discard: "Wiederherstellung verworfen", restore_rejected: "Wiederherstellung abgelehnt",
   },
 };

@@ -1,17 +1,19 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
+	"corvus/control/internal/acme"
 	"corvus/control/internal/auth"
 	"corvus/control/internal/certs"
+	"corvus/control/internal/compiler"
 	"corvus/control/internal/npmimport"
-	"corvus/control/internal/seal"
 	"corvus/control/internal/store"
 	"corvus/control/internal/validate"
 )
@@ -24,8 +26,11 @@ type npmRequest struct {
 	MySQL          *npmimport.MySQL `json:"mysql"`
 	ProxyHostIDs   []int64          `json:"proxy_host_ids"`
 	RedirectIDs    []int64          `json:"redirection_host_ids"`
+	StreamIDs      []int64          `json:"stream_ids"`
 	CertificateIDs []int64          `json:"certificate_ids"`
 	AccessListIDs  []int64          `json:"access_list_ids"`
+	// UnknownHosts imports NPM's default site setting (nil = yes, when there is one).
+	UnknownHosts *bool `json:"unknown_hosts"`
 }
 
 // source resolves and confines the requested paths to the import root.
@@ -105,6 +110,18 @@ func (s *Server) npmRead(w http.ResponseWriter, r *http.Request) (*npmimport.Sna
 	if snap.Redirects == nil {
 		snap.Redirects = []npmimport.Redirect{}
 	}
+	streams, err := s.Store.ListStreams(r.Context())
+	if err != nil {
+		fail(w, err)
+		return nil, in, false
+	}
+	for i := range snap.Streams {
+		x := npmStream(snap.Streams[i], nil)
+		snap.Streams[i].Conflict = compiler.StreamConflict(s.Paths, streams, x)
+	}
+	if snap.Streams == nil {
+		snap.Streams = []npmimport.Stream{}
+	}
 	return snap, in, true
 }
 
@@ -141,12 +158,13 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	var skips []skipped
-	counts := map[string]int{"proxy_hosts": 0, "redirection_hosts": 0, "certificates": 0, "access_lists": 0}
+	counts := map[string]int{"proxy_hosts": 0, "redirection_hosts": 0, "streams": 0, "certificates": 0, "access_lists": 0}
 	type pendingFiles struct {
 		id        int64
 		cert, key []byte
 	}
 	var files []pendingFiles
+	var newCreds []*store.DNSCredential
 
 	v, err := s.Deployer.Apply(ctx, userID(r), "import from Nginx Proxy Manager", func(tx *store.Store) error {
 		certMap := map[int64]int64{}
@@ -174,12 +192,15 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 				if c.DNSProvider != "" {
 					xc.ACME.Challenge = "dns-01"
 					if c.DNSCredentials != nil {
-						cred, _ := json.Marshal(c.DNSCredentials)
-						sealed, err := seal.Seal(s.DataKey, string(cred))
+						// saved once per provider and secret, shared by the imported certificates
+						saved, created, err := acme.ReuseOrSaveCredential(ctx, tx, s.DataKey, c.DNSProvider, *c.DNSCredentials)
 						if err != nil {
 							return err
 						}
-						xc.ACME.DNSProvider, xc.ACME.Credentials = c.DNSProvider, sealed
+						if created {
+							newCreds = append(newCreds, saved)
+						}
+						xc.ACME.DNSProvider, xc.DNSCredentialID = c.DNSProvider, &saved.ID
 					} else {
 						xc.AutoRenew = false
 					}
@@ -219,12 +240,12 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 			if !selected(in.AccessListIDs, a.NPMID) {
 				continue
 			}
-			xa := &store.AccessList{Name: a.Name, Satisfy: "any", Allow: []string{}, Deny: []string{}}
+			xa := &store.AccessList{Name: npmPolicyName(a.Name, a.NPMID), Satisfy: "any", Allow: []string{}, Deny: []string{}}
 			if a.SatisfyAll {
 				xa.Satisfy = "all"
 			}
-			for names[xa.Name] {
-				xa.Name += " (npm)"
+			for i, base := 2, xa.Name; names[xa.Name]; i++ {
+				xa.Name = suffixName(base, fmt.Sprintf("-npm-%d", i))
 			}
 			var allow, deny []string
 			for _, c := range a.Clients {
@@ -280,12 +301,20 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 			}
 			xh := &store.ProxyHost{Domains: h.Domains, ForwardScheme: h.ForwardScheme, ForwardHost: h.ForwardHost, ForwardPort: h.ForwardPort,
 				Websocket: h.Websocket, HTTP2: h.HTTP2, BlockExploits: h.BlockExploits, Enabled: h.Enabled, AdvancedConfig: h.AdvancedConfig, ClientIP: "direct",
-				SecurityHeaders: "off"} // NPM has no security header presets
+				SecurityHeaders: "off", // NPM has no security header presets
+				Gzip:            true,  // NPM compresses text responses (its client_max_body_size stays in the advanced configuration)
+				Locations:       h.CustomLocations}
 			if id, ok := certMap[h.CertificateID]; ok {
 				xh.CertificateID, xh.SSLForced = &id, h.SSLForced
+			} else if h.CertificateID != 0 {
+				skips = append(skips, skipped{"proxy_host", h.NPMID, fmt.Sprintf("imported without HTTPS: its certificate (NPM #%d) was not imported", h.CertificateID)})
 			}
 			if id, ok := aclMap[h.AccessListID]; ok {
 				xh.AccessListID = &id
+			} else if h.AccessListID != 0 && ipRules[h.AccessListID] == nil {
+				// never publish a protected site without its protection
+				skips = append(skips, skipped{"proxy_host", h.NPMID, fmt.Sprintf("not imported: its access list (NPM #%d) was not imported", h.AccessListID)})
+				continue
 			}
 			if err := checkProxyHost(r, tx, xh); err != nil {
 				skips = append(skips, skipped{"proxy_host", h.NPMID, err.Error()})
@@ -317,6 +346,24 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 			}
 			counts["redirection_hosts"]++
 		}
+		for _, h := range snap.Streams {
+			if !selected(in.StreamIDs, h.NPMID) {
+				continue
+			}
+			if h.Conflict != "" {
+				skips = append(skips, skipped{"stream", h.NPMID, h.Conflict})
+				continue
+			}
+			xs := npmStream(h, certMap)
+			if err := checkStream(r, tx, s.Paths, xs); err != nil {
+				skips = append(skips, skipped{"stream", h.NPMID, err.Error()})
+				continue
+			}
+			if err := tx.SaveStream(ctx, xs); err != nil {
+				return err
+			}
+			counts["streams"]++
+		}
 		for _, ir := range ipRules {
 			if len(ir.hosts) == 0 {
 				continue
@@ -329,14 +376,28 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 				counts["security_rules"]++
 			}
 		}
+		if snap.UnknownHosts != nil && (in.UnknownHosts == nil || *in.UnknownHosts) {
+			if err := tx.SetUnknownHosts(ctx, *snap.UnknownHosts); err != nil {
+				return err
+			}
+			counts["unknown_hosts"]++
+		}
 		return nil
 	})
 	if err != nil {
+		// the transaction was rolled back (its ids are handed out again): remove the
+		// certificate files written for it so a later certificate cannot pick them up
+		for _, f := range files {
+			_ = os.RemoveAll(s.Paths.CertDir(f.id))
+		}
 		fail(w, err)
 		return
 	}
 	if skips == nil {
 		skips = []skipped{}
+	}
+	for _, c := range newCreds {
+		s.audit(r, "dns_credential.create", fmt.Sprintf("dns_credential:%d", c.ID), c)
 	}
 	s.audit(r, "import.npm", "npm", map[string]any{"imported": counts, "skipped": len(skips)})
 	writeJSON(w, 200, map[string]any{"imported": counts, "skipped": skips, "version": v, "at": time.Now().UTC()})
@@ -353,6 +414,16 @@ func npmRedirect(h npmimport.Redirect, certMap map[int64]int64) *store.Redirecti
 	return xh
 }
 
+// npmStream maps an NPM stream to a Corvus one; certMap maps NPM certificate ids to
+// imported Corvus certificates (unmapped: plain TCP).
+func npmStream(h npmimport.Stream, certMap map[int64]int64) *store.Stream {
+	xs := &store.Stream{IncomingPort: h.IncomingPort, TCP: h.TCP, UDP: h.UDP, ForwardHost: h.ForwardHost, ForwardPort: h.ForwardPort, Enabled: h.Enabled}
+	if id, ok := certMap[h.CertificateID]; ok && h.CertificateID != 0 && h.TCP {
+		xs.CertificateID = &id
+	}
+	return xs
+}
+
 func contains(list []string, v string) bool {
 	for _, x := range list {
 		if x == v {
@@ -360,4 +431,31 @@ func contains(list []string, v string) bool {
 		}
 	}
 	return false
+}
+
+// npmPolicyName turns an NPM access list name into a valid Corvus policy name (letters,
+// digits, space, "_.-"; starting with a letter or digit; at most 64 characters).
+func npmPolicyName(name string, id int64) string {
+	var b strings.Builder
+	for _, r := range strings.TrimSpace(name) {
+		switch {
+		case r < 128 && (unicode.IsLetter(r) || unicode.IsDigit(r) || r == ' ' || r == '_' || r == '.' || r == '-'):
+			b.WriteRune(r)
+		default:
+			b.WriteByte('-')
+		}
+	}
+	out := strings.TrimLeft(b.String(), " _.-")
+	if out == "" {
+		out = fmt.Sprintf("npm-list-%d", id)
+	}
+	return suffixName(out, "")
+}
+
+// suffixName appends suffix, shortening name so the result has at most 64 characters.
+func suffixName(name, suffix string) string {
+	if max := 64 - len(suffix); len(name) > max {
+		name = strings.TrimRight(name[:max], " ")
+	}
+	return name + suffix
 }

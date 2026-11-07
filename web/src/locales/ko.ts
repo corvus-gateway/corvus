@@ -3,10 +3,21 @@ import { koRetention } from "./retention.i18n";
 import { koSso } from "./sso.i18n";
 import { koTokens } from "./tokens.i18n";
 import { koRedirects } from "./redirects.i18n";
+import { koStreams } from "./streams.i18n";
+import { koNotes } from "./notes.i18n";
+import { koUpdate } from "./update.i18n";
 import { koHeaders } from "./headers.i18n";
+import { koLocations } from "./locations.i18n";
+import { koLimits } from "./limits.i18n";
+import { koCertReplace } from "./certreplace.i18n";
+import { koDnsCreds } from "./dnscreds.i18n";
+import { koListFeeds } from "./listfeeds.i18n";
 import { koBans } from "./bans.i18n";
 import { koBackup } from "./backup.i18n";
 import { koPages } from "./pages.i18n";
+import { koConsoleHost } from "./consolehost.i18n";
+import { koChallenge } from "./challenge.i18n";
+import { koUnderAttack } from "./underattack.i18n";
 import { koSecurity } from "./security";
 import { koUsers } from "./users";
 import { koAlerts } from "./alerts";
@@ -201,10 +212,21 @@ export const ko = {
   ...koBans,
   ...koTokens,
   ...koRedirects,
+  ...koStreams,
+  ...koNotes,
+  ...koUpdate,
   ...koHeaders,
+  ...koLocations,
+  ...koLimits,
+  ...koCertReplace,
+  ...koDnsCreds,
+  ...koListFeeds,
   ...koSso,
   ...koRetention,
   ...koTemplates,
   ...koBackup,
   ...koPages,
+  ...koConsoleHost,
+  ...koChallenge,
+  ...koUnderAttack,
 } as const;

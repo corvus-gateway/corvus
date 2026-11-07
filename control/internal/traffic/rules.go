@@ -42,6 +42,20 @@ type RuleHit struct {
 	Last    *time.Time
 }
 
+// UnderAttackRule is the rule part of $corvus_rule for challenges of a host's "under
+// attack" mode ("ua:challenge", "ua:challenge_pass", "ua:challenge_fail"). They count
+// as challenge events but belong to no security rule.
+const UnderAttackRule = "ua"
+
+// ruleAction returns the action of the log field "<id>:<action>" or "ua:<action>".
+func ruleAction(v string) (string, bool) {
+	if a, ok := strings.CutPrefix(v, UnderAttackRule+":"); ok {
+		return a, a != ""
+	}
+	_, a, ok := parseRule(v)
+	return a, ok
+}
+
 // parseRule splits the log field "<id>:<action>".
 func parseRule(v string) (int64, string, bool) {
 	i := strings.IndexByte(v, ':')

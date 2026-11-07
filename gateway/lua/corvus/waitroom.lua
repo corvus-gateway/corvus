@@ -11,8 +11,8 @@ local redis = require "resty.redis"
 local cjson = require "cjson.safe"
 local rstring = require "resty.string"
 local rrandom = require "resty.random"
-local rsha256 = require "resty.sha256"
-local bit = require "bit"
+local crypto = require "corvus.crypto"
+local ipkey = require "corvus.ipkey"
 
 local ngx = ngx
 local _M = {}
@@ -30,13 +30,13 @@ local DEFAULTS = {
   capacity   = 500,   -- max concurrently admitted sessions
   active_ttl = 120,   -- s; an admitted session with no request for this long frees its slot
   grant_ttl  = 30,    -- s; time a promoted waiter has to come back and claim the slot
-  queue_ttl  = 120,   -- s; a waiter that stops polling for this long loses its place
+  queue_ttl  = 300,   -- s; a waiter that stops polling for this long loses its place
   refresh    = 15,    -- s; token age after which the gateway re-checks Redis (revocation lag)
   admit_rate = 0,     -- admissions per second (0 = unlimited, capacity only)
   fail       = "open",-- behaviour when Redis is unavailable: "open" | "closed"
   poll_min   = 3,     -- s; suggested poll interval near the front of the line
   poll_max   = 30,    -- s; suggested poll interval far back in the line
-  max_queue  = 100000,-- waiters per room; beyond this new visitors get 503 (protects Redis memory)
+  max_queue  = 100000,-- waiters per room; beyond this new visitors get 429 (protects Redis memory)
   max_new_per_ip = 60,-- new queue entries per client IP per minute (0 = unlimited)
   bind_ip    = false, -- bind admission tokens to the client's network (/24, IPv6 /48)
 }
@@ -87,57 +87,33 @@ function _M.init(policy_path)
       if cfg[k] == nil then c[k] = v else c[k] = cfg[k] end
     end
     if c.fail ~= "open" and c.fail ~= "closed" then error("corvus: room " .. name .. ": fail must be open|closed") end
+    c.enabled = cfg.enabled ~= false
     ROOMS[name] = c
   end
 end
 
 -- ---------------------------------------------------------------- tokens
 
-local function b64url(s)
-  return (ngx.encode_base64(s):gsub("[+/=]", { ["+"] = "-", ["/"] = "_", ["="] = "" }))
-end
-
--- HMAC-SHA256 (RFC 2104) on top of resty.sha256 (FFI to OpenSSL); the padded
--- key blocks are precomputed per key, so each MAC costs two SHA-256 passes.
-local function sha256_bin(s)
-  local h = rsha256:new()
-  h:update(s)
-  return h:final()
-end
-
-hmac_key = function(secret)
-  if #secret > 64 then secret = sha256_bin(secret) end
-  secret = secret .. string.rep("\0", 64 - #secret)
-  local ipad, opad = {}, {}
-  for i = 1, 64 do
-    local b = secret:byte(i)
-    ipad[i] = string.char(bit.bxor(b, 0x36))
-    opad[i] = string.char(bit.bxor(b, 0x5c))
-  end
-  return { ipad = table.concat(ipad), opad = table.concat(opad), kid = rstring.to_hex(sha256_bin(secret)):sub(1, 8) }
-end
-
-local function hmac(key, msg)
-  return sha256_bin(key.opad .. sha256_bin(key.ipad .. msg))
-end
+-- HMAC-SHA256 tokens: see corvus/crypto.lua (shared with the security-rule challenge).
+local b64url, sha256_bin, hmac, const_eq = crypto.b64url, crypto.sha256_bin, crypto.hmac, crypto.const_eq
+hmac_key = crypto.hmac_key
 
 -- KEYS: kid → key (current + previous, for rotation); CURRENT signs new tokens.
 
-local function const_eq(a, b)
-  if #a ~= #b then return false end
-  local r = 0
-  for i = 1, #a do r = bit.bor(r, bit.bxor(a:byte(i), b:byte(i))) end
-  return r == 0
-end
+local v6_prefix = ipkey.v6_prefix
+_M._v6_prefix = v6_prefix -- tests
 
--- Client network used for optional token binding: IPv4 /24, IPv6 first three groups (/48).
+-- Client network used for optional token binding: IPv4 /24, IPv6 /48.
 local function client_net()
   local ip = ngx.var.remote_addr or ""
-  if ip:find(":", 1, true) then
-    local a, b, c = ip:match("^(%x*):(%x*):(%x*)")
-    return (a or "") .. ":" .. (b or "") .. ":" .. (c or "")
-  end
+  if ip:find(":", 1, true) then return v6_prefix(ip, 3) or ip end
   return ip:match("^(%d+%.%d+%.%d+)%.") or ip
+end
+
+-- Client key for per-client limits: the IPv4 address, or the IPv6 /64 (one host's
+-- privacy addresses all share it).
+local function client_key()
+  return ipkey.client(ngx.var.remote_addr)
 end
 
 -- token = v2.<kid>.<kind>.<room>.<sid>.<iat>.<exp>.<sig>   kind: a=admission, q=queue
@@ -169,8 +145,11 @@ end
 -- ---------------------------------------------------------------- cookies
 
 local function add_cookie(name, value, max_age)
-  local c = name .. "=" .. value .. "; Path=/; Max-Age=" .. max_age .. "; HttpOnly; SameSite=Lax"
-  if ngx.var.scheme == "https" then c = c .. "; Secure" end
+  -- SameSite=None on https: a visitor coming back from another site with a POST (for
+  -- example a payment provider's 3-D Secure step) keeps the place. These cookies only
+  -- hold a place in line; /leave checks the Origin. Browsers need Secure for None.
+  local c = name .. "=" .. value .. "; Path=/; Max-Age=" .. max_age .. "; HttpOnly"
+  if ngx.var.scheme == "https" then c = c .. "; Secure; SameSite=None" else c = c .. "; SameSite=Lax" end
   local ctx = ngx.ctx
   ctx.corvus_cookies = ctx.corvus_cookies or {}
   table.insert(ctx.corvus_cookies, c)
@@ -258,13 +237,13 @@ local function run(room, op, sid)
   end
   local p = "corvus:wr:{" .. room.name .. "}:"
   local res
-  res, err = red:evalsha(SCRIPT_SHA, 5,
-    p .. "active", p .. "queue", p .. "seen", p .. "seq", p .. "rate",
+  res, err = red:evalsha(SCRIPT_SHA, 6,
+    p .. "active", p .. "queue", p .. "seen", p .. "seq", p .. "rate", p .. "granted",
     op, sid or "", room.capacity, room.active_ttl * 1000, room.grant_ttl * 1000,
     room.queue_ttl * 1000, room.admit_rate, PROMOTE_MAX, room.max_queue)
   if not res and err and err:find("NOSCRIPT", 1, true) then
-    res, err = red:eval(SCRIPT, 5,
-      p .. "active", p .. "queue", p .. "seen", p .. "seq", p .. "rate",
+    res, err = red:eval(SCRIPT, 6,
+      p .. "active", p .. "queue", p .. "seen", p .. "seq", p .. "rate", p .. "granted",
       op, sid or "", room.capacity, room.active_ttl * 1000, room.grant_ttl * 1000,
       room.queue_ttl * 1000, room.admit_rate, PROMOTE_MAX, room.max_queue)
   end
@@ -287,11 +266,23 @@ end
 
 -- ---------------------------------------------------------------- responses
 
+-- Suggested seconds until the next status check: longer far back in the line, but
+-- short enough that a promoted visitor usually claims its turn within grant_ttl and a
+-- waiter is never dropped as abandoned (queue_ttl) while following the suggestion.
 local function poll_interval(room, rank)
   local s = room.poll_min + math.floor((rank or 0) / 500)
-  if s > room.poll_max then s = room.poll_max end
+  local cap = math.min(room.poll_max, math.floor(room.grant_ttl / 2), math.floor(room.queue_ttl / 3))
+  if s > cap then s = cap end
+  if s < 1 then s = 1 end
   return s
 end
+
+-- "Wait and come back" answers (cookie check, waiting, queue full) to requests that
+-- cannot follow the waiting page (API calls, fetch/XHR, WebSockets): 429 + Retry-After.
+-- The site is not failing, so these must not read as server errors (503) in logs, error
+-- rates and 5xx alerts. Only a Redis outage with fail = "closed" answers 503. Neither
+-- counts as bad behaviour or as rate limiting (rules.lua _M.log, traffic.classify).
+local WAIT_STATUS = 429
 
 local function send_json(status, body)
   ngx.status = status
@@ -315,7 +306,7 @@ local function send_waiting(room, res)
     return ngx.redirect("/__corvus/wait/" .. room.name .. "?r=" .. ngx.escape_uri(ngx.var.request_uri), 302)
   end
   ngx.header["Retry-After"] = tostring(retry)
-  return send_json(503, {
+  return send_json(WAIT_STATUS, {
     status = "waiting", room = room.name, rank = res.rank, ticket = res.ticket,
     waiting = res.waiting, retry_after = retry,
   })
@@ -326,17 +317,24 @@ local BUSY_HTML = [[<!doctype html><meta charset=utf-8><meta name=viewport conte
   .. [[대기 인원이 많아 지금은 대기열에 들어갈 수 없습니다. 잠시 후 다시 시도해 주세요.<br>]]
   .. [[<small>The queue is full right now. Please try again shortly.</small></p>]]
 
+-- Too many new entries from one address: retries by itself after a minute.
+local BUSY_HTML_RETRY = [[<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width">]]
+  .. [[<meta http-equiv=refresh content=60><title>Corvus</title>]]
+  .. [[<p style="font:16px system-ui;margin:20vh auto;max-width:28rem;text-align:center">]]
+  .. [[같은 네트워크에서 접속이 많아 잠시 기다려야 합니다. 이 페이지는 1분 뒤 자동으로 다시 시도합니다.<br>]]
+  .. [[<small>Many visitors share your network address. This page retries automatically in a minute.</small></p>]]
+
 local function send_busy(room)
   ngx.ctx.corvus_wr = "full"
   ngx.header["Retry-After"] = "30"
   ngx.header["Cache-Control"] = "no-store"
   if wants_html() then
-    ngx.status = 503
+    ngx.status = WAIT_STATUS
     ngx.header["Content-Type"] = "text/html; charset=utf-8"
     ngx.print(BUSY_HTML)
-    return ngx.exit(503)
+    return ngx.exit(WAIT_STATUS)
   end
-  return send_json(503, { status = "full", room = room.name, retry_after = 30 })
+  return send_json(WAIT_STATUS, { status = "full", room = room.name, retry_after = 30 })
 end
 
 -- Limits how many new queue entries one client IP may create per minute.
@@ -345,7 +343,7 @@ local function allow_new_entry(room, sid)
   local d = ngx.shared.corvus_wr_ip
   if not d or room.max_new_per_ip <= 0 then return true end
   if d:get("s:" .. sid) then return true end
-  local n = d:incr("n:" .. room.name .. ":" .. (ngx.var.remote_addr or ""), 1, 0, 60)
+  local n = d:incr("n:" .. room.name .. ":" .. client_key(), 1, 0, 60)
   if n and n > room.max_new_per_ip then return false end
   d:set("s:" .. sid, true, room.queue_ttl + room.active_ttl)
   return true
@@ -364,6 +362,14 @@ end
 local function send_too_many(room)
   ngx.ctx.corvus_wr = "ip-limit"
   ngx.header["Retry-After"] = "60"
+  ngx.header["Cache-Control"] = "no-store"
+  if wants_html() then
+    -- people behind a shared address (office, mobile carrier) get a page that retries
+    ngx.status = 429
+    ngx.header["Content-Type"] = "text/html; charset=utf-8"
+    ngx.print(BUSY_HTML_RETRY)
+    return ngx.exit(429)
+  end
   return send_json(429, { status = "rate_limited", room = room.name, retry_after = 60 })
 end
 
@@ -403,9 +409,9 @@ function _M.access()
 
   if tok then
     local res, err = run(room, "heartbeat", tok.sid)
-    if not res then
+    if not res or res.code == FULL then
       ngx.ctx.corvus_wr = "pass-stale"
-      return -- valid token holders are never blocked by a Redis outage
+      return -- valid token holders are never blocked by a Redis outage or a full store
     end
     if res.code == ACTIVE then
       issue_admission(room, tok.sid)
@@ -427,7 +433,7 @@ function _M.access()
       return ngx.redirect(ngx.var.request_uri, 302)
     end
     ngx.header["Retry-After"] = "1"
-    return send_json(503, { status = "retry", room = room.name, retry_after = 1 })
+    return send_json(WAIT_STATUS, { status = "retry", room = room.name, retry_after = 1 })
   end
   if not allow_new_entry(room, sid) then return send_too_many(room) end
   local res, err = run(room, "enter", sid)
@@ -435,8 +441,11 @@ function _M.access()
   if res.code == FULL then return send_busy(room) end
 
   if res.code == ACTIVE then
+    -- The queue cookie (signed sid, 24 h) is kept: a visitor idle for longer than
+    -- active_ttl (admission cookie gone) is then recognised and, with nobody waiting,
+    -- admitted at once instead of getting a cookie check (which a POST cannot follow).
+    if not q then issue_queue(room, sid) end
     issue_admission(room, sid)
-    if q then clear_cookie("q", room) end
     ngx.ctx.corvus_wr = "admit"
     return
   end
@@ -458,6 +467,11 @@ function _M.endpoint()
   if not room then return send_json(404, { status = "unknown_room" }) end
   local method = ngx.req.get_method()
 
+  if action == "status" and method == "GET" and not room.enabled then
+    -- Room disabled (emergency release): everyone may go in.
+    return send_json(200, { status = "active", room = room.name, released = true })
+  end
+
   if action == "status" and method == "GET" then
     local q = queue_from_cookie(room)
     local tok = admission_from_cookie(room)
@@ -472,6 +486,7 @@ function _M.endpoint()
       end
     elseif tok then
       res, err = run(room, "heartbeat", tok.sid)
+      if res and res.code == FULL then res = { code = ACTIVE, active = 0 } end
       if res and res.code == NOT_FOUND then
         if not allow_new_entry(room, tok.sid) then return send_too_many(room) end
         res, err = run(room, "enter", tok.sid)
@@ -489,7 +504,6 @@ function _M.endpoint()
     end
     if res.code == ACTIVE then
       issue_admission(room, (q and q.sid) or tok.sid)
-      clear_cookie("q", room)
       return send_json(200, { status = "active", room = room.name, active = res.active, capacity = room.capacity })
     end
     return send_json(200, {
@@ -500,6 +514,14 @@ function _M.endpoint()
   end
 
   if action == "leave" and method == "POST" then
+    -- Cookies are SameSite=None on https, so refuse other sites' requests.
+    local origin = ngx.var.http_origin
+    if origin and origin ~= "" and origin ~= "null" then
+      local oh = origin:match("^https?://([^/]+)$")
+      if not oh or oh:lower() ~= (ngx.var.http_host or ""):lower() then
+        return send_json(403, { status = "forbidden" })
+      end
+    end
     local tok = admission_from_cookie(room)
     local q = queue_from_cookie(room)
     local sid = (tok and tok.sid) or (q and q.sid)
@@ -525,7 +547,7 @@ function _M.endpoint()
     local ok, err = redis_connect(red)
     if not ok then return send_json(503, { status = "unavailable", error = tostring(err) }) end
     local p = "corvus:wr:{" .. room.name .. "}:"
-    red:del(p .. "active", p .. "queue", p .. "seen", p .. "seq", p .. "rate")
+    red:del(p .. "active", p .. "queue", p .. "seen", p .. "seq", p .. "rate", p .. "granted")
     red:set_keepalive(10000, 512)
     return send_json(200, { status = "reset", room = room.name })
   end

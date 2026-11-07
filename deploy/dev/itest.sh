@@ -40,6 +40,7 @@ for id in $(c $A/api/bans | js "' '.join(str(b['id']) for b in d)"); do c -o /de
 
 HOST1=$(c $A/api/proxy-hosts | js "[h['id'] for h in d if '$H' in h['domains']][0]")
 put_host() { c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$HOST1 -d "{\"domains\":[\"$H\"],\"forward_host\":\"demo\",\"forward_port\":80$1}"; }
+put_host ',"under_attack":"off"' >/dev/null  # an aborted earlier run may have left it on
 
 echo "[rate limit]"
 RL=$(c -X POST $A/api/rate-limits -d '{"name":"itest-strict","requests_per_second":2,"burst":0}' | js "d['rate_limit']['id']")
@@ -228,6 +229,125 @@ c -o /dev/null -X DELETE $A/api/bans/$ABID
 sleep 2
 chk "$(code "$G/after-unban")" 200 "automatic ban lifted"
 
+echo "[bad behaviour]"
+# the demo origin answers 200 everywhere: a rule answering 404 stands in for missing paths
+BBR=$(rule "$(cond itest-bb-404 block ',"status_code":404' '{"field":"http.path","operator":"starts_with","value":["/itest-bb-missing"]}')")
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/settings/autoban -d '{"enabled":true,"threshold":20,"window_s":600,"duration_s":120,"include_scans":false,"scan_threshold":200,"exempt":[],"bad_behaviour":true,"bad_behaviour_codes":[404],"bad_behaviour_threshold":5,"bad_behaviour_window_s":60}')" 200 "bad behaviour: five 404s in 60 s"
+sleep 3
+chk "$(code "$G/bb-before")" 200 "client allowed before misbehaving"
+codes=$(for i in 1 2 3 4 5 6; do code "$G/itest-bb-missing/$i"; echo; done | tr '\n' ' ')
+chk "$codes" "404 404 404 404 404 403 " "request after five 404s refused immediately"
+chk "$(code "$G/bb-after")" 403 "banned by the gateway without waiting for corvus-control"
+listed=""; r=""
+for i in $(seq 1 15); do sleep 2; r=$(c $A/api/bans | js "[b['reason'] for b in d if b['ip']=='$ip' and b['source']=='auto']"); case "$r" in *"bad behaviour: 5×404 on "*) listed=1; break;; esac; done
+[ -n "$listed" ] && ok "bad-behaviour ban recorded by corvus-control ($r)" || bad "bad-behaviour ban not listed (got $r)"
+sleep 2
+chk "$(code "$G/bb-after-push")" 403 "still banned after the authoritative push"
+c -o /dev/null -X PUT $A/api/settings/autoban -d '{"enabled":false,"threshold":20,"window_s":600,"duration_s":900,"include_scans":false,"scan_threshold":200,"exempt":[],"bad_behaviour":false}'
+for id in $(c $A/api/bans | js "' '.join(str(b['id']) for b in d if b['ip']=='$ip')"); do c -o /dev/null -X DELETE $A/api/bans/$id; done
+c -o /dev/null -X DELETE $A/api/security-rules/$BBR
+sleep 2
+chk "$(code "$G/bb-after-unban")" 200 "bad-behaviour ban lifted"
+
+echo "[challenge]"
+field() { sed -n "s/.*name=\"$1\" value=\"\([^\"]*\)\".*/\1/p" | head -1; }
+status() { head -1 | cut -d' ' -f2; }
+verify() { curl -s -o /dev/null -D - -c "$1" -b "$1" --data-urlencode "t=$2" --data-urlencode "c=$3" --data-urlencode "r=$4" "$G/__corvus/challenge/verify"; }
+CHC=$(rule "$(cond itest-ch-cookie challenge ',"challenge_mode":"cookie"' '{"field":"http.path","operator":"starts_with","value":["/itest-ch-cookie"]}')")
+CHB=$(rule "$(cond itest-ch-block block '' '{"field":"http.path","operator":"eq","value":["/itest-ch-cookie/blocked"]}')")
+chk "$(c $A/api/security-rules | js "[(r['action'], r['challenge_mode'], r['challenge_ttl_s'], r['challenge_bind']) for r in d if r['id']==$CHC][0]")" "('challenge', 'cookie', 86400, 'ip')" "challenge rule stored with defaults"
+chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/security-rules -d "$(cond itest-bad challenge ',"challenge_difficulty":30' '{"field":"http.path","operator":"eq","value":["/x"]}')")" 422 "challenge difficulty above 24 rejected"
+CJ=$(mktemp)
+R=$(curl -s -D - -c "$CJ" -b "$CJ" "$G/itest-ch-cookie/page?x=1")
+chk "$(echo "$R" | status)" 403 "cookie challenge: first request gets the challenge page"
+echo "$R" | grep -qi '^cache-control: no-store' && ok "challenge page is not cacheable" || bad "challenge page without Cache-Control: no-store"
+echo "$R" | grep -qi '^x-corvus-challenge: cookie' && ok "challenge mode header" || bad "no X-Corvus-Challenge header"
+TOK=$(echo "$R" | field t)
+chk "$(echo "$R" | field r)" "/itest-ch-cookie/page?x=1" "return path in the challenge form"
+chk "$(code -X POST "$G/itest-ch-cookie/form")" 403 "POST without a pass is challenged too"
+chk "$(code "$G/__corvus/challenge/verify")" 405 "verify endpoint accepts POST only"
+chk "$(verify "$CJ" "${TOK}x" "" /itest-ch-cookie/page | status)" 403 "tampered challenge token refused"
+V=$(verify "$CJ" "$TOK" "" "/itest-ch-cookie/page?x=1")
+chk "$(echo "$V" | status)" 303 "cookie challenge: answer accepted (303)"
+echo "$V" | grep -qi '^location: .*/itest-ch-cookie/page?x=1' && ok "redirected back to the original URL" || bad "redirect target: $(echo "$V" | grep -i '^location')"
+SC=$(echo "$V" | grep -i '^set-cookie: __corvus_ch=')
+case "$SC" in *HttpOnly*SameSite=Lax*) ok "pass cookie is HttpOnly, SameSite=Lax";; *) bad "pass cookie flags: $SC";; esac
+chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$CJ" "$G/itest-ch-cookie/page?x=1")" 200 "cookie challenge: request with the pass reaches the backend"
+chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$CJ" "$G/itest-ch-cookie/blocked")" 403 "block rules still apply with a pass"
+curl -s -b "$CJ" "$G/itest-ch-cookie/blocked" | grep -q 'name="t"' && bad "block rule answered with a challenge" || ok "blocked with the block page"
+chk "$(code "$G/itest-ch-cookie/page")" 403 "without the cookie: challenged again"
+V=$(verify "$CJ" "$TOK" "" "//evil.example/x")
+echo "$V" | grep -i '^location:' | grep -qi 'evil' && bad "open redirect: $(echo "$V" | grep -i '^location')" || ok "network-path return target replaced by /"
+# js mode: compute the proof of work here (difficulty 12 ≈ 4k hashes)
+CHJ=$(rule "$(cond itest-ch-js challenge ',"challenge_mode":"js","challenge_difficulty":12,"challenge_ttl_s":300' '{"field":"http.path","operator":"starts_with","value":["/itest-ch-js"]}')")
+JJ=$(mktemp)
+P=$(curl -s -c "$JJ" -b "$JJ" "$G/itest-ch-js/x")
+echo "$P" | grep -q 'data-mode="js" data-bits="12"' && ok "js challenge page with difficulty 12" || bad "js challenge page"
+chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$CJ" "$G/itest-ch-js/x")" 403 "a cookie-check pass does not satisfy a js challenge"
+TOK=$(echo "$P" | field t)
+chk "$(verify "$JJ" "$TOK" 0x /itest-ch-js/x | status)" 403 "js challenge: invalid proof of work refused"
+CNT=$($PY -c '
+import hashlib, sys
+nonce, bits, i = sys.argv[1].split(".")[8], int(sys.argv[2]), 0
+while int.from_bytes(hashlib.sha256((nonce + str(i)).encode()).digest(), "big") >> (256 - bits):
+    i += 1
+print(i)' "$TOK" 12)
+chk "$(verify "$JJ" "$TOK" "$CNT" /itest-ch-js/x | status)" 303 "js challenge: proof of work accepted (counter $CNT)"
+chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$JJ" "$G/itest-ch-js/x")" 200 "js challenge: pass reaches the backend"
+chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$JJ" "$G/itest-ch-cookie/page")" 200 "a js pass also satisfies a cookie challenge"
+# challenge pages never count as bad behaviour
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/settings/autoban -d '{"enabled":true,"threshold":20,"window_s":600,"duration_s":120,"include_scans":false,"scan_threshold":200,"exempt":[],"bad_behaviour":true,"bad_behaviour_codes":[403],"bad_behaviour_threshold":3,"bad_behaviour_window_s":60}')" 200 "bad behaviour: three 403s in 60 s"
+sleep 3
+codes=$(for i in 1 2 3 4 5; do code "$G/itest-ch-cookie/bb-$i"; echo; done | tr '\n' ' ')
+chk "$codes" "403 403 403 403 403 " "challenge pages served repeatedly"
+chk "$(code "$G/ch-not-banned")" 200 "challenge pages do not count toward bad-behaviour bans"
+c -o /dev/null -X PUT $A/api/settings/autoban -d '{"enabled":false,"threshold":20,"window_s":600,"duration_s":900,"include_scans":false,"scan_threshold":200,"exempt":[],"bad_behaviour":false}'
+for id in $(c $A/api/bans | js "' '.join(str(b['id']) for b in d if b['ip']=='$ip')"); do c -o /dev/null -X DELETE $A/api/bans/$id; done
+sleep 3
+chk "$(c "$A/api/security-rules/events?limit=500" | js "sorted({e['action'] for e in d if e['rule_id'] in ($CHC, $CHJ)})")" "['challenge', 'challenge_fail', 'challenge_pass']" "challenge events recorded (issued / passed / failed)"
+chk "$(c "$A/api/traffic/events?limit=500" | js "sorted({e['kind'] for e in d if e['kind'].startswith('challenge')})")" "['challenge_failed', 'challenge_issued', 'challenge_passed']" "challenge traffic events"
+rm -f "$CJ" "$JJ"
+for id in $CHC $CHB $CHJ; do c -o /dev/null -X DELETE $A/api/security-rules/$id; done
+
+echo "[under attack]"
+chk "$(put_host ',"under_attack":"sometimes"')" 422 "invalid under attack mode rejected"
+chk "$(put_host ',"under_attack":"on","under_attack_config":{"mode":"cookie","ttl_s":600}')" 200 "under attack mode on (cookie check)"
+chk "$(c $A/api/proxy-hosts/$HOST1 | js "(d['under_attack'], d['under_attack_config']['mode'], d['under_attack_config']['difficulty'], d['under_attack_config']['ttl_s'], d['under_attack_config']['bind'], d['under_attack_config']['rps'], d['under_attack_config']['duration_s'])")" "('on', 'cookie', 16, 600, 'ip', 200, 900)" "under attack settings stored with defaults"
+chk "$(put_host '')" 200 "host saved without under attack fields"
+chk "$(c $A/api/proxy-hosts/$HOST1 | js "d['under_attack']")" on "omitted under attack fields keep the mode"
+chk "$(c $A/api/under-attack | js "[(s['mode'], s['active']) for s in d if s['host_id']==$HOST1]")" "[('on', True)]" "host listed as under attack"
+UAA=$(rule "$(cond itest-ua-allow allow '' '{"field":"http.path","operator":"starts_with","value":["/itest-ua-allowed"]}')")
+UAB=$(rule "$(cond itest-ua-block block '' '{"field":"http.path","operator":"starts_with","value":["/itest-ua-blocked"]}')")
+UJ=$(mktemp)
+R=$(curl -s -D - -c "$UJ" -b "$UJ" "$G/itest-ua/page?x=1")
+chk "$(echo "$R" | status)" 403 "under attack: request without a pass gets the challenge"
+echo "$R" | grep -qi '^x-corvus-challenge: cookie' && ok "under attack: cookie challenge page" || bad "under attack: no X-Corvus-Challenge header"
+TOK=$(echo "$R" | field t)
+chk "$(echo "$TOK" | cut -d. -f3)" 0 "under attack: challenge token names virtual rule 0"
+chk "$(code "$G/")" 403 "under attack: site root challenged too"
+chk "$(code "$G/itest-ua-allowed/x")" 200 "under attack: requests an allow rule matched are not challenged"
+chk "$(code "$G/itest-ua-blocked/x")" 403 "under attack: block rule still answers"
+curl -s "$G/itest-ua-blocked/x" | grep -q 'name="t"' && bad "block rule answered with a challenge" || ok "under attack: block rules come first (block page)"
+A1=$(curl -s -D - -o /dev/null "$G/.well-known/acme-challenge/itest-ua" | tr -d '\r')
+chk "$(echo "$A1" | status)" 404 "under attack: ACME path reaches the ACME responder"
+echo "$A1" | grep -qi '^x-corvus-challenge:' && bad "ACME path challenged" || ok "under attack: ACME path not challenged"
+V=$(verify "$UJ" "$TOK" "" "/itest-ua/page?x=1")
+chk "$(echo "$V" | status)" 303 "under attack: answer accepted (303)"
+echo "$V" | grep -qi '^location: .*/itest-ua/page?x=1' && ok "under attack: redirected back" || bad "under attack redirect: $(echo "$V" | grep -i '^location')"
+chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$UJ" "$G/itest-ua/page?x=1")" 200 "under attack: request with the pass reaches the backend"
+chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$UJ" "$G/itest-ua/other")" 200 "under attack: the pass covers the whole host"
+chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/proxy-hosts/$HOST1/under-attack/deactivate)" 409 "deactivate: nothing automatic to end"
+sleep 3
+chk "$(c "$A/api/traffic/events?limit=500" | js "sorted({e['kind'] for e in d if (e['kind']=='challenge_issued' and e['path'].startswith('/itest-ua')) or (e['kind']=='challenge_passed' and e['path']=='/__corvus/challenge/verify')})")" "['challenge_issued', 'challenge_passed']" "under attack challenges recorded as challenge events (passes are logged on the verify path)"
+chk "$(put_host ',"under_attack":"auto"')" 200 "under attack mode auto"
+chk "$(c $A/api/under-attack | js "[(s['mode'], s['active']) for s in d if s['host_id']==$HOST1]")" "[('auto', False)]" "auto: not active without an attack"
+chk "$(code "$G/itest-ua/auto")" 200 "auto: not active, no challenge"
+chk "$(put_host ',"under_attack":"off"')" 200 "under attack mode off"
+chk "$(code "$G/itest-ua/page")" 200 "under attack off: no challenge"
+chk "$(c $A/api/under-attack | js "[s for s in d if s['host_id']==$HOST1]")" "[]" "host no longer listed"
+rm -f "$UJ"
+for id in $UAA $UAB; do c -o /dev/null -X DELETE $A/api/security-rules/$id; done
+
 echo "[admin console allowlist]"
 chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/settings/network -d '{"trusted_proxies":[],"admin_allow":["10.255.255.0/24"]}')" 422 "allowlist without my address refused (lock-out guard)"
 chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/settings/network -d "{\"trusted_proxies\":[],\"admin_allow\":[\"$ip/32\"]}")" 200 "allowlist with my address saved"
@@ -414,12 +534,161 @@ for id in $(c $A/api/proxy-hosts | js "' '.join(str(h['id']) for h in d if any(x
 chk "$(c -o /dev/null -w '%{http_code}' -X DELETE $A/api/users/$OID)" 200 "delete user"
 c -o /dev/null -X DELETE $A/api/users/$VID; rm -f "$JO" "$JV"
 
+echo "[redirection hosts]"
+for id in $(c $A/api/redirection-hosts | js "' '.join(str(h['id']) for h in d if any(x.endswith('.corvus.test') for x in h['domains']))"); do c -o /dev/null -X DELETE $A/api/redirection-hosts/$id; done
+RD=$(c -X POST $A/api/redirection-hosts -d '{"domains":["redir.corvus.test"],"forward_scheme":"https","forward_domain":"example.org","http_code":308,"preserve_path":true,"enabled":true}')
+RDID=$(echo "$RD" | js "d.get('id') or d.get('redirection_host',{}).get('id')")
+sleep 2
+R=$(curl -s -D - -o /dev/null -H 'Host: redir.corvus.test' "$G/some/path?x=1" | tr -d '\r')
+chk "$(echo "$R" | awk 'NR==1{print $2}')" 308 "redirection host answers with its status code"
+chk "$(echo "$R" | awk -F': ' 'tolower($1)=="location"{print $2}')" "https://example.org/some/path?x=1" "redirect keeps path and query"
+c -o /dev/null -X DELETE $A/api/redirection-hosts/$RDID
+
+echo "[error pages]"
+EH=$(c -X POST $A/api/proxy-hosts -d '{"domains":["err.corvus.test"],"forward_scheme":"http","forward_host":"demo","forward_port":1}' | js "d.get('id') or d.get('proxy_host',{}).get('id')")
+sleep 2
+EB=$(curl -s -w '\n%{http_code}' -H 'Host: err.corvus.test' "$G/")
+chk "$(echo "$EB" | tail -1)" 502 "unreachable backend answers 502"
+echo "$EB" | grep -q 'Temporarily unavailable' && ok "502 uses the Corvus error page" || bad "502 without the Corvus error page"
+echo "$EB" | grep -q 'err.corvus.test' && ok "error page shows the host" || bad "error page without host"
+c -o /dev/null -X DELETE $A/api/proxy-hosts/$EH
+
+echo "[upstream pool]"
+# A forward host whose name does not resolve (container not created yet) must not block
+# deployment (resolved at run time): the host is created and answers with the error page.
+NH=$(c -X POST $A/api/proxy-hosts -d '{"domains":["nores.corvus.test"],"forward_scheme":"http","forward_host":"corvus-missing-backend","forward_port":80}' | js "d.get('id') or d.get('proxy_host',{}).get('id')")
+[ -n "$NH" ] && [ "$NH" != None ] && ok "host with an unresolvable forward host deploys" || bad "host with an unresolvable forward host rejected"
+sleep 2
+chk "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: nores.corvus.test' "$G/")" 502 "unresolvable forward host answers 502"
+chk "$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $H" "$G/")" 200 "other hosts unaffected"
+c -o /dev/null -X DELETE $A/api/proxy-hosts/$NH
+# Keep-alive pool: repeated requests reuse upstream connections (whoami shows the gateway's
+# source address and port), so there are fewer distinct ports than requests.
+PORTS=$(for i in $(seq 1 20); do curl -s -H "Host: $H" "$G/pool-$i" | sed -n 's/^RemoteAddr: //p'; done | sort -u | wc -l)
+[ "$PORTS" -ge 1 ] && [ "$PORTS" -lt 20 ] && ok "upstream connections reused ($PORTS connections for 20 requests)" || bad "no upstream connection reuse ($PORTS connections for 20 requests)"
+
+echo "[custom locations]"
+# The host's own forward target is unreachable (demo:1); the locations route to demo:80.
+# whoami echoes the request line, so the forward path is visible.
+LH=$(c -X POST $A/api/proxy-hosts -d '{"domains":["loc.corvus.test"],"forward_host":"demo","forward_port":1,"block_exploits":true,"locations":[{"path":"/loc-path","forward_host":"demo","forward_port":80,"forward_path":"/path"},{"path":"/keep/","forward_host":"demo","forward_port":80}]}' | js "d.get('id') or d.get('proxy_host',{}).get('id')")
+[ -n "$LH" ] && [ "$LH" != None ] && ok "host with custom locations deploys" || bad "host with custom locations rejected"
+sleep 2
+lget() { curl -s -H 'Host: loc.corvus.test' "$G$1"; }
+lcode() { curl -s -o /dev/null -w '%{http_code}' -H 'Host: loc.corvus.test' "$@"; }
+lget '/loc-path/x?a=1' | grep -q '^GET /path/x?a=1 HTTP/1.1' && ok "location forwards with its forward path (/loc-path/x -> /path/x)" || bad "forward path not applied: $(lget '/loc-path/x?a=1' | grep '^GET ')"
+lget /keep/y | grep -q '^GET /keep/y HTTP/1.1' && ok "location without forward path keeps the URI" || bad "location URI changed: $(lget /keep/y | grep '^GET ')"
+chk "$(lcode "$G/other")" 502 "other paths still go to the host's forward target"
+chk "$(lcode "$G/loc-path/.env")" 403 "host protections apply inside a location (exploit blocking)"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$LH -d '{"domains":["loc.corvus.test"],"forward_host":"demo","forward_port":1,"basic_auth":{"enabled":true,"users":[{"username":"locu","password":"loc-pass-123"}]}}')" 200 "enable password protection (locations kept when omitted)"
+sleep 1
+chk "$(lcode "$G/loc-path/x")" 401 "password required inside a location"
+chk "$(lcode -u locu:loc-pass-123 "$G/loc-path/x")" 200 "correct password accepted inside a location"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$LH -d '{"domains":["loc.corvus.test"],"forward_host":"demo","forward_port":1,"basic_auth":{"enabled":false,"users":[]},"locations":[{"path":"/","forward_host":"demo","forward_port":80}]}')" 200 "location / replaces the forward target"
+sleep 1
+chk "$(lcode "$G/anything")" 200 "root location answers from its upstream"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$LH -d '{"domains":["loc.corvus.test"],"forward_host":"demo","forward_port":1,"locations":[{"path":"/__corvus/x","forward_host":"demo","forward_port":80}]}')" 422 "reserved location path rejected"
+c -o /dev/null -X DELETE $A/api/proxy-hosts/$LH
+
+echo "[streams]"
+# TCP port forwarding: container port 8090 (published by deploy/dev/docker-compose.yml) → demo:80.
+for id in $(c $A/api/streams | js "' '.join(str(s['id']) for s in d if s['incoming_port']==8090)"); do c -o /dev/null -X DELETE $A/api/streams/$id; done
+chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/streams -d '{"incoming_port":9443,"tcp_forwarding":true,"forward_host":"demo","forward_port":80}')" 422 "port used by Corvus (admin) rejected"
+SID=$(c -X POST $A/api/streams -d '{"incoming_port":8090,"tcp_forwarding":true,"forward_host":"demo","forward_port":80}' | js "d.get('stream',{}).get('id')")
+[ -n "$SID" ] && [ "$SID" != None ] && ok "TCP stream created" || bad "TCP stream not created"
+sleep 2
+# Stream ports are checked from the Docker host when CORVUS_SSH is set (e.g. "ssh user@host"):
+# a NAT in front of the test server may forward only the gateway's HTTP/HTTPS/admin ports.
+scurl() { if [ -n "${CORVUS_SSH:-}" ]; then $CORVUS_SSH curl "$@" "http://127.0.0.1:8090/stream-check"; else curl "$@" "http://$H:8090/stream-check"; fi; }
+SB=$(scurl -s -m 5 --http1.0)
+echo "$SB" | grep -q '^Hostname:' && ok "TCP stream forwards to the demo backend" || bad "no whoami answer through the stream: $SB"
+echo "$SB" | grep -q 'GET /stream-check' && ok "stream passes the request through unchanged" || bad "request not passed through: $SB"
+chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/streams -d '{"incoming_port":8090,"tcp_forwarding":true,"forward_host":"demo","forward_port":80}')" 422 "second TCP stream on the same port rejected"
+c -o /dev/null -X PUT $A/api/streams/$SID -d '{"incoming_port":8090,"tcp_forwarding":true,"forward_host":"demo","forward_port":80,"enabled":false}'
+sleep 2
+chk "$(scurl -s -m 5 -o /dev/null -w '%{http_code}')" 000 "disabled stream closes the port"
+c -o /dev/null -X DELETE $A/api/streams/$SID
+
+echo "[access queue]"
+WR=$(c -X POST $A/api/waitrooms -d '{"name":"itest-queue","capacity":1000,"max_new_per_ip":0}' | js "d['waitroom']['id']")
+chk "$(put_host ",\"waitroom_id\":$WR,\"waitroom_path\":\"/\"")" 200 "attach access queue"
+WQ=$(mktemp)
+r=$(curl -s -D - -o /dev/null -c "$WQ" -b "$WQ" -H 'Accept: application/json' "$G/wq-api" | tr -d '')
+chk "$(echo "$r" | head -1 | cut -d' ' -f2)" 429 "cookie check for an API request: 429, not a server error"
+echo "$r" | grep -qi '^retry-after: 1' && ok "cookie check sends Retry-After" || bad "cookie check without Retry-After"
+chk "$(code -c "$WQ" -b "$WQ" -H 'Accept: application/json' "$G/wq-api")" 200 "with the queue cookie: admitted"
+chk "$(code -H 'Accept: text/html' "$G/wq-page")" 302 "cookie check for a page: redirect to itself"
+sleep 2
+chk "$(c "$A/api/traffic/logs?range=1h&limit=50&q=/wq-api" | js "(429,'cookie-check') in [(l['status'],l.get('wr')) for l in d['items'] if l['path']=='/wq-api']")" True "cookie check logged as 429 cookie-check"
+chk "$(c "$A/api/traffic/events?range=1h" | js "any(e['kind'] in ('rate_limited','server_error') and e['path']=='/wq-api' for e in d)")" False "cookie check is neither a rate limit nor a server error event"
+put_host ',"waitroom_id":null' >/dev/null
+c -o /dev/null -X DELETE $A/api/waitrooms/$WR
+rm -f "$WQ"
+
+echo "[ipv6]"
+# IPv4 keeps working whatever CORVUS_IPV6 decided; IPv6 is checked only when the server
+# has an IPv6 address reachable from here (CORVUS_HOST6, e.g. 2001:db8::10).
+chk "$(code "$G/__corvus/healthz" -H 'Host: unknown.corvus.test')" 200 "IPv4 listener serves"
+chk "$(code -H "Host: $H" "$G/")" 200 "proxy host serves over IPv4"
+if [ -n "${CORVUS_HOST6:-}" ]; then
+  chk "$(code -g -H "Host: $H" "http://[$CORVUS_HOST6]:8081/")" 200 "proxy host serves over IPv6"
+  chk "$(code -g "http://[$CORVUS_HOST6]:8081/__corvus/healthz")" 200 "default server listens on IPv6"
+else
+  ok "ipv6 not available (set CORVUS_HOST6 to test IPv6 listeners)"
+fi
+echo "[upload limits and gzip]"
+LIMJ='{"domains":["limits.corvus.test"],"forward_scheme":"http","forward_host":"demo","forward_port":80,"max_upload_mb":1,"upstream_timeout_s":30'
+LH=$(c -X POST $A/api/proxy-hosts -d "$LIMJ}" | js "d.get('id') or d.get('proxy_host',{}).get('id')")
+chk "$(c $A/api/proxy-hosts/$LH | js "(d.get('max_upload_mb'),d.get('upstream_timeout_s'),d.get('gzip'))")" "(1, 30, True)" "host stores upload size, timeout and gzip (default on)"
+sleep 2
+UP=$(mktemp)
+head -c 2097152 /dev/zero > "$UP"
+chk "$(code -H 'Host: limits.corvus.test' -H 'Content-Type: application/octet-stream' --data-binary @"$UP" "$G/upload")" 413 "2 MB upload to a 1 MB host: 413"
+head -c 524288 /dev/zero > "$UP"
+chk "$(code -H 'Host: limits.corvus.test' -H 'Content-Type: application/octet-stream' --data-binary @"$UP" "$G/upload")" 200 "512 KB upload accepted"
+rm -f "$UP"
+# whoami echoes the request headers as text/plain: a padded header makes the answer > 1 KB.
+PAD=$(head -c 3000 /dev/zero | tr '\0' a)
+ce() { curl -s -o /dev/null -D - -H 'Host: limits.corvus.test' -H 'Accept-Encoding: gzip' -H "X-Pad: $PAD" "$G/gz" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-encoding"{print $2}'; }
+chk "$(ce)" gzip "text response compressed"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$LH -d "$LIMJ,\"gzip\":false}")" 200 "turn gzip off"
+sleep 2
+chk "$(ce)" "" "gzip off: response not compressed"
+c -o /dev/null -X DELETE $A/api/proxy-hosts/$LH
+echo "[certificate replace]"
+CT=$(mktemp -d)
+for n in 1 2; do
+  san="DNS:replace.corvus.test"; [ $n = 2 ] && san="$san,DNS:www.replace.corvus.test"
+  MSYS2_ARG_CONV_EXCL="/CN" openssl req -x509 -newkey rsa:2048 -nodes -days 30 -set_serial $((1000+n)) -subj /CN=replace.corvus.test \
+    -addext "subjectAltName=$san" -keyout "$CT/k$n.pem" -out "$CT/c$n.pem" 2>/dev/null
+done
+certjson() { $PY -c "import json,sys; print(json.dumps({'name':'itest-replace','certificate':open(sys.argv[1]).read(),'private_key':open(sys.argv[2]).read()}))" "$CT/c$1.pem" "$CT/k$1.pem"; }
+CRID=$(c -X POST $A/api/certificates -d "$(certjson 1)" | js "d['id']")
+RH=$(c -X POST $A/api/proxy-hosts -d "{\"domains\":[\"replace.corvus.test\"],\"forward_scheme\":\"http\",\"forward_host\":\"demo\",\"forward_port\":80,\"certificate_id\":$CRID}" | js "d.get('id') or d.get('proxy_host',{}).get('id')")
+sleep 2
+serial() { echo | openssl s_client -connect "$H:8443" -servername replace.corvus.test 2>/dev/null | openssl x509 -noout -serial 2>/dev/null | cut -d= -f2; }
+chk "$(serial)" 03E9 "host serves the uploaded certificate"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/certificates/$CRID -d "$($PY -c "import json,sys; print(json.dumps({'certificate':open(sys.argv[1]).read(),'private_key':open(sys.argv[2]).read()}))" "$CT/c2.pem" "$CT/k1.pem")")" 422 "replacement with a key that does not match: 422"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/certificates/$CRID -d "$(certjson 2)")" 200 "replace the certificate in place"
+sleep 2
+chk "$(serial)" 03EA "host serves the replacement without being edited"
+chk "$(c $A/api/certificates | js "[(x['name'],len(x['domains'])) for x in d if x['id']==$CRID][0]")" "('itest-replace', 2)" "same ID, name kept, domains updated"
+chk "$(c $A/api/proxy-hosts/$RH | js "d['certificate_id']")" "$CRID" "host still uses the certificate"
+c -o /dev/null -X DELETE $A/api/proxy-hosts/$RH
+c -o /dev/null -X DELETE $A/api/certificates/$CRID
+rm -rf "$CT"
+
+echo "[backup]"
+BK=$(mktemp)
+chk "$(curl -sk -b "$J" -o "$BK" -w '%{http_code}' "$A/api/backup")" 200 "backup download"
+chk "$($PY -c "import tarfile,sys; n=tarfile.open(sys.argv[1]).getnames(); print('manifest.json' in n and any(x.endswith('.db') for x in n) and any(x.startswith('secrets/') for x in n) and not any(x.startswith('nginx/') for x in n))" "$BK")" True "backup contains manifest, database and secrets but no generated config"
+rm -f "$BK"
+
 echo "[NPM import]"
 P=$(c -X POST $A/api/import/npm/preview -d '{}')
 chk "$(echo "$P" | js "(len(d['proxy_hosts']),len(d['certificates']),len(d['access_lists']))")" "(3, 2, 1)" "preview hosts/certs/acls (soft-deleted excluded)"
 chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/import/npm/preview -d '{"path":"/data"}')" 422 "paths outside /import rejected"
 R=$(c -X POST $A/api/import/npm/apply -d '{}')
-chk "$(echo "$R" | js "sorted((k,v) for k,v in d['imported'].items() if k!='security_rules')")" "[('access_lists', 1), ('certificates', 2), ('proxy_hosts', 3)]" "import applied"
+chk "$(echo "$R" | js "sorted((k,v) for k,v in d['imported'].items() if k not in ('security_rules','redirection_hosts','streams'))")" "[('access_lists', 1), ('certificates', 2), ('proxy_hosts', 3)]" "import applied"
 chk "$(code -H 'Host: npm-shop.corvus.test' "$G/")" 301 "imported host forces HTTPS"
 chk "$(curl -sk -o /dev/null -w '%{http_code}' --resolve npm-shop.corvus.test:8443:$H https://npm-shop.corvus.test:8443/)" 200 "imported certificate serves HTTPS"
 chk "$(code -H 'Host: npm-custom.corvus.test' -u alice:alice-secret-1 "$G/")" 200 "imported access list password works"

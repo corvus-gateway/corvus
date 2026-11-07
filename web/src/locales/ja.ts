@@ -3,10 +3,21 @@ import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
+import { streamsStrings } from "./streams.i18n";
+import { notesStrings } from "./notes.i18n";
+import { updateStrings } from "./update.i18n";
 import { headersStrings } from "./headers.i18n";
+import { locationsStrings } from "./locations.i18n";
+import { limitsStrings } from "./limits.i18n";
+import { certReplaceStrings } from "./certreplace.i18n";
+import { dnsCredsStrings } from "./dnscreds.i18n";
+import { listFeedsStrings } from "./listfeeds.i18n";
 import { bansStrings } from "./bans.i18n";
 import { backupStrings } from "./backup.i18n";
 import { pagesStrings } from "./pages.i18n";
+import { consoleHostStrings } from "./consolehost.i18n";
+import { challengeStrings } from "./challenge.i18n";
+import { underAttackStrings } from "./underattack.i18n";
 import type { ko } from "./ko";
 import type { RuleLabels } from "../lib/rules";
 import type { AuditLabels } from "../lib/audit";
@@ -243,7 +254,7 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   editUser: "ユーザーを編集", userSheetDesc: "アカウント情報とロールを設定します。", initialPassword: "初期パスワード", generatePassword: "生成", copyPassword: "コピー",
   initialPasswordHint: "10 文字以上。安全な方法で共有し、初回サインイン後に変更するようユーザーに依頼してください。", passwordKeepBlank: "空欄のままにすると現在のパスワードを維持します",
   roleSelf: "自分のロールは変更できません。", userSaved: "ユーザーを保存しました", userDeletedToast: "ユーザーを削除しました",
-  resetPassword: "パスワードをリセット", resetPasswordDesc: "新しいパスワードを設定すると、そのユーザーのすべてのセッションが直ちに終了します。", passwordResetDone: "パスワードをリセットしました",
+  resetPassword: "パスワードをリセット", resetPasswordDesc: "新しいパスワードを設定すると、そのユーザーのすべてのセッションが直ちに終了し、API トークンも削除されます。", passwordResetDone: "パスワードをリセットしました",
   resetMfa: "MFA をリセット", resetMfaTitle: "2 段階認証をリセットしますか？", resetMfaDesc: "このユーザーの 2 段階認証が無効になり、再設定が必要になります。", mfaResetDone: "MFA をリセットしました",
   disableUser: "無効化", enableUser: "有効化", userDisabledToast: "ユーザーを無効にしました", userEnabledToast: "ユーザーを有効にしました",
   disableUserDesc: "無効化されたユーザーはサインインできず、現在のセッションも直ちに終了します。", deleteUser: "削除", deleteUserTitle: "ユーザーを削除", deleteUserDesc: "アカウントは完全に削除されます。監査ログは保持されます。",
@@ -304,18 +315,29 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   ...bansStrings.ja,
   ...tokensStrings.ja,
   ...redirectsStrings.ja,
+  ...streamsStrings.ja,
+  ...notesStrings.ja,
+  ...updateStrings.ja,
   ...headersStrings.ja,
+  ...locationsStrings.ja,
+  ...limitsStrings.ja,
+  ...certReplaceStrings.ja,
+  ...dnsCredsStrings.ja,
+  ...listFeedsStrings.ja,
   ...ssoStrings.ja,
   ...retentionStrings.ja,
   ...templatesStrings.ja,
   ...backupStrings.ja,
   ...pagesStrings.ja,
+  ...consoleHostStrings.ja,
+  ...challengeStrings.ja,
+  ...underAttackStrings.ja,
 };
 
 export const jaRuleLabels: RuleLabels | undefined = {
   field: {
     "ip.src": "IP アドレス", "ip.country": "国", "http.host": "ホスト", "http.path": "パス", "http.query": "クエリ文字列",
-    "http.method": "メソッド", "http.user_agent": "User-Agent", "http.referer": "Referer", "http.header": "リクエストヘッダー", "http.body": "リクエストボディ", "http.scheme": "スキーム",
+    "http.method": "メソッド", "http.user_agent": "User-Agent", "http.user_agent_list": "User-Agent リスト", "http.referer": "Referer", "http.header": "リクエストヘッダー", "http.body": "リクエストボディ", "http.scheme": "スキーム",
   },
   op: {
     in: "次のいずれか", not_in: "次のいずれでもない", eq: "等しい", ne: "等しくない", contains: "含む", not_contains: "含まない",
@@ -329,12 +351,12 @@ export const jaRuleLabels: RuleLabels | undefined = {
 
 export const jaAuditLabels: AuditLabels | undefined = {
   dom: {
-    proxy_host: "プロキシホスト", redirection_host: "リダイレクトホスト", waitroom: "アクセスキュー", certificate: "証明書", deploy: "デプロイ", auth: "認証", setup: "初期設定",
-    rate_limit: "レート制限", access_list: "Basic 認証", security_rule: "セキュリティルール", ip_list: "IP リスト", geoip: "国データベース", settings: "設定", network: "ネットワーク", import: "インポート", mfa: "MFA", user: "アカウント",
+    proxy_host: "プロキシホスト", stream: "ストリーム", redirection_host: "リダイレクトホスト", waitroom: "アクセスキュー", certificate: "証明書", dns_credential: "DNS 認証情報", deploy: "デプロイ", auth: "認証", setup: "初期設定",
+    rate_limit: "レート制限", access_list: "Basic 認証", security_rule: "セキュリティルール", ip_list: "IP リスト", geoip: "国データベース", settings: "設定", network: "ネットワーク", import: "インポート", mfa: "MFA", user: "アカウント", ban: "IP ブロック", autoban: "自動ブロック", sso: "SSO", token: "API トークン", alert_channel: "通知チャネル", alert_rules: "通知ルール", backup: "バックアップ", managed_rules: "マネージドルール", page: "ページ", retention: "データ保持", unknown_hosts: "不明なホスト",
   },
   verb: {
     create: "作成", update: "更新", delete: "削除", upload: "アップロード", apply: "適用", rollback: "ロールバック", login: "サインイン", logout: "サインアウト",
     login_failed: "サインイン失敗", password_changed: "パスワード変更", admin_created: "管理者作成", renew: "更新", issue: "発行",
-    enable: "有効化", disable: "無効化", refresh: "再読み込み", mfa_enabled: "MFA 有効化", mfa_disabled: "MFA 無効化", acme: "ACME 発行", reorder: "並べ替え",
+    enable: "有効化", disable: "無効化", refresh: "再読み込み", mfa_enabled: "MFA 有効化", mfa_disabled: "MFA 無効化", acme: "ACME 発行", reorder: "並べ替え", auto: "(自動)", test: "テスト", reset: "リセット", restore_upload: "復元ファイルのアップロード", restore_confirm: "復元の確定", restore_discard: "復元の破棄", restore_rejected: "復元の拒否",
   },
 };

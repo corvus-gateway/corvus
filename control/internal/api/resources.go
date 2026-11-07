@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -74,6 +75,7 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 		"waitrooms": len(rooms), "certificates": len(certList), "certificates_expiring": expiring,
 		"active_version": active, "dirty": dirty, "gateway": gw, "traffic": tr,
 		"redis": s.Live.Ping(ctx), "rooms": liveRooms, "version": s.Version,
+		"update": s.Updates.Available(), // newer release, or null
 	})
 }
 
@@ -100,6 +102,17 @@ type proxyHostInput struct {
 	BodyMaxKB      int      `json:"body_max_kb"`
 
 	SecurityHeaders string `json:"security_headers"` // off | basic | strict
+	// Under attack mode; omitted = unchanged (new hosts: off, default parameters).
+	UnderAttack       *string                  `json:"under_attack"`
+	UnderAttackConfig *store.UnderAttackConfig `json:"under_attack_config"`
+	// Custom locations; omitted = unchanged (new hosts: none), [] removes them all.
+	Locations *[]store.Location `json:"locations"`
+
+	MaxUploadMB      *int  `json:"max_upload_mb"`      // null = global default (100 MB), 0 = unlimited
+	UpstreamTimeoutS *int  `json:"upstream_timeout_s"` // null = default (60 s, WebSocket 1 h)
+	Gzip             *bool `json:"gzip"`               // omitted = on
+
+	Notes *string `json:"notes"` // omitted = unchanged
 
 	// BasicAuth edits the host's password protection; when present it replaces access_list_id.
 	BasicAuth      *basicAuthInput `json:"basic_auth"`
@@ -110,30 +123,26 @@ type proxyHostInput struct {
 }
 
 // requestCertificate creates a pending ACME certificate for h inside tx.
-func (s *Server) requestCertificate(r *http.Request, tx *store.Store, h *store.ProxyHost, req *certRequest) (*store.Certificate, error) {
-	c, err := s.orderCertificate(r, tx, h.Domains, req)
+func (s *Server) requestCertificate(r *http.Request, tx *store.Store, h *store.ProxyHost, req *certRequest) (*store.Certificate, *store.DNSCredential, error) {
+	c, created, err := s.orderCertificate(r, tx, h.Domains, req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	h.CertificateID = &c.ID
-	return c, nil
+	return c, created, nil
 }
 
-// orderCertificate creates a pending ACME certificate for domains inside tx.
-func (s *Server) orderCertificate(r *http.Request, tx *store.Store, hostDomains []string, req *certRequest) (*store.Certificate, error) {
+// orderCertificate creates a pending ACME certificate for domains inside tx (and the
+// DNS credential entered with it, which is returned when one was created).
+func (s *Server) orderCertificate(r *http.Request, tx *store.Store, hostDomains []string, req *certRequest) (*store.Certificate, *store.DNSCredential, error) {
 	if s.ACME == nil {
-		return nil, validate.Errors{{Field: "certificate_request", Code: "unavailable", Message: "ACME is not available"}}
+		return nil, nil, validate.Errors{{Field: "certificate_request", Code: "unavailable", Message: "ACME is not available"}}
 	}
-	info, domains, errs := s.buildACME(hostDomains, *req, "certificate_request.")
+	o, errs := s.buildACME(r.Context(), tx, hostDomains, *req, "certificate_request.")
 	if len(errs) > 0 {
-		return nil, errs
+		return nil, nil, errs
 	}
-	c := &store.Certificate{Name: domains[0], Kind: "acme", Domains: domains, NotAfter: time.Now().UTC(), Status: "pending", AutoRenew: true, ACME: info}
-	if err := tx.CreateCertificate(r.Context(), c); err != nil {
-		return nil, err
-	}
-	c.Challenge = info.Challenge
-	return c, nil
+	return s.createACMECertificate(r.Context(), tx, "", o)
 }
 
 func (in proxyHostInput) apply(h *store.ProxyHost) {
@@ -142,8 +151,22 @@ func (in proxyHostInput) apply(h *store.ProxyHost) {
 	h.WaitroomID, h.WaitroomPath, h.AdvancedConfig = in.WaitroomID, in.WaitroomPath, in.AdvancedConfig
 	h.HTTP2 = in.HTTP2 == nil || *in.HTTP2
 	h.Enabled = in.Enabled == nil || *in.Enabled
+	h.Gzip = in.Gzip == nil || *in.Gzip
+	h.MaxUploadMB, h.UpstreamTimeoutS = in.MaxUploadMB, in.UpstreamTimeoutS
 	h.ClientIP, h.RateLimitID, h.AccessListID, h.BlockExploits = in.ClientIP, in.RateLimitID, in.AccessListID, in.BlockExploits
 	h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders = in.BodyInspection, in.BodyMaxKB, in.SecurityHeaders
+	if in.UnderAttack != nil {
+		h.UnderAttack = *in.UnderAttack
+	}
+	if in.UnderAttackConfig != nil {
+		h.UnderAttackConfig = *in.UnderAttackConfig
+	}
+	if in.Locations != nil {
+		h.Locations = *in.Locations
+	}
+	if in.Notes != nil {
+		h.Notes = *in.Notes
+	}
 }
 
 // checkProxyHost validates a host against the rest of the configuration (inside the tx).
@@ -261,14 +284,19 @@ func (s *Server) createProxyHost(w http.ResponseWriter, r *http.Request) {
 	h := &store.ProxyHost{}
 	in.apply(h)
 	var cert *store.Certificate
+	var newCred *store.DNSCredential
 	if err := advancedAllowed(r, "", in.AdvancedConfig); err != nil {
+		fail(w, err)
+		return
+	}
+	if err := locationsAdvancedAllowed(r, nil, h.Locations); err != nil {
 		fail(w, err)
 		return
 	}
 	v, err := s.Deployer.Apply(r.Context(), userID(r), "create proxy host "+strings.Join(in.Domains, ","), func(tx *store.Store) error {
 		if in.CertificateRequest != nil {
 			var err error
-			if cert, err = s.requestCertificate(r, tx, h, in.CertificateRequest); err != nil {
+			if cert, newCred, err = s.requestCertificate(r, tx, h, in.CertificateRequest); err != nil {
 				return err
 			}
 		}
@@ -290,10 +318,9 @@ func (s *Server) createProxyHost(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	if cert != nil {
-		s.ACME.Start(cert.ID)
-	}
+	s.startOrder(r, cert, newCred)
 	s.audit(r, "proxy_host.create", fmt.Sprintf("proxy_host:%d", h.ID), h)
+	s.underAttackChanged()
 	writeJSON(w, 201, map[string]any{"proxy_host": h, "version": v, "certificate": cert})
 }
 
@@ -308,6 +335,7 @@ func (s *Server) updateProxyHost(w http.ResponseWriter, r *http.Request) {
 	}
 	var before, h *store.ProxyHost
 	var cert *store.Certificate
+	var newCred *store.DNSCredential
 	v, err := s.Deployer.Apply(r.Context(), userID(r), fmt.Sprintf("update proxy host #%d", id), func(tx *store.Store) error {
 		var err error
 		if before, err = tx.ProxyHostByID(r.Context(), id); err != nil {
@@ -319,8 +347,11 @@ func (s *Server) updateProxyHost(w http.ResponseWriter, r *http.Request) {
 		if err := advancedAllowed(r, before.AdvancedConfig, h.AdvancedConfig); err != nil {
 			return err
 		}
+		if err := locationsAdvancedAllowed(r, before.Locations, h.Locations); err != nil {
+			return err
+		}
 		if in.CertificateRequest != nil {
-			if cert, err = s.requestCertificate(r, tx, h, in.CertificateRequest); err != nil {
+			if cert, newCred, err = s.requestCertificate(r, tx, h, in.CertificateRequest); err != nil {
 				return err
 			}
 		}
@@ -342,10 +373,9 @@ func (s *Server) updateProxyHost(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	if cert != nil {
-		s.ACME.Start(cert.ID)
-	}
+	s.startOrder(r, cert, newCred)
 	s.audit(r, "proxy_host.update", fmt.Sprintf("proxy_host:%d", id), map[string]any{"before": before, "after": h})
+	s.underAttackChanged()
 	writeJSON(w, 200, map[string]any{"proxy_host": h, "version": v, "certificate": cert})
 }
 
@@ -375,6 +405,7 @@ func (s *Server) deleteProxyHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "proxy_host.delete", fmt.Sprintf("proxy_host:%d", id), before)
+	s.underAttackChanged()
 	writeJSON(w, 200, map[string]any{"version": v})
 }
 
@@ -471,7 +502,7 @@ func (s *Server) createWaitroom(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, o := range list {
 			if o.Name == wr.Name {
-				return validate.Errors{{Field: "name", Code: "duplicate", Message: "a access queue with this name already exists"}}
+				return validate.Errors{{Field: "name", Code: "duplicate", Message: "an access queue with this name already exists"}}
 			}
 		}
 		return tx.SaveWaitroom(r.Context(), wr)
@@ -504,7 +535,7 @@ func (s *Server) updateWaitroom(w http.ResponseWriter, r *http.Request) {
 		in.apply(wr)
 		// The name keys Redis state and visitor cookies; renaming would orphan the live queue.
 		if wr.Name != before.Name {
-			return validate.Errors{{Field: "name", Code: "immutable", Message: "a access queue cannot be renamed"}}
+			return validate.Errors{{Field: "name", Code: "immutable", Message: "an access queue cannot be renamed"}}
 		}
 		if err := validate.Waitroom(wr); err != nil {
 			return err
@@ -538,6 +569,10 @@ func (s *Server) deleteWaitroom(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fail(w, err)
 		return
+	}
+	// the gateway no longer serves the queue: drop its Redis state (best effort)
+	if err := s.Live.Forget(r.Context(), before.Name); err != nil {
+		slog.Warn("access queue state not removed", "queue", before.Name, "err", err)
 	}
 	s.audit(r, "waitroom.delete", "waitroom:"+before.Name, before)
 	writeJSON(w, 200, map[string]any{"version": v})
@@ -585,6 +620,63 @@ func (s *Server) uploadCertificate(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "certificate.upload", fmt.Sprintf("certificate:%d", c.ID), map[string]any{"name": c.Name, "domains": c.Domains, "not_after": c.NotAfter})
 	writeJSON(w, 201, c)
+}
+
+// replaceCertificate swaps the certificate and key of an uploaded certificate in place
+// (validated like an upload). It keeps its ID, so every host using it is redeployed
+// with the new pair; if the deployment fails the previous files are put back.
+func (s *Server) replaceCertificate(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		Name        string `json:"name"`
+		Certificate string `json:"certificate"`
+		PrivateKey  string `json:"private_key"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	before, err := s.Store.CertificateByID(r.Context(), id)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if before.Kind != "custom" {
+		fail(w, validate.Errors{{Field: "certificate", Code: "not_custom", Message: "only uploaded certificates can be replaced; ACME certificates are renewed by Corvus"}})
+		return
+	}
+	info, err := certs.Parse([]byte(in.Certificate), []byte(in.PrivateKey))
+	if err != nil {
+		fail(w, validate.Errors{{Field: "certificate", Code: "invalid", Message: err.Error()}})
+		return
+	}
+	name := strings.TrimSpace(in.Name)
+	if name == "" {
+		name = before.Name
+	}
+	dir := filepath.FromSlash(s.Paths.CertDir(id))
+	oldCert, errC := os.ReadFile(filepath.Join(dir, "fullchain.pem"))
+	oldKey, errK := os.ReadFile(filepath.Join(dir, "privkey.pem"))
+	v, err := s.Deployer.Apply(r.Context(), userID(r), fmt.Sprintf("replace certificate #%d", id), func(tx *store.Store) error {
+		if err := tx.ReplaceCustomCertificate(r.Context(), id, name, info.Domains, info.NotAfter); err != nil {
+			return err
+		}
+		return certs.Write(dir, []byte(in.Certificate), []byte(in.PrivateKey))
+	})
+	if err != nil {
+		if errC == nil && errK == nil {
+			_ = certs.Write(dir, oldCert, oldKey)
+		}
+		fail(w, err)
+		return
+	}
+	after := *before
+	after.Name, after.Domains, after.NotAfter, after.Status, after.LastError = name, info.Domains, info.NotAfter, "valid", ""
+	s.audit(r, "certificate.replace", fmt.Sprintf("certificate:%d", id), map[string]any{
+		"name": name, "domains_before": before.Domains, "domains": info.Domains, "not_after_before": before.NotAfter, "not_after": info.NotAfter})
+	writeJSON(w, 200, map[string]any{"certificate": after, "version": v})
 }
 
 func (s *Server) deleteCertificate(w http.ResponseWriter, r *http.Request) {

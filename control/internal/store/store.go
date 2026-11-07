@@ -278,7 +278,9 @@ type Certificate struct {
 	LastError string    `json:"last_error"`
 	AutoRenew bool      `json:"auto_renew"`
 	Challenge string    `json:"challenge,omitempty"`
-	ACME      ACMEInfo  `json:"-"`
+	// DNSCredentialID is the saved DNS credential used for DNS-01 issuance and renewals.
+	DNSCredentialID *int64   `json:"dns_credential_id,omitempty"`
+	ACME            ACMEInfo `json:"-"`
 }
 
 // ACMEInfo is the issuance configuration of an ACME certificate.
@@ -286,7 +288,7 @@ type ACMEInfo struct {
 	Email       string `json:"email,omitempty"`
 	Challenge   string `json:"challenge,omitempty"` // http-01 | dns-01
 	DNSProvider string `json:"dns_provider,omitempty"`
-	Credentials string `json:"credentials,omitempty"` // encrypted JSON (data key)
+	Credentials string `json:"credentials,omitempty"` // encrypted JSON (data key); legacy, see DNSCredentialID
 	Staging     bool   `json:"staging,omitempty"`
 }
 
@@ -295,8 +297,8 @@ func (s *Store) CreateCertificate(ctx context.Context, c *Certificate) error {
 	if c.Status == "" {
 		c.Status = "valid"
 	}
-	res, err := s.q.ExecContext(ctx, `INSERT INTO certificates(name, kind, domains, not_after, created_at, status, last_error, auto_renew, acme) VALUES (?,?,?,?,?,?,?,?,?)`,
-		c.Name, c.Kind, toJSON(c.Domains), c.NotAfter.UTC(), c.CreatedAt, c.Status, c.LastError, b2i(c.AutoRenew), toJSON(c.ACME))
+	res, err := s.q.ExecContext(ctx, `INSERT INTO certificates(name, kind, domains, not_after, created_at, status, last_error, auto_renew, acme, dns_credential_id) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		c.Name, c.Kind, toJSON(c.Domains), c.NotAfter.UTC(), c.CreatedAt, c.Status, c.LastError, b2i(c.AutoRenew), toJSON(c.ACME), c.DNSCredentialID)
 	if err != nil {
 		return err
 	}
@@ -305,7 +307,7 @@ func (s *Store) CreateCertificate(ctx context.Context, c *Certificate) error {
 }
 
 func (s *Store) ListCertificates(ctx context.Context) ([]Certificate, error) {
-	rows, err := s.q.QueryContext(ctx, `SELECT id, name, kind, domains, not_after, created_at, status, last_error, auto_renew, acme FROM certificates ORDER BY id`)
+	rows, err := s.q.QueryContext(ctx, `SELECT id, name, kind, domains, not_after, created_at, status, last_error, auto_renew, acme, dns_credential_id FROM certificates ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -315,8 +317,12 @@ func (s *Store) ListCertificates(ctx context.Context) ([]Certificate, error) {
 		var c Certificate
 		var domains, acme string
 		var auto int
-		if err := rows.Scan(&c.ID, &c.Name, &c.Kind, &domains, &c.NotAfter, &c.CreatedAt, &c.Status, &c.LastError, &auto, &acme); err != nil {
+		var cred sql.NullInt64
+		if err := rows.Scan(&c.ID, &c.Name, &c.Kind, &domains, &c.NotAfter, &c.CreatedAt, &c.Status, &c.LastError, &auto, &acme, &cred); err != nil {
 			return nil, err
+		}
+		if cred.Valid {
+			c.DNSCredentialID = &cred.Int64
 		}
 		_ = json.Unmarshal([]byte(domains), &c.Domains)
 		_ = json.Unmarshal([]byte(acme), &c.ACME)
@@ -353,6 +359,12 @@ func (s *Store) DeleteCertificate(ctx context.Context, id int64) error {
 	}
 	if n > 0 {
 		return fmt.Errorf("certificate is used by %d redirection host(s)", n)
+	}
+	if err := s.q.QueryRowContext(ctx, `SELECT COUNT(*) FROM streams WHERE certificate_id = ?`, id).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return fmt.Errorf("certificate is used by %d stream(s)", n)
 	}
 	res, err := s.q.ExecContext(ctx, `DELETE FROM certificates WHERE id = ?`, id)
 	if err != nil {
@@ -489,23 +501,70 @@ type ProxyHost struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 
 	SecurityHeaders string `json:"security_headers"` // off | basic | strict
+
+	// "Under attack" mode: off | on (challenge every request) | auto (active while the
+	// control plane sees an attack, see internal/underattack).
+	UnderAttack       string            `json:"under_attack"`
+	UnderAttackConfig UnderAttackConfig `json:"under_attack_config"`
+
+	MaxUploadMB      *int `json:"max_upload_mb"`      // nil = global default (100 MB), 0 = unlimited
+	UpstreamTimeoutS *int `json:"upstream_timeout_s"` // upstream read/send timeout; nil = default (60 s, WebSocket 1 h)
+	Gzip             bool `json:"gzip"`               // compress text responses
+
+	Notes string `json:"notes"` // free text for people; not used by the gateway
+
+	// Custom locations: path prefixes routed to their own upstream (NPM "custom locations").
+	Locations []Location `json:"locations"`
 }
 
-const phCols = `id, domains, forward_scheme, forward_host, forward_port, websocket, certificate_id, ssl_forced, http2, waitroom_id, waitroom_path, advanced_config, enabled, client_ip, rate_limit_id, access_list_id, block_exploits, body_inspection, body_max_kb, security_headers, created_at, updated_at`
+// Location routes a path prefix of a proxy host to its own upstream. It keeps the host's
+// protections (security rules, bans, rate limit, Basic auth, access queue).
+type Location struct {
+	Path           string `json:"path"` // prefix, e.g. /api; "/" replaces the host's forward host
+	ForwardScheme  string `json:"forward_scheme"`
+	ForwardHost    string `json:"forward_host"`
+	ForwardPort    int    `json:"forward_port"`
+	ForwardPath    string `json:"forward_path"`    // optional: replaces the matched prefix
+	AdvancedConfig string `json:"advanced_config"` // optional nginx directives for this location
+}
+
+// UnderAttackConfig holds the parameters of a host's "under attack" mode. Zero values
+// are replaced with the defaults by validate.ProxyHost.
+type UnderAttackConfig struct {
+	Mode       string `json:"mode"`       // challenge type: js | cookie
+	Difficulty int    `json:"difficulty"` // proof-of-work bits (js)
+	TTL        int    `json:"ttl_s"`      // pass cookie lifetime, seconds
+	Bind       string `json:"bind"`       // ip | ip_ua
+	// Auto mode: activate when, over the last WindowS seconds, the host served more
+	// than RPS requests per second, or at least BlockedPct percent of its requests were
+	// blocked or rate-limited (0 = ratio not used); stay active until DurationS seconds
+	// after the last round in which a threshold was exceeded.
+	RPS        float64  `json:"rps"`
+	BlockedPct *float64 `json:"blocked_pct"` // nil = default
+	WindowS    int      `json:"window_s"`
+	DurationS  int      `json:"duration_s"`
+}
+
+const phCols = `id, domains, forward_scheme, forward_host, forward_port, websocket, certificate_id, ssl_forced, http2, waitroom_id, waitroom_path, advanced_config, enabled, client_ip, rate_limit_id, access_list_id, block_exploits, body_inspection, body_max_kb, security_headers, under_attack, under_attack_config, max_upload_mb, upstream_timeout_s, gzip, locations, notes, created_at, updated_at`
 
 func scanProxyHost(row interface{ Scan(...any) error }) (*ProxyHost, error) {
 	h := &ProxyHost{}
-	var domains string
-	var ws, ssl, h2, en, be int
-	var cert, wr, rl, al sql.NullInt64
+	var domains, uaCfg, locs string
+	var ws, ssl, h2, en, be, gz int
+	var cert, wr, rl, al, mu, ut sql.NullInt64
 	if err := row.Scan(&h.ID, &domains, &h.ForwardScheme, &h.ForwardHost, &h.ForwardPort, &ws, &cert, &ssl, &h2, &wr, &h.WaitroomPath, &h.AdvancedConfig, &en,
-		&h.ClientIP, &rl, &al, &be, &h.BodyInspection, &h.BodyMaxKB, &h.SecurityHeaders, &h.CreatedAt, &h.UpdatedAt); err != nil {
+		&h.ClientIP, &rl, &al, &be, &h.BodyInspection, &h.BodyMaxKB, &h.SecurityHeaders, &h.UnderAttack, &uaCfg, &mu, &ut, &gz, &locs, &h.Notes, &h.CreatedAt, &h.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 		return nil, err
 	}
 	_ = json.Unmarshal([]byte(domains), &h.Domains)
+	_ = json.Unmarshal([]byte(uaCfg), &h.UnderAttackConfig)
+	_ = json.Unmarshal([]byte(locs), &h.Locations)
+	if h.Locations == nil {
+		h.Locations = []Location{}
+	}
 	h.Websocket, h.SSLForced, h.HTTP2, h.Enabled = ws == 1, ssl == 1, h2 == 1, en == 1
 	if cert.Valid {
 		h.CertificateID = &cert.Int64
@@ -519,7 +578,15 @@ func scanProxyHost(row interface{ Scan(...any) error }) (*ProxyHost, error) {
 	if al.Valid {
 		h.AccessListID = &al.Int64
 	}
-	h.BlockExploits = be == 1
+	h.BlockExploits, h.Gzip = be == 1, gz == 1
+	if mu.Valid {
+		v := int(mu.Int64)
+		h.MaxUploadMB = &v
+	}
+	if ut.Valid {
+		v := int(ut.Int64)
+		h.UpstreamTimeoutS = &v
+	}
 	return h, nil
 }
 
@@ -549,11 +616,19 @@ func (s *Store) SaveProxyHost(ctx context.Context, h *ProxyHost) error {
 	if h.SecurityHeaders == "" {
 		h.SecurityHeaders = "off"
 	}
+	if h.UnderAttack == "" {
+		h.UnderAttack = "off"
+	}
+	uaCfg := toJSON(h.UnderAttackConfig)
+	if h.Locations == nil {
+		h.Locations = []Location{}
+	}
+	locs := toJSON(h.Locations)
 	if h.ID == 0 {
-		res, err := s.q.ExecContext(ctx, `INSERT INTO proxy_hosts(domains, forward_scheme, forward_host, forward_port, websocket, certificate_id, ssl_forced, http2, waitroom_id, waitroom_path, advanced_config, enabled, client_ip, rate_limit_id, access_list_id, block_exploits, body_inspection, body_max_kb, security_headers, created_at, updated_at)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		res, err := s.q.ExecContext(ctx, `INSERT INTO proxy_hosts(domains, forward_scheme, forward_host, forward_port, websocket, certificate_id, ssl_forced, http2, waitroom_id, waitroom_path, advanced_config, enabled, client_ip, rate_limit_id, access_list_id, block_exploits, body_inspection, body_max_kb, security_headers, under_attack, under_attack_config, max_upload_mb, upstream_timeout_s, gzip, locations, notes, created_at, updated_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			toJSON(h.Domains), h.ForwardScheme, h.ForwardHost, h.ForwardPort, b2i(h.Websocket), h.CertificateID, b2i(h.SSLForced), b2i(h.HTTP2),
-			h.WaitroomID, h.WaitroomPath, h.AdvancedConfig, b2i(h.Enabled), h.ClientIP, h.RateLimitID, h.AccessListID, b2i(h.BlockExploits), h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders, t, t)
+			h.WaitroomID, h.WaitroomPath, h.AdvancedConfig, b2i(h.Enabled), h.ClientIP, h.RateLimitID, h.AccessListID, b2i(h.BlockExploits), h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders, h.UnderAttack, uaCfg, h.MaxUploadMB, h.UpstreamTimeoutS, b2i(h.Gzip), locs, h.Notes, t, t)
 		if err != nil {
 			return err
 		}
@@ -561,9 +636,9 @@ func (s *Store) SaveProxyHost(ctx context.Context, h *ProxyHost) error {
 		h.CreatedAt, h.UpdatedAt = t, t
 		return nil
 	}
-	res, err := s.q.ExecContext(ctx, `UPDATE proxy_hosts SET domains=?, forward_scheme=?, forward_host=?, forward_port=?, websocket=?, certificate_id=?, ssl_forced=?, http2=?, waitroom_id=?, waitroom_path=?, advanced_config=?, enabled=?, client_ip=?, rate_limit_id=?, access_list_id=?, block_exploits=?, body_inspection=?, body_max_kb=?, security_headers=?, updated_at=? WHERE id=?`,
+	res, err := s.q.ExecContext(ctx, `UPDATE proxy_hosts SET domains=?, forward_scheme=?, forward_host=?, forward_port=?, websocket=?, certificate_id=?, ssl_forced=?, http2=?, waitroom_id=?, waitroom_path=?, advanced_config=?, enabled=?, client_ip=?, rate_limit_id=?, access_list_id=?, block_exploits=?, body_inspection=?, body_max_kb=?, security_headers=?, under_attack=?, under_attack_config=?, max_upload_mb=?, upstream_timeout_s=?, gzip=?, locations=?, notes=?, updated_at=? WHERE id=?`,
 		toJSON(h.Domains), h.ForwardScheme, h.ForwardHost, h.ForwardPort, b2i(h.Websocket), h.CertificateID, b2i(h.SSLForced), b2i(h.HTTP2),
-		h.WaitroomID, h.WaitroomPath, h.AdvancedConfig, b2i(h.Enabled), h.ClientIP, h.RateLimitID, h.AccessListID, b2i(h.BlockExploits), h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders, t, h.ID)
+		h.WaitroomID, h.WaitroomPath, h.AdvancedConfig, b2i(h.Enabled), h.ClientIP, h.RateLimitID, h.AccessListID, b2i(h.BlockExploits), h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders, h.UnderAttack, uaCfg, h.MaxUploadMB, h.UpstreamTimeoutS, b2i(h.Gzip), locs, h.Notes, t, h.ID)
 	if err != nil {
 		return err
 	}

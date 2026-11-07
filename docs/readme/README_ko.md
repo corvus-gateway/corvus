@@ -33,8 +33,10 @@ Corvus는 웹 서비스 앞단에 두는 셀프 호스팅 게이트웨이입니�
 트래픽 급증에 대비한 접속 대기열까지 제공합니다. 모든 것이 여러분의 서버에서 동작하며, 트래픽이
 외부 클라우드로 전송되지 않습니다.
 
+<p align="center"><img src="../../assets/demo/corvus-demo-ko.gif" alt="Corvus demo" width="900"></p>
+
 - [빠른 설정](#빠른-설정)
-- [전체 설정](#전체-설정)
+- [문서](https://corvus-gateway.github.io/corvus/ko/)
 - [스크린샷](#스크린샷)
 
 ## 프로젝트 목표
@@ -52,16 +54,27 @@ Corvus는 Nginx Proxy Manager의 포크가 아닙니다. 기존 NPM 설정을 **
 
 **프록시 및 TLS**
 - 와일드카드, WebSocket, HTTP/2, HTTPS 강제 전환, 사용자 정의 Nginx 스니펫을 지원하는 프록시 호스트
-- 자동 갱신되는 무료 Let's Encrypt 인증서(HTTP-01, 또는 DNS-01: Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) 또는 직접 업로드한 인증서
+- 호스트와 스트림마다 용도를 적어 두는 메모(검색 가능)
+- 사용자 지정 위치: 경로(예: `/api`)별로 다른 업스트림으로 전달하며 호스트의 보호가 그대로 적용됩니다
+- 리디렉션 호스트: 도메인을 다른 도메인으로 보냅니다(301/302/303/307/308, 경로 유지 선택). TLS와 보호 기능도 똑같이 적용됩니다
+- 자동 갱신되는 무료 Let's Encrypt 인증서(HTTP-01, 또는 DNS-01: Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap, DNS 인증 정보는 한 번 저장해 다시 사용) 또는 직접 업로드한 인증서(갱신 시 그 자리에서 교체 가능)
+- 스트림: TCP/UDP 포트(데이터베이스, SSH, MQTT, 게임 서버)를 다른 호스트로 전달하고, TCP는 TLS 종료도 선택할 수 있습니다
+- 등록되지 않은 호스트 이름에 404 페이지, 연결 끊기, 리디렉션 중 원하는 방식으로 응답
 - Cloudflare 또는 신뢰할 수 있는 프록시 뒤에서도 실제 클라이언트 IP 확인, 호스트별 비밀번호 보호(선택)
+- 호스트별 보안 헤더 프리셋(기본 / 엄격: nosniff, 프레임 및 리퍼러 정책, 보고 전용 CSP, HttpOnly/SameSite/Secure 쿠키 플래그). 애플리케이션이 이미 보내는 헤더는 덮어쓰지 않습니다
+- 텍스트 응답 Gzip 압축(기본 켜짐), 호스트별 업로드 크기 제한과 업스트림 타임아웃
 - 모든 변경은 `openresty -t`로 검증하고, 원자적으로 적용하며, 롤백할 수 있습니다
+- 새 Corvus 릴리스가 나오면 콘솔에 표시하고 릴리스 노트로 바로 이동합니다(끌 수 있음)
 
 **Corvus Sentinel — 보안 엔진**
-- 보안 규칙: IP, IP 목록, 국가, 경로, 쿼리, 메서드, 헤더를 매칭하여 차단·허용·기록, 전역 또는 호스트별 적용
+- 보안 규칙: IP, IP 목록, 국가, 경로, 쿼리, 메서드, 헤더, User-Agent 목록을 매칭하여 차단·허용·기록·챌린지, 전역 또는 호스트별 적용
+- URL에서 최신 상태로 유지되는 IP 및 User-Agent 목록(예: Tor 출구 노드, 악성 봇 목록, 프리셋 포함). 백그라운드에서 갱신되며 내용이 바뀔 때만 다시 배포합니다
+- 외부 서비스 없이 동작하는 브라우저 챌린지: JavaScript 작업 증명(난이도 조절 가능) 또는 가벼운 쿠키 확인, 서명되고 IP에 묶인 통과 쿠키 발급
+- 호스트별 "공격 대응 모드": 모든 방문자에게 챌린지를 요구합니다. 직접 켜거나, 초당 요청 수 또는 차단된 요청 비율이 기준을 넘는 동안 자동으로 켜집니다(켜지고 꺼질 때 알림)
 - JSON, 폼, multipart 요청 본문 검사(기록 또는 차단)
 - 최신 CVE(React2Shell, wp2shell, PHP-CGI, Vite, n8n …)에 대한 원클릭 **가상 패치**
 - 서명되어 있고 더 최신인 경우에만 적용하는 관리형 시그니처 업데이트(변조 및 다운그레이드 방지)
-- 반복 위반자에 대한 자동 IP 차단(단계적 가중 및 예외 지정 지원)
+- 반복 위반자에 대한 자동 IP 차단(단계적 가중 및 예외 지정 지원), 이상 행동 시 즉시 차단(선택: IP·사이트별 4xx 응답이 너무 많은 경우)
 - 드라이런 모드를 갖춘 속도 제한, 기본으로 제공되는 익스플로잇 경로 차단
 
 **접속 대기열(Access Queue)**
@@ -116,7 +129,7 @@ services:
 ```
 
 이것이 설치의 전부입니다. 게이트웨이, 관리 콘솔, 접속 대기열 저장소가 이 컨테이너 하나에서
-실행됩니다. 옵션은 [전체 설정](#전체-설정)을 참고하세요.
+실행됩니다. 옵션은 [문서](https://corvus-gateway.github.io/corvus/ko/)를 참고하세요.
 
 3. 스택을 시작합니다.
 
@@ -147,147 +160,33 @@ docker compose up -d
 `./data`에 있는 설정, 인증서, 이력은 그대로 유지되며, 데이터베이스 변경 사항은 시작할 때
 자동으로 적용됩니다.
 
-## 전체 설정
+## 문서
 
-### 포트
+구성, 강화된 설치, 포워드 호스트, 스트림, 백업, Nginx Proxy Manager에서 마이그레이션, 보안 규칙,
+접속 대기열, 문제 해결은 **[문서 사이트](https://corvus-gateway.github.io/corvus/ko/)**에서 화면과 함께 설명합니다 (한국어 · [English](https://corvus-gateway.github.io/corvus/)).
 
-| 포트 | 용도 |
-|---|---|
-| 80 / 443 | 게이트웨이 — 프록시 트래픽 |
-| 9443 | 관리 콘솔 및 API — 신뢰할 수 있는 네트워크만 허용하세요(방화벽, 또는 *네트워크 → 관리 콘솔 접근 허용 네트워크*) |
+## 성능
 
-### 데이터와 백업
+GitHub 호스팅 `ubuntu-24.04` 러너(4 vCPU AMD EPYC 9V45)에서 [벤치마크 워크플로](../benchmark.md)로
+측정했습니다. Corvus는 **2 vCPU**에 고정하고 wrk와 백엔드는 나머지 두 개에서 실행했으며, keep-alive
+연결 64개로 3바이트 응답을 돌려주는 `GET /`를 요청했습니다.
 
-모든 상태는 `./data`에 저장됩니다. 설정 데이터베이스, 생성된 설정 이력, 인증서, 트래픽 이력,
-`secrets/`가 여기에 들어 있습니다. **`secrets/`는 반드시 백업하세요.** 데이터베이스에 저장된
-MFA 시크릿과 DNS 토큰을 암호화하는 키가 이곳에 있습니다. 컨테이너는 권한 없는 사용자
-`10001`로 실행되며, 처음 시작할 때 `./data`의 소유권을 가져옵니다.
+| 시나리오 | req/s | p50 | p99 | 메모리 |
+|---|---:|---:|---:|---:|
+| nginx 1.28 리버스 프록시(기준) | 97,227 | 0.63 ms | 1.16 ms | 17 MB |
+| Corvus, 기본 호스트 | 75,473 | 0.79 ms | 1.83 ms | 72 MB |
+| Corvus, 규칙 30개 + CIDR 1,000개 목록 + 익스플로잇 차단 + 헤더 + 속도 제한 | 54,585 | 1.12 ms | 2.29 ms | 77 MB |
+| Corvus, HTTPS(ECDSA P-256), keep-alive | 59,697 | 1.00 ms | 2.18 ms | 80 MB |
+| Corvus, HTTPS, 요청마다 새 TLS 핸드셰이크 | 4,348 handshakes/s | 5.88 ms | 11.62 ms | 88 MB |
+| Corvus, 접속 대기열(입장한 방문자) | 57,954 | 1.05 ms | 2.22 ms | 84 MB |
+| Corvus, 챌린지 규칙(통과 쿠키가 있는 방문자) | 62,901 | 0.96 ms | 1.94 ms | 88 MB |
 
-### 강화된 설치
-
-[`deploy/docker-compose.hardened.yml`](../../deploy/docker-compose.hardened.yml)은 같은 이미지를 읽기 전용 루트
-파일 시스템, Linux capability 없음, 권한 상승 불가 상태로 실행합니다. 먼저 사용자 `10001`용
-데이터 디렉터리를 만드세요.
-
-```bash
-mkdir -p data && sudo chown 10001:10001 data
-docker compose -f docker-compose.hardened.yml up -d
-```
-
-### 구성
-
-다음 변수는 `docker-compose.yml`의 `environment:` 아래에 설정합니다.
-
-| 변수 | 설명 |
-|---|---|
-| `CORVUS_ADMIN_HOSTS` | 관리 콘솔 인증서에 추가할 이름/IP. 예: `corvus.example.com,203.0.113.10` |
-| `CORVUS_DB_URL` | SQLite 대신 PostgreSQL 사용. 예: `postgres://corvus:…@db:5432/corvus` |
-| `CORVUS_REDIS_HOST` | 접속 대기열에 외부 Redis/Valkey 사용(여러 게이트웨이가 하나의 대기열을 공유). `CORVUS_REDIS_PASSWORD`와 함께 사용. 기본값: 내장 |
-| `CORVUS_IMPORT_DIR` | *NPM 가져오기*에 사용할 읽기 전용 NPM 볼륨이 있는 디렉터리 |
-| `CORVUS_RULES_URL` | 서명된 관리형 규칙 번들의 URL(선택) |
-| `CORVUS_ADMIN_ALLOW_ANY=1` | 관리자 허용 목록 설정 때문에 접속할 수 없게 되었을 때 쓰는 복구 스위치 |
-| `CORVUS_REDIS_PORT` | 127.0.0.1에서 동작하는 내장 접속 대기열 저장소의 포트(기본값 `6379`). `network_mode: host`에서 호스트가 이미 6379를 쓰고 있다면 변경 |
-| `CORVUS_RESOLVER` | 포워드 호스트 이름 확인에 쓸 DNS 서버. 기본값: Docker DNS, 호스트 네트워킹에서는 `/etc/resolv.conf`의 첫 번째 `nameserver` |
-| `CORVUS_LOOPBACK=container` | `127.0.0.1`/`localhost` 포워드 호스트가 Docker 호스트 대신 컨테이너 자신을 가리키도록 설정 |
-
-### 포워드 호스트
-
-프록시 호스트는 다음 대상으로 전달할 수 있습니다.
-
-- **다른 컨테이너**를 이름으로 지정. 예: `xoshop-web` 포트 `80`. Corvus가 그 컨테이너와 같은 Docker
-  네트워크에 있어야 합니다(`corvus` 서비스에 해당 네트워크를 추가).
-- **사설 또는 공인 IP**. 예: `10.3.2.39` 포트 `8084`.
-- **Docker 호스트 자체의 서비스**를 NPM과 마찬가지로 `127.0.0.1` 또는 `localhost`로 지정. 컨테이너
-  안에서 이 주소는 Docker 호스트를 뜻하므로 `host.docker.internal`이 필요 없습니다. 단, 서비스가
-  컨테이너에서 접근할 수 있는 주소(`127.0.0.1`만이 아니라 `0.0.0.0` 또는 Docker 브리지)에서 수신해야
-  하며, 호스트 방화벽이 Docker 네트워크에서 오는 연결을 허용해야 합니다.
-
-호스트의 `127.0.0.1`에서만 수신하는 서비스에 연결하거나 `network_mode: host`를 쓰던 NPM 구성을 그대로
-유지하려면 Corvus를 호스트 네트워킹으로 실행하세요. `ports:`와 `networks:`를 `network_mode: host`로
-바꾸면 됩니다(호스트에서 6379를 이미 쓰고 있다면 `CORVUS_REDIS_PORT`도 설정).
-
-### Nginx Proxy Manager에서 마이그레이션
-
-콘솔의 *NPM 가져오기*는 기존 NPM 설치에서 **프록시 호스트, 인증서**(Cloudflare DNS 토큰을 포함한
-Let's Encrypt 인증서와 사용자 지정 인증서), **접근 목록**(사용자와 IP 규칙)을 복사합니다. NPM의 파일과
-데이터베이스를 읽기만 하고 NPM 자체는 변경하지 않으므로 언제든 되돌아갈 수 있습니다.
-
-가져오지 않는 항목: 스트림(TCP/UDP), 리디렉션 호스트, 404 호스트, 사용자 지정 위치, NPM 전용 변수를
-사용하는 고급 설정. 건너뛰는 항목은 모두 미리보기에 표시됩니다.
-
-**NPM이 어떤 데이터베이스를 쓰는지 확인하세요.** NPM의 `docker-compose.yml`을 열어 봅니다.
-
-- `DB_MYSQL_*` / `DB_POSTGRES_*` 변수가 없고 `data/database.sqlite`가 있으면 → **SQLite**(NPM 기본값)
-- `DB_MYSQL_HOST`, `DB_MYSQL_USER`, … 가 있고 보통 별도의 `db` 서비스가 있으면 → **MySQL / MariaDB**
-- `DB_POSTGRES_*` → PostgreSQL은 가져오기를 지원하지 않으므로 콘솔에서 호스트를 다시 만드세요
-
-두 경우 모두 NPM의 `data`와 `letsencrypt` 디렉터리를 Corvus에 읽기 전용으로 마운트해야 합니다(인증서
-파일이 여기에 있습니다).
-
-```yml
-services:
-  corvus:
-    image: 'ghcr.io/corvus-gateway/gateway:latest'
-    restart: unless-stopped
-    ports:
-      - '80:80'
-      - '443:443'
-      - '9443:9443'
-    environment:
-      CORVUS_IMPORT_DIR: /import
-    volumes:
-      - ./data:/data
-      - /path/to/npm/data:/import/npm/data:ro
-      - /path/to/npm/letsencrypt:/import/npm/letsencrypt:ro
-```
-
-NPM의 `./data`와 `./letsencrypt` 볼륨의 호스트 경로를 사용하세요. NPM과 Corvus는 둘 다 80/443 포트가
-필요하므로 동시에 실행할 수 없습니다.
-
-#### SQLite를 쓰는 NPM(기본값)
-
-```bash
-cd /path/to/npm && docker compose down        # NPM 중지(80/443 해제)
-cd /path/to/corvus && docker compose up -d     # 위 마운트로 Corvus 시작
-```
-
-콘솔에서 *NPM 가져오기*를 열고 **SQLite**를 그대로 둔 채 *미리보기*를 누른 뒤, 가져올 항목을 골라
-*선택 항목 가져오기*를 누릅니다. 미리보기에서 `permission denied`가 나오면 Corvus(uid 10001로 실행)가
-파일을 읽을 수 있게 하세요: `sudo chmod o+rx /path/to/npm/data && sudo chmod o+r /path/to/npm/data/database.sqlite`.
-
-#### MySQL / MariaDB를 쓰는 NPM
-
-가져오는 동안 Corvus가 NPM의 데이터베이스에 접속해야 하므로, NPM의 프록시 서비스만 중지하고
-데이터베이스는 계속 실행해 둡니다.
-
-```bash
-cd /path/to/npm && docker compose stop app     # 80/443을 쓰는 NPM 서비스(보통 "app")
-cd /path/to/corvus && docker compose up -d
-
-# 가져오기를 위해 Corvus를 NPM의 Docker 네트워크에 연결
-docker network ls | grep -i npm                # 예: npm_default
-docker network connect npm_default $(docker compose ps -q corvus)
-```
-
-*NPM 가져오기*에서 **MySQL / MariaDB**를 고르고 NPM의 데이터베이스 설정을 입력합니다. 호스트 =
-데이터베이스 서비스 이름(보통 `db`), 포트 `3306`, 그리고 `DB_MYSQL_NAME`, `DB_MYSQL_USER`,
-`DB_MYSQL_PASSWORD`의 값입니다. 연결은 읽기 전용이며 비밀번호는 저장되지 않습니다. 그다음
-*미리보기* → *선택 항목 가져오기*를 누릅니다.
-
-가져오기가 끝나면:
-
-```bash
-docker network disconnect npm_default $(docker compose ps -q corvus)
-cd /path/to/npm && docker compose down         # NPM 데이터베이스도 중지
-```
-
-#### 가져온 뒤
-
-- 가져온 호스트를 확인한 다음 `CORVUS_IMPORT_DIR`와 두 개의 `/import` 마운트를 제거하고
-  `docker compose up -d`를 다시 실행합니다.
-- 인증서는 Corvus에서 계속 갱신됩니다. 지원하지 않는 DNS 공급자를 쓰던 호스트는 자동 갱신 없이
-  가져오며, 미리보기에서 경고가 표시됩니다.
-- **되돌리기:** Corvus에서 `docker compose down`, 그다음 NPM에서 `docker compose up -d`.
+기본 요청 경로에서 Corvus는 일반 nginx 처리량의 약 4분의 3을 냅니다(업스트림 keep-alive 연결 풀,
+워커별로 묶어 보내는 접근 로그). 전체 보호 기능(CIDR 1,000개 목록을 포함한 규칙 30개, 익스플로잇 차단,
+보안 헤더, 속도 제한)을 켜면 여기서 약 28 %가 더 듭니다.
+**주의:** 부하 생성기가 같은 머신에서 돌아가는 공유 CI 러너이고 응답도 아주 작습니다. 수치는
+보수적이며 시나리오와 버전을 비교하기 위한 것이지 처리 용량을 보장하는 값이 아닙니다. 메모리에는
+컨트롤 플레인과 내장 Valkey가 포함됩니다.
 
 ## 개발
 

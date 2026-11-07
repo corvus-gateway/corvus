@@ -33,8 +33,10 @@ exploiter que Nginx Proxy Manager — domaines, redirection et SSL gratuit en qu
 des attaques, limitation de débit et file d'accès pour absorber les pics de trafic. Tout s'exécute
 sur votre propre serveur ; aucun trafic n'est envoyé vers un cloud tiers.
 
+<p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
+
 - [Installation rapide](#installation-rapide)
-- [Installation complète](#installation-complète)
+- [Documentation](https://corvus-gateway.github.io/corvus/)
 - [Captures d'écran](#captures-décran)
 
 ## Objectif du projet
@@ -53,16 +55,27 @@ OpenResty, plan de contrôle en Go, console React) capable d'**importer une conf
 
 **Proxy et TLS**
 - Hôtes proxy avec jokers (wildcards), WebSocket, HTTP/2, HTTPS forcé et extraits Nginx personnalisés
-- Certificats Let's Encrypt gratuits (HTTP-01, ou DNS-01 via Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap) avec renouvellement automatique, ou import des vôtres
+- Notes sur les hôtes et les streams, pour se souvenir à quoi sert chacun (avec recherche)
+- Emplacements personnalisés : des chemins (ex. `/api`) vers leur propre upstream, avec les protections de l'hôte
+- Hôtes de redirection : renvoyer des domaines vers un autre domaine (301/302/303/307/308, en conservant éventuellement le chemin), avec le même TLS et la même protection
+- Certificats Let's Encrypt gratuits (HTTP-01, ou DNS-01 via Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap, avec des identifiants de fournisseur enregistrés et réutilisables) avec renouvellement automatique, ou import des vôtres (remplaçables sur place lors du renouvellement)
+- Flux (streams) : rediriger des ports TCP/UDP (bases de données, SSH, MQTT, serveurs de jeu) vers un autre hôte, avec terminaison TLS optionnelle pour TCP
+- Les noms d’hôte inconnus reçoivent au choix une page 404, une connexion fermée ou une redirection
 - Véritable IP client derrière Cloudflare ou des proxys de confiance ; protection par mot de passe optionnelle par hôte
+- Préréglages d'en-têtes de sécurité par hôte (Basique / Strict : nosniff, politiques de frame et de referrer, CSP en mode rapport seul, attributs de cookie HttpOnly/SameSite/Secure), sans jamais écraser ce que l'application envoie déjà
+- Compression gzip des réponses texte (activée par défaut), limite de taille d'envoi et délai d'attente de l'amont par hôte
 - Chaque modification est validée avec `openresty -t`, appliquée de façon atomique et peut être annulée
+- La console signale une nouvelle version de Corvus, avec un lien vers ses notes de version (désactivable)
 
 **Corvus Sentinel — moteur de sécurité**
-- Règles de sécurité : correspondance sur IP, liste d'IP, pays, chemin, requête, méthode ou en-tête → bloquer, autoriser ou journaliser, globalement ou par hôte
+- Règles de sécurité : correspondance sur IP, liste d'IP, pays, chemin, requête, méthode, en-tête ou liste de User-Agent → bloquer, autoriser, journaliser ou soumettre à un défi, globalement ou par hôte
+- Listes d'IP et de User-Agent tenues à jour depuis une URL (p. ex. nœuds de sortie Tor, listes de bots malveillants ; préréglages inclus), actualisées en arrière-plan et redéployées uniquement lorsqu'elles changent
+- Défi navigateur sans service tiers : une preuve de travail JavaScript (difficulté réglable) ou une simple vérification par cookie, avec un cookie de passage signé et lié à l'IP
+- Mode « sous attaque » par hôte : chaque visiteur doit relever le défi — activé à la main, ou automatiquement tant que le nombre de requêtes par seconde ou la part de requêtes bloquées dépasse un seuil (avec des alertes à l'activation et à la désactivation)
 - Inspection du corps des requêtes JSON, formulaire et multipart (journalisation ou blocage)
 - **Correctifs virtuels** en un clic pour les CVE récentes (React2Shell, wp2shell, PHP-CGI, Vite, n8n …)
 - Mises à jour de signatures gérées, acceptées uniquement si elles sont signées et plus récentes (pas de falsification, pas de rétrogradation)
-- Bannissement automatique des IP récidivistes, avec escalade et exemptions
+- Bannissement automatique des IP récidivistes, avec escalade et exemptions ; bannissement immédiat optionnel en cas de mauvais comportement (trop de réponses 4xx par IP et par site)
 - Limites de débit avec mode simulation (dry-run) ; blocage des chemins d'exploitation prêt à l'emploi
 
 **File d'accès**
@@ -117,7 +130,7 @@ services:
 ```
 
 C'est toute l'installation : la passerelle, la console d'administration et le stockage de la file
-d'attente d'accès fonctionnent dans ce seul conteneur. Consultez [Installation complète](#installation-complète)
+d'attente d'accès fonctionnent dans ce seul conteneur. Consultez la [documentation](https://corvus-gateway.github.io/corvus/)
 pour les options.
 
 3. Démarrez votre stack avec
@@ -150,149 +163,35 @@ docker compose up -d
 Les paramètres, certificats et l'historique dans `./data` sont conservés ; les modifications de la base
 de données sont appliquées automatiquement au démarrage.
 
-## Installation complète
+## Documentation
 
-### Ports
+La configuration, l'installation renforcée, les hôtes de destination, les flux, les sauvegardes, la migration
+depuis Nginx Proxy Manager, les règles de sécurité, la file d'attente d'accès et le dépannage sont décrits dans la
+**[documentation](https://corvus-gateway.github.io/corvus/)** (en anglais et en coréen).
 
-| Port | Rôle |
-|---|---|
-| 80 / 443 | Passerelle — trafic proxifié |
-| 9443 | Console d'administration et API — à n'autoriser que depuis des réseaux de confiance (pare-feu, ou *Réseau → Réseaux autorisés pour la console d'administration*) |
+## Performances
 
-### Données et sauvegardes
+Mesuré avec le [workflow de benchmark](../benchmark.md) sur un runner `ubuntu-24.04` hébergé par GitHub
+(4 vCPU AMD EPYC 9V45) : Corvus limité à **2 vCPU**, wrk et le backend sur les deux autres, 64 connexions
+keep-alive, `GET /` avec une réponse de 3 octets.
 
-Tout l'état se trouve dans `./data` : la base de données des paramètres, l'historique de la configuration
-générée, les certificats, l'historique du trafic et `secrets/`. **Sauvegardez `secrets/`** : il contient les clés
-qui chiffrent les secrets MFA et les jetons DNS dans la base de données. Le conteneur s'exécute avec
-l'utilisateur non privilégié `10001` et prend la propriété de `./data` au premier démarrage.
+| Scénario | req/s | p50 | p99 | Mémoire |
+|---|---:|---:|---:|---:|
+| nginx 1.28 en reverse proxy (référence) | 97,227 | 0.63 ms | 1.16 ms | 17 MB |
+| Corvus, hôte par défaut | 75,473 | 0.79 ms | 1.83 ms | 72 MB |
+| Corvus, 30 règles + liste de 1,000 CIDR + blocage des exploits + en-têtes + limite de débit | 54,585 | 1.12 ms | 2.29 ms | 77 MB |
+| Corvus, HTTPS (ECDSA P-256), keep-alive | 59,697 | 1.00 ms | 2.18 ms | 80 MB |
+| Corvus, HTTPS, nouvelle poignée de main TLS à chaque requête | 4,348 handshakes/s | 5.88 ms | 11.62 ms | 88 MB |
+| Corvus, file d'accès (visiteurs admis) | 57,954 | 1.05 ms | 2.22 ms | 84 MB |
+| Corvus, règle de défi (visiteurs munis d'un passe) | 62,901 | 0.96 ms | 1.94 ms | 88 MB |
 
-### Installation renforcée
-
-[`deploy/docker-compose.hardened.yml`](../../deploy/docker-compose.hardened.yml) exécute la même image avec un système
-de fichiers racine en lecture seule, sans aucune capability Linux et sans élévation de privilèges. Créez
-d'abord le répertoire de données pour l'utilisateur `10001` :
-
-```bash
-mkdir -p data && sudo chown 10001:10001 data
-docker compose -f docker-compose.hardened.yml up -d
-```
-
-### Configuration
-
-Définissez ces variables sous `environment:` dans `docker-compose.yml`.
-
-| Variable | Description |
-|---|---|
-| `CORVUS_ADMIN_HOSTS` | Noms/IP supplémentaires pour le certificat d'administration, p. ex. `corvus.example.com,203.0.113.10` |
-| `CORVUS_DB_URL` | Utiliser PostgreSQL au lieu de SQLite, p. ex. `postgres://corvus:…@db:5432/corvus` |
-| `CORVUS_REDIS_HOST` | Utiliser un Redis/Valkey externe pour la file d'attente d'accès (plusieurs passerelles partageant une même file) ; avec `CORVUS_REDIS_PASSWORD`. Par défaut : intégré |
-| `CORVUS_IMPORT_DIR` | Répertoire contenant les volumes NPM en lecture seule pour *Importer depuis NPM* |
-| `CORVUS_RULES_URL` | URL facultative d'un lot de règles gérées signé |
-| `CORVUS_ADMIN_ALLOW_ANY=1` | Interrupteur de secours si vous vous êtes verrouillé avec la liste d'autorisation d'administration |
-| `CORVUS_REDIS_PORT` | Port du stockage intégré de la file d'attente d'accès sur 127.0.0.1 (par défaut `6379`) ; à modifier avec `network_mode: host` si l'hôte utilise déjà 6379 |
-| `CORVUS_RESOLVER` | Serveur DNS pour les hôtes de destination. Par défaut : le DNS de Docker, ou le premier `nameserver` de `/etc/resolv.conf` en réseau hôte |
-| `CORVUS_LOOPBACK=container` | Faire pointer les hôtes de destination `127.0.0.1`/`localhost` vers le conteneur lui-même plutôt que vers l'hôte Docker |
-
-### Hôtes de destination
-
-Un hôte proxy peut transférer vers :
-
-- **un autre conteneur** par son nom, p. ex. `xoshop-web` port `80` — Corvus doit partager un réseau Docker
-  avec lui (ajoutez ce réseau au service `corvus`) ;
-- **une IP privée ou publique**, p. ex. `10.3.2.39` port `8084` ;
-- **un service sur l'hôte Docker lui-même** via `127.0.0.1` ou `localhost`, comme dans NPM. Dans un
-  conteneur, ces adresses désignent l'hôte Docker : `host.docker.internal` n'est donc pas nécessaire. Le service
-  doit écouter sur une adresse joignable depuis le conteneur (`0.0.0.0` ou le pont Docker, pas seulement
-  `127.0.0.1`), et le pare-feu de l'hôte doit autoriser les connexions provenant des réseaux Docker.
-
-Pour atteindre des services qui n'écoutent que sur `127.0.0.1` de l'hôte, ou pour conserver tel quel un
-déploiement NPM qui utilisait `network_mode: host`, exécutez Corvus en réseau hôte : remplacez `ports:` et
-`networks:` par `network_mode: host` (et définissez `CORVUS_REDIS_PORT` si le port 6379 est déjà pris sur l'hôte).
-
-### Migrer depuis Nginx Proxy Manager
-
-*Importer depuis NPM* dans la console copie les **hôtes proxy, certificats** (Let's Encrypt et
-personnalisés, y compris les jetons DNS Cloudflare) et **listes d'accès** (utilisateurs et règles IP)
-d'une installation NPM existante. Seuls les fichiers et la base de données de NPM sont lus — NPM lui-même
-n'est pas modifié, vous pouvez donc revenir en arrière à tout moment.
-
-Non importés : les streams (TCP/UDP), les hôtes de redirection, les hôtes 404, les emplacements
-personnalisés et la configuration avancée qui utilise des variables propres à NPM. L'aperçu liste tout ce
-qui est ignoré.
-
-**Vérifiez quelle base de données votre NPM utilise.** Ouvrez le `docker-compose.yml` de NPM :
-
-- aucune variable `DB_MYSQL_*` / `DB_POSTGRES_*`, et `data/database.sqlite` existe → **SQLite** (par défaut dans NPM)
-- `DB_MYSQL_HOST`, `DB_MYSQL_USER`, … et généralement un service `db` séparé → **MySQL / MariaDB**
-- `DB_POSTGRES_*` → PostgreSQL n'est pas pris en charge par l'import ; recréez les hôtes dans la console
-
-Dans les deux cas, les répertoires `data` et `letsencrypt` de NPM doivent être montés en lecture seule dans
-Corvus (les fichiers de certificats s'y trouvent) :
-
-```yml
-services:
-  corvus:
-    image: 'ghcr.io/corvus-gateway/gateway:latest'
-    restart: unless-stopped
-    ports:
-      - '80:80'
-      - '443:443'
-      - '9443:9443'
-    environment:
-      CORVUS_IMPORT_DIR: /import
-    volumes:
-      - ./data:/data
-      - /path/to/npm/data:/import/npm/data:ro
-      - /path/to/npm/letsencrypt:/import/npm/letsencrypt:ro
-```
-
-Utilisez les chemins hôtes des volumes `./data` et `./letsencrypt` de NPM. NPM et Corvus ont tous deux
-besoin des ports 80/443 et ne peuvent donc pas tourner en même temps.
-
-#### NPM avec SQLite (par défaut)
-
-```bash
-cd /path/to/npm && docker compose down        # arrêter NPM (libère 80/443)
-cd /path/to/corvus && docker compose up -d     # démarrer Corvus avec les montages ci-dessus
-```
-
-Dans la console, ouvrez *Importer depuis NPM*, conservez **SQLite**, cliquez sur *Aperçu*, choisissez ce
-qu'il faut importer et cliquez sur *Importer la sélection*. Si l'aperçu signale `permission denied`, rendez
-les fichiers lisibles pour Corvus (il tourne sous l'uid 10001) : `sudo chmod o+rx /path/to/npm/data && sudo chmod o+r /path/to/npm/data/database.sqlite`.
-
-#### NPM avec MySQL / MariaDB
-
-Corvus doit pouvoir joindre la base de données de NPM pendant l'import : arrêtez donc uniquement le service
-proxy de NPM et laissez sa base de données tourner :
-
-```bash
-cd /path/to/npm && docker compose stop app     # le service NPM qui occupe 80/443 (souvent "app")
-cd /path/to/corvus && docker compose up -d
-
-# connecter Corvus au réseau Docker de NPM pour l'import
-docker network ls | grep -i npm                # p. ex. npm_default
-docker network connect npm_default $(docker compose ps -q corvus)
-```
-
-Dans *Importer depuis NPM*, choisissez **MySQL / MariaDB** et saisissez les paramètres de la base de
-données de NPM : hôte = nom du service de base de données (généralement `db`), port `3306`, ainsi que les
-valeurs de `DB_MYSQL_NAME`, `DB_MYSQL_USER` et `DB_MYSQL_PASSWORD`. La connexion est en lecture seule et le
-mot de passe n'est pas enregistré. Puis *Aperçu* → *Importer la sélection*.
-
-Une fois l'import terminé :
-
-```bash
-docker network disconnect npm_default $(docker compose ps -q corvus)
-cd /path/to/npm && docker compose down         # arrêter aussi la base de données de NPM
-```
-
-#### Après l'import
-
-- Vérifiez les hôtes importés, puis supprimez `CORVUS_IMPORT_DIR` et les deux montages `/import` et
-  relancez `docker compose up -d`.
-- Les certificats continuent d'être renouvelés dans Corvus. Les hôtes qui utilisaient un fournisseur DNS non
-  pris en charge sont importés sans renouvellement automatique — l'aperçu le signale.
-- **Revenir en arrière :** `docker compose down` dans Corvus, puis `docker compose up -d` dans NPM.
+Sur le traitement de base des requêtes, Corvus atteint environ les trois quarts du débit de nginx seul
+(pools de connexions keep-alive vers l'upstream, journal d'accès regroupé par worker) ; l'ensemble complet
+de protections — 30 règles avec une liste de 1,000 CIDR, blocage des exploits, en-têtes de sécurité et limite
+de débit — coûte environ 28 % de plus. **Mise en garde :**
+il s'agit d'un runner CI partagé, avec le générateur de charge sur la même machine et des réponses minuscules —
+les chiffres sont prudents et servent à comparer des scénarios et des versions, pas à garantir une capacité.
+La mémoire inclut le plan de contrôle et le Valkey intégré.
 
 ## Développement
 

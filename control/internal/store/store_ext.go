@@ -318,6 +318,20 @@ func (s *Store) UpdateCertificateState(ctx context.Context, id int64, status, la
 	return err
 }
 
+// ReplaceCustomCertificate records a new certificate/key pair for an uploaded
+// certificate (same ID, so hosts keep using it). ACME certificates are not touched.
+func (s *Store) ReplaceCustomCertificate(ctx context.Context, id int64, name string, domains []string, notAfter time.Time) error {
+	res, err := s.q.ExecContext(ctx, `UPDATE certificates SET name=?, domains=?, not_after=?, status='valid', last_error='' WHERE id=? AND kind='custom'`,
+		name, toJSON(domains), notAfter.UTC(), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) SetCertificateStatus(ctx context.Context, id int64, status, lastError string) error {
 	_, err := s.q.ExecContext(ctx, `UPDATE certificates SET status=?, last_error=? WHERE id=?`, status, lastError, id)
 	return err
@@ -365,6 +379,17 @@ func (s *Store) SetMFA(ctx context.Context, userID int64, enabled bool, recovery
 	}
 	_, err := s.q.ExecContext(ctx, `UPDATE users SET mfa_enabled = ?, recovery_codes = ?`+secretSQL+` WHERE id = ?`, b2i(enabled), toJSON(recoveryHashes), userID)
 	return err
+}
+
+// ReplaceRecoveryCodes stores hashes only when the stored value is still old (compare and
+// swap); it reports whether it did.
+func (s *Store) ReplaceRecoveryCodes(ctx context.Context, userID int64, old string, hashes []string) (bool, error) {
+	res, err := s.q.ExecContext(ctx, `UPDATE users SET recovery_codes = ? WHERE id = ? AND recovery_codes = ?`, toJSON(hashes), userID, old)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
 }
 
 func (s *Store) SetRecoveryCodes(ctx context.Context, userID int64, hashes []string) error {
@@ -426,6 +451,35 @@ func (s *Store) CountActiveAdmins(ctx context.Context, exceptID int64) (int, err
 	var n int
 	err := s.q.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE role = 'admin' AND disabled = 0 AND id <> ?`, exceptID).Scan(&n)
 	return n, err
+}
+
+// ErrLastAdmin: the change would leave no active administrator.
+var ErrLastAdmin = errors.New("at least one active administrator is required")
+
+// KeepingAdmin runs fn in a transaction and rolls it back when no active administrator
+// remains afterwards. The administrator rows are locked first (PostgreSQL; SQLite has a
+// single writer), so two changes at the same time cannot both remove "the other" admin.
+func (s *Store) KeepingAdmin(ctx context.Context, fn func(tx *Store) error) error {
+	return s.WithTx(ctx, func(tx *Store) error {
+		if tx.dialect == Postgres {
+			rows, err := tx.q.QueryContext(ctx, `SELECT id FROM users WHERE role = 'admin' AND disabled = 0 FOR UPDATE`)
+			if err != nil {
+				return err
+			}
+			rows.Close()
+		}
+		if err := fn(tx); err != nil {
+			return err
+		}
+		n, err := tx.CountActiveAdmins(ctx, 0)
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return ErrLastAdmin
+		}
+		return nil
+	})
 }
 
 // ClaimTOTPStep atomically records step as the user's last used TOTP step. It returns

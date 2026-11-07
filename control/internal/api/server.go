@@ -25,6 +25,8 @@ import (
 	"corvus/control/internal/live"
 	"corvus/control/internal/store"
 	"corvus/control/internal/traffic"
+	"corvus/control/internal/underattack"
+	"corvus/control/internal/update"
 	"corvus/control/internal/validate"
 )
 
@@ -37,7 +39,9 @@ type Server struct {
 	Limiter      *auth.Limiter
 	UI           http.Handler
 	SecureCookie bool
+	Proxies      *ConsoleProxies // who may report the visitor address (nil = nobody)
 	Version      string
+	Updates      *update.Checker // nil when update checks are off
 	Traffic      *traffic.Collector
 	Gateway      func() (running bool, since time.Time) // nil when running without a gateway
 	ACME         ACMEService
@@ -48,8 +52,10 @@ type Server struct {
 	Alerts       *alerts.Engine
 	GeoIP        GeoIPService // country database for security rules (nil = unavailable)
 	AutoBan      *autoban.Service
+	UnderAttack  *underattack.Service // automatic under-attack mode (nil = unavailable)
 	History      *history.Service
 	Rules        RulesService
+	Feeds        ListFeeds // URL-fed lists (nil = unavailable)
 	allow        allowCache
 	ssoRT        ssoRuntime // OIDC sign-in flows + provider cache (sso.go)
 }
@@ -96,12 +102,20 @@ func (s *Server) Handler() http.Handler {
 	priv("GET /api/proxy-hosts/{id}", s.getProxyHost)
 	op("PUT /api/proxy-hosts/{id}", s.updateProxyHost)
 	op("DELETE /api/proxy-hosts/{id}", s.deleteProxyHost)
+	op("POST /api/proxy-hosts/{id}/under-attack/deactivate", s.deactivateUnderAttack)
+	priv("GET /api/under-attack", s.listUnderAttack)
 
 	priv("GET /api/redirection-hosts", s.listRedirectionHosts)
 	op("POST /api/redirection-hosts", s.createRedirectionHost)
 	priv("GET /api/redirection-hosts/{id}", s.getRedirectionHost)
 	op("PUT /api/redirection-hosts/{id}", s.updateRedirectionHost)
 	op("DELETE /api/redirection-hosts/{id}", s.deleteRedirectionHost)
+
+	priv("GET /api/streams", s.listStreams)
+	op("POST /api/streams", s.createStream)
+	priv("GET /api/streams/{id}", s.getStream)
+	op("PUT /api/streams/{id}", s.updateStream)
+	op("DELETE /api/streams/{id}", s.deleteStream)
 
 	priv("GET /api/waitrooms", s.listWaitrooms)
 	op("POST /api/waitrooms", s.createWaitroom)
@@ -111,6 +125,7 @@ func (s *Server) Handler() http.Handler {
 
 	priv("GET /api/certificates", s.listCertificates)
 	op("POST /api/certificates", s.uploadCertificate)
+	op("PUT /api/certificates/{id}", s.replaceCertificate)
 	op("DELETE /api/certificates/{id}", s.deleteCertificate)
 
 	priv("GET /api/deployments", s.listDeployments)
@@ -158,9 +173,11 @@ func (s *Server) Handler() http.Handler {
 	priv("GET /api/settings/pages", s.getPages) // custom block / error pages (pages.go)
 	op("PUT /api/settings/pages/{page}", s.putPage)
 	op("POST /api/settings/pages/{page}/reset", s.putPage)
+	op("PUT /api/settings/unknown-hosts", s.putUnknownHosts)
 	priv("GET /api/ip-lists", s.listIPLists)
 	op("POST /api/ip-lists", s.createIPList)
 	op("PUT /api/ip-lists/{id}", s.updateIPList)
+	op("POST /api/ip-lists/{id}/refresh", s.refreshIPList)
 	op("DELETE /api/ip-lists/{id}", s.deleteIPList)
 
 	priv("GET /api/access-lists", s.listAccessLists)
@@ -182,6 +199,10 @@ func (s *Server) Handler() http.Handler {
 	op("POST /api/certificates/acme", s.issueACME)
 	priv("GET /api/acme/dns-providers", s.dnsProviders)
 	op("POST /api/certificates/{id}/renew", s.renewACME)
+	priv("GET /api/dns-credentials", s.listDNSCredentials) // dns_credentials.go
+	op("POST /api/dns-credentials", s.createDNSCredential)
+	op("PUT /api/dns-credentials/{id}", s.updateDNSCredential)
+	op("DELETE /api/dns-credentials/{id}", s.deleteDNSCredential)
 
 	priv("POST /api/auth/mfa/setup", s.mfaSetup)
 	priv("POST /api/auth/mfa/enable", s.mfaEnable)
@@ -222,7 +243,7 @@ func (s *Server) Handler() http.Handler {
 	if s.UI != nil {
 		mux.Handle("/", s.UI)
 	}
-	return securityHeaders(s.adminAllow(s.csrf(mux)))
+	return securityHeaders(s.realIP(s.adminAllow(s.csrf(mux))))
 }
 
 // ------------------------------------------------------------------ middleware
@@ -415,13 +436,15 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		fail(w, verr)
 		return
 	}
-	if !s.Setup.Consume(strings.TrimSpace(in.Token)) {
+	token := strings.TrimSpace(in.Token)
+	if !s.Setup.Consume(token) {
 		s.Limiter.Fail(ip)
 		writeErr(w, http.StatusForbidden, "invalid_token", "invalid setup token (see the corvus container logs)")
 		return
 	}
 	u, err := s.Store.CreateUser(r.Context(), in.Email, strings.TrimSpace(in.Name), hash, "admin")
 	if err != nil {
+		s.Setup.Restore(token) // nothing was created: the same token can be used again
 		fail(w, err)
 		return
 	}
@@ -473,6 +496,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Limiter.Reset(ip)
+	s.AcctLimiter.Reset(acct) // earlier failures no longer count against the account
 	if err := s.setSession(w, r, u); err != nil {
 		fail(w, err)
 		return

@@ -7,7 +7,7 @@ export const koUsers = {
   editUser: "사용자 편집", userSheetDesc: "계정 정보와 역할을 설정합니다.", initialPassword: "초기 비밀번호", generatePassword: "자동 생성", copyPassword: "복사",
   initialPasswordHint: "10자 이상. 사용자에게 안전하게 전달하고 첫 로그인 후 변경하도록 안내하세요.", passwordKeepBlank: "비워 두면 기존 비밀번호를 유지합니다",
   roleSelf: "본인의 역할은 변경할 수 없습니다.", userSaved: "사용자를 저장했습니다", userDeletedToast: "사용자를 삭제했습니다",
-  resetPassword: "비밀번호 재설정", resetPasswordDesc: "새 비밀번호를 설정하면 해당 사용자의 모든 세션이 즉시 종료됩니다.", passwordResetDone: "비밀번호를 재설정했습니다",
+  resetPassword: "비밀번호 재설정", resetPasswordDesc: "새 비밀번호를 설정하면 해당 사용자의 모든 세션이 즉시 종료되고 API 토큰도 삭제됩니다.", passwordResetDone: "비밀번호를 재설정했습니다",
   resetMfa: "MFA 초기화", resetMfaTitle: "2단계 인증을 초기화할까요?", resetMfaDesc: "대상 사용자의 2단계 인증이 해제됩니다. 사용자는 다시 설정해야 합니다.", mfaResetDone: "MFA를 초기화했습니다",
   disableUser: "비활성화", enableUser: "활성화", userDisabledToast: "사용자를 비활성화했습니다", userEnabledToast: "사용자를 활성화했습니다",
   disableUserDesc: "비활성화하면 로그인할 수 없고 현재 세션이 즉시 종료됩니다.", deleteUser: "삭제", deleteUserTitle: "사용자 삭제", deleteUserDesc: "계정이 영구 삭제됩니다. 감사 로그는 유지됩니다.",

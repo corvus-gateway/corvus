@@ -11,7 +11,7 @@ import (
 
 // securityKinds are traffic events that count as security detections — including
 // "log only" ones, so repeated anomalies are reported even when nothing is blocked.
-var securityKinds = []string{"blocked_exploit", "exploit_detected", "blocked_rule", "rule_logged", "blocked_body", "body_detected"}
+var securityKinds = []string{"blocked_exploit", "exploit_detected", "blocked_rule", "blocked_body", "body_detected"}
 
 const maxSourceFindings = 5 // per rule and evaluation, to avoid alert floods
 

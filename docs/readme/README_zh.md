@@ -29,8 +29,10 @@
 
 Corvus 是部署在您的 Web 服务前端的自托管网关。它与 Nginx Proxy Manager 一样易于运行——只需点几下即可配置域名、转发和免费 SSL——同时还能对流经的流量进行**监视、防护和管控**：实时监控、攻击拦截、速率限制，以及应对流量高峰的访问排队。一切都运行在您自己的服务器上，不会有任何流量发送到第三方云。
 
+<p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
+
 - [快速安装](#快速安装)
-- [完整安装](#完整安装)
+- [文档](https://corvus-gateway.github.io/corvus/)
 - [截图](#截图)
 
 ## 项目目标
@@ -43,16 +45,27 @@ Corvus 不是 Nginx Proxy Manager 的分支。它是全新的实现（OpenResty 
 
 **代理与 TLS**
 - 代理主机支持通配符、WebSocket、HTTP/2、强制 HTTPS 以及自定义 Nginx 片段
-- 免费的 Let's Encrypt 证书（HTTP-01，或DNS-01：Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap），自动续期，也可上传自有证书
+- 为主机和流添加备注，记下每一项的用途（可搜索）
+- 自定义位置：按路径（如 `/api`）转发到不同的上游，并保留主机的全部防护
+- 重定向主机：将域名跳转到另一个域名（301/302/303/307/308，可选保留路径），同样享有 TLS 与防护
+- 免费的 Let's Encrypt 证书（HTTP-01，或DNS-01：Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap，服务商凭据保存后可重复使用），自动续期，也可上传自有证书（续期后可原地替换）
+- 流转发：将 TCP/UDP 端口（数据库、SSH、MQTT、游戏服务器）转发到其他主机，TCP 可选 TLS 终止
+- 未知主机名可选择返回 404 页面、关闭连接或重定向
 - 在 Cloudflare 或受信任代理之后获取真实客户端 IP；可按主机启用密码保护
+- 按主机设置安全响应头预设（基础 / 严格：nosniff、frame 与 referrer 策略、仅报告的 CSP、HttpOnly/SameSite/Secure Cookie 标志），绝不覆盖应用自身已发送的响应头
+- 文本响应的 Gzip 压缩（默认开启），以及按主机设置的上传大小限制和上游超时
 - 每次变更都会通过 `openresty -t` 验证，原子化应用，并且可以回滚
+- 有新的 Corvus 版本发布时，控制台会提示并链接到发布说明（可关闭）
 
 **Corvus Sentinel — 安全引擎**
-- 安全规则：匹配 IP、IP 列表、国家/地区、路径、查询参数、方法或请求头 → 拦截、放行或仅记录，可全局生效或按主机生效
+- 安全规则：匹配 IP、IP 列表、国家/地区、路径、查询参数、方法、请求头或 User-Agent 列表 → 拦截、放行、仅记录或质询，可全局生效或按主机生效
+- 从 URL 保持更新的 IP 列表和 User-Agent 列表（例如 Tor 出口节点、恶意爬虫列表；内置预设），在后台刷新，仅在内容变化时重新部署
+- 无需第三方服务的浏览器质询：JavaScript 工作量证明（难度可调）或轻量级 Cookie 检查，并签发经签名、与 IP 绑定的通行 Cookie
+- 按主机的“遭受攻击模式”：对所有访客发起质询——可手动开启，也可在每秒请求数或被拦截请求的比例超过阈值期间自动开启（开启和关闭时发送告警）
 - 对 JSON、表单和 multipart 请求体进行检测（记录或拦截）
 - 针对近期 CVE（React2Shell、wp2shell、PHP-CGI、Vite、n8n 等）的一键**虚拟补丁**
 - 托管特征库更新，仅接受已签名且版本更新的内容（防篡改、防降级）
-- 对屡次攻击的 IP 自动封禁，支持逐级升级与豁免
+- 对屡次攻击的 IP 自动封禁，支持逐级升级与豁免；可选对不良行为立即封禁（同一 IP 在同一站点产生过多 4xx 响应）
 - 带演练（dry-run）模式的速率限制；开箱即用的漏洞利用路径拦截
 
 **访问排队**
@@ -107,7 +120,7 @@ services:
 ```
 
 这就是全部安装内容：网关、管理控制台和访问队列存储都运行在这一个容器中。更多选项请参见
-[完整安装](#完整安装)。
+[文档](https://corvus-gateway.github.io/corvus/)。
 
 3. 运行以下命令启动服务：
 
@@ -136,140 +149,31 @@ docker compose up -d
 
 `./data` 中的设置、证书和历史记录都会保留；数据库变更会在启动时自动应用。
 
-## 完整安装
+## 文档
 
-### 端口
+配置、加固安装、目标主机、流、备份、从 Nginx Proxy Manager 迁移、安全规则、访问队列和故障排查，
+请参见 **[文档](https://corvus-gateway.github.io/corvus/)**(英文、韩文)。
 
-| 端口 | 用途 |
-|---|---|
-| 80 / 443 | 网关——代理流量 |
-| 9443 | 管理控制台与 API——仅允许受信任的网络访问（防火墙，或 *网络 → 允许访问管理控制台的网络*） |
+## 性能
 
-### 数据与备份
+使用 [基准测试工作流](../benchmark.md) 在 GitHub 托管的 `ubuntu-24.04` 运行器（4 vCPU AMD EPYC 9V45）上测得：
+Corvus 绑定到 **2 vCPU**，wrk 和后端运行在另外两个 vCPU 上，64 个 keep-alive 连接，请求 `GET /`，响应为 3 字节。
 
-所有状态都保存在 `./data` 中：设置数据库、生成的配置历史、证书、流量历史和 `secrets/`。
-**请备份 `secrets/`**——其中保存着用于加密数据库中 MFA 密钥和 DNS 令牌的密钥。容器以非特权用户
-`10001` 运行，并在首次启动时接管 `./data` 的所有权。
+| 场景 | req/s | p50 | p99 | 内存 |
+|---|---:|---:|---:|---:|
+| nginx 1.28 反向代理（基线） | 97,227 | 0.63 ms | 1.16 ms | 17 MB |
+| Corvus，默认主机 | 75,473 | 0.79 ms | 1.83 ms | 72 MB |
+| Corvus，30 条规则 + 1,000 个 CIDR 的列表 + 漏洞利用拦截 + 响应头 + 速率限制 | 54,585 | 1.12 ms | 2.29 ms | 77 MB |
+| Corvus，HTTPS（ECDSA P-256），keep-alive | 59,697 | 1.00 ms | 2.18 ms | 80 MB |
+| Corvus，HTTPS，每个请求都进行新的 TLS 握手 | 4,348 handshakes/s | 5.88 ms | 11.62 ms | 88 MB |
+| Corvus，访问排队（已放行的访客） | 57,954 | 1.05 ms | 2.22 ms | 84 MB |
+| Corvus，质询规则（持有通行 Cookie 的访客） | 62,901 | 0.96 ms | 1.94 ms | 88 MB |
 
-### 加固安装
-
-[`deploy/docker-compose.hardened.yml`](../../deploy/docker-compose.hardened.yml) 使用相同的镜像运行，但根文件系统为只读，
-不授予任何 Linux capability，也禁止提权。请先为用户 `10001` 创建数据目录：
-
-```bash
-mkdir -p data && sudo chown 10001:10001 data
-docker compose -f docker-compose.hardened.yml up -d
-```
-
-### 配置
-
-在 `docker-compose.yml` 的 `environment:` 下设置这些变量。
-
-| 变量 | 说明 |
-|---|---|
-| `CORVUS_ADMIN_HOSTS` | 管理控制台证书的额外名称/IP，例如 `corvus.example.com,203.0.113.10` |
-| `CORVUS_DB_URL` | 使用 PostgreSQL 代替 SQLite，例如 `postgres://corvus:…@db:5432/corvus` |
-| `CORVUS_REDIS_HOST` | 为访问队列使用外部 Redis/Valkey（多个网关共享同一个队列）；需配合 `CORVUS_REDIS_PASSWORD`。默认：内置 |
-| `CORVUS_IMPORT_DIR` | 包含只读 NPM 卷的目录，用于 *从 NPM 导入* |
-| `CORVUS_RULES_URL` | 已签名托管规则包的 URL（可选） |
-| `CORVUS_ADMIN_ALLOW_ANY=1` | 因管理员允许列表而无法访问时使用的恢复开关 |
-| `CORVUS_REDIS_PORT` | 内置访问队列存储在 127.0.0.1 上的端口（默认 `6379`）；使用 `network_mode: host` 且主机已占用 6379 时请修改 |
-| `CORVUS_RESOLVER` | 用于解析转发目标主机的 DNS 服务器。默认：Docker 的 DNS；使用主机网络时为 `/etc/resolv.conf` 中的第一个 `nameserver` |
-| `CORVUS_LOOPBACK=container` | 让 `127.0.0.1`/`localhost` 转发目标指向容器自身，而不是 Docker 主机 |
-
-### 转发目标主机
-
-代理主机可以转发到：
-
-- **另一个容器**，按名称指定，例如 `xoshop-web` 端口 `80`——Corvus 必须与其共享一个 Docker 网络
-  （将该网络添加到 `corvus` 服务）；
-- **私有或公网 IP**，例如 `10.3.2.39` 端口 `8084`；
-- **Docker 主机本身上的服务**，与 NPM 一样使用 `127.0.0.1` 或 `localhost`。在容器内，这些地址指的是
-  Docker 主机，因此无需 `host.docker.internal`。该服务必须监听容器可访问的地址（`0.0.0.0` 或 Docker
-  网桥，而不仅仅是 `127.0.0.1`），并且主机防火墙必须允许来自 Docker 网络的连接。
-
-如需访问只监听主机 `127.0.0.1` 的服务，或希望原样保留使用 `network_mode: host` 的 NPM 配置，请以主机网络
-运行 Corvus：将 `ports:` 和 `networks:` 替换为 `network_mode: host`（如果主机上 6379 已被占用，还需设置
-`CORVUS_REDIS_PORT`）。
-
-### 从 Nginx Proxy Manager 迁移
-
-控制台中的 *从 NPM 导入* 会从现有的 NPM 安装中复制 **代理主机、证书**（Let's Encrypt 证书和自定义证书，
-包括 Cloudflare DNS 令牌）以及 **访问列表**（用户和 IP 规则）。它只读取 NPM 的文件和数据库，不会修改 NPM
-本身，因此随时可以切换回去。
-
-不会导入的内容：流（TCP/UDP）、重定向主机、404 主机、自定义位置，以及使用 NPM 专有变量的高级配置。
-所有被跳过的项目都会在预览中列出。
-
-**先确认你的 NPM 使用哪种数据库。** 打开 NPM 的 `docker-compose.yml`：
-
-- 没有 `DB_MYSQL_*` / `DB_POSTGRES_*` 变量，且存在 `data/database.sqlite` → **SQLite**（NPM 默认）
-- 有 `DB_MYSQL_HOST`、`DB_MYSQL_USER`、…，通常还有一个单独的 `db` 服务 → **MySQL / MariaDB**
-- `DB_POSTGRES_*` → 导入不支持 PostgreSQL，请在控制台中重新创建主机
-
-两种情况都需要将 NPM 的 `data` 和 `letsencrypt` 目录以只读方式挂载到 Corvus 中（证书文件位于其中）：
-
-```yml
-services:
-  corvus:
-    image: 'ghcr.io/corvus-gateway/gateway:latest'
-    restart: unless-stopped
-    ports:
-      - '80:80'
-      - '443:443'
-      - '9443:9443'
-    environment:
-      CORVUS_IMPORT_DIR: /import
-    volumes:
-      - ./data:/data
-      - /path/to/npm/data:/import/npm/data:ro
-      - /path/to/npm/letsencrypt:/import/npm/letsencrypt:ro
-```
-
-请使用 NPM 的 `./data` 和 `./letsencrypt` 卷在宿主机上的路径。NPM 和 Corvus 都需要 80/443 端口，
-因此不能同时运行。
-
-#### 使用 SQLite 的 NPM（默认）
-
-```bash
-cd /path/to/npm && docker compose down        # 停止 NPM（释放 80/443）
-cd /path/to/corvus && docker compose up -d     # 使用上述挂载启动 Corvus
-```
-
-在控制台中打开 *从 NPM 导入*，保持 **SQLite**，点击 *预览*，选择要导入的内容后点击 *导入所选项*。
-如果预览报告 `permission denied`，请让 Corvus（以 uid 10001 运行）能够读取这些文件：`sudo chmod o+rx /path/to/npm/data && sudo chmod o+r /path/to/npm/data/database.sqlite`。
-
-#### 使用 MySQL / MariaDB 的 NPM
-
-导入期间 Corvus 需要连接 NPM 的数据库，因此只停止 NPM 的代理服务，保持其数据库继续运行：
-
-```bash
-cd /path/to/npm && docker compose stop app     # 占用 80/443 的 NPM 服务（通常为 "app"）
-cd /path/to/corvus && docker compose up -d
-
-# 为导入将 Corvus 连接到 NPM 的 Docker 网络
-docker network ls | grep -i npm                # 例如 npm_default
-docker network connect npm_default $(docker compose ps -q corvus)
-```
-
-在 *从 NPM 导入* 中选择 **MySQL / MariaDB**，并填写 NPM 的数据库设置：主机 = 数据库服务名（通常为 `db`），
-端口 `3306`，以及 `DB_MYSQL_NAME`、`DB_MYSQL_USER` 和 `DB_MYSQL_PASSWORD` 的值。连接为只读，密码不会被
-保存。然后依次点击 *预览* → *导入所选项*。
-
-导入完成后：
-
-```bash
-docker network disconnect npm_default $(docker compose ps -q corvus)
-cd /path/to/npm && docker compose down         # 同时停止 NPM 的数据库
-```
-
-#### 导入之后
-
-- 检查导入的主机，然后删除 `CORVUS_IMPORT_DIR` 和两个 `/import` 挂载，再次运行
-  `docker compose up -d`。
-- 证书会继续在 Corvus 中续期。使用了不受支持的 DNS 提供商的主机会在没有自动续期的情况下导入，预览中
-  会对此发出警告。
-- **切换回去：** 在 Corvus 中执行 `docker compose down`，然后在 NPM 中执行 `docker compose up -d`。
+在基础请求路径上，Corvus 可达到原生 nginx 约四分之三的吞吐量（到上游的 keep-alive 连接池、按 worker
+批量发送的访问日志）；启用完整防护（含 1,000 个 CIDR 列表的 30 条规则、漏洞利用拦截、安全响应头和速率
+限制）后，在此基础上再降低约 28 %。**注意：** 测试使用的是共享 CI 运行器，负载生成器
+与被测服务在同一台机器上，且响应极小——这些数字偏保守，用于比较不同场景和版本，而非容量保证。内存包括
+控制平面和内置的 Valkey。
 
 ## 开发
 

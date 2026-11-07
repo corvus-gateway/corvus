@@ -85,6 +85,7 @@ type Service struct {
 	lines   chan []byte
 	dropped atomic.Int64
 	mode    atomic.Value // string: current log mode (read on the hot path)
+	openLog atomic.Value // string: path of the day file writeLogs is appending to
 
 	mu       sync.Mutex
 	coarseAt int64 // last persisted bucket start
@@ -186,7 +187,8 @@ func (s *Service) Restore(ctx context.Context, now time.Time) {
 	s.ruleSeq = s.Collector.RestoreRuleEvents(rules)
 	if len(rows) > 0 {
 		for _, r := range rows {
-			if r.Start > s.coarseAt {
+			// a bucket saved unfinished at shutdown is flushed again once it is complete
+			if r.Start > s.coarseAt && r.Start+traffic.CoarseStep <= now.Unix() {
 				s.coarseAt = r.Start
 			}
 		}
@@ -235,8 +237,13 @@ func (s *Service) Sink(r *traffic.Record, notable bool) {
 }
 
 // Run flushes statistics/events every minute, writes logs and enforces retention.
+//
+// When ctx ends it writes the request lines still queued, saves the statistics of the
+// current (unfinished) bucket too, closes the database and returns; callers wait for it
+// so a restart or upgrade does not lose the last minutes.
 func (s *Service) Run(ctx context.Context) {
-	go s.writeLogs(ctx)
+	logsDone := make(chan struct{})
+	go func() { s.writeLogs(ctx); close(logsDone) }()
 	flush := time.NewTicker(time.Minute)
 	defer flush.Stop()
 	clean := time.NewTicker(time.Hour)
@@ -245,7 +252,9 @@ func (s *Service) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			s.flush(context.Background(), time.Now())
+			<-logsDone
+			// including the current bucket: Restore loads it back and keeps adding to it
+			s.flush(context.Background(), time.Now().Add(traffic.CoarseStep*time.Second))
 			s.db.Close()
 			return
 		case now := <-flush.C:
@@ -330,12 +339,25 @@ func (s *Service) writeLogs(ctx context.Context) {
 		}
 		w = bufio.NewWriterSize(f, 256<<10)
 		day = d
+		s.openLog.Store(f.Name())
 	}
 	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()
 	for {
 		select {
 		case <-ctx.Done():
+			for drained := false; !drained; {
+				select {
+				case line := <-s.lines:
+					open(time.Now())
+					if f != nil {
+						w.Write(line)
+						w.WriteByte('\n')
+					}
+				default:
+					drained = true
+				}
+			}
 			if f != nil {
 				w.Flush()
 				f.Close()
@@ -358,8 +380,17 @@ func (s *Service) writeLogs(ctx context.Context) {
 	}
 }
 
+// compressMu serialises compression: the midnight rotation, the hourly cleanup and a
+// retention change may pick the same file, and two writers of one .gz.tmp corrupt it.
+var compressMu sync.Mutex
+
 // compress gzips a finished day file and removes the original.
 func compress(path string) {
+	compressMu.Lock()
+	defer compressMu.Unlock()
+	if _, err := os.Stat(path); err != nil {
+		return // already compressed by an earlier call
+	}
 	in, err := os.Open(path)
 	if err != nil {
 		return
@@ -457,8 +488,9 @@ func (s *Service) cleanup(ctx context.Context, now time.Time) {
 		m := logName.FindStringSubmatch(a.Name)
 		if m[1] < cutDay {
 			os.Remove(filepath.Join(s.logDir(), a.Name))
-		} else if m[2] == "" && m[1] < today {
-			compress(filepath.Join(s.logDir(), a.Name))
+		} else if p := filepath.Join(s.logDir(), a.Name); m[2] == "" && m[1] < today && p != s.openLog.Load() {
+			// not the file still being written (just after midnight, before rotation)
+			compress(p)
 		}
 	}
 	arch := s.Archives()

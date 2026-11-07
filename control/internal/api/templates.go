@@ -82,15 +82,15 @@ func (s *Server) ruleFromTemplate(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		listOK := map[int64]bool{}
+		listKind := map[int64]string{}
 		for _, l := range lists {
-			listOK[l.ID] = true
+			listKind[l.ID] = l.Kind
 		}
 		hostOK := map[int64]bool{}
 		for _, h := range hosts {
 			hostOK[h.ID] = true
 		}
-		if err := validate.SecurityRule(&rule, func(id int64) bool { return listOK[id] }, func(id int64) bool { return hostOK[id] }); err != nil {
+		if err := validate.SecurityRule(&rule, func(id int64) string { return listKind[id] }, func(id int64) bool { return hostOK[id] }); err != nil {
 			return err
 		}
 		return tx.SaveSecurityRule(r.Context(), &rule)

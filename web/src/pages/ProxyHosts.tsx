@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Loader2, ArrowRight, Copy, Globe, Lock, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2, Users, Zap, Gauge, KeyRound, ExternalLink, UserPlus, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, Loader2, ArrowRight, Copy, Globe, Lock, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2, Users, Zap, Gauge, KeyRound, ExternalLink, UserPlus, X, Siren, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
-import { api, type AccessList, type Certificate, type ClientIPMode, type ProxyHost, type RateLimit, type SecurityHeaders, type Waitroom } from "../api";
+import { api, type AccessList, type Certificate, type ClientIPMode, type ProxyHost, type RateLimit, type SecurityHeaders, type UnderAttackStatus, type Waitroom } from "../api";
+import { UnderAttackFields, uaConfig, UA_DEFAULTS } from "../components/UnderAttackFields";
+import { LocationsFields } from "../components/LocationsFields";
+import { NoteLine, NotesSection, notesMatch } from "../components/NotesField";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
 import { Button, IconButton } from "../components/ui/button";
-import { Badge, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
+import { Badge, Callout, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
 import { Field, FormSection, IdField, Input, NumberInput, Segmented, Select, SearchInput, Switch, SwitchRow, TagInput, Textarea, fieldErr } from "../components/ui/form";
 import { ConfirmDialog, RowMenu, Sheet, Tip } from "../components/ui/overlay";
+import { servesConsole } from "../locales/consolehost.i18n";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
 import { useResource } from "../hooks/useResource";
 import { useCan } from "../lib/rbac";
 import { useI18n } from "../i18n";
 import { useDnsProviders } from "../hooks/useDnsProviders";
-import { DnsFields } from "../components/DnsFields";
+import { DnsFields, dnsRequest, newDnsChoice, type DnsChoice } from "../components/DnsFields";
 import { useApp } from "../lib/app";
 import { cn, relTime } from "../lib/utils";
 
@@ -23,7 +27,7 @@ const authFrom = (h?: ProxyHost): BasicAuthForm => {
   return { enabled: users.length > 0, users };
 };
 
-interface CertReq { email: string; dns: boolean; provider: string; creds: string; staging: boolean; agree: boolean }
+interface CertReq { email: string; dns: boolean; dnsc: DnsChoice; staging: boolean; agree: boolean }
 
 type Form = Omit<ProxyHost, "id" | "created_at" | "updated_at">;
 
@@ -32,11 +36,13 @@ const blank: Form = {
   ssl_forced: false, http2: true, waitroom_id: null, waitroom_path: "/", advanced_config: "", enabled: true,
   client_ip: "direct", rate_limit_id: null, access_list_id: null, block_exploits: true,
   body_inspection: "log", body_max_kb: 1024, security_headers: "off",
+  max_upload_mb: null, upstream_timeout_s: null, gzip: true, notes: "",
+  under_attack: "off", under_attack_config: { ...UA_DEFAULTS }, locations: [],
 };
 
 function toForm(h: ProxyHost): Form {
   const { id: _i, created_at: _c, updated_at: _u, ...rest } = h;
-  return { ...blank, ...rest };
+  return { ...blank, ...rest, under_attack: rest.under_attack ?? "off", under_attack_config: uaConfig(rest.under_attack_config), locations: rest.locations ?? [] };
 }
 
 export default function ProxyHosts() {
@@ -51,6 +57,8 @@ export default function ProxyHosts() {
   const rooms = useResource<Waitroom[]>("/api/waitrooms");
   const limits = useResource<RateLimit[]>("/api/rate-limits");
   const lists = useResource<AccessList[]>("/api/access-lists");
+  const ua = useResource<UnderAttackStatus[]>("/api/under-attack", { poll: 10000 });
+  const uaOf = (id: number | null | undefined) => ua.data?.find((s) => s.host_id === id);
 
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<{ id: number | null; form: Form; req: CertReq | null; auth: BasicAuthForm } | null>(null);
@@ -69,17 +77,20 @@ export default function ProxyHosts() {
   const showExploits = has("block_exploits");
   const showBody = has("body_inspection");
   const showHeaders = has("security_headers");
+  const showUA = has("under_attack");
+  const showLocations = has("locations");
+  const showTuning = has("gzip");
   const showLimits = !limits.missing && has("rate_limit_id");
   const showLists = !lists.missing && has("access_list_id");
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return hosts.data ?? [];
-    return (hosts.data ?? []).filter((h) => h.domains.some((d) => d.toLowerCase().includes(s)) || `${h.forward_host}:${h.forward_port}`.includes(s));
+    return (hosts.data ?? []).filter((h) => h.domains.some((d) => d.toLowerCase().includes(s)) || `${h.forward_host}:${h.forward_port}`.includes(s) || notesMatch(h.notes, s));
   }, [hosts.data, q]);
 
   const open = (h?: ProxyHost) => { setError(null); setEditing({ id: h?.id ?? null, form: h ? toForm(h) : { ...blank }, req: null, auth: authFrom(h) }); };
-  const newReq = (): CertReq => ({ email: user.email, dns: false, provider: providers[0].id, creds: providers[0].credentials_template, staging: false, agree: false });
+  const newReq = (): CertReq => ({ email: user.email, dns: false, dnsc: newDnsChoice(providers[0]), staging: false, agree: false });
 
   const save = async () => {
     if (!editing) return;
@@ -91,22 +102,32 @@ export default function ProxyHosts() {
     if (req) {
       const dns = wildcard || req.dns;
       body.certificate_id = null;
-      body.certificate_request = { email: req.email, dns_challenge: dns, dns_provider: req.provider, dns_credentials: dns ? req.creds : "", staging: req.staging };
+      body.certificate_request = { email: req.email, dns_challenge: dns, staging: req.staging, ...(dns ? dnsRequest(req.dnsc) : {}) };
     }
     if (!showClientIp) { delete body.client_ip; }
     if (!showExploits) { delete body.block_exploits; }
     if (!showBody) { delete body.body_inspection; delete body.body_max_kb; }
     if (!showHeaders) { delete body.security_headers; }
+    if (!showTuning) { delete body.max_upload_mb; delete body.upstream_timeout_s; delete body.gzip; }
+    if (!showUA) { delete body.under_attack; delete body.under_attack_config; }
+    if (!showLocations) { delete body.locations; }
     if (!showLimits) { delete body.rate_limit_id; }
     if (!showLists) { delete body.basic_auth; }
     const r = await run(() => (id ? api.put(`/api/proxy-hosts/${id}`, body) : api.post("/api/proxy-hosts", body)), { success: req ? undefined : t("savedDeployed") });
     if (r !== undefined) { if (req) toast.success(t("savedIssuing")); setEditing(null); certs.reload(); hosts.reload(); window.dispatchEvent(new Event("corvus:refresh")); }
   };
 
+  const [disabling, setDisabling] = useState<ProxyHost | null>(null);
   const toggle = async (h: ProxyHost, enabled: boolean) => {
+    if (!enabled && servesConsole(h.domains) && disabling?.id !== h.id) { setDisabling(h); return; }
     const body = { ...toForm(h), enabled };
     const r = await rowAction.run(() => api.put(`/api/proxy-hosts/${h.id}`, body), { success: enabled ? t("hostEnabled") : t("hostDisabled") });
     if (r !== undefined) { hosts.reload(); window.dispatchEvent(new Event("corvus:refresh")); }
+  };
+
+  const deactivate = async (id: number) => {
+    const r = await rowAction.run(() => api.post(`/api/proxy-hosts/${id}/under-attack/deactivate`), { success: t("uaDeactivated") });
+    if (r !== undefined) { ua.reload(); window.dispatchEvent(new Event("corvus:refresh")); }
   };
 
   const remove = async () => {
@@ -116,6 +137,7 @@ export default function ProxyHosts() {
   };
 
   const f = editing?.form;
+  const editingConsole = !!editing?.id && servesConsole((hosts.data ?? []).find((x) => x.id === editing.id)?.domains ?? []);
   const set = (patch: Partial<Form>) => setEditing((e) => (e ? { ...e, form: { ...e.form, ...patch } } : e));
   const req = editing?.req ?? null;
   const setReq = (patch: Partial<CertReq>) => setEditing((e) => (e && e.req ? { ...e, req: { ...e.req, ...patch } } : e));
@@ -146,6 +168,7 @@ export default function ProxyHosts() {
               <tbody>
                 {filtered.map((h) => {
                   const cn_ = certName(h.certificate_id);
+                  const uaSt = uaOf(h.id);
                   return (
                     <Tr key={h.id}>
                       <Td>
@@ -154,11 +177,14 @@ export default function ProxyHosts() {
                             {h.domains[0]}<ExternalLink className="h-3 w-3 opacity-0 transition group-hover:opacity-70" aria-hidden />
                           </a>
                           {h.domains.length > 1 && <Tip label={h.domains.slice(1).join(", ")}><span><Badge>+{h.domains.length - 1}</Badge></span></Tip>}
+                          {uaSt?.active && <Tip label={uaSt.reason || t("uaOn")}><span><Badge tone="danger" icon={Siren}>{t("uaBadge")}</Badge></span></Tip>}
+                          {servesConsole(h.domains) && <Tip label={t("consoleHostTitle")}><span><Badge tone="info">{t("consoleHostBadge")}</Badge></span></Tip>}
                         </div>
                         <div className="mt-0.5 flex items-center gap-2 text-xs text-fg-subtle">
                           {cn_ ? <span className="inline-flex items-center gap-1"><Lock className="h-3 w-3 text-ok" aria-hidden />{cn_}</span> : <span>{t("noTls")}</span>}
                           <span className="hidden sm:inline">· {relTime(h.updated_at, lang)}</span>
                         </div>
+                        <NoteLine notes={h.notes} />
                       </Td>
                       <Td className="hidden md:table-cell">
                         <Mono className="inline-flex items-center gap-1.5 text-fg-muted"><ArrowRight className="h-3 w-3 text-fg-subtle" aria-hidden />{h.forward_scheme}://{h.forward_host}:{h.forward_port}</Mono>
@@ -172,6 +198,7 @@ export default function ProxyHosts() {
                           {h.rate_limit_id != null && <Badge tone="info" icon={Gauge}>{limitName(h.rate_limit_id) ?? "Rate limit"}</Badge>}
                           {(h.basic_auth_users?.length ?? 0) > 0 && <Badge tone="info" icon={KeyRound}>{t("basicAuthBadge")}</Badge>}
                           {h.block_exploits && <Badge tone="warn" icon={ShieldAlert}>{t("exploitShort")}</Badge>}
+                          {h.under_attack === "auto" && !uaSt?.active && <Badge icon={Siren}>{t("uaAutoArmed")}</Badge>}
                           {h.security_headers && h.security_headers !== "off" && <Badge tone="ok" icon={ShieldCheck}>{t("headersShort")} · {h.security_headers === "strict" ? t("shStrict") : t("shBasic")}</Badge>}
                           {h.client_ip && h.client_ip !== "direct" && <Badge>{h.client_ip === "cloudflare" ? "Cloudflare" : t("trustedProxiesShort")}</Badge>}
                         </div>
@@ -186,6 +213,7 @@ export default function ProxyHosts() {
                         <RowMenu items={[
                           { label: t("edit"), icon: Pencil, onSelect: () => open(h) },
                           { label: t("copyDomain"), icon: Copy, onSelect: () => { navigator.clipboard?.writeText(h.domains[0]); toast.success(t("copied")); } },
+                          ...(can && uaSt?.active && uaSt.mode === "auto" ? [{ label: t("uaDeactivate"), icon: ShieldOff, onSelect: () => deactivate(h.id) }] : []),
                           { label: t("delete"), icon: Trash2, danger: true, separatorBefore: true, onSelect: () => setDeleting(h) },
                         ]} />
                       </Td>
@@ -202,6 +230,7 @@ export default function ProxyHosts() {
         footer={<><Button onClick={() => setEditing(null)}>{t("cancel")}</Button><Button type="submit" variant="primary" loading={busy} disabled={!!noDomain || (!!req && !req.agree)}>{t("saveAndDeploy")}</Button></>}>
         {f && (<>
           {error && <div className="px-6 pt-5"><ErrorBox error={error} /></div>}
+          {editingConsole && <div className="px-6 pt-5"><Callout tone="warn" icon={AlertTriangle} title={t("consoleHostTitle")}>{t("consoleHostEdit")}</Callout></div>}
           <FormSection title={t("secDomains")}>
             <Field label={t("domains")} required hint={t("domainsHint")} error={fieldErr(error, "domains")}>
               <TagInput label={t("domains")} value={f.domains} onChange={(v) => set({ domains: v })} placeholder="shop.example.com, *.example.com" invalid={!!fieldErr(error, "domains")} />
@@ -219,6 +248,8 @@ export default function ProxyHosts() {
             </div>
             <SwitchRow label={t("websocket")} description={t("websocketDesc")} checked={f.websocket} onChange={(v) => set({ websocket: v })} />
           </FormSection>
+
+          {showLocations && <LocationsFields value={f.locations ?? []} onChange={(v) => set({ locations: v })} error={error} isAdmin={isAdmin} />}
 
           <FormSection title={t("secTls")}>
             <IdField label={t("certificate")} error={fieldErr(error, "certificate_id")}>
@@ -241,7 +272,7 @@ export default function ProxyHosts() {
                 </IdField>
                 <SwitchRow label={t("dnsChallenge")} description={wildcard ? t("dnsChallengeLocked") : t("dnsChallengeDesc")} checked={useDns} disabled={wildcard} onChange={(v) => setReq({ dns: v })} />
                 {useDns ? (
-                  <DnsFields providers={providers} provider={req.provider} creds={req.creds} onChange={(x) => setReq({ provider: x.provider, creds: x.creds })} error={fieldErr(error, "certificate_request.dns_credentials")} />
+                  <DnsFields providers={providers} value={req.dnsc} onChange={(dnsc) => setReq({ dnsc })} fieldError={(f) => fieldErr(error, `certificate_request.${f}`)} />
                 ) : <p className="text-xs leading-5 text-fg-subtle">{t("httpChallengeHint")}</p>}
                 {fieldErr(error, "certificate_request") && <p role="alert" className="text-xs text-danger">{fieldErr(error, "certificate_request")}</p>}
                 <p className="text-xs leading-5 text-fg-subtle">{t("autoRenewNote")}</p>
@@ -330,6 +361,12 @@ export default function ProxyHosts() {
             </FormSection>
           )}
 
+          {showUA && (
+            <UnderAttackFields mode={f.under_attack ?? "off"} cfg={uaConfig(f.under_attack_config)} error={error}
+              onChange={(mode, cfg) => set({ under_attack: mode, under_attack_config: cfg })}
+              status={editing?.id ? uaOf(editing.id) : undefined} onDeactivate={() => editing?.id && deactivate(editing.id)} busy={rowAction.busy} can={can} />
+          )}
+
           <FormSection title={t("secWaitroom")}>
             <IdField label={t("waitroom")} error={fieldErr(error, "waitroom_id")}>
               {(id) => (
@@ -347,10 +384,21 @@ export default function ProxyHosts() {
           </FormSection>
 
           <FormSection title={t("secAdvanced")}>
+            {showTuning && (<>
+              <IdField label={t("maxUpload")} hint={t("maxUploadHint")} error={fieldErr(error, "max_upload_mb")}>
+                {(id) => <NumberInput id={id} min={0} max={1048576} suffix="MB" placeholder="100" value={f.max_upload_mb ?? NaN} onChange={(v) => set({ max_upload_mb: Number.isFinite(v) ? v : null })} />}
+              </IdField>
+              <IdField label={t("upstreamTimeout")} hint={t("upstreamTimeoutHint")} error={fieldErr(error, "upstream_timeout_s")}>
+                {(id) => <NumberInput id={id} min={1} max={86400} suffix="s" placeholder={f.websocket ? "3600" : "60"} value={f.upstream_timeout_s ?? NaN} onChange={(v) => set({ upstream_timeout_s: Number.isFinite(v) ? v : null })} />}
+              </IdField>
+              <SwitchRow label={t("gzip")} description={t("gzipDesc")} checked={f.gzip ?? true} onChange={(v) => set({ gzip: v })} />
+            </>)}
             <IdField label={t("advanced")} hint={isAdmin ? t("advancedHint") : t("advancedAdminOnly")} error={fieldErr(error, "advanced_config")}>
               {(id) => <Textarea id={id} rows={7} spellCheck={false} readOnly={!isAdmin} className={cn("font-mono text-xs leading-5", !isAdmin && "bg-surface-2 text-fg-muted")} value={f.advanced_config} onChange={(e) => set({ advanced_config: e.target.value })} placeholder={"# proxy_set_header X-Foo bar;"} invalid={!!fieldErr(error, "advanced_config")} />}
             </IdField>
           </FormSection>
+
+          <NotesSection value={f.notes ?? ""} onChange={(v) => set({ notes: v })} error={error} disabled={!can} />
 
           <FormSection title={t("status")}>
             <SwitchRow label={t("enabled")} description={t("hostEnabledDesc")} checked={f.enabled} onChange={(v) => set({ enabled: v })} />
@@ -361,6 +409,12 @@ export default function ProxyHosts() {
       <ConfirmDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)} title={t("deleteHostTitle")} confirmLabel={t("delete")}
         description={t("confirmDelete")} onConfirm={remove}>
         {deleting && <div className="rounded-lg border border-line bg-surface-2 px-3 py-2 font-mono text-xs">{deleting.domains.join(", ")}</div>}
+        {deleting && servesConsole(deleting.domains) && <Callout tone="danger" icon={AlertTriangle} className="mt-3">{t("consoleHostDelete")}</Callout>}
+      </ConfirmDialog>
+
+      <ConfirmDialog open={!!disabling} onOpenChange={(o) => !o && setDisabling(null)} title={t("consoleHostDisableTitle")} confirmLabel={t("disable")}
+        description={t("consoleHostDisable")} onConfirm={async () => { if (disabling) await toggle(disabling, false); }}>
+        {disabling && <div className="rounded-lg border border-line bg-surface-2 px-3 py-2 font-mono text-xs">{disabling.domains.join(", ")}</div>}
       </ConfirmDialog>
     </>
   );
