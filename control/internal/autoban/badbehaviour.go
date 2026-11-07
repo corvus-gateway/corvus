@@ -124,37 +124,37 @@ func (s *Service) RecordHits(ctx context.Context, now time.Time, hits []Hit) []s
 	}
 	var banned []string
 	for _, h := range hits {
-		ip := net.ParseIP(h.IP)
+		// h.IP: the gateway's key (IPv4 address or IPv6 /64), also used for the ack
+		key, ip := parseHitKey(h.IP)
 		if ip == nil || h.ID == "" {
 			if h.IP != "" {
 				ack(h)
 			}
 			continue
 		}
-		h.IP = ip.String()
-		if !set.Enabled || !set.BadBehaviour || active[h.IP] || exempt(ip, nets) {
+		if !set.Enabled || !set.BadBehaviour || active[key] || exemptKey(key, nets) {
 			ack(h)
 			continue
 		}
 		offenses := 1
-		if old, err := s.Store.BanByIP(ctx, h.IP); err == nil {
+		if old, err := s.Store.BanByIP(ctx, key); err == nil {
 			offenses = old.Offenses + 1
 		}
 		reason := h.Reason()
-		b := &store.IPBan{IP: h.IP, Reason: reason, Source: "auto", Offenses: offenses, ExpiresAt: banUntil(set, offenses, now)}
+		b := &store.IPBan{IP: key, Reason: reason, Source: "auto", Offenses: offenses, ExpiresAt: banUntil(set, offenses, now)}
 		if err := s.Store.UpsertBan(ctx, b); err != nil {
-			slog.Error("bad behaviour ban failed", "ip", h.IP, "err", err)
+			slog.Error("bad behaviour ban failed", "ip", key, "err", err)
 			continue
 		}
-		active[h.IP] = true
+		active[key] = true
 		ack(h)
 		until := "permanent"
 		if b.ExpiresAt != nil {
 			until = b.ExpiresAt.Format(time.RFC3339)
 		}
-		_ = s.Store.Audit(ctx, nil, "ban.auto", h.IP, map[string]any{"reason": reason, "until": until, "offenses": offenses, "detector": "bad_behaviour", "host": h.Host}, "")
-		slog.Warn("IP banned automatically", "ip", h.IP, "until", until, "offenses", offenses, "reason", reason)
-		banned = append(banned, h.IP)
+		_ = s.Store.Audit(ctx, nil, "ban.auto", key, map[string]any{"reason": reason, "until": until, "offenses": offenses, "detector": "bad_behaviour", "host": h.Host}, "")
+		slog.Warn("IP banned automatically", "ip", key, "until", until, "offenses", offenses, "reason", reason)
+		banned = append(banned, key)
 	}
 	return banned
 }

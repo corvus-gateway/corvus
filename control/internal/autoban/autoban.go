@@ -192,19 +192,8 @@ func (s *Service) Run(ctx context.Context) {
 	}
 }
 
-func exempt(ip net.IP, nets []*net.IPNet) bool {
-	if ip == nil || ip.IsLoopback() {
-		return true
-	}
-	for _, n := range nets {
-		if n.Contains(ip) {
-			return true
-		}
-	}
-	return false
-}
-
-// Evaluate bans IPs over the thresholds; returns the IPs banned in this round.
+// Evaluate bans clients over the thresholds (IPv4 addresses, IPv6 /64s); returns the
+// bans made in this round.
 func (s *Service) Evaluate(ctx context.Context, now time.Time) []string {
 	set := Load(ctx, s.Store)
 	if !set.Enabled || s.Traffic == nil {
@@ -228,7 +217,7 @@ func (s *Service) Evaluate(ctx context.Context, now time.Time) []string {
 	}
 	var cands []cand
 	window := time.Duration(set.WindowS) * time.Second
-	for ip, a := range s.Traffic.EventsByIP(now.Add(-window), Kinds...) {
+	for ip, a := range eventsByKey(s.Traffic, now.Add(-window), Kinds...) {
 		if a.Count >= int64(set.Threshold) {
 			kinds := make([]string, 0, len(a.Kinds))
 			for k := range a.Kinds {
@@ -239,7 +228,7 @@ func (s *Service) Evaluate(ctx context.Context, now time.Time) []string {
 		}
 	}
 	if set.IncludeScans {
-		for ip, a := range s.Traffic.IPCounts(window, now) {
+		for ip, a := range countsByKey(s.Traffic, window, now) {
 			if a.S4xx >= int64(set.ScanThreshold) && a.S4xx*2 >= a.Requests {
 				cands = append(cands, cand{ip, fmt.Sprintf("possible scanner: %d of %d responses were 4xx in %s", a.S4xx, a.Requests, window), a.S4xx})
 			}
@@ -247,8 +236,7 @@ func (s *Service) Evaluate(ctx context.Context, now time.Time) []string {
 	}
 	var banned []string
 	for _, c := range cands {
-		ip := net.ParseIP(c.ip)
-		if active[c.ip] || exempt(ip, nets) {
+		if active[c.ip] || exemptKey(c.ip, nets) {
 			continue
 		}
 		offenses := 1
@@ -258,7 +246,7 @@ func (s *Service) Evaluate(ctx context.Context, now time.Time) []string {
 			// only detections after it ended count, so an unbanned IP is not re-banned
 			// for what it did before.
 			if old.ExpiresAt != nil && old.ExpiresAt.After(now.Add(-window)) {
-				a := s.Traffic.EventsByIP(*old.ExpiresAt, Kinds...)[c.ip]
+				a := eventsByKey(s.Traffic, *old.ExpiresAt, Kinds...)[c.ip]
 				if a == nil || a.Count < int64(set.Threshold) {
 					continue
 				}
@@ -301,7 +289,7 @@ func (s *Service) Push(ctx context.Context, now time.Time) error {
 		if b.ExpiresAt != nil {
 			exp = b.ExpiresAt.Unix()
 		}
-		ips[b.IP] = exp
+		ips[GatewayKey(b.IP)] = exp
 	}
 	s.mu.Lock()
 	acks := s.acks

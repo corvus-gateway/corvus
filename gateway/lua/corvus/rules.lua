@@ -22,6 +22,7 @@ local ualist = require "corvus.ualist"
 local challenge = require "corvus.challenge"
 local underattack = require "corvus.underattack"
 local accesslog = require "corvus.accesslog"
+local ipkey = require "corvus.ipkey"
 local ffi = require "ffi"
 local bit = require "bit"
 
@@ -419,6 +420,18 @@ local function is_acme(uri)  -- byte test first: no substring for ordinary paths
   return byte(uri, 2) == 46 and sub(uri, 1, 28) == "/.well-known/acme-challenge/"
 end
 
+-- A ban covers the exact address (manual bans) or the client key: the IPv4 address or
+-- the IPv6 /64 (automatic bans), see ipkey.lua.
+local function banned(bans, ip)
+  if not ip then return false end
+  if bans:get(ip) then return true end
+  if find(ip, ":", 1, true) then
+    local k = ipkey.client(ip)
+    return k ~= ip and bans:get(k) ~= nil
+  end
+  return false
+end
+
 function _M.rewrite(host_id)
   local host = HOSTS[host_id]
   if not host then return end
@@ -426,7 +439,7 @@ function _M.rewrite(host_id)
   -- Banned client addresses (automatic or manual bans pushed by corvus-control).
   -- Certificate validation is never blocked.
   local bans = ngx.shared.corvus_bans
-  if bans and bans:get(ngx.var.remote_addr) then
+  if bans and banned(bans, ngx.var.remote_addr) then
     if is_acme(ngx.var.uri) then return end
     ngx.var.corvus_ban = "1"
     return deny(403)
@@ -629,8 +642,8 @@ end
 -- ------------------------------------------------------------------ bad behaviour
 --
 -- BunkerWeb-style: responses with one of the configured status codes are counted per
--- client IP and proxy host (corvus_bb, TTL = window). When the threshold is reached the
--- IP is banned here immediately (corvus_bans, first-ban duration) and a pending record
+-- client (IPv4 address or IPv6 /64) and proxy host (corvus_bb, TTL = window). When the
+-- threshold is reached the client is banned here immediately (corvus_bans, first-ban duration) and a pending record
 -- is queued (corvus_bb_q "p:<ip>"); corvus-control polls the records, stores the ban
 -- with its escalation and acknowledges them with the next ban-list push.
 
@@ -696,7 +709,8 @@ function _M.log(host_id, room)
   if sub(uri, 1, 28) == "/.well-known/acme-challenge/" or sub(uri, 1, 10) == "/__corvus/" then return end
   local bin = ngx.var.binary_remote_addr
   if not bin or ip_in(cfg.exempt, bin) then return end
-  local ip = ngx.var.remote_addr
+  -- counted and banned per client key: an IPv6 host can switch addresses inside its /64
+  local ip = ipkey.client(ngx.var.remote_addr)
   local bans, d, q = ngx.shared.corvus_bans, ngx.shared.corvus_bb, ngx.shared.corvus_bb_q
   if not bans or not d or not q or bans:get(ip) then return end
 

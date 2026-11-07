@@ -12,6 +12,7 @@ local cjson = require "cjson.safe"
 local rstring = require "resty.string"
 local rrandom = require "resty.random"
 local crypto = require "corvus.crypto"
+local ipkey = require "corvus.ipkey"
 
 local ngx = ngx
 local _M = {}
@@ -99,35 +100,7 @@ hmac_key = crypto.hmac_key
 
 -- KEYS: kid → key (current + previous, for rotation); CURRENT signs new tokens.
 
--- First n 16-bit groups of an IPv6 address, expanded ("2001:db8::1" → "2001:0db8:0000"
--- for n = 3), so every spelling of the same network gives the same string. nil when ip
--- is not plain IPv6 text (e.g. an embedded IPv4 tail).
-local function v6_prefix(ip, n)
-  local head, tail = ip:match("^([%x:]*)::([%x:]*)$")
-  local groups = {}
-  local function add(part)
-    if part == "" then return true end
-    for g in (part .. ":"):gmatch("([^:]*):") do
-      if not g:match("^%x%x?%x?%x?$") then return false end
-      groups[#groups + 1] = ("0000" .. g):sub(-4):lower()
-    end
-    return true
-  end
-  if head then
-    local before = {}
-    if not add(head) then return nil end
-    before, groups = groups, {}
-    if not add(tail) then return nil end
-    local after = groups
-    if #before + #after > 7 then return nil end
-    groups = before
-    for _ = 1, 8 - #before - #after do groups[#groups + 1] = "0000" end
-    for _, g in ipairs(after) do groups[#groups + 1] = g end
-  elseif not add(ip) or #groups ~= 8 then
-    return nil
-  end
-  return table.concat(groups, ":", 1, n)
-end
+local v6_prefix = ipkey.v6_prefix
 _M._v6_prefix = v6_prefix -- tests
 
 -- Client network used for optional token binding: IPv4 /24, IPv6 /48.
@@ -140,9 +113,7 @@ end
 -- Client key for per-client limits: the IPv4 address, or the IPv6 /64 (one host's
 -- privacy addresses all share it).
 local function client_key()
-  local ip = ngx.var.remote_addr or ""
-  if ip:find(":", 1, true) then return v6_prefix(ip, 4) or ip end
-  return ip
+  return ipkey.client(ngx.var.remote_addr)
 end
 
 -- token = v2.<kid>.<kind>.<room>.<sid>.<iat>.<exp>.<sig>   kind: a=admission, q=queue

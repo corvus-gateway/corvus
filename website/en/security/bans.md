@@ -11,7 +11,7 @@ ban and unban by hand. Bans apply to all proxy and redirection hosts, not to the
 
 | Setting | Default | Meaning |
 |---|---|---|
-| **Enable automatic bans** | On | Ban IPs whose detections (attack patterns and body inspection, also in log-only mode, and security rules that block). Matches of rules in **Log** mode never count exceed the threshold |
+| **Enable automatic bans** | On | Ban IPs whose detections (attack patterns and body inspection, also in log-only mode, and security rules that block) exceed the threshold. Matches of rules in **Log** mode never count |
 | **Detections** within **minutes** | 20 in 10 min | The threshold |
 | **First ban** | 15 min | Each repeat offense doubles the duration … |
 | **Longest ban** | 7 days | … up to this (at most 30 days) |
@@ -19,6 +19,11 @@ ban and unban by hand. Bans apply to all proxy and redirection hosts, not to the
 | **Also ban suspected scanners** | Off | Also ban IPs that get many 4xx responses in a short time (path scanning) |
 | **Ban on bad behaviour immediately** | Off | The gateway counts error responses (e.g. 404) per IP **and site** and bans as soon as the threshold is reached, without waiting for the next check |
 | **Exempt networks** | – | IPs/CIDRs that are never banned automatically: office, monitoring, your own servers |
+
+An automatic ban covers an IPv4 address, or for IPv6 the client's whole `/64` network (shown as
+for example `2001:db8:1:2::/64`). An IPv6 device can switch between many addresses of its `/64`, so
+banning one address would not stop it. Detections from all addresses of a `/64` count together.
+An exempt address or network inside a `/64` keeps that whole `/64` from being banned automatically.
 
 !!! warning "Shared IPs"
     Where many people share one public IP (company or mobile carrier NAT), they can be banned
