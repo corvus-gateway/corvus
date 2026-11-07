@@ -253,7 +253,7 @@ export const ru: Partial<Record<keyof typeof ko, string>> = {
   editUser: "Изменить пользователя", userSheetDesc: "Задайте данные учётной записи и роль.", initialPassword: "Начальный пароль", generatePassword: "Сгенерировать", copyPassword: "Копировать",
   initialPasswordHint: "Не менее 10 символов. Передайте пароль безопасным способом и попросите пользователя сменить его после первого входа.", passwordKeepBlank: "Оставьте пустым, чтобы сохранить текущий пароль",
   roleSelf: "Нельзя изменить собственную роль.", userSaved: "Пользователь сохранён", userDeletedToast: "Пользователь удалён",
-  resetPassword: "Сбросить пароль", resetPasswordDesc: "Установка нового пароля немедленно завершает все сеансы пользователя.", passwordResetDone: "Пароль сброшен",
+  resetPassword: "Сбросить пароль", resetPasswordDesc: "Установка нового пароля немедленно завершает все сеансы пользователя и удаляет его API-токены.", passwordResetDone: "Пароль сброшен",
   resetMfa: "Сбросить MFA", resetMfaTitle: "Сбросить двухэтапную проверку?", resetMfaDesc: "Двухэтапная проверка для этого пользователя будет отключена, и ему потребуется настроить её заново.", mfaResetDone: "MFA сброшена",
   disableUser: "Отключить", enableUser: "Включить", userDisabledToast: "Пользователь отключён", userEnabledToast: "Пользователь включён",
   disableUserDesc: "Отключённый пользователь не может войти, а его текущие сеансы немедленно завершаются.", deleteUser: "Удалить", deleteUserTitle: "Удаление пользователя", deleteUserDesc: "Учётная запись будет удалена безвозвратно. Записи аудита сохраняются.",

@@ -254,7 +254,7 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   editUser: "ユーザーを編集", userSheetDesc: "アカウント情報とロールを設定します。", initialPassword: "初期パスワード", generatePassword: "生成", copyPassword: "コピー",
   initialPasswordHint: "10 文字以上。安全な方法で共有し、初回サインイン後に変更するようユーザーに依頼してください。", passwordKeepBlank: "空欄のままにすると現在のパスワードを維持します",
   roleSelf: "自分のロールは変更できません。", userSaved: "ユーザーを保存しました", userDeletedToast: "ユーザーを削除しました",
-  resetPassword: "パスワードをリセット", resetPasswordDesc: "新しいパスワードを設定すると、そのユーザーのすべてのセッションが直ちに終了します。", passwordResetDone: "パスワードをリセットしました",
+  resetPassword: "パスワードをリセット", resetPasswordDesc: "新しいパスワードを設定すると、そのユーザーのすべてのセッションが直ちに終了し、API トークンも削除されます。", passwordResetDone: "パスワードをリセットしました",
   resetMfa: "MFA をリセット", resetMfaTitle: "2 段階認証をリセットしますか？", resetMfaDesc: "このユーザーの 2 段階認証が無効になり、再設定が必要になります。", mfaResetDone: "MFA をリセットしました",
   disableUser: "無効化", enableUser: "有効化", userDisabledToast: "ユーザーを無効にしました", userEnabledToast: "ユーザーを有効にしました",
   disableUserDesc: "無効化されたユーザーはサインインできず、現在のセッションも直ちに終了します。", deleteUser: "削除", deleteUserTitle: "ユーザーを削除", deleteUserDesc: "アカウントは完全に削除されます。監査ログは保持されます。",
