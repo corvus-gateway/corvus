@@ -453,6 +453,35 @@ func (s *Store) CountActiveAdmins(ctx context.Context, exceptID int64) (int, err
 	return n, err
 }
 
+// ErrLastAdmin: the change would leave no active administrator.
+var ErrLastAdmin = errors.New("at least one active administrator is required")
+
+// KeepingAdmin runs fn in a transaction and rolls it back when no active administrator
+// remains afterwards. The administrator rows are locked first (PostgreSQL; SQLite has a
+// single writer), so two changes at the same time cannot both remove "the other" admin.
+func (s *Store) KeepingAdmin(ctx context.Context, fn func(tx *Store) error) error {
+	return s.WithTx(ctx, func(tx *Store) error {
+		if tx.dialect == Postgres {
+			rows, err := tx.q.QueryContext(ctx, `SELECT id FROM users WHERE role = 'admin' AND disabled = 0 FOR UPDATE`)
+			if err != nil {
+				return err
+			}
+			rows.Close()
+		}
+		if err := fn(tx); err != nil {
+			return err
+		}
+		n, err := tx.CountActiveAdmins(ctx, 0)
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return ErrLastAdmin
+		}
+		return nil
+	})
+}
+
 // ClaimTOTPStep atomically records step as the user's last used TOTP step. It returns
 // false when this step (or a later one) was already used — a replayed code (H11).
 func (s *Store) ClaimTOTPStep(ctx context.Context, userID, step int64) (bool, error) {

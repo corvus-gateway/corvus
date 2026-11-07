@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -144,8 +145,10 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 		}
 		s.audit(r, "user.password_reset", u.Email, detail)
 	}
-	if err := s.Store.UpdateUser(ctx, id, name, role, disabled); err != nil {
-		fail(w, err)
+	if err := s.Store.KeepingAdmin(ctx, func(tx *store.Store) error {
+		return tx.UpdateUser(ctx, id, name, role, disabled)
+	}); err != nil {
+		fail(w, lastAdminErr(err))
 		return
 	}
 	if revoke {
@@ -177,8 +180,10 @@ func (s *Server) deleteUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := s.Store.DeleteUser(ctx, id); err != nil { // sessions cascade
-		fail(w, err)
+	if err := s.Store.KeepingAdmin(ctx, func(tx *store.Store) error {
+		return tx.DeleteUser(ctx, id) // sessions cascade
+	}); err != nil {
+		fail(w, lastAdminErr(err))
 		return
 	}
 	s.audit(r, "user.delete", u.Email, nil)
@@ -231,4 +236,12 @@ func locationsAdvancedAllowed(r *http.Request, before, after []store.Location) e
 		}
 	}
 	return errs.OrNil()
+}
+
+// lastAdminErr turns store.ErrLastAdmin into a 409 like the up-front check.
+func lastAdminErr(err error) error {
+	if errors.Is(err, store.ErrLastAdmin) {
+		return conflictError{err.Error()}
+	}
+	return err
 }
