@@ -482,13 +482,20 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !keep {
-			if err := s.Store.UpdateUser(ctx, u.ID, u.Name, role, false); err != nil {
+			err := s.Store.KeepingAdmin(ctx, func(tx *store.Store) error {
+				return tx.UpdateUser(ctx, u.ID, u.Name, role, false)
+			})
+			switch {
+			case errors.Is(err, store.ErrLastAdmin):
+				detail["role_sync_skipped"] = "last_admin" // another change got there first
+			case err != nil:
 				fail(w, err)
 				return
+			default:
+				_ = s.Store.DeleteUserSessions(ctx, u.ID) // the old role's sessions end, as on an admin role change
+				detail["role_changed"] = map[string]string{"before": u.Role, "after": role}
+				u.Role = role
 			}
-			_ = s.Store.DeleteUserSessions(ctx, u.ID) // the old role's sessions end, as on an admin role change
-			detail["role_changed"] = map[string]string{"before": u.Role, "after": role}
-			u.Role = role
 		}
 	}
 	if err := s.setSession(w, r, u); err != nil {
