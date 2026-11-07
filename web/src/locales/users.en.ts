@@ -9,7 +9,7 @@ export const enUsers: Record<keyof typeof koUsers, string> = {
   editUser: "Edit user", userSheetDesc: "Set account details and role.", initialPassword: "Initial password", generatePassword: "Generate", copyPassword: "Copy",
   initialPasswordHint: "At least 10 characters. Share it securely and ask the user to change it after first sign-in.", passwordKeepBlank: "Leave blank to keep the current password",
   roleSelf: "You cannot change your own role.", userSaved: "User saved", userDeletedToast: "User deleted",
-  resetPassword: "Reset password", resetPasswordDesc: "Setting a new password immediately ends all of the user's sessions.", passwordResetDone: "Password reset",
+  resetPassword: "Reset password", resetPasswordDesc: "Setting a new password immediately ends all of the user's sessions and deletes their API tokens.", passwordResetDone: "Password reset",
   resetMfa: "Reset MFA", resetMfaTitle: "Reset two-step verification?", resetMfaDesc: "Two-step verification is turned off for this user, who will need to set it up again.", mfaResetDone: "MFA reset",
   disableUser: "Disable", enableUser: "Enable", userDisabledToast: "User disabled", userEnabledToast: "User enabled",
   disableUserDesc: "A disabled user cannot sign in and current sessions end immediately.", deleteUser: "Delete", deleteUserTitle: "Delete user", deleteUserDesc: "The account is permanently deleted. Audit entries are kept.",

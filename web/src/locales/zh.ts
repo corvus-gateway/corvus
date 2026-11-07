@@ -254,7 +254,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   editUser: "编辑用户", userSheetDesc: "设置账号信息和角色。", initialPassword: "初始密码", generatePassword: "生成", copyPassword: "复制",
   initialPasswordHint: "至少 10 个字符。请安全地告知用户，并要求其首次登录后修改。", passwordKeepBlank: "留空则保留当前密码",
   roleSelf: "无法更改自己的角色。", userSaved: "用户已保存", userDeletedToast: "用户已删除",
-  resetPassword: "重置密码", resetPasswordDesc: "设置新密码后，该用户的所有会话将立即结束。", passwordResetDone: "密码已重置",
+  resetPassword: "重置密码", resetPasswordDesc: "设置新密码后，该用户的所有会话将立即结束，其 API 令牌也会被删除。", passwordResetDone: "密码已重置",
   resetMfa: "重置 MFA", resetMfaTitle: "确定重置两步验证？", resetMfaDesc: "将关闭该用户的两步验证，用户需要重新设置。", mfaResetDone: "MFA 已重置",
   disableUser: "停用", enableUser: "启用", userDisabledToast: "用户已停用", userEnabledToast: "用户已启用",
   disableUserDesc: "停用的用户无法登录，当前会话将立即结束。", deleteUser: "删除", deleteUserTitle: "删除用户", deleteUserDesc: "账号将被永久删除。审计记录将保留。",

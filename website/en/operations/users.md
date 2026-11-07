@@ -28,7 +28,8 @@ provider groups to roles, and choose whether unknown users are created automatic
 
 Scripts and Prometheus use **API tokens** (created on the *API tokens* page) with an
 `Authorization: Bearer cvs_…` header. A token has a role and an optional expiry, can't exceed its
-creator's role, and is shown only once. See the [HTTP API](../reference/api.md).
+creator's role, and is shown only once. When an administrator resets a user's password, the
+user's sessions end and the API tokens they created are deleted. See the [HTTP API](../reference/api.md).
 
 ## Protect the console
 

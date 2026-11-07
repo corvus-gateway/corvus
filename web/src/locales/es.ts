@@ -253,7 +253,7 @@ export const es: Partial<Record<keyof typeof ko, string>> = {
   editUser: "Editar usuario", userSheetDesc: "Defina los datos de la cuenta y el rol.", initialPassword: "Contraseña inicial", generatePassword: "Generar", copyPassword: "Copiar",
   initialPasswordHint: "Al menos 10 caracteres. Compártala de forma segura y pida al usuario que la cambie tras el primer inicio de sesión.", passwordKeepBlank: "Déjelo en blanco para conservar la contraseña actual",
   roleSelf: "No puede cambiar su propio rol.", userSaved: "Usuario guardado", userDeletedToast: "Usuario eliminado",
-  resetPassword: "Restablecer contraseña", resetPasswordDesc: "Al definir una contraseña nueva se cierran de inmediato todas las sesiones del usuario.", passwordResetDone: "Contraseña restablecida",
+  resetPassword: "Restablecer contraseña", resetPasswordDesc: "Al definir una contraseña nueva se cierran de inmediato todas las sesiones del usuario y se eliminan sus tokens de API.", passwordResetDone: "Contraseña restablecida",
   resetMfa: "Restablecer MFA", resetMfaTitle: "¿Restablecer la verificación en dos pasos?", resetMfaDesc: "Se desactiva la verificación en dos pasos de este usuario, que deberá configurarla de nuevo.", mfaResetDone: "MFA restablecida",
   disableUser: "Deshabilitar", enableUser: "Habilitar", userDisabledToast: "Usuario deshabilitado", userEnabledToast: "Usuario habilitado",
   disableUserDesc: "Un usuario deshabilitado no puede iniciar sesión y sus sesiones actuales finalizan de inmediato.", deleteUser: "Eliminar", deleteUserTitle: "Eliminar usuario", deleteUserDesc: "La cuenta se elimina de forma permanente. Las entradas de auditoría se conservan.",
