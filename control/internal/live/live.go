@@ -56,6 +56,18 @@ func (l *Live) Room(ctx context.Context, w store.Waitroom) Stats {
 	return st
 }
 
+// Forget deletes a removed access queue's state, so nothing is left behind in Redis
+// and a new queue with the same name starts empty.
+func (l *Live) Forget(ctx context.Context, name string) error {
+	if l == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	p := "corvus:wr:{" + name + "}:"
+	return l.rdb.Del(ctx, p+"active", p+"queue", p+"seen", p+"seq", p+"rate", p+"granted").Err()
+}
+
 // Ping reports whether Redis is reachable.
 func (l *Live) Ping(ctx context.Context) bool {
 	if l == nil {
