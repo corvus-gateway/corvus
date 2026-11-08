@@ -335,11 +335,12 @@ func extract(r io.Reader, dir string, maxBytes int64) (*Manifest, error) {
 		if name == "" {
 			continue
 		}
-		dst := filepath.Join(dir, filepath.FromSlash(name))
-		// cleanName already rejects "..", absolute paths and links; check the result too
-		if rel, err := filepath.Rel(dir, dst); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		// cleanName already rejects ".." segments, absolute paths and links; no entry
+		// name (state files are named after hosts and ids) contains ".." at all
+		if strings.Contains(name, "..") {
 			return nil, invalid("unsafe path %q", h.Name)
 		}
+		dst := filepath.Join(dir, filepath.FromSlash(name))
 		switch h.Typeflag {
 		case tar.TypeDir:
 			if !contains(stateDirs, strings.SplitN(name, "/", 2)[0]) {
