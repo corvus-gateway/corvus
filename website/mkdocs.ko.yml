@@ -3,7 +3,7 @@ INHERIT: mkdocs.yml
 docs_dir: ko
 site_dir: ../site/ko
 edit_uri: edit/main/website/ko/
-site_url: https://corvus-gateway.github.io/corvus/ko/
+site_url: https://corvusgateway.org/ko/
 theme:
   language: ko
 nav:

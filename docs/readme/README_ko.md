@@ -36,7 +36,7 @@ Corvus는 웹 서비스 앞단에 두는 셀프 호스팅 게이트웨이입니�
 <p align="center"><img src="../../assets/demo/corvus-demo-ko.gif" alt="Corvus demo" width="900"></p>
 
 - [빠른 설정](#빠른-설정)
-- [문서](https://corvus-gateway.github.io/corvus/ko/)
+- [문서](https://corvusgateway.org/ko/)
 - [스크린샷](#스크린샷)
 
 ## 프로젝트 목표
@@ -129,7 +129,7 @@ services:
 ```
 
 이것이 설치의 전부입니다. 게이트웨이, 관리 콘솔, 접속 대기열 저장소가 이 컨테이너 하나에서
-실행됩니다. 옵션은 [문서](https://corvus-gateway.github.io/corvus/ko/)를 참고하세요.
+실행됩니다. 옵션은 [문서](https://corvusgateway.org/ko/)를 참고하세요.
 
 3. 스택을 시작합니다.
 
@@ -163,7 +163,7 @@ docker compose up -d
 ## 문서
 
 구성, 강화된 설치, 포워드 호스트, 스트림, 백업, Nginx Proxy Manager에서 마이그레이션, 보안 규칙,
-접속 대기열, 문제 해결은 **[문서 사이트](https://corvus-gateway.github.io/corvus/ko/)**에서 화면과 함께 설명합니다 (한국어 · [English](https://corvus-gateway.github.io/corvus/)).
+접속 대기열, 문제 해결은 **[문서 사이트](https://corvusgateway.org/ko/)**에서 화면과 함께 설명합니다 (한국어 · [English](https://corvusgateway.org/)).
 
 ## 성능
 

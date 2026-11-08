@@ -36,7 +36,7 @@ Ihrem eigenen Server; es wird kein Traffic an eine Drittanbieter-Cloud gesendet.
 <p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
 
 - [Schnellstart](#schnellstart)
-- [Dokumentation](https://corvus-gateway.github.io/corvus/)
+- [Dokumentation](https://corvusgateway.org/)
 - [Screenshots](#screenshots)
 
 ## Projektziel
@@ -130,7 +130,7 @@ services:
 ```
 
 Das ist die gesamte Installation: Gateway, Admin-Konsole und Speicher für die Zugriffswarteschlange laufen in
-diesem einen Container. Optionen finden Sie in der [Dokumentation](https://corvus-gateway.github.io/corvus/).
+diesem einen Container. Optionen finden Sie in der [Dokumentation](https://corvusgateway.org/).
 
 3. Starten Sie Ihren Stack mit
 
@@ -165,7 +165,7 @@ Start automatisch angewendet.
 ## Dokumentation
 
 Konfiguration, gehärtete Installation, Ziel-Hosts, Streams, Backups, Migration von Nginx Proxy Manager,
-Sicherheitsregeln, Zugriffswarteschlange und Fehlerbehebung beschreibt die **[Dokumentation](https://corvus-gateway.github.io/corvus/)**
+Sicherheitsregeln, Zugriffswarteschlange und Fehlerbehebung beschreibt die **[Dokumentation](https://corvusgateway.org/)**
 (auf Englisch und Koreanisch).
 
 ## Leistung

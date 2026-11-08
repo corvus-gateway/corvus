@@ -36,7 +36,7 @@ traffic is sent to a third-party cloud.
 <p align="center"><img src="assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
 
 - [Quick Setup](#quick-setup)
-- [Documentation](https://corvus-gateway.github.io/corvus/)
+- [Documentation](https://corvusgateway.org/)
 - [Screenshots](#screenshots)
 
 ## Project Goal
@@ -129,7 +129,7 @@ services:
 ```
 
 This is the whole installation: gateway, admin console and access-queue store run in this one
-container. See the [documentation](https://corvus-gateway.github.io/corvus/) for options.
+container. See the [documentation](https://corvusgateway.org/) for options.
 
 3. Bring up your stack by running
 
@@ -164,7 +164,7 @@ automatically on start.
 
 Configuration, the hardened install, forward hosts, streams, backups, migrating from Nginx Proxy
 Manager, security rules, the access queue and troubleshooting are covered in the
-**[documentation](https://corvus-gateway.github.io/corvus/)** (English · [한국어](https://corvus-gateway.github.io/corvus/ko/)).
+**[documentation](https://corvusgateway.org/)** (English · [한국어](https://corvusgateway.org/ko/)).
 
 ## Performance
 

@@ -36,7 +36,7 @@ Corvus は、Web サービスの前段に置くセルフホスト型ゲートウ
 <p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
 
 - [クイックセットアップ](#クイックセットアップ)
-- [ドキュメント](https://corvus-gateway.github.io/corvus/)
+- [ドキュメント](https://corvusgateway.org/)
 - [スクリーンショット](#スクリーンショット)
 
 ## プロジェクトの目標
@@ -129,7 +129,7 @@ services:
 ```
 
 これでインストールは完了です。ゲートウェイ、管理コンソール、アクセス待機列ストアは、この 1 つの
-コンテナ内で動作します。オプションについては[ドキュメント](https://corvus-gateway.github.io/corvus/)を参照してください。
+コンテナ内で動作します。オプションについては[ドキュメント](https://corvusgateway.org/)を参照してください。
 
 3. 次のコマンドでスタックを起動します。
 
@@ -162,7 +162,7 @@ docker compose up -d
 ## ドキュメント
 
 設定、ハードニング済みインストール、転送先ホスト、ストリーム、バックアップ、Nginx Proxy Manager からの移行、
-セキュリティルール、アクセス待機列、トラブルシューティングは **[ドキュメント](https://corvus-gateway.github.io/corvus/)**(英語・韓国語)で説明しています。
+セキュリティルール、アクセス待機列、トラブルシューティングは **[ドキュメント](https://corvusgateway.org/)**(英語・韓国語)で説明しています。
 
 ## パフォーマンス
 

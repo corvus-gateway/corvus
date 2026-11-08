@@ -2,7 +2,7 @@
 # Build both: website/build.sh  ·  preview: mkdocs serve -f website/mkdocs.yml
 site_name: Corvus AWPG
 site_description: Self-hosted web gateway with built-in protection, monitoring and an access queue.
-site_url: https://corvus-gateway.github.io/corvus/
+site_url: https://corvusgateway.org/
 repo_url: https://github.com/corvus-gateway/corvus
 repo_name: corvus-gateway/corvus
 edit_uri: edit/main/website/en/
@@ -42,10 +42,10 @@ extra:
   generator: false
   alternate:
     - name: English
-      link: /corvus/
+      link: /
       lang: en
     - name: 한국어
-      link: /corvus/ko/
+      link: /ko/
       lang: ko
   social:
     - icon: fontawesome/brands/github

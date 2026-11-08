@@ -32,7 +32,7 @@ Corvus 是部署在您的 Web 服务前端的自托管网关。它与 Nginx Prox
 <p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
 
 - [快速安装](#快速安装)
-- [文档](https://corvus-gateway.github.io/corvus/)
+- [文档](https://corvusgateway.org/)
 - [截图](#截图)
 
 ## 项目目标
@@ -120,7 +120,7 @@ services:
 ```
 
 这就是全部安装内容：网关、管理控制台和访问队列存储都运行在这一个容器中。更多选项请参见
-[文档](https://corvus-gateway.github.io/corvus/)。
+[文档](https://corvusgateway.org/)。
 
 3. 运行以下命令启动服务：
 
@@ -152,7 +152,7 @@ docker compose up -d
 ## 文档
 
 配置、加固安装、目标主机、流、备份、从 Nginx Proxy Manager 迁移、安全规则、访问队列和故障排查，
-请参见 **[文档](https://corvus-gateway.github.io/corvus/)**(英文、韩文)。
+请参见 **[文档](https://corvusgateway.org/)**(英文、韩文)。
 
 ## 性能
 

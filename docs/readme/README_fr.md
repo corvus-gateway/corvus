@@ -36,7 +36,7 @@ sur votre propre serveur ; aucun trafic n'est envoyé vers un cloud tiers.
 <p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
 
 - [Installation rapide](#installation-rapide)
-- [Documentation](https://corvus-gateway.github.io/corvus/)
+- [Documentation](https://corvusgateway.org/)
 - [Captures d'écran](#captures-décran)
 
 ## Objectif du projet
@@ -130,7 +130,7 @@ services:
 ```
 
 C'est toute l'installation : la passerelle, la console d'administration et le stockage de la file
-d'attente d'accès fonctionnent dans ce seul conteneur. Consultez la [documentation](https://corvus-gateway.github.io/corvus/)
+d'attente d'accès fonctionnent dans ce seul conteneur. Consultez la [documentation](https://corvusgateway.org/)
 pour les options.
 
 3. Démarrez votre stack avec
@@ -167,7 +167,7 @@ de données sont appliquées automatiquement au démarrage.
 
 La configuration, l'installation renforcée, les hôtes de destination, les flux, les sauvegardes, la migration
 depuis Nginx Proxy Manager, les règles de sécurité, la file d'attente d'accès et le dépannage sont décrits dans la
-**[documentation](https://corvus-gateway.github.io/corvus/)** (en anglais et en coréen).
+**[documentation](https://corvusgateway.org/)** (en anglais et en coréen).
 
 ## Performances
 
