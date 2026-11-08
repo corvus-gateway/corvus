@@ -24,3 +24,9 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+  - package-ecosystem: pip          # documentation site build only (hash-pinned)
+    directory: /website
+    schedule: { interval: weekly }
+    groups:
+      docs:
+        patterns: ["*"]

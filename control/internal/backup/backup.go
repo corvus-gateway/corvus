@@ -336,6 +336,10 @@ func extract(r io.Reader, dir string, maxBytes int64) (*Manifest, error) {
 			continue
 		}
 		dst := filepath.Join(dir, filepath.FromSlash(name))
+		// cleanName already rejects "..", absolute paths and links; check the result too
+		if rel, err := filepath.Rel(dir, dst); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return nil, invalid("unsafe path %q", h.Name)
+		}
 		switch h.Typeflag {
 		case tar.TypeDir:
 			if !contains(stateDirs, strings.SplitN(name, "/", 2)[0]) {
