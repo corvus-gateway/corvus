@@ -189,9 +189,10 @@ local function compile_cond(c)
     for _, x in ipairs(v) do cc.set[cc.ci and lower(x) or x] = true end
   elseif c.op == "matches" or c.op == "not_matches" then
     cc.re, cc.reopt = v[1], cc.ci and "joi" or "jo"
-    local ok, err = pcall(re_find, "", cc.re, cc.reopt)
-    if not ok or err == false then
-      ngx.log(ngx.ERR, "corvus rules: invalid regex ignored: ", tostring(err))
+    -- ngx.re.find returns nil, nil, err for a pattern PCRE rejects (pcall catches the rest)
+    local ok, r1, _, err = pcall(re_find, "", cc.re, cc.reopt)
+    if not ok or err then
+      ngx.log(ngx.ERR, "corvus rules: invalid regex ignored: ", tostring(ok and err or r1))
       cc.re = nil
     end
   else
@@ -685,8 +686,11 @@ local function bb_config()
   return BB_CFG
 end
 
--- Access queue decisions that answer the client instead of the site (waitroom.lua).
-local WR_HELD = { ["cookie-check"] = true, queue = true, full = true }
+-- Access queue decisions that answer the client instead of the site (waitroom.lua). The
+-- per-IP limit on new queue entries ("ip-limit") is also not bad behaviour: it hits people
+-- behind a shared address (office, mobile carrier), whose retry page reloads by itself, and
+-- counting it would ban the whole address while everyone there is just waiting.
+local WR_HELD = { ["cookie-check"] = true, queue = true, full = true, ["ip-limit"] = true }
 
 -- log_by_lua of every proxy host: access log record, then bad-behaviour counting. room: the host has an access queue (its decision is
 -- in ngx.ctx; ngx.ctx is not touched otherwise, creating it costs a table per request).
