@@ -12,6 +12,10 @@ docker compose up -d
 Settings, certificates and history in `./data` are kept. Database changes are applied automatically
 when the new version starts.
 
+The live views (dashboard, traffic monitor, request log) also continue where they left off: Corvus
+saves the last hour when it stops and loads it back on start. After a crash or a stop of more than
+an hour, only the 5-minute statistics and events are kept.
+
 !!! tip "Before a major upgrade"
     Download a backup first: *Data retention → Backup & restore → Download backup*
     (see [Backup & restore](../operations/backup.md)).

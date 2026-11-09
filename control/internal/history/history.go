@@ -19,6 +19,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -195,6 +196,53 @@ func (s *Service) Restore(ctx context.Context, now time.Time) {
 	}
 	s.mu.Unlock()
 	slog.Info("traffic history restored", "buckets", len(rows), "events", len(evs), "rule_events", len(rules))
+	s.loadSnapshot(now)
+}
+
+func (s *Service) snapshotPath() string { return filepath.Join(s.Dir, "live.snapshot") }
+
+// loadSnapshot restores the live state saved at the last clean shutdown (10-second
+// buckets, per-minute stats, recent request log). The file is removed afterwards so an
+// unclean stop later never loads it twice.
+func (s *Service) loadSnapshot(now time.Time) {
+	p := s.snapshotPath()
+	f, err := os.Open(p)
+	if err != nil {
+		return
+	}
+	err = s.Collector.ReadSnapshot(f, now)
+	f.Close()
+	os.Remove(p)
+	switch {
+	case err == nil:
+		slog.Info("live traffic restored")
+	case errors.Is(err, traffic.ErrSnapshotStale):
+		// stopped for more than an hour: nothing in it is shown any more
+	default:
+		slog.Warn("live traffic snapshot", "err", err)
+	}
+}
+
+// saveSnapshot writes the live state for the next start (see loadSnapshot).
+func (s *Service) saveSnapshot(now time.Time) {
+	p := s.snapshotPath()
+	tmp := p + ".tmp"
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		slog.Warn("live traffic snapshot", "err", err)
+		return
+	}
+	err = s.Collector.WriteSnapshot(f, now)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(tmp, p)
+	}
+	if err != nil {
+		os.Remove(tmp)
+		slog.Warn("live traffic snapshot", "err", err)
+	}
 }
 
 func reverse[T any](a []T) {
@@ -239,8 +287,8 @@ func (s *Service) Sink(r *traffic.Record, notable bool) {
 // Run flushes statistics/events every minute, writes logs and enforces retention.
 //
 // When ctx ends it writes the request lines still queued, saves the statistics of the
-// current (unfinished) bucket too, closes the database and returns; callers wait for it
-// so a restart or upgrade does not lose the last minutes.
+// current (unfinished) bucket and the live snapshot, closes the database and returns;
+// callers wait for it so a restart or upgrade does not lose the last minutes.
 func (s *Service) Run(ctx context.Context) {
 	logsDone := make(chan struct{})
 	go func() { s.writeLogs(ctx); close(logsDone) }()
@@ -256,6 +304,7 @@ func (s *Service) Run(ctx context.Context) {
 			// including the current bucket: Restore loads it back and keeps adding to it
 			s.flush(context.Background(), time.Now().Add(traffic.CoarseStep*time.Second))
 			s.db.Close()
+			s.saveSnapshot(time.Now())
 			return
 		case now := <-flush.C:
 			s.mode.Store(Load(ctx, s.Store).LogMode)
