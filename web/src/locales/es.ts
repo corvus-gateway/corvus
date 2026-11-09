@@ -216,7 +216,7 @@ export const es: Partial<Record<keyof typeof ko, string>> = {
   allRules: "Todas las reglas", nRules: "{n} reglas", chEvents: "Reglas que recibir", chEventsDesc: "Déjelo vacío para recibir alertas de todas las reglas.",
   testSend: "Enviar prueba", testOk: "Mensaje de prueba enviado", testFail: "Error al enviar la prueba", deleteChannelTitle: "Eliminar canal",
   secretKeep: "Déjelo en blanco para conservar el valor actual", chCreated: "Canal añadido", chCreatedTest: "Canal añadido. Envíe un mensaje de prueba para verificar la conexión.",
-  fUrl: "URL del webhook", fUsername: "Nombre visible (opcional)", fChannel: "Canal (opcional)", fBotToken: "Token del bot", fChatId: "chat_id", fSecret: "Secreto de firma (opcional)",
+  fUrl: "URL del webhook", fUsername: "Nombre visible (opcional)", fChannel: "Canal (opcional)", fBotToken: "Token del bot", fChatId: "chat_id", fSecret: "Secreto de firma (opcional)", clearSecret: "Quitar el secreto de firma",
   hintSlack: "Aplicación de Slack → activar Incoming Webhooks → elegir un canal y copiar la URL del webhook",
   hintMattermost: "Integraciones → añadir un Incoming Webhook → copiar la URL",
   hintDiscord: "Ajustes del canal → Integraciones → Webhooks → Nuevo webhook → copiar la URL",

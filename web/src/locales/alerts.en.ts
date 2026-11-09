@@ -9,7 +9,7 @@ export const enAlerts: Record<keyof typeof koAlerts, string> = {
   allRules: "All rules", nRules: "{n} rules", chEvents: "Rules to receive", chEventsDesc: "Leave empty to receive alerts from every rule.",
   testSend: "Send test", testOk: "Test message sent", testFail: "Test delivery failed", deleteChannelTitle: "Delete channel",
   secretKeep: "Leave blank to keep the current value", chCreated: "Channel added", chCreatedTest: "Channel added. Send a test message to verify the connection.",
-  fUrl: "Webhook URL", fUsername: "Display name (optional)", fChannel: "Channel (optional)", fBotToken: "Bot token", fChatId: "chat_id", fSecret: "Signing secret (optional)",
+  fUrl: "Webhook URL", fUsername: "Display name (optional)", fChannel: "Channel (optional)", fBotToken: "Bot token", fChatId: "chat_id", fSecret: "Signing secret (optional)", clearSecret: "Remove the signing secret",
   hintSlack: "Slack app → enable Incoming Webhooks → pick a channel and copy the Webhook URL",
   hintMattermost: "Integrations → add an Incoming Webhook → copy the URL",
   hintDiscord: "Channel settings → Integrations → Webhooks → New Webhook → copy the URL",

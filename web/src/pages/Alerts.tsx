@@ -114,9 +114,9 @@ function ActiveStrip({ items }: { items: AlertActive[] | null }) {
 
 interface ChForm {
   name: string; kind: AlertKind; enabled: boolean; min_severity: AlertSeverity; events: string[];
-  url: string; username: string; channel: string; bot_token: string; chat_id: string; secret: string;
+  url: string; username: string; channel: string; bot_token: string; chat_id: string; secret: string; has_secret: boolean; clear_secret: boolean;
 }
-const chBlank: ChForm = { name: "", kind: "slack", enabled: true, min_severity: "warning", events: [], url: "", username: "", channel: "", bot_token: "", chat_id: "", secret: "" };
+const chBlank: ChForm = { name: "", kind: "slack", enabled: true, min_severity: "warning", events: [], url: "", username: "", channel: "", bot_token: "", chat_id: "", secret: "", has_secret: false, clear_secret: false };
 
 function Channels({ res }: { res: ReturnType<typeof useResource<AlertChannel[]>> }) {
   const { t } = useI18n();
@@ -127,12 +127,12 @@ function Channels({ res }: { res: ReturnType<typeof useResource<AlertChannel[]>>
   const { busy, error, setError, run } = useSubmit();
   const row = useSubmit();
 
-  const open = (c?: AlertChannel) => { setError(null); setEditing({ id: c?.id ?? null, form: c ? { ...chBlank, name: c.name, kind: c.kind, enabled: c.enabled, min_severity: c.min_severity, events: c.events ?? [] } : { ...chBlank } }); };
+  const open = (c?: AlertChannel) => { setError(null); setEditing({ id: c?.id ?? null, form: c ? { ...chBlank, name: c.name, kind: c.kind, enabled: c.enabled, min_severity: c.min_severity, events: c.events ?? [], username: c.username ?? "", channel: c.channel ?? "", has_secret: !!c.has_secret } : { ...chBlank } }); };
   const body = (f: ChForm, editingId: number | null) => {
     const b: Record<string, unknown> = { name: f.name, kind: f.kind, enabled: f.enabled, min_severity: f.min_severity, events: f.events };
     const put = (k: string, v: string) => { if (v !== "" || !editingId) b[k] = v; };
     if (f.kind === "telegram") { put("bot_token", f.bot_token); put("chat_id", f.chat_id); }
-    else { put("url", f.url); if (f.kind === "mattermost") { put("username", f.username); put("channel", f.channel); } if (f.kind === "webhook") put("secret", f.secret); }
+    else { put("url", f.url); if (f.kind === "mattermost") { b.username = f.username; b.channel = f.channel; } if (f.kind === "webhook") { if (f.clear_secret) b.clear_secret = true; else put("secret", f.secret); } }
     return b;
   };
   const save = async () => {
@@ -233,7 +233,8 @@ function Channels({ res }: { res: ReturnType<typeof useResource<AlertChannel[]>>
                 <IdField label={t("fUsername")}>{(id) => <Input id={id} value={f.username} onChange={(e) => set({ username: e.target.value })} placeholder="Corvus" />}</IdField>
                 <IdField label={t("fChannel")}>{(id) => <Input id={id} value={f.channel} onChange={(e) => set({ channel: e.target.value })} placeholder="town-square" />}</IdField>
               </div>)}
-              {f.kind === "webhook" && <IdField label={t("fSecret")}>{(id) => <Input id={id} type="password" autoComplete="off" className="font-mono" value={f.secret} onChange={(e) => set({ secret: e.target.value })} placeholder={secretPh} />}</IdField>}
+              {f.kind === "webhook" && <IdField label={t("fSecret")}>{(id) => <Input id={id} type="password" autoComplete="off" className="font-mono" value={f.clear_secret ? "" : f.secret} disabled={f.clear_secret} onChange={(e) => set({ secret: e.target.value })} placeholder={isEdit && f.has_secret ? secretPh : undefined} />}</IdField>}
+              {f.kind === "webhook" && isEdit && f.has_secret && <SwitchRow label={t("clearSecret")} checked={f.clear_secret} onChange={(v) => set({ clear_secret: v, secret: "" })} />}
             </>)}
             <SwitchRow label={t("enabled")} checked={f.enabled} onChange={(v) => set({ enabled: v })} />
           </FormSection>

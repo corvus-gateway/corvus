@@ -216,7 +216,7 @@ export const ru: Partial<Record<keyof typeof ko, string>> = {
   allRules: "Все правила", nRules: "Правил: {n}", chEvents: "Получаемые правила", chEventsDesc: "Оставьте пустым, чтобы получать оповещения по всем правилам.",
   testSend: "Отправить тест", testOk: "Тестовое сообщение отправлено", testFail: "Не удалось доставить тестовое сообщение", deleteChannelTitle: "Удаление канала",
   secretKeep: "Оставьте пустым, чтобы сохранить текущее значение", chCreated: "Канал добавлен", chCreatedTest: "Канал добавлен. Отправьте тестовое сообщение, чтобы проверить подключение.",
-  fUrl: "URL веб-хука", fUsername: "Отображаемое имя (необязательно)", fChannel: "Канал (необязательно)", fBotToken: "Токен бота", fChatId: "chat_id", fSecret: "Секрет подписи (необязательно)",
+  fUrl: "URL веб-хука", fUsername: "Отображаемое имя (необязательно)", fChannel: "Канал (необязательно)", fBotToken: "Токен бота", fChatId: "chat_id", fSecret: "Секрет подписи (необязательно)", clearSecret: "Удалить секрет подписи",
   hintSlack: "Приложение Slack → включите Incoming Webhooks → выберите канал и скопируйте Webhook URL",
   hintMattermost: "Integrations → добавьте Incoming Webhook → скопируйте URL",
   hintDiscord: "Настройки канала → Integrations → Webhooks → New Webhook → скопируйте URL",

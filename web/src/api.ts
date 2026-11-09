@@ -251,7 +251,7 @@ export type AlertSeverity = "info" | "warning" | "critical";
 export type AlertKind = "slack" | "mattermost" | "discord" | "teams" | "telegram" | "webhook";
 export interface AlertChannel {
   id: number; name: string; kind: AlertKind; enabled: boolean; min_severity: AlertSeverity; events: string[]; target_hint?: string;
-  created_at?: string; updated_at?: string;
+  username?: string; channel?: string; has_secret?: boolean; created_at?: string; updated_at?: string;
 }
 export interface AlertRuleCfg { enabled: boolean; severity: AlertSeverity; threshold?: number; window_s?: number; min_requests?: number }
 export interface AlertSettings { cooldown_s: number; send_resolved: boolean; language: "ko" | "en"; public_url: string; rules: Record<string, AlertRuleCfg> }

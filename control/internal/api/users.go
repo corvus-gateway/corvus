@@ -25,11 +25,11 @@ func (s *Server) requireRole(min string, next http.HandlerFunc) http.Handler {
 }
 
 type userInput struct {
-	Email    string `json:"email"`
-	Name     string `json:"name"`
-	Role     string `json:"role"`
-	Password string `json:"password"`
-	Disabled *bool  `json:"disabled"`
+	Email    string  `json:"email"`
+	Name     *string `json:"name"` // update: omitted = unchanged, "" = no name (the email is shown)
+	Role     string  `json:"role"`
+	Password string  `json:"password"`
+	Disabled *bool   `json:"disabled"`
 }
 
 func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
@@ -54,7 +54,10 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 	if !store.ValidRole(in.Role) {
 		errs = append(errs, validate.FieldError{Field: "role", Code: "invalid", Message: "role must be admin, operator or viewer"})
 	}
-	name := strings.TrimSpace(in.Name)
+	name := ""
+	if in.Name != nil {
+		name = strings.TrimSpace(*in.Name)
+	}
 	if name == "" {
 		name = strings.SplitN(in.Email, "@", 2)[0]
 	}
@@ -109,8 +112,12 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 	if in.Disabled != nil {
 		disabled = *in.Disabled
 	}
-	if n := strings.TrimSpace(in.Name); n != "" {
-		name = n
+	if in.Name != nil {
+		name = strings.TrimSpace(*in.Name)
+		if len(name) > 64 {
+			fail(w, validate.Errors{{Field: "name", Code: "invalid", Message: "name must be at most 64 characters"}})
+			return
+		}
 	}
 	if id == me.ID && (role != u.Role || disabled) {
 		fail(w, conflictError{"you cannot change your own role or disable your own account"})

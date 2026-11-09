@@ -290,6 +290,15 @@ func TestSecIPLists(t *testing.T) {
 	e.s.Feeds = &zsFeeds{err: store.ErrNotFound}
 	e.h = e.s.Handler()
 	e.must(404, "POST", "/api/ip-lists/999/refresh", nil)
+	// the list was deleted while its feed was fetched: the fetch error comes back with no
+	// list, which is "not found", not an internal error
+	e.s.Feeds = &zsFeeds{err: errors.New("HTTP 503")}
+	e.h = e.s.Handler()
+	e.must(404, "POST", "/api/ip-lists/999/refresh", nil)
+	// no list and no error from the refresher: an internal error, not a crash
+	e.s.Feeds = &zsFeeds{}
+	e.h = e.s.Handler()
+	e.must(500, "POST", fmt.Sprintf("/api/ip-lists/%d/refresh", lid), nil)
 	e.must(400, "POST", "/api/ip-lists/x/refresh", nil)
 
 	// in use by a rule: cannot be deleted

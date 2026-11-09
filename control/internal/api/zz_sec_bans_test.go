@@ -88,6 +88,9 @@ func TestSecBans(t *testing.T) {
 	if l := e.zsList("/api/bans"); len(l) != 1 || l[0]["ip"] != "2001:db8::1" {
 		t.Fatalf("after lift: %v", l)
 	}
+	// lifting it again (e.g. from a second open console) finds nothing to lift and
+	// records nothing: the audit count below stays at one ban.delete
+	e.must(404, "DELETE", fmt.Sprintf("/api/bans/%d", bid), nil)
 	e.must(404, "DELETE", "/api/bans/999", nil)
 	e.must(400, "DELETE", "/api/bans/0", nil)
 
