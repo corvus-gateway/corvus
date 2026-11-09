@@ -48,11 +48,20 @@ local SIGNATURES = {
 
 -- ------------------------------------------------------------------ read
 
+-- may_have_body: HTTP/1 announces a body with Content-Length or Transfer-Encoding. HTTP/2
+-- and HTTP/3 have no Transfer-Encoding and Content-Length is optional there, so a request
+-- without it may still carry a body (streamed uploads, fetch with a stream body).
+local function may_have_body()
+  local cl = tonumber(ngx.var.http_content_length or "")
+  if cl then return cl > 0 end
+  if (ngx.var.http_transfer_encoding or "") ~= "" then return true end
+  return (ngx.req.http_version() or 1) >= 2
+end
+
 -- Returns the raw body (possibly ""), or nil + reason ("too_large", "unreadable").
 local function read_raw(max)
+  if not may_have_body() then return "" end
   local cl = tonumber(ngx.var.content_length)
-  if cl == 0 then return "" end
-  if not cl and not ngx.var.http_transfer_encoding then return "" end
   if cl and cl > max then return nil, "too_large" end
   ngx.req.read_body()
   local data = ngx.req.get_body_data()
@@ -193,9 +202,7 @@ function _M.text(max)
     return ctx.corvus_body_text, nil, ctx.corvus_body_meta
   end
   local enc = ngx.var.http_content_encoding
-  local cl = tonumber(ngx.var.http_content_length or "")
-  local has_body = (cl ~= nil and cl > 0) or (ngx.var.http_transfer_encoding or "") ~= ""
-  if has_body and enc and enc ~= "" and lower(enc) ~= "identity" then
+  if may_have_body() and enc and enc ~= "" and lower(enc) ~= "identity" then
     ctx.corvus_body_text, ctx.corvus_body_err = false, "encoded"
     return nil, "encoded"
   end
@@ -235,8 +242,9 @@ function _M.set_signatures(list)
   for _, s in ipairs(list) do
     if type(s) == "table" and type(s.id) == "string" and type(s.pattern) == "string" then
       local opts = (type(s.options) == "string" and s.options ~= "") and s.options or "jo"
-      local ok, err = pcall(re_find, "", s.pattern, opts)
-      if ok and err ~= false then
+      -- ngx.re.find returns nil, nil, err for a pattern PCRE rejects
+      local ok, _, _, err = pcall(re_find, "", s.pattern, opts)
+      if ok and not err then
         out[#out + 1] = { s.id, s.pattern, opts }
       else
         ngx.log(ngx.ERR, "corvus body: invalid signature ", s.id, " ignored")
