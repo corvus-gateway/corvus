@@ -63,8 +63,8 @@ export default function Deployments() {
 
   return (
     <>
-      <PageHeader title={t("navDeploy")} description={t("deployDesc")} actions={can && <Button variant="primary" onClick={() => setDeploying("")}><Rocket className="h-4 w-4" />{t("deployNow")}</Button>} />
-      <ErrorBox error={act.error && !(act.error as { fields?: unknown }).fields ? act.error : null} className="mb-4" />
+      <PageHeader title={t("navDeploy")} description={t("deployDesc")} actions={can && <Button variant="primary" onClick={() => { act.setError(null); setDeploying(""); }}><Rocket className="h-4 w-4" />{t("deployNow")}</Button>} />
+      <ErrorBox error={deploying === null ? act.error : null} className="mb-4" />
       {res.loading ? <div className="space-y-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
         : res.error && !res.data ? <ErrorBox error={res.error} />
           : !versions.length && offset === 0 ? <Card><EmptyState icon={History} title={t("noDeployments")} description={t("noDeploymentsDesc")} /></Card> : (
@@ -125,6 +125,7 @@ export default function Deployments() {
 
       <Modal open={deploying !== null} onOpenChange={(o) => !o && setDeploying(null)} title={t("deployNow")} description={t("deployNowDesc")}
         footer={<><Button onClick={() => setDeploying(null)}>{t("cancel")}</Button><Button variant="primary" loading={act.busy} onClick={deploy}><Rocket className="h-4 w-4" />{t("deployNow")}</Button></>}>
+        <ErrorBox error={act.error} className="mb-4" />
         <Field label={t("message")} htmlFor="dmsg"><Input id="dmsg" value={deploying ?? ""} onChange={(e) => setDeploying(e.target.value)} placeholder={t("messagePlaceholder")} autoFocus /></Field>
       </Modal>
     </>

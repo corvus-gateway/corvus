@@ -36,7 +36,7 @@ export default function Streams() {
   const [editing, setEditing] = useState<{ id: number | null; form: Form } | null>(null);
   const [deleting, setDeleting] = useState<Stream | null>(null);
   const { busy, error, setError, run } = useSubmit();
-  const rowAction = useSubmit();
+  const rowAction = useSubmit({ toastAll: true });
 
   const cert = (id: number | null) => certs.data?.find((c) => c.id === id);
 

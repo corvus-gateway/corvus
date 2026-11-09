@@ -125,7 +125,7 @@ function RulesTab({ list, lists, hosts, geo, onEdit, onEvents }: {
   const [announce, setAnnounce] = useState("");
   const pending = useRef(false);
   const handles = useRef(new Map<number, HTMLButtonElement>());
-  const row = useSubmit();
+  const row = useSubmit({ toastAll: true });
   const order = useSubmit();
 
   useEffect(() => { if (!pending.current) setLocal(null); }, [list.data]);

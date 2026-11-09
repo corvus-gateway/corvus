@@ -20,6 +20,11 @@ export const LOCALE_TAG: Record<Lang, string> = {
 };
 export const localeTag = (l: Lang) => LOCALE_TAG[l] ?? "en-US";
 
+// Number formatting follows the console language (set by I18nProvider on render, so
+// plain helpers such as fmtNum need no language argument).
+let numLocale = "en-US";
+export const numberLocale = () => numLocale;
+
 /** A console language: its strings, plus rule and audit labels for languages other than ko/en. */
 export interface Locale { dict: Partial<Record<Key, string>>; rules?: RuleLabels; audit?: AuditLabels }
 
@@ -66,6 +71,7 @@ const Ctx = createContext<{ lang: Lang; setLang: (l: Lang) => void; t: TFn }>(nu
 export function I18nProvider({ children }: { children: ReactNode }) {
   // main.tsx loads the saved language before the first render; English if that failed.
   const [lang, setLangState] = useState<Lang>(() => { const l = initialLang(); return loaded[l] ? l : "en"; });
+  numLocale = localeTag(lang);
   useEffect(() => { document.documentElement.lang = lang; }, [lang]);
   const setLang = useCallback((l: Lang) => {
     try { localStorage.setItem("corvus.lang", l); } catch { /* ignore */ }

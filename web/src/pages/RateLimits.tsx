@@ -23,7 +23,7 @@ export default function RateLimits() {
   const [editing, setEditing] = useState<{ id: number | null; form: Form } | null>(null);
   const [deleting, setDeleting] = useState<RateLimit | null>(null);
   const { busy, error, setError, run } = useSubmit();
-  const row = useSubmit();
+  const row = useSubmit({ toastAll: true });
 
   const filtered = useMemo(() => (list.data ?? []).filter((r) => r.name.toLowerCase().includes(q.trim().toLowerCase())), [list.data, q]);
   const open = (r?: RateLimit) => { setError(null); setEditing({ id: r?.id ?? null, form: r ? pick(r) : { ...blank } }); };

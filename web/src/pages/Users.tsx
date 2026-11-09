@@ -38,6 +38,7 @@ export default function Users() {
   const [pw, setPw] = useState<{ user: User; value: string } | null>(null);
   const [mfaFor, setMfaFor] = useState<User | null>(null);
   const [deleting, setDeleting] = useState<User | null>(null);
+  const [disabling, setDisabling] = useState<User | null>(null);
   const { busy, error, setError, run } = useSubmit();
   const row = useSubmit();
   const pwSub = useSubmit();
@@ -112,7 +113,7 @@ export default function Users() {
                         { label: t("edit"), icon: Pencil, onSelect: () => open(u) },
                         { label: t("resetPassword"), icon: KeyRound, onSelect: () => { pwSub.setError(null); setPw({ user: u, value: "" }); } },
                         { label: t("resetMfa"), icon: ShieldOff, hidden: !u.mfa_enabled, onSelect: () => setMfaFor(u) },
-                        { label: u.disabled ? t("enableUser") : t("disableUser"), icon: u.disabled ? UserCheck : UserX, disabled: self, separatorBefore: true, onSelect: () => setDisabled(u, !u.disabled) },
+                        { label: u.disabled ? t("enableUser") : t("disableUser"), icon: u.disabled ? UserCheck : UserX, disabled: self, separatorBefore: true, onSelect: () => (u.disabled ? setDisabled(u, false) : setDisabling(u)) },
                         { label: t("deleteUser"), icon: Trash2, danger: true, disabled: self, onSelect: () => setDeleting(u) },
                       ]} /></Td>
                     </Tr>
@@ -162,6 +163,8 @@ export default function Users() {
       <ConfirmDialog open={!!mfaFor} onOpenChange={(o) => !o && setMfaFor(null)} title={t("resetMfaTitle")} description={t("resetMfaDesc")} confirmLabel={t("resetMfa")} onConfirm={resetMfa}>
         {mfaFor && <div className="rounded border border-line bg-surface-2 px-3 py-2 text-sm font-medium">{mfaFor.name || mfaFor.email}</div>}
       </ConfirmDialog>
+      <ConfirmDialog open={!!disabling} onOpenChange={(o) => !o && setDisabling(null)} title={disabling ? t("disableUserTitle", { name: disabling.name || disabling.email }) : ""}
+        description={t("disableUserDesc")} confirmLabel={t("disableUser")} onConfirm={async () => { if (disabling) await setDisabled(disabling, true); }} />
       <ConfirmDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)} title={t("deleteUserTitle")} description={t("deleteUserDesc")} confirmLabel={t("deleteUser")} onConfirm={remove}>
         {deleting && <div className="rounded border border-line bg-surface-2 px-3 py-2 text-sm font-medium">{deleting.name || deleting.email}</div>}
       </ConfirmDialog>

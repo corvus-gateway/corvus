@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Check, CheckCircle2, Cloud, FileKey, Globe, Loader2, RefreshCw, ShieldCheck, Sparkles, Trash2, Upload } from "lucide-react";
-import { api, isMissing, type Certificate } from "../api";
+import { ApiError, api, isMissing, type Certificate } from "../api";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Badge, Callout, Card, EmptyState, TableSkeleton } from "../components/ui/display";
@@ -57,8 +57,13 @@ export default function Certificates() {
     const f = wizard.form;
     const body: Record<string, unknown> = { domains: f.domains, email: f.email, challenge: f.challenge, staging: f.staging };
     if (f.challenge === "dns-01") Object.assign(body, dnsRequest(f.dnsc));
-    const r = await ac.run(() => api.post("/api/certificates/acme", body), { success: t("acmeStarted"), deployed: false });
-    if (r !== undefined) { setWizard(null); list.reload(); creds.reload(); }
+    let failed: unknown;
+    const r = await ac.run(() => api.post("/api/certificates/acme", body).catch((e) => { failed = e; throw e; }), { success: t("acmeStarted"), deployed: false });
+    if (r !== undefined) { setWizard(null); list.reload(); creds.reload(); return; }
+    // field errors are shown next to their field: go back to the step that has it
+    const fields = failed instanceof ApiError ? failed.fields.map((x) => x.field) : [];
+    const step = fields.some((x) => x === "domains" || x === "email") ? 0 : fields.some((x) => x.startsWith("dns_")) ? 1 : null;
+    if (step !== null) setWizard((x) => (x ? { ...x, step } : x));
   };
   const renew = async (c: Certificate) => {
     const r = await row.run(() => api.post(`/api/certificates/${c.id}/renew`), { success: t("renewStarted"), deployed: false });
