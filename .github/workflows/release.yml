@@ -1,7 +1,8 @@
 # Release: on a v* tag, build the image natively for amd64 and arm64, smoke-test each
 # architecture, publish one multi-arch tag to GHCR, sign it (keyless cosign) and attach
-# build provenance. Run manually (workflow_dispatch) to build and smoke-test without
-# publishing.
+# build provenance. The SBOMs, the provenance and signed checksums are also attached to a
+# draft GitHub release, which is published by hand with the release notes. Run manually
+# (workflow_dispatch) to build and smoke-test without publishing.
 name: release
 on:
   push:
@@ -126,7 +127,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     permissions:
-      contents: read
+      contents: write        # draft GitHub release with the SBOM and provenance files
       packages: write
       id-token: write        # keyless signing (Sigstore) and attestations
       attestations: write
@@ -162,8 +163,45 @@ jobs:
         if: ${{ !github.event.repository.private }}
         run: cosign sign --yes "${IMAGE}@${{ steps.manifest.outputs.digest }}"
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        id: attest
         if: ${{ !github.event.repository.private }}
         with:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.manifest.outputs.digest }}
           push-to-registry: true
+      # The same evidence as files on the GitHub release: SPDX SBOM per architecture (from
+      # the image's BuildKit attestation), the provenance (in-toto envelope and the full
+      # Sigstore bundle), the image digest, and SHA256SUMS signed keylessly.
+      - name: Release files
+        if: ${{ !github.event.repository.private }}
+        env:
+          DIGEST: ${{ steps.manifest.outputs.digest }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          mkdir rel && cd rel
+          for arch in amd64 arm64; do
+            docker buildx imagetools inspect "${IMAGE}@${DIGEST}" \
+              --format "{{ json (index .SBOM \"linux/${arch}\").SPDX }}" > "corvus-${v}-sbom-linux-${arch}.spdx.json"
+            test "$(jq -r .spdxVersion "corvus-${v}-sbom-linux-${arch}.spdx.json")" != null
+          done
+          jq -c .dsseEnvelope "$BUNDLE" > "corvus-${v}.intoto.jsonl"
+          cp "$BUNDLE" "corvus-${v}.provenance.sigstore.json"
+          echo "${IMAGE}@${DIGEST}" > "corvus-${v}.image-digest.txt"
+          sha256sum -- * > SHA256SUMS
+          cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
+          ls -l
+      - name: Draft GitHub release
+        if: ${{ !github.event.repository.private }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" rel/* --clobber
+          else
+            pre=""; case "$tag" in *-*) pre="--prerelease" ;; esac
+            gh release create "$tag" rel/* --draft $pre --verify-tag --title "$tag" \
+              --notes "Release notes follow."
+          fi

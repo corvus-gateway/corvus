@@ -20,3 +20,40 @@ docker compose -f docker-compose.hardened.yml up -d
 !!! note "큰 파일 업로드"
     이 모드에서는 임시 파일이 256 MB 크기의 메모리 기반 `/tmp`에 저장됩니다. 프록시 호스트가 약
     200 MB보다 큰 업로드를 받는다면 compose 파일에서 `tmpfs` 크기를 늘리세요.
+
+## 이미지 검증
+
+릴리즈 이미지는 태그된 소스로 GitHub Actions에서 빌드되고, [Sigstore](https://www.sigstore.dev/)
+cosign으로 키 없이(keyless) 서명됩니다. 따로 받아 둘 공개 키는 없습니다. 서명이 이 저장소의
+`release.yml` 워크플로에서 만든 이미지임을 증명합니다. cosign 3(또는 `--new-bundle-format`을 쓴
+2.6)을 사용하세요.
+
+```bash
+cosign verify ghcr.io/corvus-gateway/gateway:1.2.4 \
+  --certificate-identity-regexp '^https://github.com/corvus-gateway/corvus/.github/workflows/release.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+# 빌드 출처(SLSA) 확인, GitHub CLI 사용
+gh attestation verify oci://ghcr.io/corvus-gateway/gateway:1.2.4 --owner corvus-gateway
+```
+
+각 [GitHub 릴리즈](https://github.com/corvus-gateway/corvus/releases)에는 다음 파일도 첨부됩니다.
+
+| 파일 | 내용 |
+|---|---|
+| `corvus-<버전>-sbom-linux-amd64.spdx.json`, `…-arm64.spdx.json` | 소프트웨어 구성 목록(SBOM, SPDX 2.3) |
+| `corvus-<버전>.intoto.jsonl` | 빌드 출처(SLSA v1, in-toto 형식) |
+| `corvus-<버전>.provenance.sigstore.json` | 같은 빌드 출처의 Sigstore 번들 |
+| `corvus-<버전>.image-digest.txt` | 이 파일들이 가리키는 이미지 다이제스트 |
+| `SHA256SUMS`, `SHA256SUMS.sigstore.json` | 위 파일들의 체크섬과 그 서명 |
+
+내려받은 파일 확인:
+
+```bash
+cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/corvus-gateway/corvus/.github/workflows/release.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+sha256sum -c SHA256SUMS
+```
+
+파일 첨부는 1.2.4부터입니다.
