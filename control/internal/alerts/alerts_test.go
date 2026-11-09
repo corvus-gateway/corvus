@@ -193,3 +193,28 @@ func TestErrorRateFlapping(t *testing.T) {
 		}
 	}
 }
+
+// A Let's Encrypt certificate whose first issuance failed has no expiry yet: only
+// acme_failed fires, not a "certificate expiring" alert with a negative day count.
+func TestCertExpiryNotForNeverIssued(t *testing.T) {
+	e, _, h, _ := setup(t)
+	ctx := context.Background()
+	e.init()
+	// created three days ago: not_after is still the creation time
+	c := &store.Certificate{Name: "typo", Kind: "acme", Domains: []string{"shpo.example.com"}, NotAfter: time.Now().Add(-72 * time.Hour),
+		Status: "error", LastError: "urn:ietf:params:acme:error:dns", AutoRenew: true}
+	if err := e.Store.CreateCertificate(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	e.Evaluate(ctx, time.Now())
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, m := range h.msgs {
+		if b, _ := json.Marshal(m); strings.Contains(string(b), "xpiring") || strings.Contains(string(b), "만료 임박") {
+			t.Errorf("expiry alert for a certificate that was never issued: %s", b)
+		}
+	}
+	if len(h.msgs) != 1 {
+		t.Errorf("want only acme_failed, got %d alerts", len(h.msgs))
+	}
+}

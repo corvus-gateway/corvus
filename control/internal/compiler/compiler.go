@@ -370,7 +370,9 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 			return fmt.Errorf("proxy host %d: %w", h.ID, err)
 		}
 		v := hostView{ProxyHost: hc, P: c.P, HasRootLocation: validate.HasRootLocation(hc.AdvancedConfig)}
-		v.OwnAccessLog = strings.Contains(hc.AdvancedConfig, "access_log")
+		// only a server-level access_log replaces the inherited one; one inside a location
+		// (e.g. "location /health { access_log off; }") or in a comment does not
+		v.OwnAccessLog = topLevelDirective(hc.AdvancedConfig, "access_log")
 		// Upload size and gzip are server-level directives: an advanced configuration that
 		// sets them itself (common in NPM setups) keeps its own (nginx rejects duplicates).
 		if hc.MaxUploadMB != nil && !topLevelDirective(hc.AdvancedConfig, "client_max_body_size") {

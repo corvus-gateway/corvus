@@ -93,13 +93,28 @@ func Parse(certPEM, keyPEM []byte) (*Info, error) {
 	return &Info{Domains: domains, NotAfter: leaf.NotAfter.UTC()}, nil
 }
 
-// Write stores the pair; the private key is only readable by the owner.
+// Write stores the pair; the private key is only readable by the owner. Both files are
+// written under temporary names first and then renamed, so a reload or config test never
+// sees a new certificate next to the old key (or a half-written file).
 func Write(dir string, certPEM, keyPEM []byte) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(dir, "fullchain.pem"), certPEM, 0o644); err != nil {
-		return err
+	files := []struct {
+		name string
+		data []byte
+		mode os.FileMode
+	}{{"fullchain.pem", certPEM, 0o644}, {"privkey.pem", keyPEM, 0o600}}
+	for _, f := range files {
+		if err := os.WriteFile(filepath.Join(dir, f.name+".tmp"), f.data, f.mode); err != nil {
+			return err
+		}
 	}
-	return os.WriteFile(filepath.Join(dir, "privkey.pem"), keyPEM, 0o600)
+	// both renames happen right after each other; a crash while writing leaves the old pair
+	for _, name := range []string{"privkey.pem", "fullchain.pem"} {
+		if err := os.Rename(filepath.Join(dir, name+".tmp"), filepath.Join(dir, name)); err != nil {
+			return err
+		}
+	}
+	return nil
 }

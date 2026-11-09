@@ -342,5 +342,15 @@ func (d *Deployer) Refresh(ctx context.Context, message string) error {
 		return d.Runner.Reload()
 	}
 	_, err := d.Apply(ctx, nil, message, nil)
+	if err != nil {
+		// the stored settings did not deploy: still reload the active configuration so
+		// renewed certificate files are picked up (renewal does not retry once the new
+		// expiry date is stored)
+		d.mu.Lock()
+		if rerr := d.Runner.Reload(); rerr != nil {
+			slog.Error("gateway reload after failed redeploy", "err", rerr)
+		}
+		d.mu.Unlock()
+	}
 	return err
 }

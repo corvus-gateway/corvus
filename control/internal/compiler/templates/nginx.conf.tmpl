@@ -68,7 +68,9 @@ http {
     # Security-rule challenge answers (/__corvus/challenge/verify): a browser posts once
     # per challenge, so a few per second per IP is plenty.
     limit_req_zone $binary_remote_addr zone=corvus_ch_api:10m rate=5r/s;
-    server_names_hash_bucket_size 128;
+    # a bucket must hold one exact name (8 + name rounded up to 8 + 8 bytes): 512 fits the
+    # longest valid domain (253 characters); 128 stopped at 110
+    server_names_hash_bucket_size 512;
     map_hash_bucket_size 128;
 
     # Request bodies are buffered outside the data volume so uploads cannot fill

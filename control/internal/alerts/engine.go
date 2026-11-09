@@ -302,7 +302,10 @@ func (e *Engine) detect(ctx context.Context, set Settings, tr map[string]string,
 			key := fmt.Sprint(c.ID)
 			days := time.Until(c.NotAfter).Hours() / 24
 			// also after failed renewals (status "error" once expired); not while pending
-			if expOn && c.Status != "pending" && !c.NotAfter.IsZero() && days <= r1.Threshold {
+			// a Let's Encrypt certificate whose first issuance failed has no expiry date yet
+			// (not_after is still its creation time): that is acme_failed, not cert_expiry
+			neverIssued := c.Kind == "acme" && !c.NotAfter.After(c.CreatedAt.Add(time.Hour))
+			if expOn && c.Status != "pending" && !c.NotAfter.IsZero() && !neverIssued && days <= r1.Threshold {
 				out = append(out, finding{rule: "cert_expiry", key: key, title: fmt.Sprintf(tr["cert_expiry"], name),
 					text:   fmt.Sprintf(tr["cert_expiryText"], days, c.NotAfter.Format("2006-01-02"), map[bool]string{true: tr["autoRenewOn"], false: tr["autoRenewOff"]}[c.AutoRenew]),
 					fields: [][2]string{{tr["certificate"], name}, {tr["expires"], c.NotAfter.Format("2006-01-02")}}})
