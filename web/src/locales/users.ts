@@ -9,7 +9,7 @@ export const koUsers = {
   roleSelf: "본인의 역할은 변경할 수 없습니다.", userSaved: "사용자를 저장했습니다", userDeletedToast: "사용자를 삭제했습니다",
   resetPassword: "비밀번호 재설정", resetPasswordDesc: "새 비밀번호를 설정하면 해당 사용자의 모든 세션이 즉시 종료되고 API 토큰도 삭제됩니다.", passwordResetDone: "비밀번호를 재설정했습니다",
   resetMfa: "MFA 초기화", resetMfaTitle: "2단계 인증을 초기화할까요?", resetMfaDesc: "대상 사용자의 2단계 인증이 해제됩니다. 사용자는 다시 설정해야 합니다.", mfaResetDone: "MFA를 초기화했습니다",
-  disableUser: "비활성화", enableUser: "활성화", userDisabledToast: "사용자를 비활성화했습니다", userEnabledToast: "사용자를 활성화했습니다",
+  disableUser: "비활성화", enableUser: "활성화", userDisabledToast: "사용자를 비활성화했습니다", userEnabledToast: "사용자를 활성화했습니다", disableUserTitle: "{name}을(를) 비활성화할까요?",
   disableUserDesc: "비활성화하면 로그인할 수 없고 현재 세션이 즉시 종료됩니다.", deleteUser: "삭제", deleteUserTitle: "사용자 삭제", deleteUserDesc: "계정이 영구 삭제됩니다. 감사 로그는 유지됩니다.",
   conflictTitle: "요청을 처리할 수 없습니다", forbidden: "권한이 없습니다", noPermissionTitle: "접근 권한이 없습니다", noPermissionDesc: "이 페이지는 관리자만 볼 수 있습니다. 필요하면 관리자에게 권한을 요청하세요.",
   advancedAdminOnly: "고급 설정은 관리자만 변경할 수 있습니다.", readOnlyNotice: "조회 권한으로 접속 중입니다. 변경 작업은 숨겨져 있습니다.", adminOnlyNotice: "이 설정은 관리자만 변경할 수 있습니다.",

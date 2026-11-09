@@ -29,7 +29,7 @@ export default function Waitrooms() {
   const [deleting, setDeleting] = useState<Waitroom | null>(null);
   const [releasing, setReleasing] = useState<Waitroom | null>(null);
   const { busy, error, setError, run } = useSubmit();
-  const row = useSubmit();
+  const row = useSubmit({ toastAll: true });
 
   const refreshAll = () => { rooms.reload(); window.dispatchEvent(new Event("corvus:refresh")); };
   const open = (w?: Waitroom) => { setError(null); setEditing({ id: w?.id ?? null, form: w ? pick(w) : { ...blank } }); };

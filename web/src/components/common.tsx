@@ -46,8 +46,11 @@ export function ErrorBox({ error, className }: { error: unknown; className?: str
   );
 }
 
-/** Wraps a mutation: busy flag, error capture, success toast with deployed version. */
-export function useSubmit() {
+/** Wraps a mutation: busy flag, error capture, success toast with deployed version.
+ *  Validation and "configuration rejected" errors are left to the page's ErrorBox; pass
+ *  toastAll for actions that have no ErrorBox (table row switches, delete confirmations,
+ *  the redeploy banner), so those failures are not silent. */
+export function useSubmit({ toastAll = false }: { toastAll?: boolean } = {}) {
   const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -63,20 +66,33 @@ export function useSubmit() {
       // 403 is also "wrong current password / code" (invalid_credentials): the ErrorBox
       // shows that message, the permission toast would be misleading
       if (e instanceof ApiError && e.status === 403 && e.kind !== "invalid_credentials") toast.error(t("forbidden"));
-      else if (!o.silentError && !(e instanceof ApiError && (e.kind === "validation" || e.kind === "config_rejected"))) {
+      else if (o.silentError) { /* the caller shows it */ }
+      else if (e instanceof ApiError && (e.kind === "validation" || e.kind === "config_rejected")) {
+        if (toastAll) toast.error(e.kind === "config_rejected" ? t("configRejected") : t("validationFailed"), { description: errorSummary(e), duration: 10_000 });
+      } else {
         toast.error(e instanceof ApiError ? e.message : t("requestFailed"));
       }
       return undefined;
     } finally { setBusy(false); }
-  }, [t]);
+  }, [t, toastAll]);
   return { busy, error, setError, run };
+}
+
+/** Short text for a toast: the field messages, or the last lines of nginx's test output. */
+function errorSummary(e: ApiError): string {
+  if (e.kind === "config_rejected" && e.output) {
+    const lines = e.output.trim().split("\n").filter((l) => !/test failed|syntax is ok/.test(l));
+    return (lines.slice(-2).join("\n") || e.message).slice(0, 300);
+  }
+  const msgs = e.fields.map((f) => f.message).filter(Boolean);
+  return (msgs.length ? msgs.join(" · ") : e.message).slice(0, 300);
 }
 
 /** "Saved but not yet applied" banner with redeploy action. */
 export function DirtyBanner({ onDeployed }: { onDeployed?: () => void }) {
   const { t } = useI18n();
   const { can } = useCan();
-  const { busy, run } = useSubmit();
+  const { busy, run } = useSubmit({ toastAll: true });
   const redeploy = async () => {
     const r = await run(() => api.post("/api/deployments", {}), { success: t("deployed") });
     if (r !== undefined) { onDeployed?.(); window.dispatchEvent(new Event("corvus:refresh")); }

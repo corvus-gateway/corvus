@@ -55,7 +55,7 @@ export default function RedirectionHosts() {
   const [editing, setEditing] = useState<{ id: number | null; form: Form; req: CertReq | null } | null>(null);
   const [deleting, setDeleting] = useState<RedirectionHost | null>(null);
   const { busy, error, setError, run } = useSubmit();
-  const rowAction = useSubmit();
+  const rowAction = useSubmit({ toastAll: true });
 
   const certName = (id: number | null) => certs.data?.find((c) => c.id === id)?.name;
 

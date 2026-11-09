@@ -11,7 +11,7 @@ export const enUsers: Record<keyof typeof koUsers, string> = {
   roleSelf: "You cannot change your own role.", userSaved: "User saved", userDeletedToast: "User deleted",
   resetPassword: "Reset password", resetPasswordDesc: "Setting a new password immediately ends all of the user's sessions and deletes their API tokens.", passwordResetDone: "Password reset",
   resetMfa: "Reset MFA", resetMfaTitle: "Reset two-step verification?", resetMfaDesc: "Two-step verification is turned off for this user, who will need to set it up again.", mfaResetDone: "MFA reset",
-  disableUser: "Disable", enableUser: "Enable", userDisabledToast: "User disabled", userEnabledToast: "User enabled",
+  disableUser: "Disable", enableUser: "Enable", userDisabledToast: "User disabled", userEnabledToast: "User enabled", disableUserTitle: "Disable {name}?",
   disableUserDesc: "A disabled user cannot sign in and current sessions end immediately.", deleteUser: "Delete", deleteUserTitle: "Delete user", deleteUserDesc: "The account is permanently deleted. Audit entries are kept.",
   conflictTitle: "The request could not be applied", forbidden: "You do not have permission", noPermissionTitle: "Access denied", noPermissionDesc: "Only administrators can view this page. Ask an administrator if you need access.",
   advancedAdminOnly: "Only administrators can change advanced settings.", readOnlyNotice: "You are signed in with read-only access. Change actions are hidden.", adminOnlyNotice: "Only administrators can change these settings.",

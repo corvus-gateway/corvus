@@ -64,7 +64,7 @@ export default function ProxyHosts() {
   const [editing, setEditing] = useState<{ id: number | null; form: Form; req: CertReq | null; auth: BasicAuthForm } | null>(null);
   const [deleting, setDeleting] = useState<ProxyHost | null>(null);
   const { busy, error, setError, run } = useSubmit();
-  const rowAction = useSubmit();
+  const rowAction = useSubmit({ toastAll: true });
 
   const certName = (id: number | null) => certs.data?.find((c) => c.id === id)?.name;
   const roomName = (id: number | null) => rooms.data?.find((r) => r.id === id)?.name;

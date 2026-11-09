@@ -74,6 +74,7 @@ function ActiveStrip({ items }: { items: AlertActive[] | null }) {
   const { t, lang } = useI18n();
   const { can } = useCan();
   const ban = useSubmit();
+  const [banning, setBanning] = useState<AlertActive | null>(null);
   if (!items?.length) return null;
   const banIP = (a: AlertActive) => ban.run(async () => {
     await api.post("/api/bans", { ip: a.key, duration_s: 86400, reason: a.title });
@@ -92,7 +93,7 @@ function ActiveStrip({ items }: { items: AlertActive[] | null }) {
               <span className="ml-auto flex flex-wrap gap-1.5">
                 {IP_RULES.has(a.rule) && <>
                   <Link to={`/traffic?tab=logs&range=1h&q=${encodeURIComponent(a.key)}`}><Button size="sm" variant="ghost"><Search className="h-3.5 w-3.5" />{t("alViewLogs")}</Button></Link>
-                  {can && <Button size="sm" variant="danger" loading={ban.busy} onClick={() => banIP(a)}><Ban className="h-3.5 w-3.5" />{t("alBanIp")}</Button>}
+                  {can && <Button size="sm" variant="danger" loading={ban.busy} onClick={() => setBanning(a)}><Ban className="h-3.5 w-3.5" />{t("alBanIp")}</Button>}
                 </>}
                 {HOST_RULES.has(a.rule) && <Link to={`/traffic?host=${encodeURIComponent(a.key)}`}><Button size="sm" variant="ghost"><Activity className="h-3.5 w-3.5" />{t("alViewTraffic")}</Button></Link>}
                 {PAGE_FOR[a.rule] && <Link to={PAGE_FOR[a.rule]}><Button size="sm" variant="ghost">{t("alOpen")}</Button></Link>}
@@ -103,6 +104,8 @@ function ActiveStrip({ items }: { items: AlertActive[] | null }) {
         ))}
       </ul>
       <ErrorBox error={ban.error} className="mt-2" />
+      <ConfirmDialog open={!!banning} onOpenChange={(o) => !o && setBanning(null)} title={banning ? t("alBanConfirm", { ip: banning.key }) : ""}
+        description={t("alBanConfirmDesc")} confirmLabel={t("alBanIp")} onConfirm={async () => { if (banning) await banIP(banning); }} />
     </div>
   );
 }

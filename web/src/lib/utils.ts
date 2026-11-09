@@ -1,4 +1,4 @@
-import { localeTag, type Lang } from "../i18n";
+import { localeTag, numberLocale, type Lang } from "../i18n";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -13,7 +13,7 @@ export function toMs(t: number | string): number {
 
 export function fmtNum(n: number | null | undefined, digits = 0): string {
   if (n == null || Number.isNaN(n)) return "–";
-  return n.toLocaleString("en-US", { maximumFractionDigits: digits });
+  return n.toLocaleString(numberLocale(), { maximumFractionDigits: digits });
 }
 
 export function fmtCompact(n: number | null | undefined): string {
