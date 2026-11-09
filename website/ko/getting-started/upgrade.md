@@ -1,3 +1,7 @@
+---
+description: "docker compose pull로 Corvus를 업그레이드합니다. 설정, 인증서, 기록은 유지되고 데이터베이스 변경은 자동으로 적용됩니다."
+---
+
 # 업그레이드
 
 ```bash

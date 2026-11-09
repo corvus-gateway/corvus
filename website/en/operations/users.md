@@ -1,3 +1,7 @@
+---
+description: "Corvus users and sign-in: roles, two-step verification, single sign-on (OIDC), API tokens, console protection and the audit log."
+---
+
 # Users & sign-in
 
 ## Roles

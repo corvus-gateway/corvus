@@ -1,3 +1,7 @@
+---
+description: "Create your first proxy host in Corvus: point a domain at a service behind the gateway, turn on HTTPS with a free certificate and deploy."
+---
+
 # Your first proxy host
 
 A **proxy host** sends requests for a domain (e.g. `shop.example.com`) to a service behind Corvus

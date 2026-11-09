@@ -1,3 +1,7 @@
+---
+description: "Keep your site up during launches and traffic spikes: the Corvus access queue (waiting room) lets in only as many visitors as your service can handle and queues the rest in order."
+---
+
 # Access queue
 
 An access queue (waiting room) keeps your site up during a launch, a ticket sale or a sudden spike:

@@ -1,3 +1,7 @@
+---
+description: "Group IP ranges and User-Agent strings into lists that several Corvus security rules can share."
+---
+
 # IP lists
 
 Lists group IP ranges or User-Agent strings so several [security rules](rules.md) can use them.

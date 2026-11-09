@@ -1,3 +1,7 @@
+---
+description: "Fixes for common Corvus problems: the console won't open, 502/504/413 errors, Let's Encrypt failures, blocked visitors, streams and logs."
+---
+
 # Troubleshooting
 
 ## I can't open the console

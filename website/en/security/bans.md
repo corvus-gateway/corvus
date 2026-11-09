@@ -1,3 +1,7 @@
+---
+description: "Corvus automatically bans IPs that keep attacking and limits request rates. Manual bans and unbans, exempt networks and rate-limit settings."
+---
+
 # Bans & rate limits
 
 ## IP bans

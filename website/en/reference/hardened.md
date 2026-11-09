@@ -1,3 +1,7 @@
+---
+description: "Run Corvus with a read-only root filesystem, no Linux capabilities and no privilege escalation using the hardened Compose file."
+---
+
 # Hardened install
 
 The default image already runs as a non-root user, with Redis protected by a generated password and

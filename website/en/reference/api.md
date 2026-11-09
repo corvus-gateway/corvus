@@ -1,3 +1,7 @@
+---
+description: "Automate Corvus with its JSON HTTP API: create an API token and call the same endpoints the admin console uses."
+---
+
 # HTTP API
 
 The admin console is a client of a JSON API, so everything you can do in the console can be

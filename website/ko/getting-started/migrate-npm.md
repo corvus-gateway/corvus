@@ -1,3 +1,7 @@
+---
+description: "Nginx Proxy Manager의 프록시 호스트, 리디렉션 호스트, 스트림, 인증서, 접근 목록을 Corvus로 가져옵니다. NPM은 변경되지 않습니다."
+---
+
 # NPM에서 이전
 
 **NPM 가져오기**는 NPM 설정을 Corvus로 복사합니다.

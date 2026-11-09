@@ -1,3 +1,7 @@
+---
+description: "Corvus는 공격을 반복하는 IP를 자동으로 차단하고 요청 속도를 제한합니다. 수동 차단·해제, 예외 네트워크, Rate Limit 설정."
+---
+
 # 차단과 Rate Limit
 
 ## IP 차단

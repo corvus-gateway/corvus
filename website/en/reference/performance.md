@@ -1,3 +1,7 @@
+---
+description: "Corvus benchmark on 2 vCPU: requests per second, latency and memory for plain proxying, security rules, HTTPS, the access queue and challenges."
+---
+
 # Performance
 
 Measured with the [benchmark workflow](https://github.com/corvus-gateway/corvus/blob/main/docs/benchmark.md)

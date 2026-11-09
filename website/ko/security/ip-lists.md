@@ -1,3 +1,7 @@
+---
+description: "IP 대역과 User-Agent 문자열을 목록으로 묶어 여러 보안 규칙에서 함께 씁니다."
+---
+
 # IP 목록
 
 목록은 IP 대역이나 User-Agent 문자열을 묶어 여러 [보안 규칙](rules.md)에서 함께 쓸 수 있게 합니다.

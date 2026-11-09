@@ -1,3 +1,7 @@
+---
+description: "Let's Encrypt 무료 인증서를 자동 갱신으로 발급하거나(와일드카드용 DNS 인증 포함), 가진 인증서를 Corvus에 업로드합니다."
+---
+
 # 인증서
 
 Corvus는 Let's Encrypt에서 무료 인증서를 받아 자동으로 갱신하거나, 직접 올린 인증서를 사용합니다.

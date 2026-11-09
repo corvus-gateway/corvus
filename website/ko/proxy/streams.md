@@ -1,3 +1,7 @@
+---
+description: "스트림으로 HTTP가 아닌 서비스(데이터베이스, SSH, MQTT, VPN, 게임 서버)의 TCP·UDP 포트를 전달합니다."
+---
+
 # 스트림 (TCP/UDP)
 
 스트림은 HTTP를 쓰지 않는 서비스(데이터베이스, SSH, MQTT, VPN, 게임 서버)를 위해 TCP 또는 UDP

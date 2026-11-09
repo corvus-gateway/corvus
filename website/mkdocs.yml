@@ -12,6 +12,7 @@ site_dir: ../site
 
 theme:
   name: material
+  custom_dir: overrides
   language: en
   logo: assets/logo.svg
   favicon: assets/favicon.svg
@@ -40,6 +41,8 @@ theme:
 
 extra:
   generator: false
+  origin: https://corvusgateway.org   # absolute links for hreflang and link previews
+  tagline: Self-hosted web gateway with protection, monitoring and an access queue
   alternate:
     - name: English
       link: /

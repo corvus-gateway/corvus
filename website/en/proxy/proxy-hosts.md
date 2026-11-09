@@ -1,3 +1,7 @@
+---
+description: "Proxy hosts forward one or more domains to a service and apply TLS and protection on the way: forward target, certificates, WebSocket and security settings."
+---
+
 # Proxy hosts
 
 A proxy host forwards requests for one or more domains to a service (the *forward target*) and

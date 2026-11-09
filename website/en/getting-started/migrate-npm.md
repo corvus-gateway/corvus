@@ -1,3 +1,7 @@
+---
+description: "Import proxy hosts, redirection hosts, streams, certificates and access lists from Nginx Proxy Manager into Corvus. NPM itself is not changed."
+---
+
 # Migrate from Nginx Proxy Manager
 
 **Import from NPM** copies your NPM setup into Corvus:

@@ -1,3 +1,7 @@
+---
+description: "Free Let's Encrypt certificates with automatic renewal, including DNS challenges for wildcards, or upload your own certificates in Corvus."
+---
+
 # Certificates
 
 Corvus gets free certificates from Let's Encrypt and renews them automatically, or uses certificates

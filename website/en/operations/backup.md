@@ -1,3 +1,7 @@
+---
+description: "Back up and restore Corvus: what lives in ./data, why the secrets folder matters, and how to download and restore a backup."
+---
+
 # Backup & restore
 
 Everything Corvus needs lives in `./data`. **The most important part is `secrets/`**: it holds the

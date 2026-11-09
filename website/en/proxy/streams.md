@@ -1,3 +1,7 @@
+---
+description: "Forward TCP and UDP ports for services that don't speak HTTP, such as databases, SSH, MQTT, VPNs and game servers, with Corvus streams."
+---
+
 # Streams (TCP/UDP)
 
 Streams forward a TCP and/or UDP port to another host, for services that don't speak HTTP:

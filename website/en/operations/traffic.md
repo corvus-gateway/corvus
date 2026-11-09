@@ -1,3 +1,7 @@
+---
+description: "Watch requests, errors and latency per host and per path in real time with the Corvus traffic monitor."
+---
+
 # Traffic monitor
 
 The **Traffic monitor** shows requests, errors and latency in real time, per host and per path.

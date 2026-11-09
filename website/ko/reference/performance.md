@@ -1,3 +1,7 @@
+---
+description: "2 vCPU에서 측정한 Corvus 벤치마크: 기본 프록시, 보안 규칙, HTTPS, 접속 대기열, 챌린지의 초당 요청 수, 지연 시간, 메모리."
+---
+
 # 성능
 
 GitHub 호스팅 `ubuntu-24.04` 러너(4 vCPU AMD EPYC 9V45)에서

@@ -1,4 +1,5 @@
 ---
+description: "Corvus AWPG는 웹 서비스 앞에 두는 셀프 호스팅 게이트웨이입니다. Nginx Proxy Manager처럼 쉬운 리버스 프록시와 무료 SSL에 WAF 규칙, 자동 차단, 트래픽 관제, 접속 대기열을 더했습니다."
 title: Corvus AWPG
 hide:
   - navigation

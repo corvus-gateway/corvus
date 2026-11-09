@@ -1,3 +1,7 @@
+---
+description: "Corvus가 시작할 때 읽는 환경 변수입니다. docker-compose.yml의 environment:에 설정합니다."
+---
+
 # 환경 변수
 
 Corvus는 콘솔에서 설정합니다. 시작하기 전에 알아야 하는 몇 가지 설정만 환경 변수로 지정합니다.

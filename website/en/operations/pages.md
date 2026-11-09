@@ -1,3 +1,7 @@
+---
+description: "Replace the pages Corvus shows when it blocks a request or your service can't be reached with your own HTML."
+---
+
 # Block & error pages
 
 Corvus shows its own page when it refuses a request or when your service can't be reached. Both can

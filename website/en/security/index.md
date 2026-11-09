@@ -1,3 +1,7 @@
+---
+description: "How Corvus Sentinel checks every request before it reaches your service: exploit-path blocking, security rules, bans, rate limits and challenges, and the order they run in."
+---
+
 # How protection works
 
 Corvus Sentinel, the security engine, checks every request before it reaches your service. You don't

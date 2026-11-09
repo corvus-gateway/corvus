@@ -1,3 +1,7 @@
+---
+description: "Make browsers prove they are real before they reach your site, with no CAPTCHA provider, and turn on under attack mode when an attack hits."
+---
+
 # Challenge & under attack mode
 
 A **challenge** asks the browser to prove it is a real browser before it reaches your site. It needs

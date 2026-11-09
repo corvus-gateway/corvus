@@ -1,3 +1,7 @@
+---
+description: "Redirect one domain to another address, such as an old domain to the new one or example.com to www, with Corvus redirection hosts."
+---
+
 # Redirection hosts
 
 A redirection host sends visitors of one domain to another address, for example an old domain to

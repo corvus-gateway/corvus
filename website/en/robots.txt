@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://corvusgateway.org/sitemap.xml
+Sitemap: https://corvusgateway.org/ko/sitemap.xml

@@ -1,3 +1,7 @@
+---
+description: "Block, allow, log or challenge requests that match conditions you choose with Corvus security rules."
+---
+
 # Security rules
 
 Security rules decide what happens to requests that match conditions you choose: block them, allow

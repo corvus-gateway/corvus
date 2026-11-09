@@ -1,3 +1,7 @@
+---
+description: "공격, 응답 지연, 트래픽 급증, 인증서 문제를 감지하면 Slack, Discord, Teams, Telegram, Mattermost, 웹훅으로 알립니다."
+---
+
 # 알림
 
 Corvus는 문제와 공격을 감시하다가 팀 채팅으로 알려 줍니다.

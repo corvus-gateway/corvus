@@ -4,6 +4,9 @@ docs_dir: ko
 site_dir: ../site/ko
 edit_uri: edit/main/website/ko/
 site_url: https://corvusgateway.org/ko/
+site_description: 보호·관제·접속 대기열을 갖춘 셀프 호스팅 웹 게이트웨이. 프록시 호스트와 무료 SSL을 몇 번의 클릭으로 설정합니다.
+extra:
+  tagline: 보호·관제·접속 대기열을 갖춘 셀프 호스팅 웹 게이트웨이
 theme:
   language: ko
 nav:

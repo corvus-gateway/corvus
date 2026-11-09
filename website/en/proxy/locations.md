@@ -1,3 +1,7 @@
+---
+description: "Send part of a site to a different service by path with custom locations on a Corvus proxy host."
+---
+
 # Custom locations
 
 Custom locations send part of a site to a different service, by path. Example: `shop.example.com`

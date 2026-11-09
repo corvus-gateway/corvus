@@ -1,3 +1,7 @@
+---
+description: "Get notified in Slack, Discord, Teams, Telegram, Mattermost or a webhook when Corvus detects attacks, latency, traffic spikes or certificate problems."
+---
+
 # Alerts
 
 Corvus watches for problems and attacks and notifies your team chat.

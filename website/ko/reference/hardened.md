@@ -1,3 +1,7 @@
+---
+description: "강화용 Compose 파일로 읽기 전용 루트 파일 시스템, Linux capability 없음, 권한 상승 금지 상태로 Corvus를 실행합니다."
+---
+
 # 강화 설치
 
 기본 이미지도 이미 root가 아닌 사용자로 실행되며, Redis는 생성된 비밀번호로 보호되고 OpenResty는

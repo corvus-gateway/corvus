@@ -1,0 +1,43 @@
+{#- Search and link-preview metadata on top of the Material theme.
+    The English and Korean sites have the same page tree, so every page links to its counterpart. -#}
+{% extends "base.html" %}
+
+{% block site_meta %}
+{% if not page %}{{ super() }}{% else %}
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  {% set description = page.meta.description or config.site_description %}
+  <meta name="description" content="{{ description | e }}">
+  {% if page.canonical_url %}
+    <link rel="canonical" href="{{ page.canonical_url }}">
+  {% endif %}
+  {% for alt in config.extra.alternate %}
+    <link rel="alternate" href="{{ config.extra.origin }}{{ alt.link }}{{ page.url }}" hreflang="{{ alt.lang }}">
+  {% endfor %}
+  <link rel="alternate" href="{{ config.extra.origin }}/{{ page.url }}" hreflang="x-default">
+  <link rel="icon" href="{{ config.theme.favicon | url }}">
+{% endif %}
+{% endblock %}
+
+{% block htmltitle %}
+{% if not page %}{{ super() }}{% else %}
+  {% if page.is_homepage %}
+    {% set title = config.site_name ~ " – " ~ config.extra.tagline %}
+  {% else %}
+    {% set title = (page.meta.title or page.title | striptags) ~ " - " ~ config.site_name %}
+  {% endif %}
+  <title>{{ title }}</title>
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ config.site_name }}">
+  <meta property="og:title" content="{{ title | e }}">
+  <meta property="og:description" content="{{ (page.meta.description or config.site_description) | e }}">
+  {% if page.canonical_url %}
+    <meta property="og:url" content="{{ page.canonical_url }}">
+  {% endif %}
+  <meta property="og:image" content="{{ config.extra.origin }}/assets/social.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Corvus AWPG console dashboard">
+  <meta name="twitter:card" content="summary_large_image">
+{% endif %}
+{% endblock %}

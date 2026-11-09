@@ -1,3 +1,7 @@
+---
+description: "Install Corvus with Docker Compose: one container holds the gateway, the admin console and the access-queue store. Requirements, ports and first sign-in."
+---
+
 # Install
 
 Corvus runs as **one container**: the gateway, the admin console and the access-queue store are all

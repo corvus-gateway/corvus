@@ -1,3 +1,7 @@
+---
+description: "Environment variables Corvus reads at startup, set under environment: in docker-compose.yml."
+---
+
 # Configuration
 
 Corvus is configured in the console. A few settings that must be known before it starts are

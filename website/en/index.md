@@ -1,4 +1,5 @@
 ---
+description: "Corvus AWPG is a self-hosted gateway for your web services: reverse proxy and free SSL as easy as Nginx Proxy Manager, plus WAF rules, auto-bans, a traffic monitor and an access queue."
 title: Corvus AWPG
 hide:
   - navigation
