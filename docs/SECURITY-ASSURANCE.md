@@ -80,7 +80,8 @@ replaced without a new release. Certificates of outbound TLS connections are alw
 
 ## Verification
 
-- **Tests:** Go unit and fuzz tests and Lua unit tests run in CI on every pull request; an
+- **Tests:** Go unit, API and fuzz tests (statement coverage of the control plane kept at 80% or
+  more by CI) and Lua unit tests run on every pull request; an
   integration suite (`deploy/dev/itest.sh`) exercises a real gateway, and every release image is
   smoke-tested in CI before it is published. Bug fixes come with a test that fails without the fix.
 - **Static analysis:** `go vet`, `gofmt`, CodeQL code scanning, TypeScript strict mode.

@@ -19,7 +19,13 @@ jobs:
       - name: gofmt (unformatted files fail the build)
         run: test -z "$(gofmt -l control | tee /dev/stderr)"
       - run: go vet ./...
-      - run: go test -race ./...
+      - name: Tests (race detector, statement coverage of the control plane)
+        run: go test -race -coverpkg=./control/... -coverprofile=cover.out ./...
+      - name: Coverage must stay at 80% or more
+        run: |
+          total=$(go tool cover -func=cover.out | awk '/^total:/ {sub("%","",$3); print $3}')
+          echo "control-plane statement coverage: ${total}%" | tee -a "$GITHUB_STEP_SUMMARY"
+          awk -v t="$total" 'BEGIN { exit !(t >= 80) }'
       - name: govulncheck (reachable Go vulnerabilities fail the build)
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 

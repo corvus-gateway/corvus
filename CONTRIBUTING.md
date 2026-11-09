@@ -45,7 +45,7 @@ All changes, including the maintainer's own, reach `main` through a pull request
 ### Test policy
 
 New functionality **must** come with automated tests, and bug fixes should add a test that fails
-without the fix. A pull request that adds behaviour without tests is not merged until tests are
+without the fix. CI measures statement coverage of the Go control plane and fails below 80%. A pull request that adds behaviour without tests is not merged until tests are
 added (we are happy to help write them).
 
 ### What reviewers check

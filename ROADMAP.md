@@ -13,8 +13,8 @@ promise; priorities change with user feedback. Ideas and votes are welcome in
 
 - **Reliability first.** Bug-fix releases for problems reported by users, each tested as a release
   candidate before the final version.
-- **Tests.** Raise automated test coverage of the control plane to at least 80% of statements,
-  counting the unit tests and the integration suite (`deploy/dev/itest.sh`).
+- **Tests.** Keep statement coverage of the control plane at 80% or more (enforced in CI, about
+  90% today) and extend the integration suite (`deploy/dev/itest.sh`) to more gateway scenarios.
 - **Release integrity.** SBOM, build provenance and signed checksums attached to every GitHub
   release, next to the signed container images.
 
