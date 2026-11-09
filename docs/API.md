@@ -388,7 +388,7 @@ tested, deployed and rolled back with the rest of the configuration.
 | GET / PUT | `/api/settings/sso` | admin | OIDC settings |
 | POST | `/api/settings/sso/test` | admin | Test OIDC discovery |
 | GET / POST | `/api/users` | admin (session) | Users |
-| PUT / DELETE | `/api/users/{id}` | admin (session) | Update / delete |
+| PUT / DELETE | `/api/users/{id}` | admin (session) | Update / delete (your own password goes through `/api/auth/password`) |
 | POST | `/api/users/{id}/reset-mfa` | admin (session) | Reset a user's MFA |
 | GET / POST | `/api/tokens` | session | API tokens (`{ "name", "role", "expires_days" }`) |
 | DELETE | `/api/tokens/{id}` | session | Revoke a token |

@@ -116,6 +116,12 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 		fail(w, conflictError{"you cannot change your own role or disable your own account"})
 		return
 	}
+	if id == me.ID && in.Password != "" {
+		// your own password is changed on the account page, which asks for the current
+		// password and signs out your other sessions
+		fail(w, conflictError{"change your own password on the account page"})
+		return
+	}
 	// Keep at least one active administrator.
 	if u.Role == "admin" && !u.Disabled && (role != "admin" || disabled) {
 		if n, err := s.Store.CountActiveAdmins(ctx, id); err != nil || n == 0 {
@@ -134,14 +140,12 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 			fail(w, err)
 			return
 		}
-		revoke = revoke || id != me.ID
+		revoke = true
 		var detail any
-		if id != me.ID {
-			// an administrator resets someone's password when the account may be in the
-			// wrong hands: the API tokens it created end too, like its sessions
-			if n, err := s.Store.DeleteUserAPITokens(ctx, id); err == nil && n > 0 {
-				detail = map[string]any{"tokens_revoked": n}
-			}
+		// an administrator resets someone's password when the account may be in the
+		// wrong hands: the API tokens it created end too, like its sessions
+		if n, err := s.Store.DeleteUserAPITokens(ctx, id); err == nil && n > 0 {
+			detail = map[string]any{"tokens_revoked": n}
 		}
 		s.audit(r, "user.password_reset", u.Email, detail)
 	}

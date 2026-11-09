@@ -130,14 +130,19 @@ func TestZZUsersUpdate(t *testing.T) {
 		t.Fatalf("audit: reset=%d update=%d", zaAudited(t, e.s, "user.password_reset"), zaAudited(t, e.s, "user.update"))
 	}
 
-	// own account: no role change, no disabling; a password or name change is fine and keeps the session
+	// own account: no role change, no disabling, no password (that goes through the
+	// account page, which asks for the current one); a name change is fine and keeps the session
 	self := fmt.Sprintf("/api/users/%d", e.admin.ID)
-	for _, body := range []map[string]any{{"role": "viewer"}, {"disabled": true}} {
+	before, _ := e.s.Store.UserByID(ctx, e.admin.ID)
+	for _, body := range []map[string]any{{"role": "viewer"}, {"disabled": true}, {"name": "Chief", "password": "Self-chosen-passw0rd"}} {
 		if code, m := e.call("PUT", self, body); code != 409 || m["error"] != "conflict" || !strings.Contains(m["message"].(string), "your own") {
 			t.Fatalf("self %v: %d %v", body, code, m)
 		}
 	}
-	m = e.must(200, "PUT", self, map[string]any{"name": "Chief", "role": "admin", "password": "Self-chosen-passw0rd"})
+	if after, _ := e.s.Store.UserByID(ctx, e.admin.ID); after.PasswordHash() != before.PasswordHash() || after.Name != before.Name {
+		t.Fatal("rejected self update changed the account")
+	}
+	m = e.must(200, "PUT", self, map[string]any{"name": "Chief", "role": "admin"})
 	if m["name"] != "Chief" || !alive(e.cookie) {
 		t.Fatalf("self update: %v alive=%v", m, alive(e.cookie))
 	}

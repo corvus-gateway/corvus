@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Copy, KeyRound, Lock, Pencil, Plus, ShieldOff, Trash2, UserCheck, UserX, Users as UsersIcon, Wand2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, ApiError, type User } from "../api";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
@@ -32,6 +33,7 @@ export default function Users() {
   const { t, lang } = useI18n();
   const { isAdmin } = useCan();
   const { user: me } = useApp();
+  const navigate = useNavigate();
   const list = useResource<User[]>(isAdmin ? "/api/users" : null, { poll: 20000 });
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<{ id: number | null; form: Form } | null>(null);
@@ -111,7 +113,9 @@ export default function Users() {
                       <Td className="hidden text-fg-muted lg:table-cell">{u.last_login_at ? relTime(u.last_login_at, lang) : "–"}</Td>
                       <Td className="text-right"><RowMenu items={[
                         { label: t("edit"), icon: Pencil, onSelect: () => open(u) },
-                        { label: t("resetPassword"), icon: KeyRound, onSelect: () => { pwSub.setError(null); setPw({ user: u, value: "" }); } },
+                        self
+                          ? { label: t("changePassword"), icon: KeyRound, onSelect: () => navigate("/account") }
+                          : { label: t("resetPassword"), icon: KeyRound, onSelect: () => { pwSub.setError(null); setPw({ user: u, value: "" }); } },
                         { label: t("resetMfa"), icon: ShieldOff, hidden: !u.mfa_enabled, onSelect: () => setMfaFor(u) },
                         { label: u.disabled ? t("enableUser") : t("disableUser"), icon: u.disabled ? UserCheck : UserX, disabled: self, separatorBefore: true, onSelect: () => (u.disabled ? setDisabled(u, false) : setDisabling(u)) },
                         { label: t("deleteUser"), icon: Trash2, danger: true, disabled: self, onSelect: () => setDeleting(u) },
