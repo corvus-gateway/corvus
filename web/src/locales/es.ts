@@ -174,7 +174,7 @@ export const es: Partial<Record<keyof typeof ko, string>> = {
   lastUpdated: "Última actualización", cfNoInfo: "La información de la lista de IP de Cloudflare no está disponible.", cfUsageHint: "Se usa cuando la «IP del cliente» de un host proxy está configurada como Cloudflare.",
   // traffic
   trafficDesc: "Supervise solicitudes, errores y latencia en tiempo real, y busque o exporte registros.", allHosts: "Todos los hosts", live: "En vivo", tabOverview: "Resumen", tabLogs: "Registros de solicitudes", tabEvents: "Eventos",
-  queuedRequests: "En cola", queuedHint: "Enviadas a una cola de acceso", egress: "Salida", requestsByStatus: "Solicitudes por estado", latency: "Latencia de respuesta", latencyDesc: "Percentiles",
+  queuedRequests: "En cola", queuedHint: "Nuevos puestos en una cola de acceso", egress: "Salida", requestsByStatus: "Solicitudes por estado", latency: "Latencia de respuesta", latencyDesc: "Percentiles",
   byHost: "Por host", topPaths: "Rutas principales", searchLogs: "Buscar ruta o IP", allStatus: "Todos los estados", noLogs: "No hay registros que mostrar", noLogsDesc: "Cambie los filtros o amplíe el periodo.",
   responseTime: "Tiempo de respuesta", eventType: "Tipo de evento", allEvents: "Todos los eventos", noEvents: "No hay eventos", noEventsDesc: "Los bloqueos, errores y esperas en cola aparecen aquí en orden cronológico.",
   evRateLimited: "Limitado por tasa", evBlockedExploit: "Ruta de exploit bloqueada", evServerError: "Error del servidor (5xx)", evWaitroomQueue: "Se formó una cola en la cola de acceso", evWaitroomFail: "Política de fallo de la cola de acceso aplicada",

@@ -14,17 +14,24 @@
 -- so the gateway keeps no per-visitor state:
 --
 --   challenge  c1.<kid>.<rule>.<j|c>.<bits>.<ttl>.<i|u>.<exp>.<nonce>.<mac>
---              MAC over the payload | client IP | host; valid for TOKEN_TTL seconds
+--              MAC over the payload | client | host; valid for TOKEN_TTL seconds
 --   pass       p1.<kid>.<level>.<i|u>.<exp>.<mac>
---              MAC over the payload | client IP | host [| sha256(User-Agent) for "u"];
+--              MAC over the payload | client | host [| sha256(User-Agent) for "u"];
 --              level = proof-of-work bits solved (0 = cookie check)
 --
+-- "client" is the client key of corvus/ipkey.lua: the IPv4 address, or the IPv6 /64.
+-- IPv4 stays exact, as with other challenge services: a wider range would let one
+-- solved proof of work serve a whole subnet of bots. An IPv6 host changes its
+-- temporary (privacy) address within its /64 (RFC 8981), and a /64 is one subscriber's
+-- network, so binding to the full IPv6 address would only re-challenge real visitors.
+--
 -- Every value inside a token is covered by the MAC, so clients cannot lower the
--- difficulty or extend the lifetime, and a token only verifies from the client IP
--- (and host) it was issued to. Nonces are not tracked: replaying a solved challenge
--- from the same IP within its 5-minute lifetime only yields another pass for that IP.
+-- difficulty or extend the lifetime, and a token only verifies from the client (and
+-- host) it was issued to. Nonces are not tracked: replaying a solved challenge from
+-- the same client within its 5-minute lifetime only yields another pass for it.
 
 local crypto = require "corvus.crypto"
+local ipkey = require "corvus.ipkey"
 
 local byte, find, sub, match = string.byte, string.find, string.sub, string.match
 local tonumber, type = tonumber, type
@@ -196,8 +203,9 @@ end
 
 -- ------------------------------------------------------------------ request helpers
 
+-- Client key (IPv4 address or IPv6 /64), host and User-Agent of the request.
 local function client()
-  return ngx.var.remote_addr or "", ngx.var.host or "", ngx.var.http_user_agent or ""
+  return ipkey.client(ngx.var.remote_addr), ngx.var.host or "", ngx.var.http_user_agent or ""
 end
 
 -- The request's valid pass (see parse_pass) or nil. The cookie is verified once per

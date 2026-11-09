@@ -175,7 +175,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   lastUpdated: "最后更新", cfNoInfo: "无法获取 Cloudflare IP 列表信息。", cfUsageHint: "当代理主机的“客户端 IP”设置为 Cloudflare 时使用。",
   // traffic
   trafficDesc: "实时查看请求、错误和延迟，并搜索或导出日志。", allHosts: "全部主机", live: "实时", tabOverview: "概览", tabLogs: "请求日志", tabEvents: "事件",
-  queuedRequests: "排队", queuedHint: "被送入访问排队", egress: "出站流量", requestsByStatus: "按状态统计请求", latency: "响应延迟", latencyDesc: "百分位数",
+  queuedRequests: "排队", queuedHint: "新进入访问排队的访客", egress: "出站流量", requestsByStatus: "按状态统计请求", latency: "响应延迟", latencyDesc: "百分位数",
   byHost: "按主机", topPaths: "热门路径", searchLogs: "搜索路径或 IP", allStatus: "全部状态", noLogs: "暂无日志", noLogsDesc: "请更改筛选条件或扩大时间范围。",
   responseTime: "响应时间", eventType: "事件类型", allEvents: "全部事件", noEvents: "暂无事件", noEventsDesc: "拦截、错误和排队事件将按时间顺序显示在此处。",
   evRateLimited: "触发速率限制", evBlockedExploit: "已拦截漏洞利用路径", evServerError: "服务器错误（5xx）", evWaitroomQueue: "访问排队形成队列", evWaitroomFail: "已应用访问排队故障策略",

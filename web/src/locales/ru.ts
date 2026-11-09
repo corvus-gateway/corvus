@@ -174,7 +174,7 @@ export const ru: Partial<Record<keyof typeof ko, string>> = {
   lastUpdated: "Последнее обновление", cfNoInfo: "Сведения о списке IP Cloudflare недоступны.", cfUsageHint: "Используется, если для прокси-хоста в поле «IP клиента» выбран Cloudflare.",
   // traffic
   trafficDesc: "Отслеживайте запросы, ошибки и задержки в реальном времени, ищите и экспортируйте журналы.", allHosts: "Все хосты", live: "В реальном времени", tabOverview: "Обзор", tabLogs: "Журнал запросов", tabEvents: "События",
-  queuedRequests: "В очереди", queuedHint: "Направлено в очередь доступа", egress: "Исходящий трафик", requestsByStatus: "Запросы по статусам", latency: "Задержка ответа", latencyDesc: "Процентили",
+  queuedRequests: "В очереди", queuedHint: "Новые места в очереди доступа", egress: "Исходящий трафик", requestsByStatus: "Запросы по статусам", latency: "Задержка ответа", latencyDesc: "Процентили",
   byHost: "По хостам", topPaths: "Популярные пути", searchLogs: "Поиск по пути или IP", allStatus: "Все статусы", noLogs: "Нет записей", noLogsDesc: "Измените фильтры или расширьте период.",
   responseTime: "Время ответа", eventType: "Тип события", allEvents: "Все события", noEvents: "Нет событий", noEventsDesc: "Блокировки, ошибки и постановка в очередь отображаются здесь в хронологическом порядке.",
   evRateLimited: "Ограничение запросов", evBlockedExploit: "Заблокирован путь эксплойта", evServerError: "Ошибка сервера (5xx)", evWaitroomQueue: "Сформирована очередь доступа", evWaitroomFail: "Применена политика отказа очереди доступа",

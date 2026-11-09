@@ -174,7 +174,7 @@ export const fr: Partial<Record<keyof typeof ko, string>> = {
   lastUpdated: "Dernière mise à jour", cfNoInfo: "Les informations sur la liste des IP Cloudflare sont indisponibles.", cfUsageHint: "Utilisée lorsque l'« IP du client » d'un hôte proxy est définie sur Cloudflare.",
   // traffic
   trafficDesc: "Suivez requêtes, erreurs et latence en temps réel, et recherchez ou exportez les journaux.", allHosts: "Tous les hôtes", live: "En direct", tabOverview: "Vue d'ensemble", tabLogs: "Journaux des requêtes", tabEvents: "Événements",
-  queuedRequests: "En file", queuedHint: "Envoyées vers une file d'accès", egress: "Trafic sortant", requestsByStatus: "Requêtes par statut", latency: "Latence de réponse", latencyDesc: "Percentiles",
+  queuedRequests: "En file", queuedHint: "Nouvelles places dans une file d'accès", egress: "Trafic sortant", requestsByStatus: "Requêtes par statut", latency: "Latence de réponse", latencyDesc: "Percentiles",
   byHost: "Par hôte", topPaths: "Chemins principaux", searchLogs: "Rechercher un chemin ou une IP", allStatus: "Tous les statuts", noLogs: "Aucun journal à afficher", noLogsDesc: "Modifiez les filtres ou élargissez la période.",
   responseTime: "Temps de réponse", eventType: "Type d'événement", allEvents: "Tous les événements", noEvents: "Aucun événement", noEventsDesc: "Les blocages, erreurs et mises en file s'affichent ici par ordre chronologique.",
   evRateLimited: "Débit limité", evBlockedExploit: "Chemin d'exploit bloqué", evServerError: "Erreur serveur (5xx)", evWaitroomQueue: "File d'attente formée dans la file d'accès", evWaitroomFail: "Politique de défaillance de la file d'accès appliquée",

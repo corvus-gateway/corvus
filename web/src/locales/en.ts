@@ -175,7 +175,7 @@ export const en: Record<keyof typeof ko, string> = {
   lastUpdated: "Last updated", cfNoInfo: "Cloudflare IP list information is unavailable.", cfUsageHint: "Used when a proxy host's 'Client IP' is set to Cloudflare.",
   // traffic
   trafficDesc: "Watch requests, errors and latency in real time, and search or export logs.", allHosts: "All hosts", live: "Live", tabOverview: "Overview", tabLogs: "Request logs", tabEvents: "Events",
-  queuedRequests: "Queued", queuedHint: "Sent to an access queue", egress: "Egress", requestsByStatus: "Requests by status", latency: "Response latency", latencyDesc: "Percentiles",
+  queuedRequests: "Queued", queuedHint: "New places in an access queue", egress: "Egress", requestsByStatus: "Requests by status", latency: "Response latency", latencyDesc: "Percentiles",
   byHost: "By host", topPaths: "Top paths", searchLogs: "Search path or IP", allStatus: "All statuses", noLogs: "No logs to show", noLogsDesc: "Change the filters or widen the range.",
   responseTime: "Response time", eventType: "Event type", allEvents: "All events", noEvents: "No events", noEventsDesc: "Blocks, errors and queueing show up here in chronological order.",
   evRateLimited: "Rate limited", evBlockedExploit: "Exploit path blocked", evServerError: "Server error (5xx)", evWaitroomQueue: "Visitors waiting in access queue", evWaitroomFail: "Access queue failure policy applied",

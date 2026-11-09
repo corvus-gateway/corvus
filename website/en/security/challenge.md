@@ -14,8 +14,11 @@ no third-party service (no CAPTCHA provider) and stores nothing on the server.
 | **JavaScript (proof of work)** | Solves a small computation, usually within a second or a few | Bots that don't run JavaScript; makes mass requests expensive |
 | **Cookie check** | Accepts a cookie and sends a form back | Simple scripts and HTTP clients |
 
-Visitors who pass get a signed cookie bound to their IP (optionally also their browser) and are not
-challenged again until it expires (**Pass valid for**, default 24 hours for rules).
+Visitors who pass get a signed cookie bound to their IP address (optionally also their browser)
+and are not challenged again until it expires (**Pass valid for**, default 24 hours for rules).
+For IPv6 the cookie is bound to the visitor's /64 network, because devices change their temporary
+IPv6 address within it regularly. A visitor whose IP address changes (for example from Wi-Fi to
+mobile data) is challenged again.
 
 !!! warning "Non-browser clients can't pass"
     API clients, mobile apps, feed readers, monitoring and search engine crawlers can't solve a

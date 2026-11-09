@@ -10,7 +10,8 @@
 --   5 rate    HASH  s=epoch_sec n=admitted_in_sec     (admission rate limit)
 --   6 granted ZSET  member=sid  score=ticket          (promoted, turn not yet claimed)
 -- ARGV: op, sid, capacity, active_ttl_ms, grant_ttl_ms, queue_ttl_ms, admit_rate_per_sec(0=off), promote_max, max_queue(0=off)
--- Returns: {code, rank, ticket, queue_len, active_count}
+-- Returns: {code, rank, ticket, queue_len, active_count, new}
+--   new: 1 when this call put the visitor into the line (a new ticket), else 0
 --   code: 0=NOT_FOUND 1=ACTIVE 2=WAITING 3=RELEASED 4=FULL (queue at max_queue)
 -- Time comes from Redis TIME so all gateways share one clock.
 
@@ -110,7 +111,7 @@ local function restore_lapsed(member)
   end
 end
 
-local function finish(code, member)
+local function finish(code, member, new)
   if rate > 0 and admitted_now > 0 then
     redis.call('HSET', K_RATE, 's', rate_sec, 'n', rate_used + admitted_now)
     redis.call('PEXPIRE', K_RATE, 5000)
@@ -120,7 +121,7 @@ local function finish(code, member)
     rank = redis.call('ZRANK', K_QUEUE, member) + 1
     ticket = tonumber(redis.call('ZSCORE', K_QUEUE, member))
   end
-  return {code, rank, ticket, redis.call('ZCARD', K_QUEUE), redis.call('ZCARD', K_ACTIVE)}
+  return {code, rank, ticket, redis.call('ZCARD', K_QUEUE), redis.call('ZCARD', K_ACTIVE), new and 1 or 0}
 end
 
 if op == 'stats' then
@@ -188,4 +189,4 @@ end
 local seq = redis.call('INCR', K_SEQ)
 redis.call('ZADD', K_QUEUE, seq, sid)
 redis.call('ZADD', K_SEEN, now, sid)
-return finish(WAITING, sid)
+return finish(WAITING, sid, true)

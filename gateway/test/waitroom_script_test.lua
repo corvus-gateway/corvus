@@ -91,7 +91,7 @@ local CAP, ACTIVE_TTL, GRANT_TTL, QUEUE_TTL = 1, 120000, 30000, 120000
 local function run(op, sid)
   local env = setmetatable({ KEYS = KEYS, ARGV = { op, sid, CAP, ACTIVE_TTL, GRANT_TTL, QUEUE_TTL, 0, 200, 0 }, redis = fake }, { __index = _G })
   local r = setfenv(chunk, env)()
-  return { code = r[1], rank = r[2], ticket = r[3], waiting = r[4], active = r[5] }
+  return { code = r[1], rank = r[2], ticket = r[3], waiting = r[4], active = r[5], new = r[6] }
 end
 
 local ACTIVE, WAITING, NOT_FOUND = 1, 2, 0
@@ -164,5 +164,17 @@ for k in pairs(db) do db[k] = nil end    -- Valkey restarted: everything is gone
 eq(run("enter", "x").code, ACTIVE, "after the restart x comes back first and gets the slot")
 eq(run("heartbeat", "w").code, ACTIVE, "w (valid admission token) is let back in, not queued")
 eq(zset("active").w ~= nil, true, "w holds a slot again")
+
+-- ---------------------------------------------------------------- new places in line
+-- Only the call that puts a visitor into the line reports it as new, so statistics count
+-- each place in line once, not every reload or retried request of a waiting visitor.
+for k in pairs(db) do db[k] = nil end
+at(3000)
+eq(run("enter", "n1").new, 0, "admitted directly: not a place in line")
+eq(run("enter", "n2").new, 1, "joins the line: new")
+eq(run("enter", "n2").new, 0, "reload while waiting: not new")
+eq(run("poll", "n2").new, 0, "status check: not new")
+eq(run("poll", "n3").new, 0, "unknown visitor polling: not new")
+eq(run("enter", "n3").new, 1, "next visitor joins: new")
 
 T.done("waitroom_script_test")

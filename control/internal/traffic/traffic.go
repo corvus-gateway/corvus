@@ -358,9 +358,10 @@ func classify(r *Record) (blocked bool, kinds []string) {
 }
 
 // waitroomHeld reports whether the access queue answered the request itself (cookie
-// check, waiting, queue full; 429 + Retry-After): visitors told to wait, not rate limited.
+// check, joined the line, still waiting, queue full; 429 + Retry-After): visitors told
+// to wait, not rate limited.
 func waitroomHeld(wr string) bool {
-	return wr == "cookie-check" || wr == "queue" || wr == "full"
+	return wr == "cookie-check" || wr == "queue" || wr == "wait" || wr == "full"
 }
 
 // isChallenge reports whether the gateway answered with a challenge page (issued, or

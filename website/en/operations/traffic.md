@@ -14,7 +14,8 @@ seconds.
 ## Overview
 
 - **Requests**, **Error rate**, **p95** latency, **Blocked** (rate limits and exploit paths),
-  **Queued** (sent to an access queue) and **Egress**
+  **Queued** (visitors who joined an access queue; reloads while waiting are not counted
+  again) and **Egress**
 - **Requests by status** and **Response latency** (p50 / p95 / p99) over time
 - **By host** and **Top paths**: where the traffic and the errors are
 

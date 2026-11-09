@@ -184,4 +184,23 @@ eq(tostring(ok) .. ":" .. tostring(res), "false:expired", "verify: expired chall
 ok, rid, res = ch.verify({}, rule_ok)
 eq(tostring(ok) .. ":" .. tostring(rid) .. ":" .. tostring(res), "false:nil:malformed", "verify: no token")
 
+-- IPv6: the pass is bound to the /64, so a new temporary (privacy) address of the same
+-- host keeps it; another /64 does not. IPv4 stays exact (checked above).
+T.set_time(now)
+ngx.var.remote_addr = "2001:db8:1:2::5"
+local t6 = ch.make_challenge(7, ch.settings({ mode = "cookie" }), nonce, "2001:0db8:0001:0002", "example.com", now)
+ngx.var.remote_addr = "2001:db8:1:2:a1b2:c3d4:e5f6:1"
+ok, rid, res = ch.verify({ t = t6 }, rule_ok)
+eq(ok, true, "verify: IPv6 privacy address in the same /64")
+local c6 = res and res:match("^__corvus_ch=([^;]+)")
+ngx.var["cookie___corvus_ch"] = c6
+ngx.var.remote_addr = "2001:db8:1:2::77"
+eq(ch.pass({}) ~= nil, true, "pass: same /64, other address")
+ngx.var.remote_addr = "2001:db8:1:3::5"
+ok, rid, res = ch.verify({ t = t6 }, rule_ok)
+eq(tostring(ok) .. ":" .. tostring(res), "false:signature", "verify: another /64")
+eq(ch.pass({}), nil, "pass: another /64")
+ngx.var.remote_addr = "203.0.113.6"
+eq(ch.parse_pass(c6, "203.0.113.6", "example.com", ua, now), nil, "IPv4 neighbour does not share a pass")
+
 T.done("challenge_test")

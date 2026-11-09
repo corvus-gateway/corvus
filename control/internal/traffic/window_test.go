@@ -52,7 +52,7 @@ func TestUnderAttackRuleEvents(t *testing.T) {
 // Access queue answers (429 + Retry-After) are visitors told to wait: not rate limited,
 // not blocked, not server errors. The per-IP entry limit stays a rate limit.
 func TestWaitroomHeldNotRateLimited(t *testing.T) {
-	for _, wr := range []string{"cookie-check", "queue", "full"} {
+	for _, wr := range []string{"cookie-check", "queue", "wait", "full"} {
 		blocked, kinds := classify(&Record{S: 429, WR: wr})
 		for _, k := range kinds {
 			if k == "rate_limited" || k == "server_error" {
@@ -65,5 +65,18 @@ func TestWaitroomHeldNotRateLimited(t *testing.T) {
 	}
 	if blocked, _ := classify(&Record{S: 429, WR: "ip-limit"}); !blocked {
 		t.Error("ip-limit 429 must stay a rate limit")
+	}
+}
+
+// "Queued" counts places in line: a waiting visitor's reloads and retried API calls
+// ("wait") are held but not counted again.
+func TestQueuedCountsNewPlacesOnly(t *testing.T) {
+	c := New()
+	now := time.Now()
+	for _, wr := range []string{"queue", "wait", "wait", "wait", "queue", "pass"} {
+		c.Add(&Record{T: float64(now.UnixMilli()) / 1000, S: 429, WR: wr, H: "a", IP: "1.1.1.1"})
+	}
+	if q := c.SummaryFor(time.Hour, "", now.Add(time.Second)).Queued; q != 2 {
+		t.Fatalf("queued = %d, want 2", q)
 	}
 }

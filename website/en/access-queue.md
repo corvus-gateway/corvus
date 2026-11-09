@@ -33,7 +33,7 @@ Waiting visitors see a page with their position, localized in 8 languages, that 
 | **When the cache DB is down** | **Let everyone in** (fail-open, favours availability) or **Block access** (fail-closed, protects capacity) |
 | **Max queue length** | Beyond this, new visitors are asked to come back later (0 = unlimited) |
 | **Queue joins per IP** | New queue entries one IP may create per minute |
-| **Bind admission to the client network** | Admission only works from the same network, so it can't be shared. Visitors who change networks queue again |
+| **Bind admission to the client network** | A visitor's place in line and admission only work from the same network (IPv4 /24, IPv6 /48), so a copied cookie is useless elsewhere. Visitors who change networks (e.g. from Wi-Fi to mobile data) queue again |
 
 !!! tip "Choosing the capacity"
     Start with the number of simultaneous users your service handled comfortably in a load test, and
@@ -49,6 +49,15 @@ Waiting visitors see a page with their position, localized in 8 languages, that 
 - If the cache DB restarts (for example when Corvus is upgraded), visitors who are already inside
   stay inside, and the line starts again from the visitors who check in first.
 - An [alert](operations/alerts.md) can notify you when the backlog grows.
+
+## Copied cookies
+
+A visitor's place in line and admission are a signed cookie. Like other waiting rooms that check
+the device, Corvus binds it to the browser it was issued to: copied into another browser or
+another device, it is not accepted and that person starts at the back of the line. A browser
+update keeps the place. Two people with the same browser on the same kind of device cannot be told
+apart this way; for sales where that matters, also turn on **Bind admission to the client
+network**.
 
 ## APIs and apps
 

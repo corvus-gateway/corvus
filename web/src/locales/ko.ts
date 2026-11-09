@@ -173,7 +173,7 @@ export const ko = {
   lastUpdated: "마지막 갱신", cfNoInfo: "Cloudflare IP 목록 정보를 불러올 수 없습니다.", cfUsageHint: "프록시 호스트의 '클라이언트 IP'를 Cloudflare로 지정하면 이 목록이 사용됩니다.",
   // traffic
   trafficDesc: "요청·오류·지연을 실시간으로 관찰하고 로그를 검색·내보냅니다.", allHosts: "모든 호스트", live: "실시간", tabOverview: "개요", tabLogs: "요청 로그", tabEvents: "이벤트",
-  queuedRequests: "대기 처리", queuedHint: "접속 대기열로 보낸 요청", egress: "송신량", requestsByStatus: "상태별 요청", latency: "응답 지연", latencyDesc: "백분위수 (ms)",
+  queuedRequests: "대기 처리", queuedHint: "접속 대기열에 새로 줄을 선 방문자", egress: "송신량", requestsByStatus: "상태별 요청", latency: "응답 지연", latencyDesc: "백분위수 (ms)",
   byHost: "호스트별", topPaths: "상위 경로", searchLogs: "경로 또는 IP 검색", allStatus: "모든 상태", noLogs: "표시할 로그가 없습니다", noLogsDesc: "조건을 바꾸거나 기간을 늘려 보세요.",
   responseTime: "응답 시간", eventType: "이벤트 종류", allEvents: "모든 이벤트", noEvents: "이벤트가 없습니다", noEventsDesc: "차단·오류·대기 이벤트가 발생하면 시간순으로 표시됩니다.",
   evRateLimited: "Rate Limit 차단", evBlockedExploit: "공격 경로 차단", evServerError: "서버 오류 (5xx)", evWaitroomQueue: "접속 대기열 대기열 발생", evWaitroomFail: "접속 대기열 장애 정책 적용",

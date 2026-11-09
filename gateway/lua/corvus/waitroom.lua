@@ -38,7 +38,7 @@ local DEFAULTS = {
   poll_max   = 30,    -- s; suggested poll interval far back in the line
   max_queue  = 100000,-- waiters per room; beyond this new visitors get 429 (protects Redis memory)
   max_new_per_ip = 60,-- new queue entries per client IP per minute (0 = unlimited)
-  bind_ip    = false, -- bind admission tokens to the client's network (/24, IPv6 /48)
+  bind_ip    = false, -- also bind queue and admission tokens to the client's network (/24, IPv6 /48)
 }
 
 -- ---------------------------------------------------------------- init
@@ -116,26 +116,54 @@ local function client_key()
   return ipkey.client(ngx.var.remote_addr)
 end
 
--- token = v2.<kid>.<kind>.<room>.<sid>.<iat>.<exp>.<sig>   kind: a=admission, q=queue
--- `bind` (optional) is mixed into the MAC but not carried in the token, so a
--- bound token only verifies from the same client network.
-local function make_token(kind, room, sid, iat, exp, bind)
-  local p = "v2." .. CURRENT.kid .. "." .. kind .. "." .. room .. "." .. sid .. "." .. iat .. "." .. exp
-  return p .. "." .. b64url(hmac(CURRENT, p .. (bind and ("|" .. bind) or "")))
+-- Browser family: the User-Agent with every run of digits replaced by "0", so a
+-- browser update keeps the family while another browser or device does not.
+local function ua_family(ua)
+  return ((ua or ""):gsub("%d+", "0"))
+end
+_M._ua_family = ua_family -- tests
+
+-- What a token is bound to: the browser family, plus the client network when the room
+-- binds to it. A copied cookie then only works in the same kind of browser (and
+-- network), like a device check: anyone else is treated as a new visitor and queues.
+local function binding(room)
+  local ctx = ngx.ctx
+  local ua = ctx.corvus_wr_ua
+  if not ua then
+    ua = b64url(sha256_bin(ua_family(ngx.var.http_user_agent))):sub(1, 22)
+    ctx.corvus_wr_ua = ua
+  end
+  if room.bind_ip then return ua .. "|" .. client_net() end
+  return ua
 end
 
-local function parse_token(tok, kind, room, bind)
+-- token = v3.<kid>.<kind>.<room>.<sid>.<iat>.<exp>.<sig>   kind: a=admission, q=queue
+-- `bind` (see binding) is mixed into the MAC but not carried in the token, so a token
+-- only verifies for the browser (and network) it was issued to. v2 tokens (before
+-- browser binding; bound to the network only when the room did) are still accepted
+-- until they expire, so an upgrade does not send everyone in line to the back.
+local function make_token(kind, room, sid, iat, exp, bind)
+  local p = "v3." .. CURRENT.kid .. "." .. kind .. "." .. room .. "." .. sid .. "." .. iat .. "." .. exp
+  return p .. "." .. b64url(hmac(CURRENT, p .. "|" .. bind))
+end
+
+-- bind: binding(room); bind_v2: what a v2 token of this kind was bound to (or nil).
+local function parse_token(tok, kind, room, bind, bind_v2)
   if not tok or #tok > 240 then return nil end
-  local kid, k, r, sid, iat, exp, sig = tok:match("^v2%.(%x+)%.(%l)%.([%l%d-]+)%.(%x+)%.(%d+)%.(%d+)%.([%w_-]+)$")
+  local v, kid, k, r, sid, iat, exp, sig = tok:match("^v([23])%.(%x+)%.(%l)%.([%l%d-]+)%.(%x+)%.(%d+)%.(%d+)%.([%w_-]+)$")
   if not kid or k ~= kind or r ~= room or #sid ~= 32 then return nil end
   local key = KEYS[kid]
   if not key then return nil end
-  local p = "v2." .. kid .. "." .. k .. "." .. r .. "." .. sid .. "." .. iat .. "." .. exp
-  if not const_eq(b64url(hmac(key, p .. (bind and ("|" .. bind) or ""))), sig) then return nil end
+  local p = "v" .. v .. "." .. kid .. "." .. k .. "." .. r .. "." .. sid .. "." .. iat .. "." .. exp
+  local b
+  if v == "3" then b = "|" .. bind else b = bind_v2 and ("|" .. bind_v2) or "" end
+  if not const_eq(b64url(hmac(key, p .. b)), sig) then return nil end
   exp = tonumber(exp)
   if ngx.time() >= exp then return nil end
-  return { sid = sid, iat = tonumber(iat), exp = exp }
+  return { sid = sid, iat = tonumber(iat), exp = exp, legacy = v == "2" }
 end
+_M._make_token, _M._parse_token, _M._binding = make_token, parse_token, binding -- tests
+function _M._set_secret(s) CURRENT = hmac_key(s); KEYS = { [CURRENT.kid] = CURRENT } end -- tests
 
 local function new_sid()
   local b = rrandom.bytes(16, true) or rrandom.bytes(16)
@@ -157,14 +185,13 @@ end
 
 local function issue_admission(room, sid)
   local now = ngx.time()
-  local bind = room.bind_ip and client_net() or nil
-  add_cookie(COOKIE_PREFIX .. "a_" .. room.cookie, make_token("a", room.name, sid, now, now + room.active_ttl, bind), room.active_ttl)
+  add_cookie(COOKIE_PREFIX .. "a_" .. room.cookie, make_token("a", room.name, sid, now, now + room.active_ttl, binding(room)), room.active_ttl)
 end
 
 local function issue_queue(room, sid)
   local now = ngx.time()
   local ttl = 86400
-  add_cookie(COOKIE_PREFIX .. "q_" .. room.cookie, make_token("q", room.name, sid, now, now + ttl), ttl)
+  add_cookie(COOKIE_PREFIX .. "q_" .. room.cookie, make_token("q", room.name, sid, now, now + ttl, binding(room)), ttl)
 end
 
 local function clear_cookie(kind, room)
@@ -172,11 +199,15 @@ local function clear_cookie(kind, room)
 end
 
 local function admission_from_cookie(room)
-  return parse_token(ngx.var["cookie_" .. COOKIE_PREFIX .. "a_" .. room.cookie], "a", room.name, room.bind_ip and client_net() or nil)
+  return parse_token(ngx.var["cookie_" .. COOKIE_PREFIX .. "a_" .. room.cookie], "a", room.name, binding(room), room.bind_ip and client_net() or nil)
 end
 
+-- A v2 queue token was never network-bound, so it is only accepted when the room
+-- does not bind to the network.
 local function queue_from_cookie(room)
-  return parse_token(ngx.var["cookie_" .. COOKIE_PREFIX .. "q_" .. room.cookie], "q", room.name)
+  local q = parse_token(ngx.var["cookie_" .. COOKIE_PREFIX .. "q_" .. room.cookie], "q", room.name, binding(room), nil)
+  if q and q.legacy and room.bind_ip then return nil end
+  return q
 end
 
 -- header_filter_by_lua: merge our cookies with any Set-Cookie from the upstream.
@@ -261,7 +292,7 @@ local function run(room, op, sid)
     return nil, err
   end
   red:set_keepalive(10000, 512)
-  return { code = res[1], rank = res[2], ticket = res[3], waiting = res[4], active = res[5] }
+  return { code = res[1], rank = res[2], ticket = res[3], waiting = res[4], active = res[5], new = res[6] == 1 }
 end
 
 -- ---------------------------------------------------------------- responses
@@ -444,14 +475,16 @@ function _M.access()
     -- The queue cookie (signed sid, 24 h) is kept: a visitor idle for longer than
     -- active_ttl (admission cookie gone) is then recognised and, with nobody waiting,
     -- admitted at once instead of getting a cookie check (which a POST cannot follow).
-    if not q then issue_queue(room, sid) end
+    if not q or q.legacy then issue_queue(room, sid) end
     issue_admission(room, sid)
     ngx.ctx.corvus_wr = "admit"
     return
   end
 
-  if not q or q.sid ~= sid then issue_queue(room, sid) end
-  ngx.ctx.corvus_wr = "queue"
+  if not q or q.sid ~= sid or q.legacy then issue_queue(room, sid) end
+  -- "queue": the visitor just joined the line; "wait": already in line (a reload or a
+  -- retried API call), so traffic statistics count each place in line once.
+  ngx.ctx.corvus_wr = res.new and "queue" or "wait"
   return send_waiting(room, res)
 end
 
@@ -502,6 +535,7 @@ function _M.endpoint()
       if room.fail == "open" then return send_json(200, { status = "active", room = room.name, degraded = true }) end
       return send_json(503, { status = "unavailable", room = room.name, retry_after = 10 })
     end
+    if res.new then ngx.ctx.corvus_wr = "queue" end -- (re)joined the line from the waiting page
     if res.code == ACTIVE then
       issue_admission(room, (q and q.sid) or tok.sid)
       return send_json(200, { status = "active", room = room.name, active = res.active, capacity = room.capacity })
