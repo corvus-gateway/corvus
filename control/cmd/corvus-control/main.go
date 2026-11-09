@@ -523,13 +523,14 @@ func run() error {
 	case err := <-gatewayDone:
 		runErr = fmt.Errorf("gateway exited unexpectedly: %v", err)
 	}
+	// Save traffic history first: the container runtime kills the process 10 s after the
+	// stop signal (Docker's default), and both a slow console request (admin server
+	// shutdown) and open WebSockets (graceful nginx stop) can take that long.
+	stopHistory()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = hs.Shutdown(shutdownCtx)
 	_ = acmeSrv.Shutdown(shutdownCtx)
-	// Save traffic history before stopping OpenResty: a graceful nginx stop can wait for
-	// open WebSockets until the container runtime's own stop timeout (10 s in Docker).
-	stopHistory()
 	if or != nil {
 		or.Stop(10 * time.Second)
 	}
