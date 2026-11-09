@@ -217,7 +217,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   allRules: "全部规则", nRules: "{n} 条规则", chEvents: "接收的规则", chEventsDesc: "留空则接收所有规则的告警。",
   testSend: "发送测试", testOk: "测试消息已发送", testFail: "测试发送失败", deleteChannelTitle: "删除渠道",
   secretKeep: "留空则保留当前值", chCreated: "渠道已添加", chCreatedTest: "渠道已添加。请发送测试消息以验证连接。",
-  fUrl: "Webhook URL", fUsername: "显示名称（可选）", fChannel: "频道（可选）", fBotToken: "Bot 令牌", fChatId: "chat_id", fSecret: "签名密钥（可选）",
+  fUrl: "Webhook URL", fUsername: "显示名称（可选）", fChannel: "频道（可选）", fBotToken: "Bot 令牌", fChatId: "chat_id", fSecret: "签名密钥（可选）", clearSecret: "删除签名密钥",
   hintSlack: "Slack 应用 → 启用 Incoming Webhooks → 选择频道并复制 Webhook URL",
   hintMattermost: "集成（Integrations）→ 添加 Incoming Webhook → 复制 URL",
   hintDiscord: "频道设置 → 整合 → Webhook → 新 Webhook → 复制 URL",

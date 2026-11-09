@@ -65,6 +65,13 @@ func TestZZSetupFlow(t *testing.T) {
 		t.Fatal("setup token consumed by an invalid request")
 	}
 
+	// without the right token the body is not looked at (no password hashing): 403
+	if w, m := e.do("POST", "/api/setup", map[string]string{"token": "nope", "email": "nobody", "password": "short"}, withCSRF()); w.Code != 403 || m["error"] != "invalid_token" {
+		t.Fatalf("wrong token, invalid body: %d %v", w.Code, m)
+	}
+	e.s.Limiter = auth.NewLimiter(2, time.Minute)
+	e.h = e.s.Handler()
+
 	// wrong token: 403, counted against the address; the limit then answers 429
 	good := map[string]string{"token": tok, "email": "  Boss@Example.com ", "password": zaPassword}
 	bad := map[string]string{"token": "wrong-token-value", "email": "boss@example.com", "password": zaPassword}

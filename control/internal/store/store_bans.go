@@ -94,6 +94,9 @@ func (s *Store) LiftBan(ctx context.Context, id int64) (*IPBan, error) {
 	if err != nil {
 		return nil, err
 	}
+	if b.ExpiresAt != nil && !b.ExpiresAt.After(now()) {
+		return nil, ErrNotFound // already lifted or expired: nothing to do
+	}
 	t := now().Add(-time.Second)
 	_, err = s.q.ExecContext(ctx, `UPDATE ip_bans SET expires_at = ? WHERE id = ?`, t, id)
 	return b, err

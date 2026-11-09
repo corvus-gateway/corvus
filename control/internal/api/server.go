@@ -420,6 +420,13 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, "already_setup", "an administrator already exists")
 		return
 	}
+	// The token is checked first, so requests without it cost no password hashing.
+	token := strings.TrimSpace(in.Token)
+	if !s.Setup.Consume(token) {
+		s.Limiter.Fail(ip)
+		writeErr(w, http.StatusForbidden, "invalid_token", "invalid setup token (see the corvus container logs)")
+		return
+	}
 	in.Email = strings.TrimSpace(in.Email)
 	var verr validate.Errors
 	if !strings.Contains(in.Email, "@") || len(in.Email) > 254 {
@@ -433,13 +440,8 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		verr = append(verr, validate.FieldError{Field: "password", Code: "weak", Message: err.Error()})
 	}
 	if len(verr) > 0 {
+		s.Setup.Restore(token) // nothing was created: the same token can be used again
 		fail(w, verr)
-		return
-	}
-	token := strings.TrimSpace(in.Token)
-	if !s.Setup.Consume(token) {
-		s.Limiter.Fail(ip)
-		writeErr(w, http.StatusForbidden, "invalid_token", "invalid setup token (see the corvus container logs)")
 		return
 	}
 	u, err := s.Store.CreateUser(r.Context(), in.Email, strings.TrimSpace(in.Name), hash, "admin")

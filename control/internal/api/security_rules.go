@@ -378,6 +378,13 @@ func (s *Server) refreshIPList(w http.ResponseWriter, r *http.Request) {
 	}
 	l, err := s.Feeds.Refresh(r.Context(), id)
 	if l == nil {
+		// no list to show: it does not exist (any more, e.g. deleted during the fetch)
+		// or the refresh failed before reading it
+		if _, gerr := s.Store.IPListByID(r.Context(), id); errors.Is(gerr, store.ErrNotFound) {
+			err = gerr
+		} else if err == nil {
+			err = errors.New("list refresh returned no list")
+		}
 		fail(w, err)
 		return
 	}

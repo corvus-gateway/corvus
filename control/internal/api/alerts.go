@@ -25,6 +25,25 @@ type channelInput struct {
 	BotToken    string   `json:"bot_token"`
 	ChatID      string   `json:"chat_id"`
 	Secret      string   `json:"secret"`
+	ClearSecret bool     `json:"clear_secret"` // webhook: remove the signing secret
+}
+
+// channelView is a channel as the API returns it: the destination stays sealed, but the
+// optional values that are not secret are shown so they can be edited and cleared.
+type channelView struct {
+	store.AlertChannel
+	Username  string `json:"username,omitempty"`
+	Channel   string `json:"channel,omitempty"`
+	HasSecret bool   `json:"has_secret,omitempty"`
+}
+
+func (s *Server) channelView(c store.AlertChannel) channelView {
+	v := channelView{AlertChannel: c}
+	var t alerts.Target
+	if raw, err := seal.Open(s.DataKey, c.Target); err == nil && json.Unmarshal([]byte(raw), &t) == nil {
+		v.Username, v.Channel, v.HasSecret = t.Username, t.Channel, t.Secret != ""
+	}
+	return v
 }
 
 // build fills c from the input; empty secret fields keep the existing target values.
@@ -79,6 +98,9 @@ func (s *Server) buildChannel(in channelInput, c *store.AlertChannel) error {
 	set(&t.BotToken, in.BotToken)
 	set(&t.ChatID, in.ChatID)
 	set(&t.Secret, in.Secret)
+	if in.ClearSecret {
+		t.Secret = ""
+	}
 	if in.Username != nil {
 		t.Username = strings.TrimSpace(*in.Username)
 	}
@@ -121,7 +143,11 @@ func (s *Server) listChannels(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	writeJSON(w, 200, list)
+	out := make([]channelView, 0, len(list))
+	for _, c := range list {
+		out = append(out, s.channelView(c))
+	}
+	writeJSON(w, 200, out)
 }
 
 func (s *Server) createChannel(w http.ResponseWriter, r *http.Request) {
@@ -143,7 +169,7 @@ func (s *Server) createChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "alert_channel.create", fmt.Sprintf("alert_channel:%d", c.ID), map[string]any{"name": c.Name, "kind": c.Kind, "target": c.TargetHint})
-	writeJSON(w, 201, map[string]any{"channel": c})
+	writeJSON(w, 201, map[string]any{"channel": s.channelView(*c)})
 }
 
 func (s *Server) updateChannel(w http.ResponseWriter, r *http.Request) {
@@ -176,7 +202,7 @@ func (s *Server) updateChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "alert_channel.update", fmt.Sprintf("alert_channel:%d", id), map[string]any{"name": c.Name, "kind": c.Kind, "target": c.TargetHint, "enabled": c.Enabled})
-	writeJSON(w, 200, map[string]any{"channel": c})
+	writeJSON(w, 200, map[string]any{"channel": s.channelView(*c)})
 }
 
 func (s *Server) deleteChannel(w http.ResponseWriter, r *http.Request) {

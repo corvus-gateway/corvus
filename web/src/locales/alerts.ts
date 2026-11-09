@@ -7,7 +7,7 @@ export const koAlerts = {
   allRules: "모든 규칙", nRules: "규칙 {n}개", chEvents: "받을 규칙", chEventsDesc: "선택하지 않으면 모든 규칙의 알림을 받습니다.",
   testSend: "테스트 전송", testOk: "테스트 메시지를 보냈습니다", testFail: "테스트 전송 실패", deleteChannelTitle: "채널 삭제",
   secretKeep: "변경하지 않으려면 비워 두세요", chCreated: "채널을 추가했습니다", chCreatedTest: "채널을 추가했습니다. 테스트 메시지를 보내 연결을 확인해 보세요.",
-  fUrl: "Webhook URL", fUsername: "표시 이름 (선택)", fChannel: "채널 (선택)", fBotToken: "봇 토큰", fChatId: "chat_id", fSecret: "서명 비밀키 (선택)",
+  fUrl: "Webhook URL", fUsername: "표시 이름 (선택)", fChannel: "채널 (선택)", fBotToken: "봇 토큰", fChatId: "chat_id", fSecret: "서명 비밀키 (선택)", clearSecret: "서명 비밀키 삭제",
   hintSlack: "Slack 앱 → Incoming Webhooks 활성화 → 채널 선택 후 Webhook URL 복사",
   hintMattermost: "통합 → Incoming Webhook 추가 → URL 복사",
   hintDiscord: "채널 설정 → 연동 → 웹후크 → 새 웹후크 만들기 → URL 복사",

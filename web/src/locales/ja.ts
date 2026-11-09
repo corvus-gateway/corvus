@@ -217,7 +217,7 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   allRules: "すべてのルール", nRules: "{n} 件のルール", chEvents: "受信するルール", chEventsDesc: "空欄の場合、すべてのルールのアラートを受信します。",
   testSend: "テスト送信", testOk: "テストメッセージを送信しました", testFail: "テスト送信に失敗しました", deleteChannelTitle: "チャネルを削除",
   secretKeep: "空欄のままにすると現在の値を維持します", chCreated: "チャネルを追加しました", chCreatedTest: "チャネルを追加しました。テストメッセージを送信して接続を確認してください。",
-  fUrl: "Webhook URL", fUsername: "表示名（任意）", fChannel: "チャンネル（任意）", fBotToken: "ボットトークン", fChatId: "chat_id", fSecret: "署名シークレット（任意）",
+  fUrl: "Webhook URL", fUsername: "表示名（任意）", fChannel: "チャンネル（任意）", fBotToken: "ボットトークン", fChatId: "chat_id", fSecret: "署名シークレット（任意）", clearSecret: "署名シークレットを削除",
   hintSlack: "Slack アプリ → Incoming Webhooks を有効化 → チャンネルを選択して Webhook URL をコピー",
   hintMattermost: "統合機能 → Incoming Webhook を追加 → URL をコピー",
   hintDiscord: "チャンネル設定 → 連携サービス → ウェブフック → 新しいウェブフック → URL をコピー",
