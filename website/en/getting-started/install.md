@@ -83,7 +83,7 @@ If port 6379 is already used on the host, also set `CORVUS_REDIS_PORT` (see
 
 ## Related
 
-- [Install on a NAS](nas.md): TrueNAS SCALE app, ports and tips for other NAS systems
+- [Install on a NAS](nas.md): TrueNAS SCALE and Unraid apps, ports and tips for other NAS systems
 - [Configuration](../reference/configuration.md): environment variables
 - [Hardened install](../reference/hardened.md): read-only root filesystem, no capabilities
 - [Upgrade](upgrade.md)

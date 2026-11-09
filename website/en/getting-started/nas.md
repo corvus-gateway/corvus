@@ -1,5 +1,5 @@
 ---
-description: Install Corvus on a NAS — TrueNAS SCALE app catalog, ports, the setup token, and tips for other NAS systems.
+description: Install Corvus on a NAS — TrueNAS SCALE app catalog, Unraid Community Applications, ports, the setup token, and tips for other NAS systems.
 ---
 
 # Install on a NAS
@@ -40,9 +40,37 @@ Keep the console port (30553) closed to the internet; see [Protect the console](
 TrueNAS shows an update for the app when a new Corvus version is in the catalog. Data is migrated
 automatically on start.
 
+## Unraid
+
+Corvus is in **Community Applications** (the **Apps** tab).
+
+1. **Apps**, search for **Corvus**, then **Install**.
+2. Keep the default ports or change them:
+
+    | Port | Default | Used for |
+    |---|---|---|
+    | Admin console | **9443** | The console (HTTPS, self-signed certificate at first) |
+    | HTTP | **1880** | Your sites over HTTP and Let's Encrypt HTTP validation |
+    | HTTPS | **18443** | Your sites over HTTPS |
+
+    Unraid's web interface usually uses 80 and 443, which is why the template uses other ports.
+    To use 80/443 directly, give the container its own IP address (**Network Type** `br0` or a
+    custom network).
+
+3. Data is kept in `/mnt/user/appdata/corvus` and owned by `nobody:users` (PUID 99, PGID 100).
+   Back it up like other app data; it holds the database, certificates and the encryption keys.
+4. To choose the setup token yourself, fill in **Setup Token** (at least 12 characters) before the
+   first start. Otherwise open the container's **Logs** and find the line with `setup_token`.
+5. Click **WebUI** in the container menu (or open `https://<unraid-ip>:9443`), accept the
+   certificate warning, enter the token and create the administrator account.
+
+Forward ports **80 → 1880** and **443 → 18443** on your router to reach your sites from the
+internet. Keep the console port closed to the internet. Updates appear in the **Docker** tab like
+for other containers.
+
 ## Other NAS systems
 
-Any NAS that runs Docker Compose (Synology Container Manager, Unraid, QNAP Container Station, …)
+Any NAS that runs Docker Compose (Synology Container Manager, QNAP Container Station, …)
 can use the normal [install](install.md). Things to watch for:
 
 - **Ports 80/443 already in use by the NAS.** Publish Corvus on other ports (e.g. `8080:80` and

@@ -1,5 +1,5 @@
 ---
-description: NAS에 Corvus 설치하기 — TrueNAS SCALE 앱 카탈로그, 포트, 설정 토큰, 다른 NAS에서 주의할 점.
+description: NAS에 Corvus 설치하기 — TrueNAS SCALE 앱 카탈로그, Unraid Community Applications, 포트, 설정 토큰, 다른 NAS에서 주의할 점.
 ---
 
 # NAS에 설치
@@ -39,9 +39,35 @@ Let's Encrypt가 평소 포트로 Corvus에 닿습니다. 80 포트를 열 수 �
 카탈로그에 새 Corvus 버전이 올라오면 TrueNAS가 앱 업데이트를 표시합니다. 데이터는 시작할 때 자동으로
 옮겨집니다.
 
+## Unraid
+
+Corvus는 **Community Applications**(**Apps** 탭)에 있습니다.
+
+1. **Apps**에서 **Corvus**를 검색하고 **Install**을 누릅니다.
+2. 포트는 기본값을 쓰거나 바꿉니다.
+
+    | 포트 | 기본값 | 용도 |
+    |---|---|---|
+    | 관리 콘솔 | **9443** | 콘솔(HTTPS, 처음에는 자체 서명 인증서) |
+    | HTTP | **1880** | 사이트의 HTTP 접속과 Let's Encrypt HTTP 인증 |
+    | HTTPS | **18443** | 사이트의 HTTPS 접속 |
+
+    Unraid 웹 화면이 보통 80과 443을 쓰기 때문에 템플릿은 다른 포트를 씁니다. 80/443을 그대로
+    쓰려면 컨테이너에 별도 IP를 주세요(**Network Type**을 `br0` 또는 사용자 지정 네트워크로).
+
+3. 데이터는 `/mnt/user/appdata/corvus`에 저장되고 소유자는 `nobody:users`(PUID 99, PGID 100)입니다.
+   데이터베이스, 인증서, 암호화 키가 들어 있으니 다른 앱 데이터처럼 백업하세요.
+4. 설정 토큰을 직접 정하려면 처음 시작하기 전에 **Setup Token**(12자 이상)을 입력합니다. 비워 두면
+   컨테이너 **Logs**에서 `setup_token`이 있는 줄을 찾으세요.
+5. 컨테이너 메뉴의 **WebUI**(또는 `https://<unraid-ip>:9443`)를 열고 인증서 경고를 수락한 뒤 토큰을
+   입력하고 관리자 계정을 만듭니다.
+
+인터넷에서 사이트에 접속하려면 공유기에서 **80 → 1880**, **443 → 18443**으로 포워딩하세요. 콘솔 포트는
+인터넷에 열지 마세요. 업데이트는 다른 컨테이너처럼 **Docker** 탭에 표시됩니다.
+
 ## 다른 NAS
 
-Docker Compose를 쓸 수 있는 NAS(Synology Container Manager, Unraid, QNAP Container Station 등)라면
+Docker Compose를 쓸 수 있는 NAS(Synology Container Manager, QNAP Container Station 등)라면
 일반 [설치](install.md) 방법을 그대로 쓰면 됩니다. 주의할 점:
 
 - **NAS가 이미 80/443을 쓰는 경우.** Corvus를 다른 포트(예: `8080:80`, `8443:443`)로 열고 공유기에서

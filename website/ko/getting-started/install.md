@@ -83,7 +83,7 @@ services:
 
 ## 관련 문서
 
-- [NAS에 설치](nas.md): TrueNAS SCALE 앱, 포트, 다른 NAS에서 주의할 점
+- [NAS에 설치](nas.md): TrueNAS SCALE·Unraid 앱, 포트, 다른 NAS에서 주의할 점
 - [환경 변수](../reference/configuration.md): 환경 변수 설정
 - [강화 설치](../reference/hardened.md): 읽기 전용 루트 파일 시스템, capability 없음
 - [업그레이드](upgrade.md)
