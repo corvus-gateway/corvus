@@ -31,13 +31,35 @@ A few things we look for before merging — we can help with any of them:
   case in `deploy/dev/itest.sh`), and bug fixes ideally get a test that fails without the fix.
   Changes to the rules engine, authentication or configuration generation are not merged without
   tests. If you don't know how to test something, open the PR anyway and we'll work it out together.
-- **Style:** Go code is formatted with `gofmt`; for TypeScript, follow the style of the surrounding code.
+- **Style:** Go code follows [Effective Go](https://go.dev/doc/effective_go) and is formatted with
+  `gofmt`; `gofmt` and `go vet` run in CI and must pass. TypeScript is compiled in strict mode
+  (`npm run build` fails on type errors); follow the style of the surrounding code. Lua files must
+  compile with LuaJIT (checked in CI).
 - **Text in the console:** add new strings to the dictionaries in `web/src/locales/`. English is
   enough — other languages are welcome but optional.
 - **License:** by contributing you agree that your contribution is licensed under the
   [Apache License 2.0](LICENSE).
 
 All changes, including the maintainer's own, reach `main` through a pull request with passing checks.
+
+### Test policy
+
+New functionality **must** come with automated tests, and bug fixes should add a test that fails
+without the fix. A pull request that adds behaviour without tests is not merged until tests are
+added (we are happy to help write them).
+
+### What reviewers check
+
+- The change does what the description says, and nothing unrelated.
+- Tests cover the new behaviour; CI is green.
+- Input from users or the network is validated; no secrets in logs or API responses.
+- Configuration rendered for nginx stays valid (`openresty -t`) and existing configurations keep
+  working after an upgrade.
+- User-facing changes update the documentation (`website/`) and console strings.
+
+See also [GOVERNANCE.md](GOVERNANCE.md), [ROADMAP.md](ROADMAP.md),
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
+[docs/SECURITY-ASSURANCE.md](docs/SECURITY-ASSURANCE.md).
 
 ## Development setup
 

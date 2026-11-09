@@ -35,4 +35,6 @@ control/internal/webui/dist/*
 !/docs/readme/
 !/docs/API.md
 !/docs/benchmark.md
+!/docs/ARCHITECTURE.md
+!/docs/SECURITY-ASSURANCE.md
 /site/

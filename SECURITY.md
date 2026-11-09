@@ -19,6 +19,19 @@ Include, if you can:
 You will get an acknowledgement within 7 days. Once a fix is ready, it is released together with
 a GitHub security advisory, and reporters are credited unless they prefer otherwise.
 
+## How reports are handled
+
+1. **Acknowledge** within 7 days and confirm whether the issue reproduces.
+2. **Assess** the impact and severity (CVSS) together with the reporter, in a private GitHub
+   security advisory.
+3. **Fix** in a private fork of the advisory, with a regression test. The target is a release
+   within 30 days of confirmation for high and critical issues, sooner when the issue is exploited.
+4. **Release** a patched version (release candidate first when time allows), then publish the
+   advisory, request a CVE through GitHub, and credit the reporter.
+5. **Disclose** details no later than 90 days after the report, or earlier once a fix is out.
+
+Release notes describe security fixes without exploit details.
+
 ## Supported versions
 
 Security fixes are released for the latest minor version of 1.x. Upgrade with
@@ -31,3 +44,6 @@ Security fixes are released for the latest minor version of 1.x. Upgrade with
   a vulnerability unless it bypasses an explicit guarantee (for example, a *Block* security rule).
 - Managed rule bundles are accepted only when signed with the project key. A way to make the
   gateway accept an unsigned or downgraded bundle **is** a vulnerability.
+
+For what Corvus is designed to guarantee, see the
+[security assurance case](docs/SECURITY-ASSURANCE.md).
