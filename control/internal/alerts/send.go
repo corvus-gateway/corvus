@@ -17,6 +17,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"corvus/control/internal/netcfg"
 )
 
 // Target is the (sealed) destination configuration of a channel.
@@ -208,6 +210,11 @@ func payload(kind string, t Target, m Message) (string, []byte, error) {
 var allowLoopback = false // tests only
 
 func blockedIP(ip net.IP) bool {
+	if v4, transition := netcfg.EmbeddedIPv4(ip); transition {
+		// NAT64/6to4 addresses are judged by the IPv4 address they carry; Teredo and
+		// local-use NAT64 have no reliably readable IPv4 part and are refused.
+		return v4 == nil || blockedIP(v4)
+	}
 	if allowLoopback && ip.IsLoopback() {
 		return false
 	}
@@ -217,7 +224,8 @@ func blockedIP(ip net.IP) bool {
 var client = &http.Client{
 	Timeout: 10 * time.Second,
 	Transport: &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
+		// No proxy: the dial guard below must see the real destination address.
+		Proxy: nil,
 		DialContext: (&net.Dialer{Timeout: 5 * time.Second, Control: func(network, address string, _ syscall.RawConn) error {
 			host, _, _ := net.SplitHostPort(address)
 			if ip := net.ParseIP(host); ip != nil && blockedIP(ip) {
@@ -252,16 +260,29 @@ func Send(ctx context.Context, kind string, t Target, m Message) (int, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		msg := err.Error()
-		if t.BotToken != "" {
-			msg = strings.ReplaceAll(msg, t.BotToken, "***") // never leak the bot token
-		}
-		return 0, errors.New(msg)
+		return 0, transportError(err, req.URL, t)
 	}
 	defer resp.Body.Close()
-	snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 300))
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4<<10)) // lets the connection be reused
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return resp.StatusCode, fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(snippet)))
+		// The response body is not reported: it may echo request details.
+		return resp.StatusCode, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 	return resp.StatusCode, nil
+}
+
+// transportError describes a failed request without the destination's path or
+// query, where webhook services keep their secrets; only scheme and host remain.
+func transportError(err error, dest *url.URL, t Target) error {
+	msg := err.Error()
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		msg = fmt.Sprintf("%s %s://%s/…: %v", ue.Op, dest.Scheme, dest.Host, ue.Err)
+	}
+	for _, s := range []string{t.BotToken, t.Secret, dest.Path, dest.RawPath, dest.RawQuery} {
+		if len(s) > 1 {
+			msg = strings.ReplaceAll(msg, s, "***")
+		}
+	}
+	return errors.New(msg)
 }
