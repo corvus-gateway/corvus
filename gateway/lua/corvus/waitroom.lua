@@ -210,7 +210,23 @@ local function queue_from_cookie(room)
   return q
 end
 
--- header_filter_by_lua: merge our cookies with any Set-Cookie from the upstream.
+-- same_origin: the request comes from a page of this host. Browsers send Origin with
+-- every POST from fetch() and forms; a missing or opaque ("null") Origin is accepted
+-- only together with Sec-Fetch-Site: same-origin.
+local function same_origin()
+  local origin = ngx.var.http_origin
+  if origin and origin ~= "" and origin ~= "null" then
+    local oh = origin:match("^https?://([^/]+)$")
+    return oh ~= nil and oh:lower() == (ngx.var.http_host or ""):lower()
+  end
+  return ngx.var.http_sec_fetch_site == "same-origin"
+end
+_M._same_origin = same_origin -- tests
+
+-- header_filter_by_lua: merge our cookies with any Set-Cookie from the upstream. A
+-- response that carries a Corvus cookie is personal: it must not be stored by shared
+-- caches (CDNs, proxies) and replayed to other visitors, so its Cache-Control is
+-- replaced.
 function _M.header_filter()
   local cookies = ngx.ctx.corvus_cookies
   if not cookies then return end
@@ -221,6 +237,7 @@ function _M.header_filter()
     for i = #existing, 1, -1 do table.insert(cookies, 1, existing[i]) end
   end
   ngx.header["Set-Cookie"] = cookies
+  ngx.header["Cache-Control"] = "private, no-store"
 end
 
 -- ---------------------------------------------------------------- redis
@@ -548,14 +565,8 @@ function _M.endpoint()
   end
 
   if action == "leave" and method == "POST" then
-    -- Cookies are SameSite=None on https, so refuse other sites' requests.
-    local origin = ngx.var.http_origin
-    if origin and origin ~= "" and origin ~= "null" then
-      local oh = origin:match("^https?://([^/]+)$")
-      if not oh or oh:lower() ~= (ngx.var.http_host or ""):lower() then
-        return send_json(403, { status = "forbidden" })
-      end
-    end
+    -- Cookies are SameSite=None on https, so only same-origin requests may leave.
+    if not same_origin() then return send_json(403, { status = "forbidden" }) end
     local tok = admission_from_cookie(room)
     local q = queue_from_cookie(room)
     local sid = (tok and tok.sid) or (q and q.sid)
