@@ -59,6 +59,11 @@ http {
     proxy_buffer_size       16k;
     proxy_buffers           8 16k;
     proxy_busy_buffers_size 32k;
+    # a bucket must hold one exact name (8 + name rounded up to 8 + 8 bytes): 512 fits the
+    # longest valid domain (253 characters); 128 stopped at 110
+    server_names_hash_bucket_size 512;
+    map_hash_bucket_size 128;
+    # (maps below must follow map_hash_bucket_size, or nginx reports it as a duplicate)
     # Client key for per-client limits: the IPv4 address, or the IPv6 /64 (an IPv6 host
     # can use any address of its /64), as ipkey.lua keys bans and the access queue.
     # IPv4-mapped IPv6 addresses (::ffff:a.b.c.d) keep the whole address.
@@ -76,10 +81,6 @@ http {
     # Security-rule challenge answers (/__corvus/challenge/verify): a browser posts once
     # per challenge, so a few per second per IP is plenty.
     limit_req_zone $corvus_client zone=corvus_ch_api:10m rate=5r/s;
-    # a bucket must hold one exact name (8 + name rounded up to 8 + 8 bytes): 512 fits the
-    # longest valid domain (253 characters); 128 stopped at 110
-    server_names_hash_bucket_size 512;
-    map_hash_bucket_size 128;
 
     # Request bodies are buffered outside the data volume so uploads cannot fill
     # the disk that holds the database and certificates (F7).
