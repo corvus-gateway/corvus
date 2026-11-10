@@ -33,9 +33,13 @@ e-mail address:
 
 - A user created automatically on the first SSO sign-in is linked to that provider account.
 - An existing user (for example one created with a password) is linked on their first SSO sign-in
-  only if the provider marks the e-mail address as verified (`email_verified: true`). Otherwise the
-  sign-in is refused; ask the provider to send verified e-mails, or remove the user and let SSO
-  create it again.
+  only if the provider marks the e-mail address as verified (`email_verified: true`, from the ID
+  token or the userinfo endpoint). Otherwise the sign-in is refused; ask the provider to send
+  verified e-mails, or remove the user and let SSO create it again.
+- Some providers never send `email_verified`, among them **Microsoft Entra ID**. If your provider
+  only issues addresses it has verified (for Entra ID: users of your own tenant), turn on
+  **The identity provider verifies email addresses**: a sign-in without the claim then links the
+  existing user. `email_verified: false` is still refused.
 - Once linked, the user signs in through that provider account even if the e-mail changes at the
   provider. Another provider account with the same e-mail is refused.
 - Administrators can remove a link with **Unlink SSO** in the user's menu, for example when a

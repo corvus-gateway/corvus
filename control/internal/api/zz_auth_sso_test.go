@@ -330,8 +330,17 @@ func TestZZSSOSettingsEdits(t *testing.T) {
 	}
 	// sync_role is kept when not sent
 	in = base()
-	if code, m := call("PUT", "/api/settings/sso", in); code != 200 || m["sync_role"] != false || m["client_secret_set"] != true {
+	if code, m := call("PUT", "/api/settings/sso", in); code != 200 || m["sync_role"] != false || m["client_secret_set"] != true || m["trust_email"] != false {
 		t.Fatalf("keep: %d %v", code, m)
+	}
+	// trust_email: off by default, kept when not sent
+	in["trust_email"] = true
+	if code, m := call("PUT", "/api/settings/sso", in); code != 200 || m["trust_email"] != true || !stored().TrustEmail {
+		t.Fatalf("trust_email: %d %v", code, m)
+	}
+	delete(in, "trust_email")
+	if code, m := call("PUT", "/api/settings/sso", in); code != 200 || m["trust_email"] != true {
+		t.Fatalf("trust_email kept: %d %v", code, m)
 	}
 	// clear the secret (public client)
 	in["clear_client_secret"] = true
@@ -341,7 +350,7 @@ func TestZZSSOSettingsEdits(t *testing.T) {
 	if stored().ClientSecret != "" {
 		t.Fatal("secret not cleared")
 	}
-	if n := e.audited("sso.update"); n != 3 {
+	if n := e.audited("sso.update"); n != 5 {
 		t.Fatalf("sso.update audited %d times", n)
 	}
 	list, _ := e.s.Store.ListAudit(ctx, 1)

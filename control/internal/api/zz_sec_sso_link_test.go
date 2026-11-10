@@ -102,6 +102,26 @@ func TestZZSSOLinkNeedsVerifiedEmail(t *testing.T) {
 	}
 }
 
+// With trust_email (IdPs such as Entra ID that never send email_verified) a missing
+// claim links an existing user; an explicit false is still refused.
+func TestZZSSOLinkTrustEmail(t *testing.T) {
+	e := newSSOEnv(t, func(s *sso.Settings) { s.AutoProvision = false; s.TrustEmail = true })
+	ctx := context.Background()
+	alice, _ := e.s.Store.CreateUser(ctx, "alice@example.com", "Alice", "x", "viewer")
+	e.idp.mutate = func(m map[string]any) { m["email_verified"] = false }
+	wantErr(t, e.login(e.browser()), "email_unverified")
+	if zlSubject(t, e, alice.ID) != "" {
+		t.Fatal("linked with email_verified false")
+	}
+	e.idp.mutate = func(m map[string]any) { delete(m, "email_verified") }
+	if loc := e.login(e.browser()); loc != "/" {
+		t.Fatalf("trusted sign-in: %q", loc)
+	}
+	if zlSubject(t, e, alice.ID) != "sub-alice@example.com" {
+		t.Fatal("not linked")
+	}
+}
+
 // New users are created linked, also without email_verified.
 func TestZZSSOProvisionedUsersAreLinked(t *testing.T) {
 	e := newSSOEnv(t, nil)

@@ -375,6 +375,30 @@ func TestCovClaims(t *testing.T) {
 	if v := c2.Values("groups"); len(v) != 1 {
 		t.Fatalf("merged raw claims: %v", v)
 	}
+	// email_verified missing from the ID token: taken from userinfo for the same email only
+	c3 := ParseClaims(map[string]any{"sub": "u3", "email": "carol@example.com"})
+	c3.Merge(map[string]any{"email": "other@example.com", "email_verified": true})
+	if c3.EmailVerified != nil {
+		t.Fatal("email_verified of another address")
+	}
+	c3.Merge(map[string]any{"email": "Carol@Example.com", "email_verified": true})
+	if c3.EmailVerified == nil || !*c3.EmailVerified {
+		t.Fatal("email_verified from userinfo")
+	}
+	c3.Merge(map[string]any{"email": "carol@example.com", "email_verified": false})
+	if !*c3.EmailVerified {
+		t.Fatal("a known email_verified is not overwritten")
+	}
+	f, tr := false, true
+	for _, tc := range []struct {
+		v     *bool
+		trust bool
+		want  bool
+	}{{nil, false, false}, {nil, true, true}, {&f, true, false}, {&tr, false, true}} {
+		if got := (Settings{TrustEmail: tc.trust}).EmailVerified(Claims{EmailVerified: tc.v}); got != tc.want {
+			t.Errorf("EmailVerified(%v, trust %v) = %v", tc.v, tc.trust, got)
+		}
+	}
 	// already set: Merge keeps the ID token values
 	c.Merge(map[string]any{"email": "x@y", "name": "X"})
 	if c.Email != "alice@example.com" || c.Name != "alice" {

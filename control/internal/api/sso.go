@@ -192,13 +192,14 @@ type ssoView struct {
 	DefaultRole     string   `json:"default_role"`
 	AutoProvision   bool     `json:"auto_provision"`
 	SyncRole        bool     `json:"sync_role"`
+	TrustEmail      bool     `json:"trust_email"`
 	RedirectURI     string   `json:"redirect_uri"`
 }
 
 func (s *Server) ssoViewOf(r *http.Request, c sso.Settings) ssoView {
 	return ssoView{Enabled: c.Enabled, DisplayName: c.Label(), Issuer: c.Issuer, ClientID: c.ClientID, ClientSecretSet: c.ClientSecret != "",
 		Scopes: c.Scopes, AllowedDomains: c.AllowedDomains, RoleClaim: c.RoleClaim, AdminValues: c.AdminValues, OperatorValues: c.OperatorValues,
-		DefaultRole: c.DefaultRole, AutoProvision: c.AutoProvision, SyncRole: c.SyncRole, RedirectURI: s.ssoRedirectURI(r)}
+		DefaultRole: c.DefaultRole, AutoProvision: c.AutoProvision, SyncRole: c.SyncRole, TrustEmail: c.TrustEmail, RedirectURI: s.ssoRedirectURI(r)}
 }
 
 // publicSSO tells the sign-in page whether to show the SSO button.
@@ -239,6 +240,7 @@ type ssoInput struct {
 	DefaultRole       string   `json:"default_role"`
 	AutoProvision     bool     `json:"auto_provision"`
 	SyncRole          *bool    `json:"sync_role"`
+	TrustEmail        *bool    `json:"trust_email"` // absent = keep (reset when the issuer changes)
 	// read-only fields echoed back by clients are ignored
 	ClientSecretSet *bool   `json:"client_secret_set,omitempty"`
 	RedirectURI     *string `json:"redirect_uri,omitempty"`
@@ -260,6 +262,11 @@ func (s *Server) putSSOSettings(w http.ResponseWriter, r *http.Request) {
 		DefaultRole: in.DefaultRole, AutoProvision: in.AutoProvision, SyncRole: prev.SyncRole || prev.Issuer == ""}
 	if strings.TrimRight(in.Issuer, "/") != strings.TrimRight(prev.Issuer, "/") {
 		c.ClientSecret = "" // never send the old provider's secret to a new issuer
+	} else {
+		c.TrustEmail = prev.TrustEmail // a statement about this provider only
+	}
+	if in.TrustEmail != nil {
+		c.TrustEmail = *in.TrustEmail
 	}
 	if in.SyncRole != nil {
 		c.SyncRole = *in.SyncRole
@@ -296,7 +303,7 @@ func (s *Server) putSSOSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	s.ssoRT.invalidate()
 	s.audit(r, "sso.update", c.Issuer, map[string]any{"enabled": c.Enabled, "client_id": c.ClientID, "client_secret_changed": secretChanged,
-		"role_claim": c.RoleClaim, "default_role": c.DefaultRole, "auto_provision": c.AutoProvision, "sync_role": c.SyncRole, "allowed_domains": c.AllowedDomains})
+		"role_claim": c.RoleClaim, "default_role": c.DefaultRole, "auto_provision": c.AutoProvision, "sync_role": c.SyncRole, "trust_email": c.TrustEmail, "allowed_domains": c.AllowedDomains})
 	writeJSON(w, 200, s.ssoViewOf(r, c))
 }
 
@@ -456,8 +463,8 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cl := sso.ParseClaims(raw)
-	// Email (or the role claim) may only be available from userinfo.
-	if (cl.Email == "" || (c.RoleClaim != "" && cl.Values(c.RoleClaim) == nil)) && p.UserInfoEndpoint() != "" {
+	// Email, email_verified or the role claim may only be available from userinfo.
+	if (cl.Email == "" || cl.EmailVerified == nil || (c.RoleClaim != "" && cl.Values(c.RoleClaim) == nil)) && p.UserInfoEndpoint() != "" {
 		if ui, err := p.UserInfo(cctx, oauth2.StaticTokenSource(tok)); err == nil && ui.Subject == idt.Subject {
 			m := map[string]any{}
 			if ui.Claims(&m) == nil {
@@ -538,7 +545,8 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 // matched by the identity provider account (issuer + subject) they are linked to:
 //   - linked account → that user, whatever email the IdP reports now;
 //   - otherwise a user with the same email is linked on this sign-in, but only when
-//     the IdP states the email is verified (email_verified true), and only if that
+//     the IdP states the email is verified (email_verified true, or no claim with
+//     "trust_email" set for IdPs that never send it), and only if that
 //     user is not linked to another account at the same issuer;
 //   - otherwise, with auto-provisioning, a new user is created and linked.
 //
@@ -578,7 +586,7 @@ func (s *Server) ssoUser(ctx context.Context, c sso.Settings, cl sso.Claims, sub
 		slog.Error("sso link lookup failed", "err", err)
 		return nil, false, "internal"
 	}
-	if cl.EmailVerified == nil || !*cl.EmailVerified {
+	if !c.EmailVerified(cl) {
 		return nil, false, "link_unverified"
 	}
 	if err := s.Store.LinkIdentity(ctx, u.ID, c.Issuer, sub); err != nil {

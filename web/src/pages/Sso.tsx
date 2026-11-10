@@ -15,20 +15,20 @@ import { copyText } from "../lib/utils";
 interface SsoSettings {
   enabled: boolean; display_name: string; issuer: string; client_id: string; client_secret_set: boolean;
   scopes: string[]; allowed_domains: string[]; role_claim: string; admin_values: string[]; operator_values: string[];
-  default_role: "viewer" | "deny"; auto_provision: boolean; sync_role: boolean; redirect_uri: string;
+  default_role: "viewer" | "deny"; auto_provision: boolean; sync_role: boolean; trust_email: boolean; redirect_uri: string;
 }
 interface Discovery { issuer: string; authorization_endpoint: string; token_endpoint: string; userinfo_endpoint?: string; jwks_uri: string }
 
 interface Form {
   enabled: boolean; display_name: string; issuer: string; client_id: string; scopes: string;
   allowed_domains: string[]; role_claim: string; admin_values: string[]; operator_values: string[];
-  default_role: "viewer" | "deny"; auto_provision: boolean; sync_role: boolean;
+  default_role: "viewer" | "deny"; auto_provision: boolean; sync_role: boolean; trust_email: boolean;
 }
 
 const toForm = (s: SsoSettings): Form => ({
   enabled: s.enabled, display_name: s.display_name, issuer: s.issuer, client_id: s.client_id, scopes: (s.scopes ?? []).join(" "),
   allowed_domains: s.allowed_domains ?? [], role_claim: s.role_claim, admin_values: s.admin_values ?? [], operator_values: s.operator_values ?? [],
-  default_role: s.default_role === "deny" ? "deny" : "viewer", auto_provision: s.auto_provision, sync_role: s.sync_role,
+  default_role: s.default_role === "deny" ? "deny" : "viewer", auto_provision: s.auto_provision, sync_role: s.sync_role, trust_email: !!s.trust_email,
 });
 
 export default function SsoPage() {
@@ -148,6 +148,7 @@ export default function SsoPage() {
                 </Field>
                 <SwitchRow label={t("ssoAutoProvision")} description={t("ssoAutoProvisionDesc")} checked={f.auto_provision} onChange={(v) => set("auto_provision", v)} />
                 <SwitchRow label={t("ssoSyncRole")} description={t("ssoSyncRoleDesc")} checked={f.sync_role} onChange={(v) => set("sync_role", v)} disabled={f.role_claim.trim() === ""} />
+                <SwitchRow label={t("ssoTrustEmail")} description={t("ssoTrustEmailDesc")} checked={f.trust_email} onChange={(v) => set("trust_email", v)} />
                 <Callout tone="info">{t("ssoMfaNote")}</Callout>
                 <Callout tone="neutral">{t("ssoLocalNote")}</Callout>
               </div>

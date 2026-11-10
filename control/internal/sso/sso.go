@@ -50,6 +50,9 @@ type Settings struct {
 	DefaultRole    string   `json:"default_role"` // "viewer" | "deny"
 	AutoProvision  bool     `json:"auto_provision"`
 	SyncRole       bool     `json:"sync_role"` // update the user's role from the mapping on every login
+	// TrustEmail: the IdP only issues verified email addresses, so a token without an
+	// email_verified claim may link an existing user (an explicit false still refuses).
+	TrustEmail bool `json:"trust_email"`
 }
 
 // Defaults returns the settings used before anything was saved.
@@ -79,6 +82,15 @@ func Parse(raw string) (Settings, error) {
 		s.DefaultRole = "viewer"
 	}
 	return s, nil
+}
+
+// EmailVerified reports whether cl's email may link an existing user: the IdP says it
+// is verified, or it does not say and the IdP is trusted to verify emails.
+func (s Settings) EmailVerified(cl Claims) bool {
+	if cl.EmailVerified != nil {
+		return *cl.EmailVerified
+	}
+	return s.TrustEmail
 }
 
 // Ready reports whether the configuration is complete enough to offer the SSO button.
@@ -419,11 +431,15 @@ func ParseClaims(raw map[string]any) Claims {
 	return c
 }
 
-// Merge fills missing fields (and claims) from userinfo.
+// Merge fills missing fields (and claims) from userinfo. The caller checks that the
+// userinfo subject is the ID token's. email_verified is taken from userinfo when the
+// ID token lacks it and userinfo reports the same email.
 func (c *Claims) Merge(other map[string]any) {
 	o := ParseClaims(other)
 	if c.Email == "" && o.Email != "" {
 		c.Email, c.EmailVerified = o.Email, o.EmailVerified
+	} else if c.EmailVerified == nil && o.EmailVerified != nil && o.Email == c.Email {
+		c.EmailVerified = o.EmailVerified
 	}
 	if c.Name == "" {
 		c.Name = o.Name
