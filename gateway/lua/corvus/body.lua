@@ -11,7 +11,8 @@
 -- Bodies above the host limit are not read (logged as "skip"). Bodies that are read but
 -- cannot be inspected completely are reported with their own ids (see UNINSPECTED):
 -- compressed bodies (Content-Encoding), bodies whose normalisation hit a limit, and
--- JSON/form bodies in a charset that is not ASCII-compatible or with NUL bytes.
+-- JSON/form bodies in a charset that is not ASCII-compatible (UTF-16/32, UTF-7, EBCDIC)
+-- or with NUL bytes.
 
 local cjson_new = require("cjson.safe").new
 local find, lower, sub, byte, gsub = string.find, string.lower, string.sub, string.byte, string.gsub
@@ -123,8 +124,12 @@ local function add_value(acc, v, depth)
   if #v > 1 and looks_json(v) then
     local obj = decode_json(acc, v)
     if type(obj) == "table" then
-      -- JSON nested in string values deeper than this is not walked
-      if depth >= MAX_JSON_IN_STRING then acc.truncated = true return end
+      -- JSON nested in string values deeper than this is not walked ("[]" and "{}" hold
+      -- nothing to walk)
+      if depth >= MAX_JSON_IN_STRING then
+        if next(obj) ~= nil then acc.truncated = true end
+        return
+      end
       flatten(acc, obj, depth + 1)
     end
   end
@@ -160,7 +165,11 @@ local function trim(s) return (gsub(s, "^%s*(.-)%s*$", "%1")) end
 -- Header parameters (RFC 9110, RFC 6266): `; name=token` or `; name="quoted \" string"`.
 -- Returns the media type / disposition type (lower case) and a list of { name, value }
 -- (names lower case, values as sent), or nil when the parameter list is malformed.
-local function parse_params(h)
+-- disposition (Content-Disposition of a multipart part): browsers send file names as
+-- they are (HTML: only CR, LF and '"' are percent-encoded), so a backslash is literal
+-- in a quoted value, and an unquoted value runs to the next ";" (trimmed), as in
+-- `filename=my file.txt`.
+local function parse_params(h, disposition)
   local semi = find(h, ";", 1, true)
   local base = lower(trim(sub(h, 1, (semi or #h + 1) - 1)))
   local list = {}
@@ -183,11 +192,14 @@ local function parse_params(h)
         local c = byte(h, i)
         if not c then return nil end            -- unterminated
         if c == 34 then break end
-        if c == 92 and i < n then i = i + 1 end -- quoted pair
+        if c == 92 and i < n and not disposition then i = i + 1 end -- quoted pair
         buf[#buf + 1] = sub(h, i, i)
         i = i + 1
       end
       value, pos = concat(buf), i + 1
+    elseif disposition then
+      local vs, ve = find(h, "^[^;]*", pos)
+      value, pos = trim(sub(h, vs, ve)), ve + 1
     else
       local vs, ve = find(h, "^[^;%s]*", pos)
       value, pos = sub(h, vs, ve), ve + 1
@@ -237,8 +249,9 @@ end
 local CD_HEADER = "^[Cc][Oo][Nn][Tt][Ee][Nn][Tt]%-[Dd][Ii][Ss][Pp][Oo][Ss][Ii][Tt][Ii][Oo][Nn]%s*:(.*)$"
 
 -- Multipart: sets meta.anomaly when the structure cannot be parsed unambiguously
--- (missing, empty or repeated boundary parameter, no parts, no close delimiter, a part
--- without a header section, repeated or malformed Content-Disposition parameters).
+-- (missing, empty or repeated boundary parameter, no delimiter, no close delimiter, a
+-- part without a header section, repeated or malformed Content-Disposition parameters).
+-- A body that starts with the close delimiter has no parts (an empty form).
 local function decode_multipart(acc, s, list, meta)
   local boundary, dup = param(list or {}, "boundary")
   if not list or not boundary or boundary == "" or dup then
@@ -248,7 +261,8 @@ local function decode_multipart(acc, s, list, meta)
   end
   local delim = "--" .. boundary
   local _, start, close = next_delim(s, delim, 1)
-  if not start or close then meta.anomaly = true add(acc, s) return end
+  if not start then meta.anomaly = true add(acc, s) return end
+  if close then meta.parts = 0 return end
   local parts = 0
   while true do
     local a, nstart, nclose = next_delim(s, delim, start)
@@ -270,7 +284,7 @@ local function decode_multipart(acc, s, list, meta)
       end
       local name, filename
       if cd then
-        local _, ps = parse_params(cd)
+        local _, ps = parse_params(cd, true)
         if not ps or ncd > 1 then meta.anomaly = true end
         ps = ps or {}
         local d1, d2, d3, fnx
@@ -300,12 +314,27 @@ local function decode_multipart(acc, s, list, meta)
   meta.parts = parts
 end
 
--- Charsets whose bytes are ASCII-compatible, so the decoders above read them as the
--- application does. Others (UTF-16/32, UTF-7, EBCDIC …) cannot be inspected.
-local function ascii_charset(cs)
-  cs = lower(cs)
-  return cs == "utf-8" or cs == "utf8" or cs == "us-ascii" or cs == "ascii" or cs == "latin1"
-    or find(cs, "^iso%-8859%-%d+$") ~= nil or find(cs, "^windows%-125%d$") ~= nil
+-- EBCDIC code pages (IBM/cp numbers): their bytes for JSON and form syntax are not ASCII.
+local EBCDIC = {}
+for _, n in ipairs({ 37, 273, 277, 278, 280, 284, 285, 290, 297, 420, 423, 424, 500, 870, 871,
+  875, 880, 905, 918, 1025, 1026, 1047, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1148,
+  1149 }) do
+  EBCDIC[n] = true
+end
+
+-- foreign_charset: the charset does not keep ASCII bytes for ASCII characters, so the
+-- decoders here would not read the body as the application does (UTF-16/32, UCS-2/4,
+-- UTF-7, EBCDIC). ASCII-compatible charsets (UTF-8, EUC-KR, Shift_JIS, GBK, Big5,
+-- ISO-8859-*, windows-125x ...) are read as bytes: the JSON and form syntax is ASCII.
+local function foreign_charset(cs)
+  cs = gsub(lower(trim(cs)), "[%-_%s]", "")
+  if find(cs, "^utf16") or find(cs, "^utf32") or find(cs, "^ucs[24]") or find(cs, "^utf7")
+    or find(cs, "^iso10646") or find(cs, "^csucs4") or find(cs, "^unicode")
+    or find(cs, "^csunicode") or find(cs, "ebcdic", 1, true) then
+    return true
+  end
+  local num = cs:match("^c?s?ibm(%d+)$") or cs:match("^cp(%d+)$")
+  return num ~= nil and EBCDIC[tonumber(num)] == true
 end
 
 local function normalise(raw, ctype)
@@ -317,10 +346,10 @@ local function normalise(raw, ctype)
   local is_json = find(mtype, "json", 1, true) ~= nil
   local is_form = mtype == "application/x-www-form-urlencoded"
   if is_json or is_form then
-    -- a body in another encoding, or with NUL bytes, may be decoded differently by the
-    -- application than here
+    -- a body in an encoding that is not ASCII-compatible, or with NUL bytes, may be
+    -- decoded differently by the application than here
     local cs = list and param(list, "charset")
-    if (cs and not ascii_charset(cs)) or find(raw, "\0", 1, true)
+    if (cs and foreign_charset(cs)) or find(raw, "\0", 1, true)
       or sub(raw, 1, 2) == "\254\255" or sub(raw, 1, 2) == "\255\254" then
       meta.charset = true
     end

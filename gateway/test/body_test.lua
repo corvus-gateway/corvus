@@ -146,6 +146,20 @@ _, meta = norm(deep, "application/json")
 eq(meta.truncated, true, "JSON nested deeper than the decoder accepts")
 _, meta = norm('{"a":"[draft] title"}', "application/json")
 eq(meta.truncated, nil, "bracketed text is not nested JSON")
+-- an empty array/object at the JSON-in-string limit holds nothing left uninspected
+local function in_strings(inner) -- inner JSON as a string value, three levels down
+  local l3 = '{"c":' .. string.format("%q", inner) .. '}'
+  local l2 = '{"b":' .. string.format("%q", l3) .. '}'
+  return '{"a":' .. string.format("%q", l2) .. '}'
+end
+for _, empty in ipairs({ "[]", "{}", " [ ] " }) do
+  _, meta = norm(in_strings(empty), "application/json")
+  eq(meta.truncated, nil, "empty " .. empty .. " at the limit")
+end
+_, meta = norm(in_strings('{"d":1}'), "application/json")
+eq(meta.truncated, true, "non-empty object at the limit")
+_, meta = norm(in_strings('[1]'), "application/json")
+eq(meta.truncated, true, "non-empty array at the limit")
 for k, v in pairs(body.UNINSPECTED) do eq(v, true, "uninspected id " .. k) end
 
 -- ---------------------------------------------------------------- charset / NUL
@@ -153,6 +167,22 @@ eq(inspect('{"a":"b"}', "application/json; charset=utf-16"), "unsupported-charse
 eq(inspect('{"a":"b"}', 'application/json; charset="UTF-8"'), nil, "quoted utf-8")
 eq(inspect('a=b', "application/x-www-form-urlencoded; charset=ISO-8859-1"), nil, "latin-1 form")
 eq(inspect('a=b', "application/x-www-form-urlencoded; charset=utf-7"), "unsupported-charset", "utf-7 form")
+-- ASCII-compatible legacy charsets are read as bytes
+for _, cs in ipairs({ "EUC-KR", "cp949", "Shift_JIS", "GBK", "gb18030", "Big5", "latin1", "cp1252", "windows-1251", "koi8-r" }) do
+  eq(inspect('a=%B0%A1&b=EVI', "application/x-www-form-urlencoded; charset=" .. cs), nil, cs .. " form")
+  eq(inspect('{"a":"\176\161"}', "application/json; charset=" .. cs), nil, cs .. " json")
+end
+eq(inspect('a=EVIL', "application/x-www-form-urlencoded; charset=euc-kr"), "marker", "euc-kr form is inspected")
+eq(inspect('{"a":"EVIL"}', "application/json; charset=euc-kr"), "marker", "euc-kr json is inspected")
+-- charsets that are not ASCII-compatible
+for _, cs in ipairs({ "UTF-16", "utf-16le", "UTF-16BE", "utf16", "utf-32", "UTF-32LE", "ucs-2", "UCS-4", "utf-7",
+  "ISO-10646-UCS-2", "unicode", "ebcdic-cp-us", "IBM037", "cp037", "ibm01140", "cp1140", "IBM1047", "cp500", "csIBM037" }) do
+  eq(inspect('{"a":"b"}', "application/json; charset=" .. cs), "unsupported-charset", cs .. " json")
+end
+eq(inspect('a=b', "application/x-www-form-urlencoded; charset=utf-16"), "unsupported-charset", "utf-16 form")
+for _, cs in ipairs({ "ibm437", "cp850", "cp1250", "ibm866" }) do -- ASCII-compatible code pages
+  eq(inspect('{"a":"b"}', "application/json; charset=" .. cs), nil, cs .. " json")
+end
 eq(inspect('{\0"\0a\0"\0:\0"\0b\0"\0}\0', "application/json"), "unsupported-charset", "NUL bytes in json")
 eq(inspect('\255\254{', "application/json"), "unsupported-charset", "UTF-16 byte order mark")
 eq(inspect('{"a":"EVIL"}', "application/json; charset=utf-16"), "marker", "a signature match wins")
@@ -184,7 +214,12 @@ eq(inspect(mp("REAL", { field }), MP .. 'REAL; xboundary="FAKE"'), "marker", "xb
 eq(inspect(mp("REAL", { field }), MP .. 'REAL; boundary="FAKE"'), "multipart-anomaly", "repeated boundary")
 eq(inspect(mp("XX", { field }), "multipart/form-data"), "multipart-anomaly", "missing boundary")
 eq(inspect(mp("XX", { field }), MP .. "YY"), "multipart-anomaly", "boundary never appears")
-eq(inspect("--XX--\r\n", MP .. "XX"), "multipart-anomaly", "no parts")
+eq(inspect("--XX--\r\n", MP .. "XX"), nil, "empty form (close delimiter only)")
+eq(inspect("--XX--", MP .. "XX"), nil, "empty form without a line break")
+local _, m0 = norm("--XX--\r\n", MP .. "XX")
+eq(m0.parts, 0, "empty form has no parts")
+eq(m0.anomaly, nil, "empty form is not an anomaly")
+eq(inspect("EVIL", MP .. "XX"), "multipart-anomaly", "no delimiter")
 eq(inspect(mp("XX", { field }, false), MP .. "XX"), "multipart-anomaly", "no close delimiter")
 eq(inspect(mp("XX", { 'Content-Disposition: form-data; name="f"\r\nEVIL' }), MP .. "XX"), "multipart-anomaly", "part without a header section")
 -- a delimiter must start a line
@@ -210,6 +245,17 @@ eq(lines(text)["a.txt"], true, "unquoted filename")
 eq(lines(text)["EVIL"], nil, "file contents are skipped")
 text = norm(mp("XX", { 'Content-Disposition: form-data; xfilename="n"; name="f"\r\n\r\nEVIL' }), MP .. "XX")
 eq(lines(text)["EVIL"], true, "xfilename is not a filename")
+-- browsers do not escape backslashes in file names
+text = norm(mp("XX", { 'Content-Disposition: form-data; name="f"; filename="C:\\Users\\me\\a.txt"\r\n\r\nEVIL' }), MP .. "XX")
+eq(lines(text)["C:\\Users\\me\\a.txt"], true, "Windows path kept as sent")
+eq(inspect(mp("XX", { 'Content-Disposition: form-data; name="f"; filename="dir\\"\r\n\r\nv' }), MP .. "XX"), nil, "filename ending with a backslash")
+text = norm(mp("XX", { 'Content-Disposition: form-data; name="f"; filename="dir\\"\r\n\r\nv' }), MP .. "XX")
+eq(lines(text)["dir\\"], true, "trailing backslash kept")
+text = norm(mp("XX", { "Content-Disposition: form-data; name=f; filename= my file.txt \r\n\r\nEVIL" }), MP .. "XX")
+eq(lines(text)["my file.txt"], true, "unquoted filename with a space")
+eq(lines(text)["EVIL"], nil, "file contents of an unquoted filename are skipped")
+local _, cdp = params('form-data; name="a\\"; filename=x y', true)
+eq(cdp[1][2] .. "|" .. cdp[2][2], "a\\|x y", "disposition parameters")
 eq(inspect(mp("XX", { 'Content-Disposition: form-data; name="a"; name="b"\r\n\r\nv' }), MP .. "XX"), "multipart-anomaly", "repeated name")
 eq(inspect(mp("XX", { 'Content-Disposition: form-data; name="a"\r\nContent-Disposition: form-data; name="b"\r\n\r\nv' }), MP .. "XX"), "multipart-anomaly", "repeated Content-Disposition")
 eq(inspect(mp("XX", { 'Content-Disposition: form-data; name="f"\r\n\r\n{"k":"EVIL"}' }), MP .. "XX"), "marker", "JSON field value decoded")
