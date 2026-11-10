@@ -49,6 +49,11 @@ const (
 	PendingDir = "restore-pending" // confirmed, applied on the next start
 )
 
+// maxEntries caps the number of archive entries (files and directories) a restore
+// extracts. A backup holds the database, a few secrets, a handful of files per
+// certificate and the managed-rule bundle: a few thousand entries at most.
+var maxEntries = 50000
+
 // stateDirs are the data subdirectories a backup carries (and a restore replaces).
 var stateDirs = []string{"secrets", "certs", "rules"}
 
@@ -320,6 +325,7 @@ func extract(r io.Reader, dir string, maxBytes int64) (*Manifest, error) {
 	got := map[string]FileEntry{}
 	var manifest []byte
 	var total int64
+	entries := 0
 	for {
 		h, err := tr.Next()
 		if err == io.EOF {
@@ -327,6 +333,9 @@ func extract(r io.Reader, dir string, maxBytes int64) (*Manifest, error) {
 		}
 		if err != nil {
 			return nil, invalid("corrupt archive: %v", err)
+		}
+		if entries++; entries > maxEntries {
+			return nil, invalid("archive has more than %d entries", maxEntries)
 		}
 		name, err := cleanName(h.Name)
 		if err != nil {
