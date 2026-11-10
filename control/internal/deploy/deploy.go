@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -44,6 +45,27 @@ type Deployer struct {
 }
 
 func (d *Deployer) versionsDir() string { return filepath.Join(d.Dir, "versions") }
+
+// versionDirName matches the directory names Apply gives versions ("v%06d").
+var versionDirName = regexp.MustCompile(`^v[0-9]{6,19}$`)
+
+// ErrBadVersionDir is returned for a stored version directory name that Apply
+// could not have produced (for example from an edited database).
+var ErrBadVersionDir = errors.New("invalid version directory")
+
+// VersionPath returns the directory of a version, refusing names other than the
+// ones Apply generates and any path that would resolve outside versions/.
+func (d *Deployer) VersionPath(name string) (string, error) {
+	if !versionDirName.MatchString(name) {
+		return "", ErrBadVersionDir
+	}
+	base := filepath.Clean(d.versionsDir())
+	p := filepath.Join(base, name)
+	if rel, err := filepath.Rel(base, p); err != nil || rel != name {
+		return "", ErrBadVersionDir
+	}
+	return p, nil
+}
 func (d *Deployer) currentLink() string { return filepath.Join(d.Dir, "current") }
 
 // CurrentConf is the nginx.conf path the gateway is started with.
@@ -132,7 +154,10 @@ func (d *Deployer) Rollback(ctx context.Context, by *int64, targetID int64) (*st
 	if target.Status == "failed" || target.Dir == "" {
 		return nil, errors.New("this version was never deployed")
 	}
-	dir := filepath.Join(d.versionsDir(), target.Dir)
+	dir, err := d.VersionPath(target.Dir)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := os.Stat(dir); err != nil {
 		return nil, errors.New("configuration files of this version were pruned")
 	}
@@ -169,7 +194,10 @@ func (d *Deployer) EnsureCurrent(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	_, statErr := os.Stat(filepath.Join(d.versionsDir(), v.Dir, "nginx.conf"))
+	vdir, statErr := d.VersionPath(v.Dir)
+	if statErr == nil {
+		_, statErr = os.Stat(filepath.Join(vdir, "nginx.conf"))
+	}
 	if statErr == nil && v.RollbackOf != nil {
 		slog.Info("keeping rolled-back configuration", "version", v.ID)
 		d.mu.Lock()
@@ -228,6 +256,9 @@ func (d *Deployer) activate(dirName string) error {
 
 // swapLink atomically replaces the "current" symlink (rename over the old one).
 func (d *Deployer) swapLink(dirName string) error {
+	if _, err := d.VersionPath(dirName); err != nil {
+		return err
+	}
 	tmp := d.currentLink() + ".tmp"
 	_ = os.Remove(tmp)
 	if err := os.Symlink(filepath.Join("versions", dirName), tmp); err != nil {
