@@ -73,6 +73,8 @@ export function deployedVersion(res: unknown): number | null {
 
 export interface User {
   id: number; email: string; name: string; role: string; created_at?: string; last_login_at?: string; mfa_enabled?: boolean; disabled?: boolean;
+  /** Linked to an SSO identity provider account (user list only). */
+  sso_linked?: boolean;
 }
 export type LoginResult = User | { mfa_required: true; mfa_token: string };
 

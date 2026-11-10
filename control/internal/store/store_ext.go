@@ -421,7 +421,18 @@ func (s *Store) ListUsers(ctx context.Context) ([]User, error) {
 		}
 		out = append(out, *u)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	linked, err := s.linkedUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		out[i].SSOLinked = linked[out[i].ID]
+	}
+	return out, nil
 }
 
 func (s *Store) UpdateUser(ctx context.Context, id int64, name, role string, disabled bool) error {

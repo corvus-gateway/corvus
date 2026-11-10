@@ -17,9 +17,21 @@ import (
 	"corvus/control/internal/store"
 )
 
+// maxCodeInput bounds the verification code and sign-in token fields.
+const maxCodeInput = 128
+
 // verifySecondFactor accepts a TOTP code (not reused) or a one-time recovery code.
 func (s *Server) verifySecondFactor(ctx context.Context, u *store.User, code string) bool {
+	return s.checkSecondFactor(ctx, u, code, true)
+}
+
+// checkSecondFactor checks a TOTP or recovery code; only with consume does a valid
+// code count as used (a TOTP step is claimed, a recovery code removed).
+func (s *Server) checkSecondFactor(ctx context.Context, u *store.User, code string, consume bool) bool {
 	code = strings.TrimSpace(code)
+	if len(code) > maxCodeInput {
+		return false
+	}
 	if len(code) == 6 {
 		secret, err := seal.Open(s.DataKey, u.TOTPSecret())
 		if err != nil || secret == "" {
@@ -29,6 +41,9 @@ func (s *Server) verifySecondFactor(ctx context.Context, u *store.User, code str
 		if step < 0 {
 			return false
 		}
+		if !consume {
+			return true
+		}
 		ok, err := s.Store.ClaimTOTPStep(ctx, u.ID, step) // persisted: no replay across restarts (H11)
 		return err == nil && ok
 	}
@@ -37,6 +52,9 @@ func (s *Server) verifySecondFactor(ctx context.Context, u *store.User, code str
 	h := auth.RecoveryHash(code)
 	for i, v := range hashes {
 		if v == h {
+			if !consume {
+				return true
+			}
 			rest := append(append([]string{}, hashes[:i]...), hashes[i+1:]...)
 			// only if the stored codes are still the ones read: two requests using codes
 			// at the same time cannot both succeed or bring a used code back
@@ -53,6 +71,10 @@ func (s *Server) handleLoginMFA(w http.ResponseWriter, r *http.Request) {
 		Code     string `json:"code"`
 	}
 	if !decode(w, r, &in) {
+		return
+	}
+	if len(in.MFAToken) > maxCodeInput || len(in.Code) > maxCodeInput {
+		writeErr(w, http.StatusBadRequest, "bad_request", "sign-in token or code is too long")
 		return
 	}
 	ip := clientIP(r)
@@ -174,11 +196,22 @@ func (s *Server) mfaDisable(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, "mfa_disabled", "two-factor authentication is not enabled")
 		return
 	}
-	if !auth.CheckPassword(u.PasswordHash(), in.Password) || !s.verifySecondFactor(r.Context(), u, in.Code) {
+	ip, acct, ok := s.passwordCheckAllowed(w, r, u)
+	if !ok {
+		return
+	}
+	// Both factors are always checked; the code is only used up when the password is
+	// right, and the answer does not tell which one was wrong.
+	pwOK := checkPasswordInput(u.PasswordHash(), in.Password)
+	codeOK := s.checkSecondFactor(r.Context(), u, in.Code, pwOK)
+	if !pwOK || !codeOK {
+		s.Limiter.Fail(ip)
+		s.AcctLimiter.Fail(acct)
 		s.audit(r, "auth.mfa_disable_failed", u.Email, nil)
 		writeErr(w, http.StatusForbidden, "invalid_credentials", "password or verification code is incorrect")
 		return
 	}
+	s.AcctLimiter.Reset(acct)
 	if err := s.Store.SetMFA(r.Context(), u.ID, false, nil); err != nil {
 		fail(w, err)
 		return

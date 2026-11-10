@@ -25,10 +25,12 @@ func TestLocationsAdvancedAllowed(t *testing.T) {
 	if err := locationsAdvancedAllowed(req("operator").r, before, same); err != nil {
 		t.Errorf("operator, snippet unchanged: %v", err)
 	}
-	if err := locationsAdvancedAllowed(req("operator").r, before, nil); err != nil {
-		t.Errorf("operator, locations removed: %v", err)
+	plain := []store.Location{{Path: "/plain", ForwardHost: "a", ForwardPort: 80}}
+	if err := locationsAdvancedAllowed(req("operator").r, plain, nil); err != nil {
+		t.Errorf("operator, location without a snippet removed: %v", err)
 	}
-	for _, after := range [][]store.Location{changed, moved} {
+	cleared := []store.Location{{Path: "/api", ForwardHost: "a", ForwardPort: 80}}
+	for _, after := range [][]store.Location{changed, moved, cleared, nil} {
 		if err := locationsAdvancedAllowed(req("operator").r, before, after); err == nil {
 			t.Errorf("operator changed a snippet: %+v", after)
 		}

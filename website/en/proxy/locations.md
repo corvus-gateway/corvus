@@ -16,7 +16,7 @@ Open a proxy host and expand **Custom locations** in the form, then click **Add 
 | **Path** | Path prefix, e.g. `/api`. Requests to `/api` and everything below it use this location |
 | **Scheme / Host / IP / Port** | The service that receives these requests |
 | **Forward path** | Optional. Replaces the matched prefix: with path `/api` and forward path `/v2/`, `/api/orders` is sent as `/v2/orders` |
-| **Advanced config** | Optional nginx directives for this location only (administrators) |
+| **Advanced config** | Optional nginx directives for this location only (administrators). Operators can't set, change or clear it, nor remove or move a location that has one |
 
 ## Good to know
 

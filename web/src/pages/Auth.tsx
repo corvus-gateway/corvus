@@ -169,6 +169,7 @@ const SSO_ERRORS: Record<string, Key> = {
   idp_error: "ssoErrIdp", exchange: "ssoErrExchange", token_invalid: "ssoErrToken", no_email: "ssoErrNoEmail", email_unverified: "ssoErrEmailUnverified",
   domain: "ssoErrDomain", no_role: "ssoErrNoRole", not_provisioned: "ssoErrNotProvisioned", user_disabled: "ssoErrUserDisabled",
   rate_limited: "ssoErrRateLimited", busy: "ssoErrBusy", internal: "ssoErrInternal",
+  link_unverified: "ssoErrLinkUnverified", link_conflict: "ssoErrLinkConflict",
 };
 
 /** Reads (once) and removes `?sso_error=` left by a failed SSO callback. */
