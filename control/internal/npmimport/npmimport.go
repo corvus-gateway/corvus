@@ -542,7 +542,7 @@ func openMySQL(ctx context.Context, m *MySQL) (*sql.DB, error) {
 	cfg.User, cfg.Passwd, cfg.DBName = m.User, m.Password, m.Database
 	cfg.Net, cfg.Addr = "tcp", net.JoinHostPort(m.Host, strconv.Itoa(port))
 	cfg.Timeout, cfg.ReadTimeout = 5*time.Second, 30*time.Second
-	cfg.TLSConfig = "preferred"
+	cfg.TLSConfig = mysqlTLSMode(m.Host)
 	cfg.Params = map[string]string{"charset": "utf8mb4"}
 	db, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
@@ -551,7 +551,34 @@ func openMySQL(ctx context.Context, m *MySQL) (*sql.DB, error) {
 	db.SetMaxOpenConns(1) // one session, so the read-only setting below applies to every query
 	if _, err := db.ExecContext(ctx, "SET SESSION TRANSACTION READ ONLY"); err != nil {
 		db.Close()
+		if cfg.TLSConfig == "true" {
+			return nil, fmt.Errorf("cannot connect to MySQL at %s: %v (servers outside the local network must offer TLS with a certificate trusted by the system and valid for this host name; for a server on the local network, enter its private IP address or container name)", cfg.Addr, err)
+		}
 		return nil, fmt.Errorf("cannot connect to MySQL at %s: %v", cfg.Addr, err)
 	}
 	return db, nil
+}
+
+// mysqlTLSMode chooses the driver's TLS setting for host. Servers on the local machine
+// or network (loopback/private addresses, container names and local-only domains) use
+// TLS when they offer it and fall back to plain connections, as NPM's bundled MariaDB
+// has no TLS. Every other server must offer TLS with a verified certificate, so the
+// database password never crosses another network in clear or to an impostor.
+func mysqlTLSMode(host string) string {
+	h := strings.ToLower(strings.TrimSuffix(strings.Trim(host, "[]"), "."))
+	if ip := net.ParseIP(h); ip != nil {
+		if validate.PublicIP(ip) {
+			return "true"
+		}
+		return "preferred"
+	}
+	if !strings.Contains(h, ".") {
+		return "preferred" // container or LAN host name (e.g. "db", "localhost")
+	}
+	for _, suffix := range []string{".localhost", ".local", ".internal", ".lan", ".home.arpa"} {
+		if strings.HasSuffix(h, suffix) {
+			return "preferred"
+		}
+	}
+	return "true"
 }
