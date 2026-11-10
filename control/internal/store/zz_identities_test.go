@@ -114,7 +114,7 @@ func TestZZAuditLimitsAndPrune(t *testing.T) {
 	s := openTest(t)
 	ctx := context.Background()
 	long := strings.Repeat("é", 400) // 800 bytes
-	if err := s.Audit(ctx, nil, "auth.login_failed", long, map[string]string{"blob": strings.Repeat("\x01", 5000)}, ""); err != nil {
+	if err := s.Audit(ctx, nil, "auth.login_failed", long, map[string]string{"blob": strings.Repeat("\x01", 8000)}, ""); err != nil {
 		t.Fatal(err)
 	}
 	list, err := s.ListAudit(ctx, 10)
@@ -131,6 +131,11 @@ func TestZZAuditLimitsAndPrune(t *testing.T) {
 	}
 	if truncUTF8("short", 10) != "short" || auditJSON(map[string]int{"a": 1}) != `{"a":1}` {
 		t.Fatal("small values must be kept")
+	}
+	// a large host entry (about 20 KB) is kept whole
+	host := map[string]string{"advanced_config": strings.Repeat("proxy_set_header X-A b;\n", 800)}
+	if j := auditJSON(host); j != toJSON(host) || len(j) < 16<<10 {
+		t.Fatalf("20 KB detail cut: %d bytes", len(j))
 	}
 
 	// retention by age

@@ -807,7 +807,7 @@ type AuditEntry struct {
 // by a truncated preview (the stored detail stays valid JSON).
 const (
 	AuditTargetMax = 256
-	AuditDetailMax = 2048
+	AuditDetailMax = 32 << 10 // room for a whole host (create/update entries)
 )
 
 func (s *Store) Audit(ctx context.Context, userID *int64, action, target string, detail any, ip string) error {

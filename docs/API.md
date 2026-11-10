@@ -85,7 +85,7 @@ Role: **public** = no authentication · **viewer** = any signed-in user or token
 | POST | `/api/auth/logout`, `/api/auth/password` | viewer (session) | Sign out, change password (`{ "current", "new" }`: ends your other sessions and deletes the API tokens you created; wrong current passwords count against the sign-in limits) |
 | POST | `/api/auth/mfa/setup`, `/enable`, `/disable` | viewer (session) | Manage TOTP for the current user (`/disable` takes `{ "password", "code" }`; failures count against the sign-in limits) |
 | GET | `/api/overview` | viewer | Dashboard summary |
-| GET | `/api/audit` | viewer | Audit log (entries are kept for 365 days, at most the newest 500,000; targets over 256 bytes are cut and details over 2 KB are replaced by a `{"truncated": true, …}` preview) |
+| GET | `/api/audit` | viewer | Audit log (entries are kept for 365 days, at most the newest 500,000; targets over 256 bytes are cut and details over 32 KB are replaced by a `{"truncated": true, …}` preview) |
 
 ### Proxy hosts, redirection hosts, streams, certificates, deployments
 
