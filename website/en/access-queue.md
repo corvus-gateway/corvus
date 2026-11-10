@@ -59,6 +59,9 @@ update keeps the place. Two people with the same browser on the same kind of dev
 apart this way; for sales where that matters, also turn on **Bind admission to the client
 network**.
 
+A response on which Corvus sets this cookie is sent with `Cache-Control: private, no-store`, so a
+CDN or caching proxy in front of Corvus never hands one visitor's cookie to another.
+
 ## APIs and apps
 
 Pages, images and API calls under the protected path all need an admission. A browser gets it

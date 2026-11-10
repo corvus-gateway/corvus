@@ -67,7 +67,8 @@ func (c *Compiler) renderStreams(ctx context.Context, s *store.Store, dir string
 		}
 		v := streamView{Stream: sc, Upstream: upstreamAddr(sc.ForwardHost, static, hostGW), IPv6: c.P.IPv6}
 		v.UpstreamResolve = !isIP(v.Upstream)
-		if why := c.P.InternalTarget(v.Upstream, sc.ForwardPort); why != "" {
+		self := c.P.AdminPort > 0 && sc.ForwardPort == c.P.AdminPort && c.self()(sc.ForwardHost)
+		if why := c.P.StreamTarget(v.Upstream, sc.ForwardPort, self); why != "" {
 			return 0, fmt.Errorf("stream %d: %s", st.ID, why)
 		}
 		if sc.CertificateID != nil {

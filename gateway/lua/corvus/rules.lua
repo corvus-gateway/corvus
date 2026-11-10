@@ -214,7 +214,11 @@ function _M.init(path)
     local groups = {}
     for gi, g in ipairs(r.groups or {}) do
       local cs = {}
-      for ci, c in ipairs(g) do cs[ci] = compile_cond(c) end
+      for ci, c in ipairs(g) do
+        cs[ci] = compile_cond(c)
+        -- outcome of a regex that cannot be evaluated (see test): fail closed
+        cs[ci].on_error = r.action == "block" or r.action == "challenge"
+      end
       groups[gi] = cs
     end
     compiled[i] = {
@@ -307,6 +311,16 @@ local function field(ctx, c, host)
   return v
 end
 
+-- Regex evaluation errors are logged at most once a minute per worker.
+local regex_err_logged = 0
+local function regex_error(c, err)
+  local now = ngx.time()
+  if now - regex_err_logged < 60 then return end
+  regex_err_logged = now
+  ngx.log(ngx.WARN, "corvus rules: regex could not be evaluated (", tostring(err),
+    "), rule condition treated as ", c.on_error and "matching" or "not matching")
+end
+
 local function test(ctx, c, host)
   local op = c.op
   local v = field(ctx, c, host)
@@ -340,7 +354,15 @@ local function test(ctx, c, host)
   if op == "ends_with" then return #c.v <= #v and sub(v, -#c.v) == c.v end
   if op == "matches" or op == "not_matches" then
     if not c.re then return false end
-    local from = re_find(v, c.re, c.reopt)  -- errors (e.g. match limit) count as no match
+    local from, _, err = re_find(v, c.re, c.reopt)
+    if err then
+      -- The regex could not be evaluated (e.g. PCRE match limit): the outcome is
+      -- unknown. Fail closed: the condition holds for block and challenge rules (either
+      -- operator), and does not hold for allow and log rules, so an evaluation error
+      -- never lets a request skip a check.
+      regex_error(c, err)
+      return c.on_error == true
+    end
     if op == "matches" then return from ~= nil end
     return from == nil
   end
@@ -483,12 +505,14 @@ function _M.rewrite(host_id)
   -- Request body inspection (virtual patching for body-borne exploits).
   if host.body ~= "off" then
     local sig = body.inspect(host.body_max)
-    -- A compressed body cannot be inspected: hosts in block mode refuse it, hosts that
-    -- only log record it as not inspected (it is not a detection).
-    if sig == "encoded" and host.body ~= "block" then sig = "skip:encoded" end
+    -- A body that was read but cannot be inspected completely (compressed, unreadable,
+    -- cut short by a normalisation limit, unsupported charset): hosts in block mode
+    -- refuse it, hosts that only log record it as not inspected (it is not a detection).
+    -- Bodies above the host's size limit are not read and pass (logged as skipped).
+    if sig and body.UNINSPECTED[sig] and host.body ~= "block" then sig = "skip:" .. sig end
     if sig then
       if sub(sig, 1, 5) == "skip:" then
-        ngx.var.corvus_body = sig            -- not inspected (too large / unreadable): log only
+        ngx.var.corvus_body = sig            -- not inspected: log only
       else
         ngx.var.corvus_body = sig .. ":" .. host.body
         if host.body == "block" then return deny(403) end
@@ -754,5 +778,9 @@ function _M.bad_behaviour_hits()
   end
   ngx.say('{"hits":[', table.concat(out, ","), ']}')
 end
+
+-- Exposed for tests.
+_M._compile_cond = compile_cond
+_M._test = test
 
 return _M

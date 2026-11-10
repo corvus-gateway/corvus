@@ -87,6 +87,17 @@ type Compiler struct {
 	// HostGateway returns the Docker host's address (see HostGateway); loopback forward
 	// hosts are rendered with it. "" or nil = loopback stays loopback.
 	HostGateway func() string
+	// Self reports whether a forward host (name or address, as entered) refers to this
+	// container, where the admin console runs (e.g. its container name). nil = SelfHost.
+	Self func(host string) bool
+}
+
+// self returns the Self check in use.
+func (c *Compiler) self() func(string) bool {
+	if c.Self != nil {
+		return c.Self
+	}
+	return SelfHost
 }
 
 type hostView struct {
@@ -126,8 +137,10 @@ type target struct {
 	Resolve   bool   // Addr is a name: resolved at run time (server … resolve)
 	Path      string // forward path replacing the location prefix ("" = URI unchanged)
 	Websocket bool
-	// Console: the target is on the admin console port, so the request carries the
-	// gateway key that lets the console trust X-Forwarded-For (see api.ConsoleProxies).
+	// Console: the target is the admin console itself (its port on loopback, the Docker
+	// host loopback is mapped to, or this container), so the request carries the gateway
+	// key that lets the console trust X-Forwarded-For (see api.ConsoleProxies). Other
+	// upstreams never receive the key.
 	Console bool
 	// UpstreamTimeoutS is the host's upstream read/send timeout (nil = default).
 	UpstreamTimeoutS *int
@@ -138,11 +151,11 @@ type target struct {
 
 // targets builds the host's upstream targets: its forward host, the custom locations,
 // and the target of the root location (a custom location "/" replaces the forward host).
-func (v *hostView) targets(static map[string]string, hostGW string) {
+func (v *hostView) targets(static map[string]string, hostGW string, self func(string) bool) {
 	mk := func(name, scheme, host string, port int) target {
 		addr := upstreamAddr(host, static, hostGW)
 		return target{Name: name, Scheme: scheme, Addr: addr, Port: port, Resolve: !isIP(addr),
-			Console:   v.P.AdminPort > 0 && port == v.P.AdminPort,
+			Console:   v.P.AdminPort > 0 && port == v.P.AdminPort && consoleAddr(host, addr, hostGW, self),
 			Websocket: v.Websocket, UpstreamTimeoutS: v.UpstreamTimeoutS, ErrorCodes: v.ErrorCodes, RateLimit: v.RateLimit}
 	}
 	v.Host = mk(fmt.Sprintf("corvus_up_%d", v.ID), v.ForwardScheme, v.ForwardHost, v.ForwardPort)
@@ -161,6 +174,16 @@ func (v *hostView) targets(static map[string]string, hostGW string) {
 			v.Locations = append(v.Locations, t)
 		}
 	}
+}
+
+// consoleAddr reports whether a forward host (as entered, and as rendered) is where the
+// admin console listens: loopback (this container, or the Docker host it is mapped to),
+// the Docker host's address, or this container.
+func consoleAddr(host, addr, hostGW string, self func(string) bool) bool {
+	if isLoopback(host) || isLoopback(addr) || (hostGW != "" && strings.Trim(addr, "[]") == hostGW) {
+		return true
+	}
+	return self != nil && self(host)
 }
 
 // UpstreamErrorCodes are the nginx-generated upstream errors (connection refused,
@@ -399,7 +422,7 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		if !topLevelDirective(hc.AdvancedConfig, "error_page") {
 			v.ErrorCodes = errorCodes(v.RateLimit)
 		}
-		v.targets(static, hostGW)
+		v.targets(static, hostGW, c.self())
 		for _, t := range append([]target{v.Host}, v.LocUpstreams...) {
 			if why := c.P.InternalTarget(t.Addr, t.Port); why != "" {
 				return fmt.Errorf("proxy host %d: %s", h.ID, why)

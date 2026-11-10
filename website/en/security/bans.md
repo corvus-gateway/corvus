@@ -46,6 +46,8 @@ Bans don't apply to the admin console (port 9443). To limit who can reach the co
 
 A rate limit policy caps how fast one IP may send requests to a host. Create policies on the
 **Rate limits** page and attach one in the proxy host form (**Protection → Rate limit policy**).
+As with bans, an IPv6 client counts by its whole `/64` network: all addresses of a `/64` share one
+budget.
 
 | Setting | Meaning |
 |---|---|

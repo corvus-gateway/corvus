@@ -147,10 +147,12 @@ func (u *user) status(room string) (wrStatus, error) {
 }
 
 func (u *user) leave(room string) error {
-	code, _, err := u.do("POST", "/__corvus/wr/"+room+"/leave", nil)
+	// like a browser on the waiting page: /leave accepts same-origin requests only
+	hdr := map[string]string{"Origin": strings.TrimRight(u.base, "/")}
+	code, _, err := u.do("POST", "/__corvus/wr/"+room+"/leave", hdr)
 	for attempt := 0; err == nil && code == http.StatusTooManyRequests && attempt < 3; attempt++ {
 		time.Sleep(time.Duration(400*(attempt+1)) * time.Millisecond)
-		code, _, err = u.do("POST", "/__corvus/wr/"+room+"/leave", nil)
+		code, _, err = u.do("POST", "/__corvus/wr/"+room+"/leave", hdr)
 	}
 	if err == nil && code != 200 {
 		err = fmt.Errorf("leave http %d", code)
