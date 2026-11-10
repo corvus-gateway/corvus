@@ -59,15 +59,23 @@ http {
     proxy_buffer_size       16k;
     proxy_buffers           8 16k;
     proxy_busy_buffers_size 32k;
-    limit_conn_zone $binary_remote_addr zone=corvus_conn_ip:10m;
-    limit_conn corvus_conn_ip 2048;        # simultaneous connections per client IP (NAT-friendly; slow clients are cut by the timeouts above)
+    # Client key for per-client limits: the IPv4 address, or the IPv6 /64 (an IPv6 host
+    # can use any address of its /64), as ipkey.lua keys bans and the access queue.
+    # IPv4-mapped IPv6 addresses (::ffff:a.b.c.d) keep the whole address.
+    map $binary_remote_addr $corvus_client {
+        "~(?s)^\x00{10}\xff\xff"  $binary_remote_addr;
+        "~(?s)^(.{8}).{8}$"      $1;
+        default                  $binary_remote_addr;
+    }
+    limit_conn_zone $corvus_client zone=corvus_conn_ip:10m;
+    limit_conn corvus_conn_ip 2048;        # simultaneous connections per client (IPv4 address / IPv6 /64) (NAT-friendly; slow clients are cut by the timeouts above)
     limit_conn_status 429;
     # Waiting room status API: coarse per-IP flood guard (NAT-friendly). The real
     # limit is per session in Lua (each sid may poll at most a few times a second).
-    limit_req_zone $binary_remote_addr zone=corvus_wr_api:10m rate=500r/s;
+    limit_req_zone $corvus_client zone=corvus_wr_api:10m rate=500r/s;
     # Security-rule challenge answers (/__corvus/challenge/verify): a browser posts once
     # per challenge, so a few per second per IP is plenty.
-    limit_req_zone $binary_remote_addr zone=corvus_ch_api:10m rate=5r/s;
+    limit_req_zone $corvus_client zone=corvus_ch_api:10m rate=5r/s;
     # a bucket must hold one exact name (8 + name rounded up to 8 + 8 bytes): 512 fits the
     # longest valid domain (253 characters); 128 stopped at 110
     server_names_hash_bucket_size 512;
@@ -148,10 +156,10 @@ http {
 {{- end}}
     }
     # Not limited: exempt networks, or requests a security rule allowed ($corvus_skip).
-    # Counted per client address and host: a policy shared by several hosts gives each
-    # host its own budget.
+    # Counted per client (IPv4 address or IPv6 /64) and host: a policy shared by several
+    # hosts gives each host its own budget.
     map "$corvus_rl{{.ID}}_exempt$corvus_skip" $corvus_rl{{.ID}}_key {
-        "0"     $binary_remote_addr$corvus_host;
+        "0"     "$corvus_host $corvus_client";
         default "";
     }
     limit_req_zone $corvus_rl{{.ID}}_key zone=corvus_rl{{.ID}}:10m rate={{.RequestsPerSecond}}r/s;

@@ -95,3 +95,37 @@ func TestRenderIPv6(t *testing.T) {
 	read = render("v6r", p6)
 	check(read("nginx.conf"), []string{"resolver 127.0.0.11 ipv6=on valid=30s;"}, []string{"ipv6=off"})
 }
+
+// Per-client limits key IPv6 clients by their /64 (IPv4 by address), like bans and the
+// access queue: the global zones and every rate limit policy use $corvus_client.
+func TestRenderClientKeyIPv6Prefix(t *testing.T) {
+	ctx := context.Background()
+	c, st, _, dir := streamEnv(t)
+	rl := &store.RateLimit{Name: "api", RequestsPerSecond: 10, StatusCode: 429, MaxConnections: 5, Enabled: true, ExemptCIDRs: []string{}}
+	if err := st.SaveRateLimit(ctx, rl); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "v1")
+	if err := c.Render(ctx, st, out); err != nil {
+		t.Fatal(err)
+	}
+	conf := readFile(t, filepath.Join(out, "nginx.conf"))
+	for _, want := range []string{
+		"map $binary_remote_addr $corvus_client {",
+		`"~(?s)^\x00{10}\xff\xff"  $binary_remote_addr;`,
+		`"~(?s)^(.{8}).{8}$"      $1;`,
+		"default                  $binary_remote_addr;",
+		"limit_conn_zone $corvus_client zone=corvus_conn_ip:10m;",
+		"limit_req_zone $corvus_client zone=corvus_wr_api:10m",
+		"limit_req_zone $corvus_client zone=corvus_ch_api:10m",
+		`"0"     "$corvus_host $corvus_client";`,
+		"limit_conn_zone $corvus_rl1_key zone=corvus_cl1:10m;",
+	} {
+		if !strings.Contains(conf, want) {
+			t.Errorf("nginx.conf lacks %q", want)
+		}
+	}
+	if strings.Contains(conf, "zone $binary_remote_addr") || strings.Contains(conf, "$binary_remote_addr$corvus_host") {
+		t.Error("a limit zone still keys on the full client address")
+	}
+}

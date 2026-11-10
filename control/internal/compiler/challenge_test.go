@@ -84,7 +84,7 @@ func TestRenderChallengeRules(t *testing.T) {
 	if !strings.Contains(host, `require("corvus.rules").challenge_verify(1)`) || !strings.Contains(redirect, `require("corvus.rules").challenge_verify("r1")`) {
 		t.Error("verify endpoint not bound to the host's rule key")
 	}
-	if !strings.Contains(readFile(t, filepath.Join(dir, "nginx.conf")), "limit_req_zone $binary_remote_addr zone=corvus_ch_api:10m rate=5r/s;") {
+	if !strings.Contains(readFile(t, filepath.Join(dir, "nginx.conf")), "limit_req_zone $corvus_client zone=corvus_ch_api:10m rate=5r/s;") {
 		t.Error("nginx.conf: challenge rate-limit zone missing")
 	}
 }
