@@ -3,6 +3,7 @@ package compiler
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -60,17 +61,24 @@ func (c *Compiler) renderStreams(ctx context.Context, s *store.Store, dir string
 		if why := StreamConflict(c.P, streams, &sc); why != "" {
 			return 0, fmt.Errorf("stream %d: %s", st.ID, why)
 		}
+		upstream := upstreamAddr(sc.ForwardHost, static, hostGW)
+		self := c.P.AdminPort > 0 && sc.ForwardPort == c.P.AdminPort && c.self()(sc.ForwardHost)
+		if why := c.P.InternalTarget(upstream, sc.ForwardPort); why != "" {
+			return 0, fmt.Errorf("stream %d: %s", st.ID, why)
+		}
+		if why := c.P.StreamTarget(upstream, sc.ForwardPort, self); why != "" {
+			// To the admin console: the API refuses to save such a stream; one stored
+			// before 1.2.5 is left out, so the rest of the configuration still applies.
+			slog.Warn("stream not rendered: forward target not allowed", "stream", st.ID, "reason", why)
+			continue
+		}
 		if n == 0 {
 			if err := os.MkdirAll(filepath.Join(dir, "streams"), 0o755); err != nil {
 				return 0, err
 			}
 		}
-		v := streamView{Stream: sc, Upstream: upstreamAddr(sc.ForwardHost, static, hostGW), IPv6: c.P.IPv6}
+		v := streamView{Stream: sc, Upstream: upstream, IPv6: c.P.IPv6}
 		v.UpstreamResolve = !isIP(v.Upstream)
-		self := c.P.AdminPort > 0 && sc.ForwardPort == c.P.AdminPort && c.self()(sc.ForwardHost)
-		if why := c.P.StreamTarget(v.Upstream, sc.ForwardPort, self); why != "" {
-			return 0, fmt.Errorf("stream %d: %s", st.ID, why)
-		}
 		if sc.CertificateID != nil {
 			// Never fall back to plain text: the TCP listener waits for the certificate.
 			v.CertDir = c.certDir(sc.CertificateID)

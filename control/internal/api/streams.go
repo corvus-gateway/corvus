@@ -51,6 +51,12 @@ func checkStream(r *http.Request, tx *store.Store, p compiler.Paths, st *store.S
 	if why := compiler.StreamConflict(p, others, st); why != "" {
 		errs = append(errs, validate.FieldError{Field: "incoming_port", Code: "conflict", Message: why})
 	}
+	// Not to the admin console: on loopback (also when mapped to the Docker host, where
+	// the console port is published) or on this container.
+	if p.AdminPort > 0 && st.ForwardPort == p.AdminPort && (compiler.IsLoopback(st.ForwardHost) || compiler.SelfHost(st.ForwardHost)) {
+		why := fmt.Sprintf("port %d is used internally by Corvus (admin console)", p.AdminPort)
+		errs = append(errs, validate.FieldError{Field: "forward_host", Code: "internal", Message: why})
+	}
 	return errs.OrNil()
 }
 

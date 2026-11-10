@@ -209,3 +209,6 @@ func HostGateway(hostsFile, netDev, route string) string {
 	}
 	return ""
 }
+
+// IsLoopback reports whether a forward host (name or address) is this machine's loopback.
+func IsLoopback(host string) bool { return isLoopback(host) }

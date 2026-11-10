@@ -41,6 +41,14 @@ func TestCheckStream(t *testing.T) {
 	if err := checkStream(r, st, e.s.Paths, udp); err != nil {
 		t.Fatalf("same port, other protocol: %v", err)
 	}
+	for _, h := range []string{"127.0.0.1", "localhost", "127.0.1.1"} {
+		if err := checkStream(r, st, e.s.Paths, &store.Stream{IncomingPort: 6001, TCP: true, ForwardHost: h, ForwardPort: 9443, Enabled: true}); err == nil || !strings.Contains(err.Error(), "admin console") {
+			t.Fatalf("stream to the console on %s accepted: %v", h, err)
+		}
+	}
+	if err := checkStream(r, st, e.s.Paths, &store.Stream{IncomingPort: 6001, TCP: true, ForwardHost: "nas.lan", ForwardPort: 9443, Enabled: true}); err != nil {
+		t.Fatalf("stream to another machine's port 9443 refused: %v", err)
+	}
 	missing := int64(42)
 	if err := checkStream(r, st, e.s.Paths, &store.Stream{IncomingPort: 6000, TCP: true, ForwardHost: "db", ForwardPort: 1, CertificateID: &missing}); err == nil || !strings.Contains(err.Error(), "certificate") {
 		t.Fatalf("missing certificate accepted: %v", err)

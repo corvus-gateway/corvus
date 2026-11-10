@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -91,8 +92,11 @@ func TestRenderRefusesStreamToConsole(t *testing.T) {
 	if err := st.SaveStream(ctx, s); err != nil {
 		t.Fatal(err)
 	}
-	err := c.Render(ctx, st, filepath.Join(dir, "v1"))
-	if err == nil || !strings.Contains(err.Error(), "admin console") {
+	// stored before the check existed: left out, the rest of the configuration applies
+	if err := c.Render(ctx, st, filepath.Join(dir, "v1")); err != nil {
+		t.Fatalf("render with a stream to the console failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "v1", "streams", fmt.Sprintf("%d.conf", s.ID))); !os.IsNotExist(err) {
 		t.Fatalf("stream to the console rendered: %v", err)
 	}
 	c.Self = func(string) bool { return false }
