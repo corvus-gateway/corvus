@@ -75,7 +75,7 @@ func TestRenderChallengeRules(t *testing.T) {
 	host := readFile(t, filepath.Join(dir, "hosts", "1.conf"))
 	redirect := readFile(t, filepath.Join(dir, "hosts", "redirect-1.conf"))
 	for name, conf := range map[string]string{"1.conf": host, "redirect-1.conf": redirect} {
-		for _, w := range []string{"location = /__corvus/challenge/verify {", "client_max_body_size 4k;", "limit_req zone=corvus_ch_api burst=20 nodelay;"} {
+		for _, w := range []string{"location = /__corvus/challenge/verify {", "client_max_body_size 4k;", "limit_req zone=corvus_ch_client burst=20 nodelay;"} {
 			if !strings.Contains(conf, w) {
 				t.Errorf("%s: missing %q\n%s", name, w, conf)
 			}
@@ -84,7 +84,7 @@ func TestRenderChallengeRules(t *testing.T) {
 	if !strings.Contains(host, `require("corvus.rules").challenge_verify(1)`) || !strings.Contains(redirect, `require("corvus.rules").challenge_verify("r1")`) {
 		t.Error("verify endpoint not bound to the host's rule key")
 	}
-	if !strings.Contains(readFile(t, filepath.Join(dir, "nginx.conf")), "limit_req_zone $corvus_client zone=corvus_ch_api:10m rate=5r/s;") {
+	if !strings.Contains(readFile(t, filepath.Join(dir, "nginx.conf")), "limit_req_zone $corvus_client zone=corvus_ch_client:10m rate=5r/s;") {
 		t.Error("nginx.conf: challenge rate-limit zone missing")
 	}
 }

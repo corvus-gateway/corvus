@@ -72,15 +72,17 @@ http {
         "~(?s)^(.{8}).{8}$"      $1;
         default                  $binary_remote_addr;
     }
-    limit_conn_zone $corvus_client zone=corvus_conn_ip:10m;
-    limit_conn corvus_conn_ip 2048;        # simultaneous connections per client (IPv4 address / IPv6 /64) (NAT-friendly; slow clients are cut by the timeouts above)
+    # Zone names differ from the ones keyed by $binary_remote_addr before 1.2.5: nginx
+    # refuses a reload that changes an existing zone's key (upgrade or rollback).
+    limit_conn_zone $corvus_client zone=corvus_conn_client:10m;
+    limit_conn corvus_conn_client 2048;        # simultaneous connections per client (IPv4 address / IPv6 /64) (NAT-friendly; slow clients are cut by the timeouts above)
     limit_conn_status 429;
     # Waiting room status API: coarse per-IP flood guard (NAT-friendly). The real
     # limit is per session in Lua (each sid may poll at most a few times a second).
-    limit_req_zone $corvus_client zone=corvus_wr_api:10m rate=500r/s;
+    limit_req_zone $corvus_client zone=corvus_wr_client:10m rate=500r/s;
     # Security-rule challenge answers (/__corvus/challenge/verify): a browser posts once
     # per challenge, so a few per second per IP is plenty.
-    limit_req_zone $corvus_client zone=corvus_ch_api:10m rate=5r/s;
+    limit_req_zone $corvus_client zone=corvus_ch_client:10m rate=5r/s;
 
     # Request bodies are buffered outside the data volume so uploads cannot fill
     # the disk that holds the database and certificates (F7).

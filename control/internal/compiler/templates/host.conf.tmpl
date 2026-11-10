@@ -234,7 +234,7 @@ server {
     location = /__corvus/challenge/verify {
         client_max_body_size 4k;
         client_body_buffer_size 4k;
-        limit_req zone=corvus_ch_api burst=20 nodelay;
+        limit_req zone=corvus_ch_client burst=20 nodelay;
         limit_req_status 429;
         default_type text/html;
         content_by_lua_block { require("corvus.rules").challenge_verify({{.ID}}) }
@@ -264,7 +264,7 @@ server {
     # the site, plus a dedicated per-IP limit for the status API (F2).
     location ^~ /__corvus/wr/ {
 {{- template "guard" .}}
-        limit_req zone=corvus_wr_api burst=1000 nodelay;
+        limit_req zone=corvus_wr_client burst=1000 nodelay;
         limit_req_status 429;
         content_by_lua_block { require("corvus.waitroom").endpoint() }
     }

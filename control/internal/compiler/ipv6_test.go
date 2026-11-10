@@ -115,9 +115,9 @@ func TestRenderClientKeyIPv6Prefix(t *testing.T) {
 		`"~(?s)^\x00{10}\xff\xff"  $binary_remote_addr;`,
 		`"~(?s)^(.{8}).{8}$"      $1;`,
 		"default                  $binary_remote_addr;",
-		"limit_conn_zone $corvus_client zone=corvus_conn_ip:10m;",
-		"limit_req_zone $corvus_client zone=corvus_wr_api:10m",
-		"limit_req_zone $corvus_client zone=corvus_ch_api:10m",
+		"limit_conn_zone $corvus_client zone=corvus_conn_client:10m;",
+		"limit_req_zone $corvus_client zone=corvus_wr_client:10m",
+		"limit_req_zone $corvus_client zone=corvus_ch_client:10m",
 		`"0"     "$corvus_host $corvus_client";`,
 		"limit_conn_zone $corvus_rl1_key zone=corvus_cl1:10m;",
 	} {
@@ -127,5 +127,12 @@ func TestRenderClientKeyIPv6Prefix(t *testing.T) {
 	}
 	if strings.Contains(conf, "zone $binary_remote_addr") || strings.Contains(conf, "$binary_remote_addr$corvus_host") {
 		t.Error("a limit zone still keys on the full client address")
+	}
+	// zones once keyed by $binary_remote_addr must not reappear with another key
+	// (nginx refuses such a reload when upgrading or rolling back)
+	for _, old := range []string{"corvus_conn_ip", "corvus_wr_api", "corvus_ch_api"} {
+		if strings.Contains(conf, old) {
+			t.Errorf("nginx.conf reuses the zone name %s", old)
+		}
 	}
 }
