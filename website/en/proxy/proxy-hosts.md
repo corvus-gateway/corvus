@@ -74,7 +74,7 @@ Where the real visitor IP comes from. It is used by rules, bans, rate limits and
 | **Rate limit policy** | Limits requests per IP. See [Bans & rate limits](../security/bans.md#rate-limits) |
 | **Password protection** | Asks for a username and password before the site opens (HTTP Basic auth). Good for staging sites and internal tools |
 | **Block known exploit paths** | Blocks common attack patterns: SQL injection, path traversal, scanner probes. **On by default** |
-| **Request body inspection** | Checks JSON, form and multipart bodies for known exploit payloads: **Off**, **Log only** or **Block** |
+| **Request body inspection** | Checks JSON, form and multipart bodies for known exploit payloads: **Off**, **Log only** or **Block**. In **Block** mode, bodies that cannot be fully inspected (compressed, malformed multipart, a charset other than UTF-8 or another ASCII-compatible one, too many fields) are refused too. Bodies above the inspection size limit pass and are logged as not inspected |
 | **Under attack mode** | Makes every visitor pass a browser challenge. See [Challenge & under attack](../security/challenge.md) |
 | **Security headers** | Adds browser security headers (**Basic** or **Strict**). Headers your app already sends are never replaced |
 

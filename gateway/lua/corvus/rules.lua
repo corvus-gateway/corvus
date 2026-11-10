@@ -483,12 +483,14 @@ function _M.rewrite(host_id)
   -- Request body inspection (virtual patching for body-borne exploits).
   if host.body ~= "off" then
     local sig = body.inspect(host.body_max)
-    -- A compressed body cannot be inspected: hosts in block mode refuse it, hosts that
-    -- only log record it as not inspected (it is not a detection).
-    if sig == "encoded" and host.body ~= "block" then sig = "skip:encoded" end
+    -- A body that was read but cannot be inspected completely (compressed, unreadable,
+    -- cut short by a normalisation limit, unsupported charset): hosts in block mode
+    -- refuse it, hosts that only log record it as not inspected (it is not a detection).
+    -- Bodies above the host's size limit are not read and pass (logged as skipped).
+    if sig and body.UNINSPECTED[sig] and host.body ~= "block" then sig = "skip:" .. sig end
     if sig then
       if sub(sig, 1, 5) == "skip:" then
-        ngx.var.corvus_body = sig            -- not inspected (too large / unreadable): log only
+        ngx.var.corvus_body = sig            -- not inspected: log only
       else
         ngx.var.corvus_body = sig .. ":" .. host.body
         if host.body == "block" then return deny(403) end
