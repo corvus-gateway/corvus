@@ -3,6 +3,7 @@ package history
 import (
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -76,6 +77,11 @@ func TestCovApplyCompressesOldLogs(t *testing.T) {
 	}
 	set := DefaultSettings()
 	set.LogMode = "off"
+	// saved first, as the settings API does: the cleanup Apply starts re-reads them
+	raw, _ := json.Marshal(set)
+	if err := st.SetMeta(context.Background(), "retention", string(raw)); err != nil {
+		t.Fatal(err)
+	}
 	s.Apply(context.Background(), set)
 	if m, _ := s.mode.Load().(string); m != "off" {
 		t.Fatalf("mode = %q", m)
