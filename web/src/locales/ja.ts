@@ -120,7 +120,7 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   secAbuse: "不正利用対策", secAbuseDesc: "ボットによるキューの占有や入場トークンの共有を防ぎます。",
   maxQueue: "最大キュー長", maxQueueHint: "超過すると、新規訪問者には後で再試行するよう案内します（0 = 無制限）",
   maxNewPerIp: "IP ごとのキュー参加数", maxNewPerIpHint: "1 つの IP が 1 分間に作成できる新規キューエントリ数（0 = 無制限）", unitPerMin: "/分",
-  bindIp: "入場をクライアントのネットワークに紐付け", bindIpDesc: "入場トークンは同じネットワーク（IPv4 /24）からのみ有効になり、共有を防ぎます。ネットワークを変更した訪問者は再度並ぶ必要があります。",
+  bindIp: "入場をクライアントのネットワークに紐付け", bindIpDesc: "入場トークンは同じネットワーク（IPv4 /24、IPv6 /48）からのみ有効になり、共有を防ぎます。ネットワークを変更した訪問者は再度並ぶ必要があります。",
   turnOn: "再開", previewWaitPage: "待機ページをプレビュー", emergencyOff: "緊急解除", emergencyOffTitle: "このアクセスキューを解除しますか？",
   emergencyOffDesc: "すべての訪問者が待機なしで通過します。急激なアクセス集中がアップストリームに大きな負荷をかける可能性があります。", deleteRoomTitle: "アクセスキューを削除",
   // rate limits

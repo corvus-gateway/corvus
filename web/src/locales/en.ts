@@ -120,7 +120,7 @@ export const en: Record<keyof typeof ko, string> = {
   secAbuse: "Abuse protection", secAbuseDesc: "Stops bots from flooding the queue or sharing admission tokens.",
   maxQueue: "Max queue length", maxQueueHint: "Beyond this, new visitors are asked to retry later (0 = unlimited)",
   maxNewPerIp: "Queue joins per IP", maxNewPerIpHint: "New queue entries one IP may create per minute (0 = unlimited)", unitPerMin: "/min",
-  bindIp: "Bind admission to the client network", bindIpDesc: "Admission tokens only work from the same network (IPv4 /24), preventing sharing. Visitors who change networks must queue again.",
+  bindIp: "Bind admission to the client network", bindIpDesc: "Admission tokens only work from the same network (IPv4 /24, IPv6 /48), preventing sharing. Visitors who change networks must queue again.",
   turnOn: "Turn back on", previewWaitPage: "Preview waiting page", emergencyOff: "Emergency release", emergencyOffTitle: "Release this access queue?",
   emergencyOffDesc: "Every visitor will pass straight through without waiting. A sudden surge may hit your upstream hard.", deleteRoomTitle: "Delete access queue",
   // rate limits

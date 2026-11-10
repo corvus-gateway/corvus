@@ -119,7 +119,7 @@ export const de: Partial<Record<keyof typeof ko, string>> = {
   secAbuse: "Missbrauchsschutz", secAbuseDesc: "Verhindert, dass Bots die Warteschlange fluten oder Einlasstoken weitergeben.",
   maxQueue: "Max. Warteschlangenlänge", maxQueueHint: "Darüber hinaus werden neue Besucher gebeten, es später erneut zu versuchen (0 = unbegrenzt)",
   maxNewPerIp: "Beitritte pro IP", maxNewPerIpHint: "Neue Warteschlangeneinträge, die eine IP pro Minute erstellen darf (0 = unbegrenzt)", unitPerMin: "/min",
-  bindIp: "Einlass an das Client-Netzwerk binden", bindIpDesc: "Einlasstoken funktionieren nur aus demselben Netzwerk (IPv4 /24) und können nicht weitergegeben werden. Besucher, die das Netzwerk wechseln, müssen sich erneut anstellen.",
+  bindIp: "Einlass an das Client-Netzwerk binden", bindIpDesc: "Einlasstoken funktionieren nur aus demselben Netzwerk (IPv4 /24, IPv6 /48) und können nicht weitergegeben werden. Besucher, die das Netzwerk wechseln, müssen sich erneut anstellen.",
   turnOn: "Wieder aktivieren", previewWaitPage: "Vorschau der Warteseite", emergencyOff: "Notfallfreigabe", emergencyOffTitle: "Diese Zugriffswarteschlange freigeben?",
   emergencyOffDesc: "Alle Besucher passieren ohne Wartezeit. Eine plötzliche Lastspitze kann Ihren Upstream stark belasten.", deleteRoomTitle: "Zugriffswarteschlange löschen",
   // rate limits
