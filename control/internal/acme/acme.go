@@ -248,13 +248,15 @@ func (s *Service) issue(ctx context.Context, id int64) error {
 		return err
 	}
 	renewal := c.Status == "valid"
+	var cred Credentials // DNS-01 secret in use, redacted from errors
 	fail := func(err error) error {
 		status := "error"
 		if renewal && time.Now().Before(c.NotAfter) {
 			status = "valid" // keep serving the still-valid certificate; surface the error
 		}
-		_ = s.Store.SetCertificateStatus(ctx, id, status, err.Error())
-		return err
+		msg := redactError(err.Error(), cred)
+		_ = s.Store.SetCertificateStatus(ctx, id, status, msg)
+		return errors.New(msg)
 	}
 	cl, _, err := s.client(ctx, c.ACME.Email, c.ACME.Staging, c.Domains)
 	if err != nil {
@@ -262,10 +264,11 @@ func (s *Service) issue(ctx context.Context, id int64) error {
 	}
 	switch c.ACME.Challenge {
 	case "dns-01":
-		provider, cred, err := s.dnsCredentials(ctx, c)
+		provider, dc, err := s.dnsCredentials(ctx, c)
 		if err != nil {
 			return fail(err)
 		}
+		cred = dc
 		p, err := dnsProvider(provider, cred)
 		if err != nil {
 			return fail(err)
