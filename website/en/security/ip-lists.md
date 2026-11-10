@@ -35,6 +35,8 @@ the background (every hour by default). **Add from preset** fills in well-known 
 
 - Only `https://` URLs; internal and private addresses are refused.
 - One entry per line; lines starting with `#` or `;` are comments. At most 5 MB.
+- Ranges broader than `/8` (IPv4) or `/16` (IPv6), such as `0.0.0.0/0`, are ignored and counted
+  in the list's warning, so a feed cannot cover everyone with one line.
 - If a fetch fails, the previous entries stay in effect and the list shows the error.
 - The gateway configuration is redeployed only when the entries actually change.
 

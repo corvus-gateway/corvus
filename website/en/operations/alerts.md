@@ -24,6 +24,10 @@ Open **Alerts → Channels → Add channel** and pick the type:
 Choose the **Minimum severity** and, if you like, only some rules. Click **Send test** to check the
 connection.
 
+Alerts are sent directly to the destination (proxy environment variables such as `HTTPS_PROXY` are
+not used). Destinations on the Corvus host itself (loopback, link-local such as cloud metadata) are
+refused; private network addresses are allowed for self-hosted Mattermost and similar.
+
 ## 2. Detection rules
 
 **Detection rules** lists what Corvus watches. Each rule can be turned off and has its own
@@ -53,3 +57,7 @@ clears, the alert language, and the **Console URL** used for links in messages.
 
 **History** keeps every alert with its state (*Firing*, *Resolved*) and delivery result. Active
 alerts are also shown at the top of the dashboard.
+
+A failed delivery shows only the HTTP status (for example `HTTP 404`) or the connection error with
+the destination's host name. The path of the webhook URL, which holds its secret, and the response
+body of the receiving service are never shown.
