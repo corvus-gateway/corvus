@@ -276,6 +276,11 @@ func Parse(kind string, data []byte) (items []string, warning string, err error)
 	if err != nil {
 		return nil, "", err
 	}
+	broad := 0
+	if kind != store.ListKindUserAgent {
+		items, broad = dropBroad(items)
+		skipped += broad
+	}
 	if len(items) == 0 {
 		if skipped > 0 {
 			return nil, "", fmt.Errorf("no valid entries (%d lines not understood)", skipped)
@@ -283,14 +288,45 @@ func Parse(kind string, data []byte) (items []string, warning string, err error)
 		return nil, "", fmt.Errorf("the feed is empty")
 	}
 	var warn []string
-	if skipped > 0 {
-		warn = append(warn, fmt.Sprintf("%d invalid lines ignored", skipped))
+	if skipped-broad > 0 {
+		warn = append(warn, fmt.Sprintf("%d invalid lines ignored", skipped-broad))
+	}
+	if broad > 0 {
+		warn = append(warn, fmt.Sprintf("%d ranges broader than /%d (IPv4) or /%d (IPv6) ignored", broad, MinFeedPrefixV4, MinFeedPrefixV6))
 	}
 	if len(items) > max {
 		warn = append(warn, fmt.Sprintf("%d entries, only the first %d are used", len(items), max))
 		items = items[:max]
 	}
 	return items, strings.Join(warn, "; "), nil
+}
+
+// Shortest prefixes accepted from a feed: a remote list must not be able to cover
+// the whole address space (or a large share of it) with a single entry.
+const (
+	MinFeedPrefixV4 = 8
+	MinFeedPrefixV6 = 16
+)
+
+// dropBroad removes normalised CIDRs shorter than the minimum feed prefix.
+func dropBroad(in []string) ([]string, int) {
+	out := in[:0]
+	n := 0
+	for _, c := range in {
+		_, ipn, err := net.ParseCIDR(c)
+		if err == nil {
+			ones, bits := ipn.Mask.Size()
+			if (bits == 32 && ones < MinFeedPrefixV4) || (bits == 128 && ones < MinFeedPrefixV6) {
+				n++
+				continue
+			}
+		}
+		out = append(out, c)
+	}
+	if n > 0 {
+		slog.Warn("list feed: ignoring very broad ranges", "count", n)
+	}
+	return out, n
 }
 
 func ipOrCIDR(s string) bool {

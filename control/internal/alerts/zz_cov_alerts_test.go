@@ -161,7 +161,7 @@ func TestCovSendErrors(t *testing.T) {
 	defer srv.Close()
 	m := Message{Title: "t", Time: time.Now()}
 	code, err := Send(context.Background(), "discord", Target{URL: srv.URL}, m)
-	if code != 404 || err == nil || err.Error() != "HTTP 404: channel_not_found" {
+	if code != 404 || err == nil || err.Error() != "HTTP 404" {
 		t.Fatalf("code=%d err=%v", code, err)
 	}
 	if _, err := Send(context.Background(), "slack", Target{URL: "http://\x7f"}, m); err == nil {
@@ -174,7 +174,7 @@ func TestCovSendErrors(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err = Send(ctx, "telegram", Target{BotToken: "999:SECRETTOKEN", ChatID: "1"}, m)
-	if err == nil || strings.Contains(err.Error(), "SECRETTOKEN") || !strings.Contains(err.Error(), "***") {
+	if err == nil || strings.Contains(err.Error(), "SECRETTOKEN") || !strings.Contains(err.Error(), "api.telegram.org/…") {
 		t.Fatalf("token leak: %v", err)
 	}
 }

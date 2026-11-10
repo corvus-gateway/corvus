@@ -778,7 +778,11 @@ func (s *Server) deploymentFiles(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"files": map[string]string{}})
 		return
 	}
-	root := filepath.Join(s.Deployer.Dir, "versions", v.Dir)
+	root, err := s.Deployer.VersionPath(v.Dir)
+	if err != nil {
+		writeErr(w, http.StatusConflict, "invalid_version_dir", "the files of this version cannot be shown")
+		return
+	}
 	files := map[string]string{}
 	_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {

@@ -92,6 +92,12 @@ Use the host paths of NPM's `./data` and `./letsencrypt` volumes. NPM and Corvus
     `DB_MYSQL_USER` and `DB_MYSQL_PASSWORD`. The connection is read-only and the password is not
     stored. Then **Preview** → **Import selected**.
 
+    For a server on the local machine or network (a container name such as `db`, `localhost`, a
+    private IP address, or a `.local`/`.lan`/`.internal`/`.home.arpa` name) Corvus uses TLS when the
+    server offers it and otherwise connects without it, as NPM's bundled MariaDB has no TLS. Any
+    other server must offer TLS with a certificate that is trusted by the system and valid for the
+    host name you entered; if it does not, enter the server's private IP address instead.
+
     When the import is done:
 
     ```bash
