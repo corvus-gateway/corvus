@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	_ "modernc.org/sqlite"
 )
@@ -128,6 +129,12 @@ func (s *Store) migrate(ctx context.Context) error {
 			tx.Rollback()
 			return fmt.Errorf("migration %s: %w", version, err)
 		}
+		if hook := afterMigration[version]; hook != nil {
+			if err := hook(ctx, &Store{db: s.db, q: s.wrap(tx), tx: true, dialect: s.dialect}); err != nil {
+				tx.Rollback()
+				return fmt.Errorf("migration %s: %w", version, err)
+			}
+		}
 		if _, err := s.wrap(tx).ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)`, version, now()); err != nil {
 			tx.Rollback()
 			return err
@@ -164,6 +171,7 @@ type User struct {
 	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
 	MFAEnabled  bool       `json:"mfa_enabled"`
 	Disabled    bool       `json:"disabled"`
+	SSOLinked   bool       `json:"sso_linked,omitempty"` // set by ListUsers only
 	hash        string
 	totpSecret  string
 	recovery    string
@@ -208,6 +216,9 @@ func scanUser(row interface{ Scan(...any) error }) (*User, error) {
 }
 
 const userCols = `id, email, name, password_hash, role, created_at, last_login_at, totp_secret, mfa_enabled, recovery_codes, disabled`
+
+// userColsU is userCols for queries joining users as "u".
+const userColsU = `u.id, u.email, u.name, u.password_hash, u.role, u.created_at, u.last_login_at, u.totp_secret, u.mfa_enabled, u.recovery_codes, u.disabled`
 
 func (s *Store) UserByID(ctx context.Context, id int64) (*User, error) {
 	return scanUser(s.q.QueryRowContext(ctx, `SELECT `+userCols+` FROM users WHERE id = ?`, id))
@@ -792,10 +803,72 @@ type AuditEntry struct {
 	IP     string          `json:"ip"`
 }
 
+// Size limits of an audit entry: longer targets are cut, larger details are replaced
+// by a truncated preview (the stored detail stays valid JSON).
+const (
+	AuditTargetMax = 256
+	AuditDetailMax = 2048
+)
+
 func (s *Store) Audit(ctx context.Context, userID *int64, action, target string, detail any, ip string) error {
 	_, err := s.q.ExecContext(ctx, `INSERT INTO audit_log(ts, user_id, action, target, detail, ip) VALUES (?,?,?,?,?,?)`,
-		now(), userID, action, target, toJSON(detail), ip)
+		now(), userID, action, truncUTF8(target, AuditTargetMax), auditJSON(detail), ip)
 	return err
+}
+
+func auditJSON(detail any) string {
+	j := toJSON(detail)
+	if len(j) <= AuditDetailMax {
+		return j
+	}
+	for n := AuditDetailMax / 2; ; n /= 2 { // escaping can grow the preview: shrink until it fits
+		out := toJSON(map[string]any{"truncated": true, "size": len(j), "preview": truncUTF8(j, n)})
+		if len(out) <= AuditDetailMax || n < 64 {
+			return out
+		}
+	}
+}
+
+// truncUTF8 cuts s to at most max bytes without splitting a character ("…" marks a cut).
+func truncUTF8(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	cut := max - len("…")
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "…"
+}
+
+// Audit log retention: entries older than AuditRetention are removed, and at most
+// AuditMaxRows of the newest entries are kept.
+const (
+	AuditRetention = 365 * 24 * time.Hour
+	AuditMaxRows   = 500000
+)
+
+// PruneAudit removes audit entries older than before and all but the newest keep
+// entries; it returns the number of rows removed.
+func (s *Store) PruneAudit(ctx context.Context, before time.Time, keep int64) (int64, error) {
+	res, err := s.q.ExecContext(ctx, `DELETE FROM audit_log WHERE ts < ?`, before.UTC().Truncate(time.Second))
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	var maxID sql.NullInt64
+	if err := s.q.QueryRowContext(ctx, `SELECT MAX(id) FROM audit_log`).Scan(&maxID); err != nil {
+		return n, err
+	}
+	if maxID.Valid && maxID.Int64 > keep {
+		res, err := s.q.ExecContext(ctx, `DELETE FROM audit_log WHERE id <= ?`, maxID.Int64-keep)
+		if err != nil {
+			return n, err
+		}
+		m, _ := res.RowsAffected()
+		n += m
+	}
+	return n, nil
 }
 
 func (s *Store) ListAudit(ctx context.Context, limit int) ([]AuditEntry, error) {

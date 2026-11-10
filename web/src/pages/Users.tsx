@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Copy, KeyRound, Lock, Pencil, Plus, ShieldOff, Trash2, UserCheck, UserX, Users as UsersIcon, Wand2 } from "lucide-react";
+import { Copy, KeyRound, Link2Off, Lock, Pencil, Plus, ShieldOff, Trash2, UserCheck, UserX, Users as UsersIcon, Wand2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, ApiError, type User } from "../api";
@@ -39,6 +39,7 @@ export default function Users() {
   const [editing, setEditing] = useState<{ id: number | null; form: Form } | null>(null);
   const [pw, setPw] = useState<{ user: User; value: string } | null>(null);
   const [mfaFor, setMfaFor] = useState<User | null>(null);
+  const [ssoFor, setSsoFor] = useState<User | null>(null);
   const [deleting, setDeleting] = useState<User | null>(null);
   const [disabling, setDisabling] = useState<User | null>(null);
   const { busy, error, setError, run } = useSubmit();
@@ -76,6 +77,11 @@ export default function Users() {
   const resetMfa = async () => {
     if (!mfaFor) return;
     const r = await row.run(() => api.post(`/api/users/${mfaFor.id}/reset-mfa`), { deployed: false, success: t("mfaResetDone") });
+    if (r !== undefined) done();
+  };
+  const unlinkSso = async () => {
+    if (!ssoFor) return;
+    const r = await row.run(() => api.post(`/api/users/${ssoFor.id}/reset-sso`), { deployed: false, success: t("ssoUnlinkDone") });
     if (r !== undefined) done();
   };
   const remove = async () => {
@@ -117,6 +123,7 @@ export default function Users() {
                           ? { label: t("changePassword"), icon: KeyRound, onSelect: () => navigate("/account") }
                           : { label: t("resetPassword"), icon: KeyRound, onSelect: () => { pwSub.setError(null); setPw({ user: u, value: "" }); } },
                         { label: t("resetMfa"), icon: ShieldOff, hidden: !u.mfa_enabled, onSelect: () => setMfaFor(u) },
+                        { label: t("ssoUnlink"), icon: Link2Off, hidden: !u.sso_linked, onSelect: () => setSsoFor(u) },
                         { label: u.disabled ? t("enableUser") : t("disableUser"), icon: u.disabled ? UserCheck : UserX, disabled: self, separatorBefore: true, onSelect: () => (u.disabled ? setDisabled(u, false) : setDisabling(u)) },
                         { label: t("deleteUser"), icon: Trash2, danger: true, disabled: self, onSelect: () => setDeleting(u) },
                       ]} /></Td>
@@ -166,6 +173,9 @@ export default function Users() {
 
       <ConfirmDialog open={!!mfaFor} onOpenChange={(o) => !o && setMfaFor(null)} title={t("resetMfaTitle")} description={t("resetMfaDesc")} confirmLabel={t("resetMfa")} onConfirm={resetMfa}>
         {mfaFor && <div className="rounded border border-line bg-surface-2 px-3 py-2 text-sm font-medium">{mfaFor.name || mfaFor.email}</div>}
+      </ConfirmDialog>
+      <ConfirmDialog open={!!ssoFor} onOpenChange={(o) => !o && setSsoFor(null)} title={t("ssoUnlinkTitle")} description={t("ssoUnlinkDesc")} confirmLabel={t("ssoUnlink")} onConfirm={unlinkSso}>
+        {ssoFor && <div className="rounded border border-line bg-surface-2 px-3 py-2 text-sm font-medium">{ssoFor.name || ssoFor.email}</div>}
       </ConfirmDialog>
       <ConfirmDialog open={!!disabling} onOpenChange={(o) => !o && setDisabling(null)} title={disabling ? t("disableUserTitle", { name: disabling.name || disabling.email }) : ""}
         description={t("disableUserDesc")} confirmLabel={t("disableUser")} onConfirm={async () => { if (disabling) await setDisabled(disabling, true); }} />

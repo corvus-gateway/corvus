@@ -77,15 +77,15 @@ Role: **public** = no authentication · **viewer** = any signed-in user or token
 |---|---|---|---|
 | GET | `/api/status` | public | `{ "setup_required": bool, "version": "…" }` |
 | POST | `/api/setup` | public | Create the first administrator (requires the setup token from the logs) |
-| POST | `/api/auth/login` | public | `{ "email", "password" }` → session (or MFA challenge) |
+| POST | `/api/auth/login` | public | `{ "email", "password" }` → session (or MFA challenge). An email over 254 bytes or a password over 1024 bytes is `400 bad_request` |
 | POST | `/api/auth/login/mfa` | public | Complete sign-in with a TOTP or recovery code |
 | GET | `/api/auth/sso` | public | Whether OIDC single sign-on is enabled |
 | GET | `/api/auth/oidc/start`, `/api/auth/oidc/callback` | public | OIDC sign-in flow |
 | GET | `/api/auth/me` | viewer | Current user (or token principal) |
-| POST | `/api/auth/logout`, `/api/auth/password` | viewer (session) | Sign out, change password |
-| POST | `/api/auth/mfa/setup`, `/enable`, `/disable` | viewer (session) | Manage TOTP for the current user |
+| POST | `/api/auth/logout`, `/api/auth/password` | viewer (session) | Sign out, change password (`{ "current", "new" }`: ends your other sessions and deletes the API tokens you created; wrong current passwords count against the sign-in limits) |
+| POST | `/api/auth/mfa/setup`, `/enable`, `/disable` | viewer (session) | Manage TOTP for the current user (`/disable` takes `{ "password", "code" }`; failures count against the sign-in limits) |
 | GET | `/api/overview` | viewer | Dashboard summary |
-| GET | `/api/audit` | viewer | Audit log |
+| GET | `/api/audit` | viewer | Audit log (entries are kept for 365 days, at most the newest 500,000; targets over 256 bytes are cut and details over 2 KB are replaced by a `{"truncated": true, …}` preview) |
 
 ### Proxy hosts, redirection hosts, streams, certificates, deployments
 
@@ -158,7 +158,7 @@ An advanced configuration that sets `client_max_body_size` or `gzip` itself keep
 | `path` | Path prefix (`/` followed by letters, digits, `._~/-`); `/__corvus` and `/.well-known/acme-challenge` are reserved. `/` replaces the host's forward target |
 | `forward_scheme`, `forward_host`, `forward_port` | Upstream of the location (default scheme `http`) |
 | `forward_path` | Optional; replaces the matched prefix (`/api/x` → `/v2/x` with `/v2/`). Not allowed for `/` |
-| `advanced_config` | Optional nginx directives inside the location (same restrictions as the host's `advanced_config`, no nested `location`); administrators only |
+| `advanced_config` | Optional nginx directives inside the location (same restrictions as the host's `advanced_config`, no nested `location`); administrators only: operators can neither set, change nor clear it, nor remove or move a location that has one |
 
 A location keeps the host's protections: security rules, bans, exploit and body inspection,
 "under attack" mode, rate limit, Basic auth, and the access queue for requests under the
@@ -390,6 +390,7 @@ tested, deployed and rolled back with the rest of the configuration.
 | GET / POST | `/api/users` | admin (session) | Users |
 | PUT / DELETE | `/api/users/{id}` | admin (session) | Update / delete (your own password goes through `/api/auth/password`) |
 | POST | `/api/users/{id}/reset-mfa` | admin (session) | Reset a user's MFA |
+| POST | `/api/users/{id}/reset-sso` | admin (session) | Remove a user's SSO links (`sso_linked` in the user list) |
 | GET / POST | `/api/tokens` | session | API tokens (`{ "name", "role", "expires_days" }`) |
 | DELETE | `/api/tokens/{id}` | session | Revoke a token |
 | POST | `/api/import/npm/preview`, `/apply` | admin | Import from Nginx Proxy Manager (`/apply` takes `proxy_host_ids`, `redirection_host_ids`, `stream_ids`, `certificate_ids`, `access_list_ids`; omitted = all) |

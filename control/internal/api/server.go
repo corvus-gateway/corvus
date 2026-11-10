@@ -140,6 +140,7 @@ func (s *Server) Handler() http.Handler {
 	adm("PUT /api/users/{id}", s.updateUser)
 	adm("DELETE /api/users/{id}", s.deleteUser)
 	adm("POST /api/users/{id}/reset-mfa", s.resetUserMFA)
+	adm("POST /api/users/{id}/reset-sso", s.resetUserSSO)
 
 	priv("GET /api/rate-limits", s.listRateLimits)
 	op("POST /api/rate-limits", s.createRateLimit)
@@ -467,6 +468,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
+	if len(in.Email) > maxEmailLen || len(in.Password) > maxPasswordInput {
+		writeErr(w, http.StatusBadRequest, "bad_request", "email or password is too long")
+		return
+	}
 	ip := clientIP(r)
 	if blocked, wait := s.Limiter.Blocked(ip); blocked {
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
@@ -475,6 +480,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	acct := s.accountKey(r, in.Email) // a known browser counts on its own (#142)
 	if blocked, wait := s.AcctLimiter.Blocked(acct); blocked {
+		// attempts on a locked account count against the address too, so they cannot
+		// go on (and fill the audit log) without limit
+		s.Limiter.Fail(ip)
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
 		s.audit(r, "auth.login_locked", strings.ToLower(strings.TrimSpace(in.Email)), nil)
 		writeErr(w, http.StatusTooManyRequests, "rate_limited", "this account is temporarily locked after repeated failures")
@@ -530,40 +538,90 @@ func (s *Server) handlePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u := userFrom(r)
-	if !auth.CheckPassword(u.PasswordHash(), in.Current) {
+	ip, acct, ok := s.passwordCheckAllowed(w, r, u)
+	if !ok {
+		return
+	}
+	if !checkPasswordInput(u.PasswordHash(), in.Current) {
+		s.Limiter.Fail(ip)
+		s.AcctLimiter.Fail(acct)
 		s.audit(r, "auth.password_change_failed", u.Email, nil)
 		writeErr(w, http.StatusForbidden, "invalid_credentials", "current password is incorrect")
 		return
 	}
+	s.AcctLimiter.Reset(acct)
 	hash, err := auth.HashPassword(in.New)
 	if err != nil {
 		fail(w, validate.Errors{{Field: "new", Code: "weak", Message: err.Error()}})
 		return
 	}
-	if err := s.Store.UpdatePassword(r.Context(), u.ID, hash); err != nil {
+	ctx := r.Context()
+	if err := s.Store.UpdatePassword(ctx, u.ID, hash); err != nil {
 		fail(w, err)
 		return
 	}
-	_ = s.Store.DeleteUserSessions(r.Context(), u.ID) // sign out everywhere else
+	_ = s.Store.DeleteUserSessions(ctx, u.ID) // sign out everywhere else
+	var detail any
+	// API tokens the user created end too, like the other sessions
+	if n, err := s.Store.DeleteUserAPITokens(ctx, u.ID); err == nil && n > 0 {
+		detail = map[string]any{"tokens_revoked": n}
+	}
 	if err := s.setSession(w, r, u); err != nil {
 		fail(w, err)
 		return
 	}
-	s.audit(r, "auth.password_changed", u.Email, nil)
+	s.audit(r, "auth.password_changed", u.Email, detail)
 	writeJSON(w, 200, map[string]string{"status": "ok"})
 }
 
-// PurgeLoop removes expired sessions periodically.
+// Input limits for sign-in requests (checked before anything else).
+const (
+	maxEmailLen      = 254  // RFC 5321 path limit
+	maxPasswordInput = 1024 // stored passwords are at most 72 bytes (bcrypt)
+)
+
+// checkPasswordInput is auth.CheckPassword for request input of any length.
+func checkPasswordInput(hash, pw string) bool {
+	return len(pw) <= maxPasswordInput && auth.CheckPassword(hash, pw)
+}
+
+// passwordCheckAllowed applies the sign-in limits (per address and per account) to a
+// password check by a signed-in user; it writes the 429 response when blocked.
+func (s *Server) passwordCheckAllowed(w http.ResponseWriter, r *http.Request, u *store.User) (ip, acct string, ok bool) {
+	ip, acct = clientIP(r), s.accountKey(r, u.Email)
+	for _, l := range []struct {
+		lim *auth.Limiter
+		key string
+	}{{s.Limiter, ip}, {s.AcctLimiter, acct}} {
+		if blocked, wait := l.lim.Blocked(l.key); blocked {
+			w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+			writeErr(w, http.StatusTooManyRequests, "rate_limited", "too many failed attempts, try again later")
+			return ip, acct, false
+		}
+	}
+	return ip, acct, true
+}
+
+// PurgeLoop removes expired sessions and old audit entries periodically.
 func (s *Server) PurgeLoop(ctx context.Context) {
 	t := time.NewTicker(time.Hour)
 	defer t.Stop()
 	for {
+		s.purge(ctx)
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			_ = s.Store.PurgeExpiredSessions(ctx)
 		}
+	}
+}
+
+func (s *Server) purge(ctx context.Context) {
+	_ = s.Store.PurgeExpiredSessions(ctx)
+	if n, err := s.Store.PruneAudit(ctx, time.Now().Add(-store.AuditRetention), store.AuditMaxRows); err != nil {
+		slog.Error("audit log pruning failed", "err", err)
+	} else if n > 0 {
+		slog.Info("audit log pruned", "removed", n)
 	}
 }
 

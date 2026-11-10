@@ -220,6 +220,27 @@ func (s *Server) resetUserMFA(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]string{"status": "ok"})
 }
 
+// resetUserSSO removes a user's SSO links: the next SSO sign-in links the user again
+// under the rules of a first sign-in (verified email, see ssoUser).
+func (s *Server) resetUserSSO(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	u, err := s.Store.UserByID(r.Context(), id)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	n, err := s.Store.DeleteUserIdentities(r.Context(), id)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	s.audit(r, "user.sso_unlinked", u.Email, map[string]int64{"links": n})
+	writeJSON(w, 200, map[string]string{"status": "ok"})
+}
+
 // advancedAllowed: only administrators may change a proxy host's advanced nginx
 // configuration (it is raw gateway configuration).
 func advancedAllowed(r *http.Request, before, after string) error {
@@ -230,7 +251,9 @@ func advancedAllowed(r *http.Request, before, after string) error {
 }
 
 // locationsAdvancedAllowed: the same for the advanced configuration of custom locations
-// (compared by path; other location fields may be changed by operators).
+// (compared by path; other location fields may be changed by operators). Setting,
+// changing or clearing a snippet is an administrator action, and so is removing
+// (or moving) a location that carries one.
 func locationsAdvancedAllowed(r *http.Request, before, after []store.Location) error {
 	if store.RoleAtLeast(userFrom(r).Role, "admin") {
 		return nil
@@ -239,11 +262,20 @@ func locationsAdvancedAllowed(r *http.Request, before, after []store.Location) e
 	for _, l := range before {
 		was[strings.TrimSpace(l.Path)] = strings.TrimSpace(l.AdvancedConfig)
 	}
+	const msg = "only administrators can change the advanced configuration"
 	var errs validate.Errors
+	kept := map[string]bool{}
 	for i, l := range after {
-		if snip := strings.TrimSpace(l.AdvancedConfig); snip != "" && snip != was[strings.TrimSpace(l.Path)] {
-			errs = append(errs, validate.FieldError{Field: fmt.Sprintf("locations[%d].advanced_config", i), Code: "forbidden",
-				Message: "only administrators can change the advanced configuration"})
+		path := strings.TrimSpace(l.Path)
+		kept[path] = true
+		if strings.TrimSpace(l.AdvancedConfig) != was[path] {
+			errs = append(errs, validate.FieldError{Field: fmt.Sprintf("locations[%d].advanced_config", i), Code: "forbidden", Message: msg})
+		}
+	}
+	for _, l := range before {
+		if path := strings.TrimSpace(l.Path); was[path] != "" && !kept[path] {
+			errs = append(errs, validate.FieldError{Field: "locations", Code: "forbidden",
+				Message: fmt.Sprintf("only administrators can remove the location %s: it has an advanced configuration", path)})
 		}
 	}
 	return errs.OrNil()

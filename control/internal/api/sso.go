@@ -12,6 +12,9 @@ package api
 //     out of user management). With default_role "deny", users without a matching
 //     group cannot sign in via SSO at all. Without a role claim, existing users keep
 //     their role and new users get the default role.
+//   - Users are bound to the IdP account (issuer + subject), not to the email: an
+//     existing user is linked on a first SSO sign-in only when the IdP marks the
+//     email as verified (see ssoUser). Administrators can remove a link.
 
 import (
 	"context"
@@ -19,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -40,8 +44,10 @@ const (
 	oidcCookiePath = "/api/auth/oidc/"
 	oidcFlowTTL    = 10 * time.Minute
 	oidcMaxFlows   = 5000
-	providerTTL    = time.Hour
-	callbackPath   = "/api/auth/oidc/callback"
+	// pending flows per client address (several tabs or retries; more evicts the oldest)
+	oidcMaxFlowsPerIP = 20
+	providerTTL       = time.Hour
+	callbackPath      = "/api/auth/oidc/callback"
 )
 
 // ssoRuntime is the in-memory part of SSO: pending sign-in flows and the cached
@@ -56,6 +62,7 @@ type oidcFlow struct {
 	nonce, verifier, redirectURI string
 	issuer, clientID             string
 	bindHash                     string // hash of the browser-binding cookie
+	ip                           string // client address that started the flow
 	exp                          time.Time
 }
 
@@ -80,11 +87,38 @@ func (rt *ssoRuntime) putFlow(state string, f *oidcFlow) bool {
 			}
 		}
 	}
+	if f.ip != "" {
+		// one client address holds at most oidcMaxFlowsPerIP pending flows: its oldest
+		// one makes room, so a single address cannot fill the table
+		var oldest string
+		n := 0
+		for k, v := range rt.flows {
+			if v.ip != f.ip {
+				continue
+			}
+			n++
+			if oldest == "" || v.exp.Before(rt.flows[oldest].exp) {
+				oldest = k
+			}
+		}
+		if n >= oidcMaxFlowsPerIP {
+			delete(rt.flows, oldest)
+		}
+	}
 	if len(rt.flows) >= oidcMaxFlows {
 		return false
 	}
 	rt.flows[state] = f
 	return true
+}
+
+// flowClientKey groups clients for the per-address flow limit: IPv6 clients by /64
+// (one host usually holds a whole /64).
+func flowClientKey(ip string) string {
+	if a := net.ParseIP(ip); a != nil && a.To4() == nil {
+		return a.Mask(net.CIDRMask(64, 128)).String() + "/64"
+	}
+	return ip
 }
 
 // takeFlow removes and returns the flow (one use only).
@@ -343,7 +377,7 @@ func (s *Server) oidcStart(w http.ResponseWriter, r *http.Request) {
 	}
 	state, nonce, bind, verifier := auth.RandomToken(24), auth.RandomToken(24), auth.RandomToken(32), oauth2.GenerateVerifier()
 	if !s.ssoRT.putFlow(state, &oidcFlow{nonce: nonce, verifier: verifier, redirectURI: redirectURI, issuer: c.Issuer, clientID: c.ClientID,
-		bindHash: auth.TokenHash(bind), exp: time.Now().Add(oidcFlowTTL)}) {
+		bindHash: auth.TokenHash(bind), ip: flowClientKey(clientIP(r)), exp: time.Now().Add(oidcFlowTTL)}) {
 		http.Redirect(w, r, "/login?sso_error=busy", http.StatusFound)
 		return
 	}
@@ -432,6 +466,10 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	detail := map[string]any{"issuer": c.Issuer, "sub": idt.Subject}
+	if idt.Subject == "" || len(idt.Subject) > store.MaxSubject {
+		s.ssoFail(w, r, "token_invalid", "", map[string]any{"error": "missing or oversized subject"})
+		return
+	}
 	if cl.Email == "" || !strings.Contains(cl.Email, "@") {
 		s.ssoFail(w, r, "no_email", "", detail)
 		return
@@ -449,24 +487,9 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		s.ssoFail(w, r, "no_role", cl.Email, detail)
 		return
 	}
-	u, err := s.Store.UserByEmail(ctx, cl.Email)
-	provisioned := false
-	switch {
-	case errors.Is(err, store.ErrNotFound):
-		if !c.AutoProvision {
-			s.ssoFail(w, r, "not_provisioned", cl.Email, detail)
-			return
-		}
-		u, err = s.provisionSSOUser(ctx, cl, role)
-		if err != nil {
-			slog.Error("sso provisioning failed", "err", err)
-			s.ssoFail(w, r, "internal", cl.Email, detail)
-			return
-		}
-		provisioned = true
-	case err != nil:
-		slog.Error("sso user lookup failed", "err", err)
-		s.ssoFail(w, r, "internal", cl.Email, detail)
+	u, provisioned, code := s.ssoUser(ctx, c, cl, idt.Subject, role, detail)
+	if code != "" {
+		s.ssoFail(w, r, code, cl.Email, detail)
 		return
 	}
 	if u.Disabled {
@@ -511,10 +534,70 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-// provisionSSOUser creates a console user for a first SSO sign-in. The account
-// gets a random (unknown) password, so it can only sign in via SSO unless an
-// administrator sets a password.
-func (s *Server) provisionSSOUser(ctx context.Context, cl sso.Claims, role string) (*store.User, error) {
+// ssoUser finds (or creates) the console user for a verified ID token. Users are
+// matched by the identity provider account (issuer + subject) they are linked to:
+//   - linked account → that user, whatever email the IdP reports now;
+//   - otherwise a user with the same email is linked on this sign-in, but only when
+//     the IdP states the email is verified (email_verified true), and only if that
+//     user is not linked to another account at the same issuer;
+//   - otherwise, with auto-provisioning, a new user is created and linked.
+//
+// On failure it returns the sso_error code.
+func (s *Server) ssoUser(ctx context.Context, c sso.Settings, cl sso.Claims, sub, role string, detail map[string]any) (u *store.User, provisioned bool, code string) {
+	u, err := s.Store.UserByIdentity(ctx, c.Issuer, sub)
+	if err == nil {
+		return u, false, ""
+	}
+	if !errors.Is(err, store.ErrNotFound) {
+		slog.Error("sso user lookup failed", "err", err)
+		return nil, false, "internal"
+	}
+	u, err = s.Store.UserByEmail(ctx, cl.Email)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		if !c.AutoProvision {
+			return nil, false, "not_provisioned"
+		}
+		u, err = s.provisionSSOUser(ctx, c.Issuer, sub, cl, role)
+		if errors.Is(err, errSSOLinkConflict) {
+			return nil, false, "link_conflict"
+		}
+		if err != nil {
+			slog.Error("sso provisioning failed", "err", err)
+			return nil, false, "internal"
+		}
+		return u, true, ""
+	case err != nil:
+		slog.Error("sso user lookup failed", "err", err)
+		return nil, false, "internal"
+	}
+	// An existing user who has not signed in with this IdP account before.
+	if _, err := s.Store.IdentitySubject(ctx, u.ID, c.Issuer); err == nil {
+		return nil, false, "link_conflict" // linked to a different account at this issuer
+	} else if !errors.Is(err, store.ErrNotFound) {
+		slog.Error("sso link lookup failed", "err", err)
+		return nil, false, "internal"
+	}
+	if cl.EmailVerified == nil || !*cl.EmailVerified {
+		return nil, false, "link_unverified"
+	}
+	if err := s.Store.LinkIdentity(ctx, u.ID, c.Issuer, sub); err != nil {
+		if store.IsUnique(err) { // a concurrent sign-in linked the user or the account
+			return nil, false, "link_conflict"
+		}
+		slog.Error("sso link failed", "err", err)
+		return nil, false, "internal"
+	}
+	detail["linked"] = true
+	return u, false, ""
+}
+
+var errSSOLinkConflict = errors.New("sso: email already used by another identity")
+
+// provisionSSOUser creates a console user for a first SSO sign-in and links it to
+// the IdP account. The account gets a random (unknown) password, so it can only sign
+// in via SSO unless an administrator sets a password.
+func (s *Server) provisionSSOUser(ctx context.Context, issuer, sub string, cl sso.Claims, role string) (*store.User, error) {
 	name := cl.Name
 	if name == "" {
 		name = strings.SplitN(cl.Email, "@", 2)[0]
@@ -526,9 +609,20 @@ func (s *Server) provisionSSOUser(ctx context.Context, cl sso.Claims, role strin
 	if err != nil {
 		return nil, err
 	}
-	u, err := s.Store.CreateUser(ctx, cl.Email, name, hash, role)
-	if err != nil && store.IsUnique(err) { // concurrent first sign-in
-		return s.Store.UserByEmail(ctx, cl.Email)
+	var u *store.User
+	err = s.Store.WithTx(ctx, func(tx *store.Store) error {
+		var err error
+		if u, err = tx.CreateUser(ctx, cl.Email, name, hash, role); err != nil {
+			return err
+		}
+		return tx.LinkIdentity(ctx, u.ID, issuer, sub)
+	})
+	if err != nil && store.IsUnique(err) {
+		// concurrent first sign-in: the other request created and linked the user
+		if u, lerr := s.Store.UserByIdentity(ctx, issuer, sub); lerr == nil {
+			return u, nil
+		}
+		return nil, errSSOLinkConflict
 	}
 	return u, err
 }
