@@ -205,6 +205,10 @@ type r6 struct {
 
 var unknown = [2]byte{'X', 'X'}
 
+// maxRows caps the ranges read from a CSV (DB-IP country lite has about one
+// million), so a hostile or broken download cannot exhaust memory.
+var maxRows = 4_000_000
+
 // ParseCSV reads "start,end,CC" lines (IPv4 and IPv6 mixed, sorted or not).
 func ParseCSV(r io.Reader) (*DB, error) {
 	type span4 struct {
@@ -219,7 +223,7 @@ func ParseCSV(r io.Reader) (*DB, error) {
 	var s6 []span6
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64<<10), 64<<10)
-	line := 0
+	line, rows := 0, 0
 	for sc.Scan() {
 		line++
 		f := strings.Split(strings.ReplaceAll(sc.Text(), `"`, ""), ",")
@@ -231,17 +235,31 @@ func ParseCSV(r io.Reader) (*DB, error) {
 		if a == nil || b == nil {
 			continue
 		}
+		if rows++; rows > maxRows {
+			return nil, fmt.Errorf("line %d: more than %d ranges", line, maxRows)
+		}
 		cc := unknown
 		if len(code) == 2 && code[0] >= 'A' && code[0] <= 'Z' && code[1] >= 'A' && code[1] <= 'Z' && code != "ZZ" {
 			cc = [2]byte{code[0], code[1]}
 		}
-		if a4, b4 := a.To4(), b.To4(); a4 != nil && b4 != nil {
-			s4 = append(s4, span4{binary.BigEndian.Uint32(a4), binary.BigEndian.Uint32(b4), cc})
+		a4, b4 := a.To4(), b.To4()
+		if (a4 == nil) != (b4 == nil) {
+			return nil, fmt.Errorf("line %d: range mixes IPv4 and IPv6", line)
+		}
+		if a4 != nil {
+			x, y := binary.BigEndian.Uint32(a4), binary.BigEndian.Uint32(b4)
+			if y < x {
+				return nil, fmt.Errorf("line %d: range ends before it starts", line)
+			}
+			s4 = append(s4, span4{x, y, cc})
 			continue
 		}
 		var x, y [16]byte
 		copy(x[:], a.To16())
 		copy(y[:], b.To16())
+		if bytes.Compare(y[:], x[:]) < 0 {
+			return nil, fmt.Errorf("line %d: range ends before it starts", line)
+		}
 		s6 = append(s6, span6{x, y, cc})
 	}
 	if err := sc.Err(); err != nil {
