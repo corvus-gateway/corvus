@@ -2,10 +2,12 @@ package compiler
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"net"
 	"os"
 	"strings"
+	"time"
 )
 
 // StaticHosts reads a hosts file (normally /etc/hosts) into name → IP.
@@ -93,6 +95,55 @@ func (p Paths) InternalTarget(addr string, port int) string {
 		}
 	}
 	return ""
+}
+
+// StreamTarget is InternalTarget for streams, which also may not forward to the admin
+// console on loopback or on this container (self: the forward host refers to this
+// container): a stream passes the client's bytes unchanged, and the console trusts
+// requests from local addresses that carry the gateway key.
+func (p Paths) StreamTarget(addr string, port int, self bool) string {
+	if why := p.InternalTarget(addr, port); why != "" {
+		return why
+	}
+	if p.AdminPort > 0 && port == p.AdminPort && (isLoopback(addr) || self) {
+		return fmt.Sprintf("%s port %d is used internally by Corvus (admin console)", strings.Trim(addr, "[]"), port)
+	}
+	return ""
+}
+
+// SelfHost reports whether a forward host refers to this container: its hostname, one of
+// its interface addresses, or a name (such as the container name) that resolves to one.
+func SelfHost(host string) bool {
+	h := strings.Trim(strings.ToLower(host), "[]")
+	if h == "" {
+		return false
+	}
+	if name, err := os.Hostname(); err == nil && strings.EqualFold(name, h) {
+		return true
+	}
+	own := map[string]bool{}
+	if addrs, err := net.InterfaceAddrs(); err == nil {
+		for _, a := range addrs {
+			if n, ok := a.(*net.IPNet); ok {
+				own[n.IP.String()] = true
+			}
+		}
+	}
+	if ip := net.ParseIP(h); ip != nil {
+		return ip.IsLoopback() || own[ip.String()]
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, h)
+	if err != nil {
+		return false
+	}
+	for _, ip := range ips {
+		if ip.IP.IsLoopback() || own[ip.IP.String()] {
+			return true
+		}
+	}
+	return false
 }
 
 // isLoopback reports whether a forward host means "this machine".
