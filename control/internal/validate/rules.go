@@ -447,7 +447,12 @@ func FeedURL(raw string) error {
 
 // PublicIP reports whether ip is a globally routable unicast address (not loopback,
 // private, link-local, CGNAT, unspecified, multicast or documentation/benchmark ranges).
+// IPv6 transition addresses (NAT64, 6to4) are judged by the IPv4 address they carry;
+// those whose IPv4 part cannot be read reliably (local-use NAT64, Teredo) are not public.
 func PublicIP(ip net.IP) bool {
+	if v4, transition := netcfg.EmbeddedIPv4(ip); transition {
+		return v4 != nil && PublicIP(v4)
+	}
 	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
 		ip.IsInterfaceLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() {
 		return false

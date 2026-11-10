@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -24,10 +25,18 @@ var (
 		"2a06:98c0::/29", "2c0f:f248::/32"}
 )
 
-// Cloudflare returns the stored snapshot or the builtin list.
+// Cloudflare returns the stored snapshot or the builtin list. A stored snapshot
+// that does not pass the trusted-proxy checks (for example one restored from an
+// older backup holding a very broad range) is ignored in favour of the builtin list.
 func Cloudflare(ctx context.Context, s *store.Store) store.CloudflareIPs {
 	if c, err := s.CloudflareIPs(ctx); err == nil && c != nil && len(c.IPv4) > 0 {
-		return *c
+		v4, err4 := trustedRanges(c.IPv4, false)
+		v6, err6 := trustedRanges(c.IPv6, true)
+		if err4 == nil && err6 == nil && len(v4) > 0 {
+			c.IPv4, c.IPv6 = v4, v6
+			return *c
+		}
+		slog.Warn("ignoring stored Cloudflare ranges that fail validation; using the builtin list")
 	}
 	return store.CloudflareIPs{IPv4: builtinV4, IPv6: builtinV6, Source: "builtin"}
 }
@@ -62,11 +71,25 @@ func FetchCloudflare(ctx context.Context) (store.CloudflareIPs, error) {
 		}
 		return out, sc.Err()
 	}
-	v4, err := get("https://www.cloudflare.com/ips-v4")
+	list := func(url string, v6 bool) ([]string, error) {
+		raw, err := get(url)
+		if err != nil {
+			return nil, err
+		}
+		out, err := trustedRanges(raw, v6)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", url, err)
+		}
+		if len(out) == 0 {
+			return nil, fmt.Errorf("%s: empty list", url)
+		}
+		return out, nil
+	}
+	v4, err := list("https://www.cloudflare.com/ips-v4", false)
 	if err != nil {
 		return store.CloudflareIPs{}, err
 	}
-	v6, err := get("https://www.cloudflare.com/ips-v6")
+	v6, err := list("https://www.cloudflare.com/ips-v6", true)
 	if err != nil {
 		return store.CloudflareIPs{}, err
 	}
@@ -141,4 +164,62 @@ func cidrString(n *net.IPNet) (string, bool) {
 		return (&net.IPNet{IP: n.IP.To4(), Mask: net.CIDRMask(ones-96, 32)}).String(), true
 	}
 	return n.String(), true
+}
+
+// trustedRanges normalizes a Cloudflare range list with the same rules as operator
+// entered trusted proxies and checks that every entry is of the expected family.
+func trustedRanges(in []string, v6 bool) ([]string, error) {
+	out, err := NormalizeTrustedCIDRs(in)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range out {
+		_, n, _ := net.ParseCIDR(c)
+		if (n.IP.To4() == nil) != v6 {
+			return nil, fmt.Errorf("unexpected entry %q", c)
+		}
+	}
+	return out, nil
+}
+
+// IPv6 transition ranges that carry an IPv4 address: the NAT64 well-known prefix
+// (64:ff9b::/96, IPv4 in the last 32 bits), 6to4 (2002::/16, IPv4 in bits 16-47),
+// local-use NAT64 (64:ff9b:1::/48, operator-chosen layout) and Teredo (2001::/32,
+// obfuscated client address).
+var (
+	nat64WKP   = mustCIDR("64:ff9b::/96")
+	nat64Local = mustCIDR("64:ff9b:1::/48")
+	sixToFour  = mustCIDR("2002::/16")
+	teredo     = mustCIDR("2001::/32")
+)
+
+func mustCIDR(s string) *net.IPNet {
+	_, n, err := net.ParseCIDR(s)
+	if err != nil {
+		panic(err)
+	}
+	return n
+}
+
+// EmbeddedIPv4 reports whether ip is an IPv6 transition address that reaches an
+// IPv4 destination. v4 is the embedded address when its position is fixed (NAT64
+// well-known prefix, 6to4); it is nil for ranges whose IPv4 part cannot be read
+// reliably (local-use NAT64, Teredo), which callers should treat as not public.
+func EmbeddedIPv4(ip net.IP) (v4 net.IP, transition bool) {
+	if ip.To4() != nil {
+		return nil, false
+	}
+	ip16 := ip.To16()
+	if ip16 == nil {
+		return nil, false
+	}
+	switch {
+	case nat64WKP.Contains(ip16):
+		return net.IPv4(ip16[12], ip16[13], ip16[14], ip16[15]), true
+	case sixToFour.Contains(ip16):
+		return net.IPv4(ip16[2], ip16[3], ip16[4], ip16[5]), true
+	case nat64Local.Contains(ip16), teredo.Contains(ip16):
+		return nil, true
+	}
+	return nil, false
 }
