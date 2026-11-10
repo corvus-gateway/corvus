@@ -119,7 +119,7 @@ export const es: Partial<Record<keyof typeof ko, string>> = {
   secAbuse: "Protección contra abusos", secAbuseDesc: "Impide que los bots saturen la cola o compartan tokens de admisión.",
   maxQueue: "Longitud máx. de la cola", maxQueueHint: "Por encima de este valor, se pide a los nuevos visitantes que lo intenten más tarde (0 = ilimitado)",
   maxNewPerIp: "Entradas en cola por IP", maxNewPerIpHint: "Nuevas entradas en la cola que una IP puede crear por minuto (0 = ilimitado)", unitPerMin: "/min",
-  bindIp: "Vincular la admisión a la red del cliente", bindIpDesc: "Los tokens de admisión solo funcionan desde la misma red (IPv4 /24), lo que impide compartirlos. Los visitantes que cambien de red deberán volver a hacer cola.",
+  bindIp: "Vincular la admisión a la red del cliente", bindIpDesc: "Los tokens de admisión solo funcionan desde la misma red (IPv4 /24, IPv6 /48), lo que impide compartirlos. Los visitantes que cambien de red deberán volver a hacer cola.",
   turnOn: "Reactivar", previewWaitPage: "Vista previa de la página de espera", emergencyOff: "Liberación de emergencia", emergencyOffTitle: "¿Liberar esta cola de acceso?",
   emergencyOffDesc: "Todos los visitantes pasarán directamente sin esperar. Un pico repentino puede sobrecargar su upstream.", deleteRoomTitle: "Eliminar cola de acceso",
   // rate limits

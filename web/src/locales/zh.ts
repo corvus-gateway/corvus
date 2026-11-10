@@ -120,7 +120,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   secAbuse: "防滥用", secAbuseDesc: "防止机器人刷队列或共享入场令牌。",
   maxQueue: "最大队列长度", maxQueueHint: "超出后新访客将被提示稍后重试（0 = 不限制）",
   maxNewPerIp: "每 IP 入队次数", maxNewPerIpHint: "单个 IP 每分钟可新建的排队条目数（0 = 不限制）", unitPerMin: "/分钟",
-  bindIp: "将入场凭证绑定到客户端网络", bindIpDesc: "入场令牌仅在同一网络（IPv4 /24）内有效，防止共享。切换网络的访客需重新排队。",
+  bindIp: "将入场凭证绑定到客户端网络", bindIpDesc: "入场令牌仅在同一网络（IPv4 /24、IPv6 /48）内有效，防止共享。切换网络的访客需重新排队。",
   turnOn: "重新开启", previewWaitPage: "预览排队页面", emergencyOff: "紧急解除", emergencyOffTitle: "确定解除此访问排队？",
   emergencyOffDesc: "所有访客将无需排队直接通过。突发流量可能对上游造成严重冲击。", deleteRoomTitle: "删除访问排队",
   // rate limits

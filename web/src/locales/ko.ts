@@ -118,7 +118,7 @@ export const ko = {
   secAbuse: "남용 방지", secAbuseDesc: "봇이 대기열을 채우거나 입장권을 돌려 쓰는 것을 막습니다.",
   maxQueue: "최대 대기 인원", maxQueueHint: "이 인원을 넘으면 새 방문자에게 '잠시 후 다시' 안내 (0 = 제한 없음)",
   maxNewPerIp: "IP당 대기열 진입", maxNewPerIpHint: "한 IP에서 1분에 새로 줄 설 수 있는 횟수 (0 = 제한 없음)", unitPerMin: "회/분",
-  bindIp: "입장권을 접속 네트워크에 묶기", bindIpDesc: "입장권을 같은 네트워크(IPv4 /24)에서만 쓸 수 있게 해 공유를 막습니다. 이동 중 네트워크가 바뀌면 다시 줄을 서야 합니다.",
+  bindIp: "입장권을 접속 네트워크에 묶기", bindIpDesc: "입장권을 같은 네트워크(IPv4 /24, IPv6 /48)에서만 쓸 수 있게 해 공유를 막습니다. 이동 중 네트워크가 바뀌면 다시 줄을 서야 합니다.",
   turnOn: "다시 켜기", previewWaitPage: "대기 화면 미리보기", emergencyOff: "긴급 해제", emergencyOffTitle: "접속 대기열을 긴급 해제할까요?",
   emergencyOffDesc: "해제하면 모든 방문자가 대기 없이 곧바로 통과합니다. 트래픽이 급증하면 업스트림에 부하가 몰릴 수 있습니다.", deleteRoomTitle: "접속 대기열 삭제",
   // rate limits

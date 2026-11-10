@@ -119,7 +119,7 @@ export const fr: Partial<Record<keyof typeof ko, string>> = {
   secAbuse: "Protection contre les abus", secAbuseDesc: "Empêche les bots d'inonder la file ou de partager des jetons d'admission.",
   maxQueue: "Longueur max. de la file", maxQueueHint: "Au-delà, les nouveaux visiteurs sont invités à réessayer plus tard (0 = illimité)",
   maxNewPerIp: "Entrées en file par IP", maxNewPerIpHint: "Nouvelles entrées en file qu'une IP peut créer par minute (0 = illimité)", unitPerMin: "/min",
-  bindIp: "Lier l'admission au réseau du client", bindIpDesc: "Les jetons d'admission ne fonctionnent que depuis le même réseau (IPv4 /24), ce qui empêche leur partage. Les visiteurs qui changent de réseau doivent refaire la file.",
+  bindIp: "Lier l'admission au réseau du client", bindIpDesc: "Les jetons d'admission ne fonctionnent que depuis le même réseau (IPv4 /24, IPv6 /48), ce qui empêche leur partage. Les visiteurs qui changent de réseau doivent refaire la file.",
   turnOn: "Réactiver", previewWaitPage: "Aperçu de la page d'attente", emergencyOff: "Levée d'urgence", emergencyOffTitle: "Lever cette file d'accès ?",
   emergencyOffDesc: "Tous les visiteurs passeront directement, sans attente. Un pic soudain peut lourdement solliciter votre serveur en amont.", deleteRoomTitle: "Supprimer la file d'accès",
   // rate limits
