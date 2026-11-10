@@ -166,6 +166,8 @@ Configuration, the hardened install, forward hosts, streams, backups, migrating 
 Manager, security rules, the access queue and troubleshooting are covered in the
 **[documentation](https://corvusgateway.org/)** (English · [한국어](https://corvusgateway.org/ko/)).
 
+A step-by-step tutorial book in Korean is on [WikiDocs](https://wikidocs.net/book/22096).
+
 ## Performance
 
 Measured with the [benchmark workflow](docs/benchmark.md) on a GitHub-hosted `ubuntu-24.04`

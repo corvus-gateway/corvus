@@ -169,6 +169,8 @@ La configuration, l'installation renforcée, les hôtes de destination, les flux
 depuis Nginx Proxy Manager, les règles de sécurité, la file d'attente d'accès et le dépannage sont décrits dans la
 **[documentation](https://corvusgateway.org/)** (en anglais et en coréen).
 
+Un livre tutoriel pas à pas, en coréen, est disponible sur [WikiDocs](https://wikidocs.net/book/22096).
+
 ## Performances
 
 Mesuré avec le [workflow de benchmark](../benchmark.md) sur un runner `ubuntu-24.04` hébergé par GitHub

@@ -168,6 +168,8 @@ Konfiguration, gehärtete Installation, Ziel-Hosts, Streams, Backups, Migration 
 Sicherheitsregeln, Zugriffswarteschlange und Fehlerbehebung beschreibt die **[Dokumentation](https://corvusgateway.org/)**
 (auf Englisch und Koreanisch).
 
+Ein Schritt-für-Schritt-Tutorial als Buch (auf Koreanisch) gibt es auf [WikiDocs](https://wikidocs.net/book/22096).
+
 ## Leistung
 
 Gemessen mit dem [Benchmark-Workflow](../benchmark.md) auf einem von GitHub gehosteten `ubuntu-24.04`-Runner

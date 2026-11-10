@@ -165,6 +165,8 @@ docker compose up -d
 구성, 강화된 설치, 포워드 호스트, 스트림, 백업, Nginx Proxy Manager에서 마이그레이션, 보안 규칙,
 접속 대기열, 문제 해결은 **[문서 사이트](https://corvusgateway.org/ko/)**에서 화면과 함께 설명합니다 (한국어 · [English](https://corvusgateway.org/)).
 
+설치부터 보안 설정, 접속 대기열까지 차례로 따라 하는 책은 [위키독스](https://wikidocs.net/book/22096)에 있습니다.
+
 ## 성능
 
 GitHub 호스팅 `ubuntu-24.04` 러너(4 vCPU AMD EPYC 9V45)에서 [벤치마크 워크플로](../benchmark.md)로

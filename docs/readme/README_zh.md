@@ -154,6 +154,8 @@ docker compose up -d
 配置、加固安装、目标主机、流、备份、从 Nginx Proxy Manager 迁移、安全规则、访问队列和故障排查，
 请参见 **[文档](https://corvusgateway.org/)**(英文、韩文)。
 
+韩文的分步教程书见 [WikiDocs](https://wikidocs.net/book/22096)。
+
 ## 性能
 
 使用 [基准测试工作流](../benchmark.md) 在 GitHub 托管的 `ubuntu-24.04` 运行器（4 vCPU AMD EPYC 9V45）上测得：

@@ -164,6 +164,8 @@ docker compose up -d
 設定、ハードニング済みインストール、転送先ホスト、ストリーム、バックアップ、Nginx Proxy Manager からの移行、
 セキュリティルール、アクセス待機列、トラブルシューティングは **[ドキュメント](https://corvusgateway.org/)**(英語・韓国語)で説明しています。
 
+手順を追って学べる韓国語のチュートリアル本が [WikiDocs](https://wikidocs.net/book/22096) にあります。
+
 ## パフォーマンス
 
 GitHub ホストの `ubuntu-24.04` ランナー(4 vCPU AMD EPYC 9V45)で [ベンチマークワークフロー](../benchmark.md)
