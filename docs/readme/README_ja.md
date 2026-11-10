@@ -89,7 +89,7 @@ Corvus は Nginx Proxy Manager のフォークではありません。既存の 
 - Prometheus `/metrics`
 
 **管理**
-- ロール、MFA(TOTP + リカバリーコード)、OIDC シングルサインオン、API トークン
+- ロール、MFA(TOTP + リカバリーコード)、OIDC シングルサインオン、API トークン、コマンドラインでの管理者復旧(`reset-admin`)
 - 管理コンソールの IP 許可リスト、監査ログ、デプロイ履歴
 - 標準は SQLite、PostgreSQL にも対応。ライト/ダークテーマ対応の 8 言語管理コンソール
 

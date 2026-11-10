@@ -90,7 +90,7 @@ Go-Steuerungsebene, React-Konsole), die ein **bestehendes NPM-Setup importieren*
 - Prometheus-`/metrics`
 
 **Administration**
-- Rollen, MFA (TOTP + Wiederherstellungscodes), OIDC-Single-Sign-On, API-Tokens
+- Rollen, MFA (TOTP + Wiederherstellungscodes), OIDC-Single-Sign-On, API-Tokens, Admin-Wiederherstellung per Befehlszeile (`reset-admin`)
 - IP-Allowlist für die Admin-Konsole, Audit-Log, Deployment-Historie
 - Standardmäßig SQLite oder PostgreSQL; Admin-Konsole in 8 Sprachen mit hellem und dunklem Design
 

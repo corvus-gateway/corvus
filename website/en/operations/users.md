@@ -18,7 +18,8 @@ Add teammates under **Users**.
 
 Every user can turn on two-step verification (TOTP) under **Account security**, with an
 authenticator app such as Google Authenticator or 1Password. Save the recovery codes shown once
-after setup. Administrators can **Reset MFA** for a user who lost their phone.
+after setup. Administrators can **Reset MFA** for a user who lost their phone. If the only administrator is
+locked out, see [I forgot the password or lost two-step verification](../reference/troubleshooting.md#i-forgot-the-password-or-lost-two-step-verification).
 
 ![Account security](../img/account.png){ .shot }
 

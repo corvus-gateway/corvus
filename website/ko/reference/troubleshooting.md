@@ -13,6 +13,21 @@ description: "자주 겪는 Corvus 문제 해결: 콘솔이 안 열릴 때, 502�
 - 설정 토큰을 잃어버렸나요? `docker compose logs corvus | grep setup_token`(첫 관리자를 만들기
   전까지만 표시됩니다).
 
+## 비밀번호를 잊었거나 2단계 인증을 잃어버렸습니다 { #i-forgot-the-password-or-lost-two-step-verification }
+
+다른 관리자가 있다면 **사용자** 화면에서 비밀번호를 재설정하거나 **MFA 초기화**를 해 줄 수 있습니다.
+관리자가 한 명뿐이라면 서버에서 다음을 실행하세요.
+
+```bash
+docker compose exec corvus corvus-control reset-admin
+```
+
+하나뿐인 활성 관리자에게 새 무작위 비밀번호를 만들어 출력하고, 그 계정의 세션을 끝내고, 그 계정이
+만든 API 토큰을 삭제합니다. 인증 앱과 복구 코드도 잃어버렸다면 `--disable-mfa`를, 관리자가 여럿이면
+`--email you@example.com`을 붙이세요. 로그인한 뒤 **계정 보안** 화면에서 비밀번호를 바꾸고 2단계 인증을
+다시 설정하세요. 재설정은 감사 로그에 남습니다. Corvus가 실행 중일 때도 쓸 수 있고 SQLite와
+PostgreSQL 모두 지원합니다.
+
 ## 502 Bad Gateway
 
 Corvus가 전달 대상에 접속하지 못합니다.

@@ -89,7 +89,7 @@ Go control plane, React console) that can **import an existing NPM setup**.
 - Prometheus `/metrics`
 
 **Administration**
-- Roles, MFA (TOTP + recovery codes), OIDC single sign-on, API tokens
+- Roles, MFA (TOTP + recovery codes), OIDC single sign-on, API tokens, admin recovery from the command line (`reset-admin`)
 - Admin-console IP allowlist, audit log, deployment history
 - SQLite by default or PostgreSQL; admin console in 8 languages with light and dark themes
 

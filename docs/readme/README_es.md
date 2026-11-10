@@ -90,7 +90,7 @@ OpenResty, plano de control en Go, consola en React) que puede **importar una co
 - `/metrics` de Prometheus
 
 **Administración**
-- Roles, MFA (TOTP + códigos de recuperación), inicio de sesión único con OIDC, tokens de API
+- Roles, MFA (TOTP + códigos de recuperación), inicio de sesión único con OIDC, tokens de API, recuperación del administrador desde la línea de comandos (`reset-admin`)
 - Lista de IP permitidas para la consola de administración, registro de auditoría, historial de despliegues
 - SQLite por defecto o PostgreSQL; consola de administración en 8 idiomas con temas claro y oscuro
 

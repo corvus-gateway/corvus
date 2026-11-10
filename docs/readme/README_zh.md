@@ -80,7 +80,7 @@ Corvus 不是 Nginx Proxy Manager 的分支。它是全新的实现（OpenResty 
 - Prometheus `/metrics`
 
 **管理**
-- 角色、MFA（TOTP + 恢复码）、OIDC 单点登录、API 令牌
+- 角色、MFA（TOTP + 恢复码）、OIDC 单点登录、API 令牌、通过命令行恢复管理员(`reset-admin`)
 - 管理控制台 IP 白名单、审计日志、部署历史
 - 默认使用 SQLite，也可使用 PostgreSQL；管理控制台支持 8 种语言及浅色/深色主题
 

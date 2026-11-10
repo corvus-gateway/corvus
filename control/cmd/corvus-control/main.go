@@ -131,6 +131,9 @@ func envBool(key string, def bool) bool {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "reset-admin" {
+		os.Exit(resetAdmin(os.Args[2:], os.Stdout, os.Stderr))
+	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
 	if err := run(); err != nil {
 		slog.Error("corvus-control stopped", "err", err)

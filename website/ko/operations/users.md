@@ -18,7 +18,9 @@ description: "Corvus 사용자와 로그인: 역할, 2단계 인증, SSO(OIDC), 
 
 모든 사용자는 **계정 보안**에서 Google Authenticator나 1Password 같은 인증 앱으로 2단계
 인증(TOTP)을 켤 수 있습니다. 설정 후 한 번만 보여 주는 복구 코드를 꼭 저장해 두세요. 휴대폰을 잃어버린
-사용자는 관리자가 **MFA 초기화**를 해 줄 수 있습니다.
+사용자는 관리자가 **MFA 초기화**를 해 줄 수 있습니다. 하나뿐인 관리자가 로그인하지 못한다면
+[비밀번호를 잊었거나 2단계 인증을 잃어버렸습니다](../reference/troubleshooting.md#i-forgot-the-password-or-lost-two-step-verification)를
+참고하세요.
 
 ![계정 보안](../img/account.png){ .shot }
 

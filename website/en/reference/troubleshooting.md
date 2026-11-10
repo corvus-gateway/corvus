@@ -13,6 +13,21 @@ description: "Fixes for common Corvus problems: the console won't open, 502/504/
 - Lost the setup token? `docker compose logs corvus | grep setup_token` (only shown until the first
   administrator exists).
 
+## I forgot the password or lost two-step verification
+
+Another administrator can reset your password or **Reset MFA** under **Users**. If you are the only
+administrator, run this on the server:
+
+```bash
+docker compose exec corvus corvus-control reset-admin
+```
+
+It prints a new random password for the only active administrator, ends their sessions and deletes
+the API tokens they created. Add `--disable-mfa` if you also lost your authenticator app and recovery
+codes, and `--email you@example.com` if there are several administrators. Sign in, change the
+password on the **Account** page and set up two-step verification again. The reset is recorded in
+the audit log. It works while Corvus is running, with SQLite and PostgreSQL.
+
 ## 502 Bad Gateway
 
 Corvus can't reach the forward target.

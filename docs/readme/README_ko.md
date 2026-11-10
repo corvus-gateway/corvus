@@ -89,7 +89,7 @@ Corvus는 Nginx Proxy Manager의 포크가 아닙니다. 기존 NPM 설정을 **
 - Prometheus `/metrics`
 
 **관리**
-- 역할, MFA(TOTP + 복구 코드), OIDC 싱글 사인온, API 토큰
+- 역할, MFA(TOTP + 복구 코드), OIDC 싱글 사인온, API 토큰, 명령줄로 관리자 계정 복구(`reset-admin`)
 - 관리 콘솔 IP 허용 목록, 감사 로그, 배포 이력
 - 기본 SQLite 또는 PostgreSQL, 라이트/다크 테마를 지원하는 8개 언어 관리 콘솔
 
