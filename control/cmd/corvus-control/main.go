@@ -498,7 +498,8 @@ func run() error {
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		// A save ends in a deploy: openresty -t (up to 30 s) and the reload check (up to
-		// 60 s) on slow devices. Long downloads and refreshes extend their own deadline.
+		// 15 s) on slow devices, plus rendering. Long downloads and refreshes extend
+		// their own deadline.
 		WriteTimeout: 150 * time.Second,
 		IdleTimeout:  120 * time.Second,
 		TLSConfig:    &tls.Config{MinVersion: tls.VersionTLS12},
