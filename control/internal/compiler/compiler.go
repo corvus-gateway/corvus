@@ -149,22 +149,27 @@ type target struct {
 	Advanced         string // location advanced configuration
 }
 
-// wsTimeoutS is the minimum upstream read/send timeout with WebSocket on: upgraded
-// connections (and event streams) stay open while idle.
+// wsTimeoutS is the upstream read/send timeout with WebSocket on when the host sets
+// none: upgraded connections (and event streams) stay open while idle.
 const wsTimeoutS = 3600
 
 // TimeoutS is the upstream read/send timeout in seconds (0 = nginx default, 60 s): the
-// host's value, at least wsTimeoutS with WebSocket on.
+// host's value as set, or wsTimeoutS with WebSocket on.
 func (t target) TimeoutS() int {
-	s := 0
-	if t.UpstreamTimeoutS != nil {
-		s = *t.UpstreamTimeoutS
+	switch {
+	case t.UpstreamTimeoutS != nil:
+		return *t.UpstreamTimeoutS
+	case t.Websocket:
+		return wsTimeoutS
 	}
-	if t.Websocket && s < wsTimeoutS {
-		s = wsTimeoutS
-	}
-	return s
+	return 0
 }
+
+// OwnReadTimeout and OwnSendTimeout report whether the location advanced configuration
+// sets the timeout itself: nginx rejects a second one in the same block ("directive is
+// duplicate"), so the generated one is left out.
+func (t target) OwnReadTimeout() bool { return topLevelDirective(t.Advanced, "proxy_read_timeout") }
+func (t target) OwnSendTimeout() bool { return topLevelDirective(t.Advanced, "proxy_send_timeout") }
 
 // targets builds the host's upstream targets: its forward host, the custom locations,
 // and the target of the root location (a custom location "/" replaces the forward host).

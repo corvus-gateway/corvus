@@ -51,8 +51,12 @@
             proxy_set_header Connection "";
 {{- end}}
 {{- with .TimeoutS}}
+{{- if not $.OwnReadTimeout}}
             proxy_read_timeout {{.}}s;
+{{- end}}
+{{- if not $.OwnSendTimeout}}
             proxy_send_timeout {{.}}s;
+{{- end}}
 {{- end}}
             proxy_pass {{.Scheme}}://{{.Name}}{{.Path}};
 {{- if .ErrorCodes}}

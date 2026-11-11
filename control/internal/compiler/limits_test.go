@@ -33,6 +33,12 @@ func TestRenderHostLimitsAndGzip(t *testing.T) {
 		{Domains: []string{"unlimited.example.com"}, MaxUploadMB: n(0), Websocket: true, UpstreamTimeoutS: n(30), Gzip: true}, // 4
 		{Domains: []string{"adv.example.com"}, MaxUploadMB: n(5), AdvancedConfig: "client_max_body_size 20m;\ngzip on;"},      // 5
 		{Domains: []string{"wslong.example.com"}, Websocket: true, UpstreamTimeoutS: n(7200)},                                 // 6
+		// location advanced configuration with its own timeouts: no duplicate directive
+		{Domains: []string{"wsloc.example.com"}, Websocket: true, Locations: []store.Location{
+			{Path: "/api", ForwardScheme: "http", ForwardHost: "api", ForwardPort: 81, AdvancedConfig: "proxy_read_timeout 600s;"},
+			{Path: "/", ForwardScheme: "http", ForwardHost: "web", ForwardPort: 82, AdvancedConfig: "proxy_send_timeout 5s;\nproxy_read_timeout 7s;"},
+			{Path: "/x", ForwardScheme: "http", ForwardHost: "x", ForwardPort: 83, AdvancedConfig: "# proxy_read_timeout 9s;"},
+		}}, // 7
 	} {
 		h.ForwardHost, h.ForwardPort, h.Enabled = "app", 8080, true
 		if err := st.SaveProxyHost(ctx, h); err != nil {
@@ -73,10 +79,17 @@ func TestRenderHostLimitsAndGzip(t *testing.T) {
 		{"1", nil, []string{"\n    client_max_body_size", "gzip off", "proxy_read_timeout", "proxy_send_timeout"}},
 		{"2", []string{"proxy_read_timeout 3600s;", "proxy_send_timeout 3600s;"}, []string{"gzip off"}},
 		{"3", []string{"client_max_body_size 2048m;", "gzip off;", "proxy_read_timeout 300s;", "proxy_send_timeout 300s;"}, nil},
-		// WebSocket: a shorter host timeout is raised to 1 h (upgraded connections idle)
-		{"4", []string{"client_max_body_size 0;", "proxy_read_timeout 3600s;", "proxy_send_timeout 3600s;"}, []string{"30s", "gzip off"}},
+		// an explicit timeout applies as set, also with WebSocket
+		{"4", []string{"client_max_body_size 0;", "proxy_read_timeout 30s;", "proxy_send_timeout 30s;"}, []string{"3600s", "gzip off"}},
 		{"5", []string{"client_max_body_size 20m;", "gzip on;"}, []string{"client_max_body_size 5m", "gzip off"}},
 		{"6", []string{"proxy_read_timeout 7200s;", "proxy_send_timeout 7200s;"}, []string{"3600s"}},
+		{"7", []string{"proxy_read_timeout 600s;", "proxy_send_timeout 5s;", "proxy_read_timeout 7s;", "proxy_read_timeout 9s;"}, nil},
+	}
+	// one timeout of each kind per location: /api keeps its read timeout, "/" both, and a
+	// commented-out directive does not count
+	if c := read("hosts/7.conf"); strings.Count(c, "proxy_read_timeout") != 4 || strings.Count(c, "proxy_send_timeout") != 3 ||
+		strings.Count(c, "proxy_read_timeout 3600s;") != 1 || strings.Count(c, "proxy_send_timeout 3600s;") != 2 {
+		t.Errorf("host 7: generated timeouts must give way to the location's own\n%s", c)
 	}
 	for _, tc := range cases {
 		conf := read("hosts/" + tc.id + ".conf")
