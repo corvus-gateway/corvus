@@ -115,6 +115,8 @@ Imported items are deployed right away.
   without automatic renewal; the preview warns about them.
 - **Streams:** on a bridge network, publish each stream port in `docker-compose.yml`
   (see [Streams](../proxy/streams.md)).
+- **Uploads:** imported proxy hosts get a 2000 MB **Max upload size**, like NPM, unless their
+  advanced configuration sets `client_max_body_size` itself.
 - **Going back:** `docker compose down` in Corvus, then `docker compose up -d` in NPM.
 
 ## NPM terms in Corvus

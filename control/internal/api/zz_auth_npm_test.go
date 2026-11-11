@@ -57,7 +57,7 @@ INSERT INTO access_list_auth VALUES (3, 5, 'bob', 'bob-secret');
 INSERT INTO proxy_host VALUES (1, '["shop.example.com"]', 'http', 'shop', 8080, 1, 1, 1, 1, 1, 1, 1, '', '[]', 0);
 INSERT INTO proxy_host VALUES (2, '["a.example.com"]', 'http', 'a', 80, 2, 2, 1, 0, 0, 0, 1, '', '[]', 0);
 INSERT INTO proxy_host VALUES (3, '["Taken.example.com"]', 'http', 't', 80, 0, 0, 0, 0, 0, 0, 1, '', '[]', 0);
-INSERT INTO proxy_host VALUES (4, '["nocert.example.com"]', 'http', 'n', 80, 0, 99, 1, 0, 0, 0, 1, '', '[]', 0);
+INSERT INTO proxy_host VALUES (4, '["nocert.example.com"]', 'http', 'n', 80, 0, 99, 1, 0, 0, 0, 1, 'client_max_body_size 10m;', '[]', 0);
 INSERT INTO proxy_host VALUES (5, '["broken-acl.example.com"]', 'http', 'b', 80, 3, 0, 0, 0, 0, 0, 1, '', '[]', 0);
 INSERT INTO proxy_host VALUES (6, '["bad-port.example.com"]', 'http', 'p', 0, 0, 0, 0, 0, 0, 0, 1, '', '[]', 0);
 INSERT INTO proxy_host VALUES (7, '["five.example.com"]', 'http', 'f', 80, 5, 5, 0, 0, 0, 0, 1, '', '[]', 0);
@@ -227,6 +227,18 @@ func TestZZNPMPreviewAndApply(t *testing.T) {
 	}
 	if u, _ := e.s.Store.UnknownHosts(ctx); u.Mode != store.UnknownClose {
 		t.Fatalf("unknown hosts: %+v", u)
+	}
+	// NPM's global 2000 MB upload limit, unless the advanced configuration sets its own
+	all, _ := e.s.Store.ListProxyHosts(ctx)
+	uploads := map[string]string{}
+	for _, h := range all {
+		uploads[h.Domains[0]] = "nil"
+		if h.MaxUploadMB != nil {
+			uploads[h.Domains[0]] = fmt.Sprint(*h.MaxUploadMB)
+		}
+	}
+	if uploads["shop.example.com"] != "2000" || uploads["nocert.example.com"] != "nil" || uploads["taken.example.com"] != "nil" {
+		t.Fatalf("upload limits: %v", uploads)
 	}
 	if zaAudited(t, e.s, "import.npm") != 2 || zaAudited(t, e.s, "dns_credential.create") != 1 {
 		t.Fatalf("audit: import=%d cred=%d", zaAudited(t, e.s, "import.npm"), zaAudited(t, e.s, "dns_credential.create"))

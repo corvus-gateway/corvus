@@ -304,6 +304,12 @@ func (s *Server) npmApply(w http.ResponseWriter, r *http.Request) {
 				SecurityHeaders: "off", // NPM has no security header presets
 				Gzip:            true,  // NPM compresses text responses (its client_max_body_size stays in the advanced configuration)
 				Locations:       h.CustomLocations}
+			if !strings.Contains(h.AdvancedConfig, "client_max_body_size") {
+				// NPM's bundled nginx.conf sets "client_max_body_size 2000m" for every host;
+				// keep that limit rather than Corvus's 100 MB default.
+				mb := 2000
+				xh.MaxUploadMB = &mb
+			}
 			if id, ok := certMap[h.CertificateID]; ok {
 				xh.CertificateID, xh.SSLForced = &id, h.SSLForced
 			} else if h.CertificateID != 0 {

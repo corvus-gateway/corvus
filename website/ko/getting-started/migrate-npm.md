@@ -115,6 +115,8 @@ NPM의 `./data`, `./letsencrypt` 볼륨의 호스트 경로를 사용하세요. 
   가져오며, 미리보기에서 경고를 보여 줍니다.
 - **스트림:** 브리지 네트워크에서는 스트림 포트마다 `docker-compose.yml`에서 포트를 공개해야
   합니다([스트림](../proxy/streams.md) 참고).
+- **업로드:** 가져온 프록시 호스트는 NPM과 같이 **최대 업로드 크기**가 2000 MB가 됩니다. 고급
+  설정에서 `client_max_body_size`를 직접 지정한 호스트는 그 값을 그대로 씁니다.
 - **되돌아가기:** Corvus에서 `docker compose down`을 실행한 뒤 NPM에서 `docker compose up -d`를
   실행합니다.
 
