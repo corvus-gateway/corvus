@@ -315,7 +315,9 @@ func sendRetry(ctx context.Context, kind string, t Target, m Message, sem chan s
 		if a.retryAfter > 0 {
 			wait = min(a.retryAfter, maxRetryAfter)
 		}
-		slog.Info("alert delivery failed, retrying", "kind", kind, "err", a.err, "in", wait)
+		// the error can quote a remote answer: keep it on one log line
+		msg := strings.NewReplacer("\n", " ", "\r", " ").Replace(a.err.Error())
+		slog.Info("alert delivery failed, retrying", "kind", kind, "err", msg, "in", wait)
 		if !sleep(ctx, wait) {
 			return last
 		}
