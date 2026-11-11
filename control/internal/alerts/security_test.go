@@ -26,7 +26,7 @@ func TestSecurityAlertsWithoutBlocking(t *testing.T) {
 	for i := 0; i < 150; i++ {
 		tc.Add(&traffic.Record{T: ts - float64(i%120), H: "shop.example.com", U: "/wp-admin", S: 404, IP: "192.0.2.77"})
 	}
-	e.Evaluate(ctx, now)
+	evalWait(e, ctx, now)
 	got := map[string]string{}
 	for _, a := range e.Active() {
 		got[a.Rule+"|"+a.Key] = a.Title

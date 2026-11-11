@@ -19,16 +19,16 @@ func TestUnderAttackAlerts(t *testing.T) {
 	e.Src.UnderAttack = func() []underattack.Transition { q := queue; queue = nil; return q }
 
 	queue = []underattack.Transition{{HostID: 3, Host: "shop.example.com", On: true, Reason: "300 requests/s over 30 s (threshold 200)", Since: t0, Until: t0.Add(15 * time.Minute), At: t0}}
-	e.Evaluate(ctx, t0)
+	evalWait(e, ctx, t0)
 	if h.n() != 1 {
 		t.Fatalf("on: %d messages", h.n())
 	}
-	e.Evaluate(ctx, t0.Add(30*time.Second))
+	evalWait(e, ctx, t0.Add(30*time.Second))
 	if h.n() != 1 {
 		t.Fatalf("one-shot alert repeated: %d", h.n())
 	}
 	queue = []underattack.Transition{{HostID: 3, Host: "shop.example.com", Reason: "x", Since: t0, Until: t0.Add(15 * time.Minute), At: t0.Add(20 * time.Minute)}}
-	e.Evaluate(ctx, t0.Add(20*time.Minute))
+	evalWait(e, ctx, t0.Add(20*time.Minute))
 	if h.n() != 2 {
 		t.Fatalf("off: %d messages", h.n())
 	}
@@ -54,7 +54,7 @@ func TestUnderAttackAlerts(t *testing.T) {
 		t.Fatal(err)
 	}
 	queue = []underattack.Transition{{HostID: 3, Host: "shop.example.com", On: true, At: t0.Add(time.Hour), Since: t0.Add(time.Hour), Until: t0.Add(2 * time.Hour)}}
-	e.Evaluate(ctx, t0.Add(time.Hour))
+	evalWait(e, ctx, t0.Add(time.Hour))
 	if h.n() != 2 || len(queue) != 0 {
 		t.Fatalf("disabled rule: %d messages, queue %d", h.n(), len(queue))
 	}

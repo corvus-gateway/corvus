@@ -70,7 +70,7 @@ func TestErrorRateFireCooldownResolve(t *testing.T) {
 	now := time.Now()
 	feed(tc, now, 80, 200)
 	feed(tc, now, 20, 502) // 20% 5xx
-	e.Evaluate(ctx, now)
+	evalWait(e, ctx, now)
 	if h.n() != 1 {
 		t.Fatalf("expected 1 firing notification, got %d", h.n())
 	}
@@ -81,15 +81,15 @@ func TestErrorRateFireCooldownResolve(t *testing.T) {
 	if len(e.Active()) != 1 {
 		t.Fatal("alert not active")
 	}
-	e.Evaluate(ctx, now.Add(time.Minute)) // within cooldown → silent
+	evalWait(e, ctx, now.Add(time.Minute)) // within cooldown → silent
 	if h.n() != 1 {
 		t.Fatalf("cooldown violated: %d messages", h.n())
 	}
-	e.Evaluate(ctx, now.Add(20*time.Minute)) // window passed, traffic gone: one quiet round is not enough
+	evalWait(e, ctx, now.Add(20*time.Minute)) // window passed, traffic gone: one quiet round is not enough
 	if h.n() != 1 {
 		t.Fatalf("resolved after a single quiet round: %d messages", h.n())
 	}
-	e.Evaluate(ctx, now.Add(20*time.Minute+30*time.Second)) // second quiet round → resolved
+	evalWait(e, ctx, now.Add(20*time.Minute+30*time.Second)) // second quiet round → resolved
 	if h.n() != 2 || !strings.Contains(h.msgs[1]["attachments"].([]any)[0].(map[string]any)["title"].(string), "Resolved") {
 		t.Fatalf("expected resolved message, got %d", h.n())
 	}
@@ -108,7 +108,7 @@ func TestSeverityAndEventFilters(t *testing.T) {
 	_ = e.Store.SaveAlertChannel(ctx, &c)
 	now := time.Now()
 	feed(tc, now, 60, 500)
-	e.Evaluate(ctx, now)
+	evalWait(e, ctx, now)
 	if h.n() != 0 {
 		t.Fatal("event filter ignored")
 	}
@@ -124,11 +124,11 @@ func TestDeployFailedOneShotAndLogin(t *testing.T) {
 		_ = e.Store.Audit(ctx, nil, "auth.login_failed", "x@y.z", nil, "9.9.9.9")
 	}
 	now := time.Now()
-	e.Evaluate(ctx, now)
+	evalWait(e, ctx, now)
 	if h.n() != 2 {
 		t.Fatalf("want deploy_failed + login_failed, got %d", h.n())
 	}
-	e.Evaluate(ctx, now.Add(30*time.Second))
+	evalWait(e, ctx, now.Add(30*time.Second))
 	if h.n() != 2 {
 		t.Fatalf("one-shot deploy alert repeated: %d", h.n())
 	}
@@ -181,12 +181,12 @@ func TestErrorRateFlapping(t *testing.T) {
 	now := time.Now()
 	feed(tc, now, 80, 200)
 	feed(tc, now, 20, 502)
-	e.Evaluate(ctx, now)
-	e.Evaluate(ctx, now.Add(20*time.Minute)) // gone for one round
+	evalWait(e, ctx, now)
+	evalWait(e, ctx, now.Add(20*time.Minute)) // gone for one round
 	feed(tc, now.Add(20*time.Minute+30*time.Second), 80, 200)
 	feed(tc, now.Add(20*time.Minute+30*time.Second), 20, 502)
-	e.Evaluate(ctx, now.Add(20*time.Minute+30*time.Second)) // back
-	for i := 1; i < h.n(); i++ {                            // an "ongoing" reminder after the cooldown is fine
+	evalWait(e, ctx, now.Add(20*time.Minute+30*time.Second)) // back
+	for i := 1; i < h.n(); i++ {                             // an "ongoing" reminder after the cooldown is fine
 		title := h.msgs[i]["attachments"].([]any)[0].(map[string]any)["title"].(string)
 		if strings.Contains(title, "Resolved") || !strings.Contains(title, "Still firing") {
 			t.Fatalf("flapping condition sent %q", title)
@@ -206,7 +206,7 @@ func TestCertExpiryNotForNeverIssued(t *testing.T) {
 	if err := e.Store.CreateCertificate(ctx, c); err != nil {
 		t.Fatal(err)
 	}
-	e.Evaluate(ctx, time.Now())
+	evalWait(e, ctx, time.Now())
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for _, m := range h.msgs {

@@ -222,7 +222,7 @@ func TestCovRoomsRedisCertAndResolved(t *testing.T) {
 	_ = e.Store.CreateCertificate(ctx, &store.Certificate{Name: "c", Kind: "custom", Domains: []string{"a.example"}, NotAfter: time.Now().Add(72 * time.Hour)})
 
 	now := time.Now()
-	e.Evaluate(ctx, now)
+	evalWait(e, ctx, now)
 	act := e.Active()
 	rules := map[string]bool{}
 	for _, a := range act {
@@ -249,8 +249,8 @@ func TestCovRoomsRedisCertAndResolved(t *testing.T) {
 
 	// conditions clear: resolved after two rounds, in Korean
 	waiting, redisUp = 0, true
-	e.Evaluate(ctx, now.Add(10*time.Second))
-	e.Evaluate(ctx, now.Add(20*time.Second))
+	evalWait(e, ctx, now.Add(10*time.Second))
+	evalWait(e, ctx, now.Add(20*time.Second))
 	h.mu.Lock()
 	n := len(h.msgs)
 	last := h.msgs[n-1]["attachments"].([]any)[0].(map[string]any)
@@ -262,7 +262,7 @@ func TestCovRoomsRedisCertAndResolved(t *testing.T) {
 		t.Fatalf("still active: %+v", left)
 	}
 	// after the cooldown the remaining alert is repeated as ongoing
-	e.Evaluate(ctx, now.Add(2*time.Minute))
+	evalWait(e, ctx, now.Add(2*time.Minute))
 	if h.n() != 6 {
 		t.Fatalf("ongoing reminder: %d", h.n())
 	}
