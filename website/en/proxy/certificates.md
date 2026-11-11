@@ -17,7 +17,8 @@ certificate with its expiry date and lets you issue, upload, renew and replace t
 
 Click **Issue with ACME** and follow the three steps (domains, validation, review). Issuing runs in
 the background; after a minute or two the status changes from **Issuing** to **Valid**.
-Certificates renew automatically 30 days before they expire.
+Certificates renew automatically 30 days before they expire (short-lived certificates in the last
+third of their lifetime). Up to two orders run at a time; the others wait their turn.
 
 ### HTTP-01 (default)
 
@@ -93,6 +94,9 @@ failed validation and what the CA received. You see it in three places:
 - **Container log** (`docker compose logs corvus`): `ACME issuance failed` with the certificate ID
   and the error.
 - **Alerts**: the certificate problem alert includes the error.
+
+A failed order is retried automatically: after 1 hour, then with doubling waits up to every
+12 hours, until it succeeds. **Renew now** retries right away.
 
 To retry without counting against Let's Encrypt's rate limits, issue a test certificate with the
 **Use the staging environment** option first.

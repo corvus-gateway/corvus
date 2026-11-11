@@ -18,6 +18,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -51,17 +53,56 @@ type Service struct {
 	// DirectorySuffix limits the override to certificates whose domains all end with it
 	// (e.g. ".corvus.test" → test CA for test domains, Let's Encrypt for real ones).
 	DirectorySuffix string
-	OnIssued        func(ctx context.Context) // re-deploys the gateway so new files are loaded
+	// OnIssued re-deploys the gateway so new files are loaded. Completions in a burst
+	// (an import, a renewal round) are combined into one call, DeployDelay (default
+	// 30 s) after the last of them; when no other order is in flight it runs sooner.
+	OnIssued    func(ctx context.Context)
+	DeployDelay time.Duration
+	// Concurrency bounds simultaneous orders (default 2); more wait for a slot.
+	Concurrency int
 
-	mu      sync.Mutex
-	tokens  map[string]string // HTTP-01 token → key authorization
-	running map[int64]bool
+	mu          sync.Mutex
+	tokens      map[string]string // HTTP-01 token → key authorization
+	running     map[int64]bool    // started orders, including those waiting for a slot
+	failures    map[int64]failure // failed orders and when to try again (in memory)
+	slots       chan struct{}
+	deployTimer *time.Timer
+
+	accountMu sync.Mutex // one account lookup/registration at a time
+}
+
+// failure tracks retries of a certificate whose last order failed.
+type failure struct {
+	attempts int
+	next     time.Time
+}
+
+// Retry backoff after a failed order: 1 h, doubling up to 12 h.
+const (
+	retryFirst = time.Hour
+	retryMax   = 12 * time.Hour
+)
+
+func retryAfter(attempts int) time.Duration {
+	d := retryFirst
+	for i := 1; i < attempts && d < retryMax; i++ {
+		d *= 2
+	}
+	return min(d, retryMax)
 }
 
 func (s *Service) init() {
 	if s.tokens == nil {
 		s.tokens = map[string]string{}
 		s.running = map[int64]bool{}
+		s.failures = map[int64]failure{}
+	}
+	if s.slots == nil {
+		n := s.Concurrency
+		if n <= 0 {
+			n = 2
+		}
+		s.slots = make(chan struct{}, n)
 	}
 }
 
@@ -144,6 +185,10 @@ func sameCA(regURI, dir string) bool {
 }
 
 func (s *Service) client(ctx context.Context, email string, staging bool, domains []string) (*lego.Client, *account, error) {
+	// Concurrent orders for the same email must not each register a new account:
+	// the first registers and stores it, the others then load it.
+	s.accountMu.Lock()
+	defer s.accountMu.Unlock()
 	acc := &account{email: email}
 	dir := s.directory(staging, domains)
 	stored, err := s.Store.ACMEAccount(ctx, email, staging)
@@ -187,6 +232,7 @@ func (s *Service) client(ctx context.Context, email string, staging bool, domain
 	cfg := lego.NewConfig(acc)
 	cfg.CADirURL = dir
 	cfg.Certificate.KeyType = certcrypto.EC256
+	cfg.Certificate.Timeout = 5 * time.Minute // a busy CA can take longer than lego's 30 s to finalize
 	cfg.UserAgent = "corvus"
 	cl, err := lego.NewClient(cfg)
 	if err != nil {
@@ -217,7 +263,8 @@ func (s *Service) client(ctx context.Context, email string, staging bool, domain
 // ---------------------------------------------------------------- issuance
 
 // Start issues (or renews) certificate id in the background; a second call while
-// one is running is ignored.
+// one is running or waiting is ignored. At most Concurrency orders run at once
+// (CA rate limits, a small host); the others wait for a slot.
 func (s *Service) Start(id int64) {
 	s.mu.Lock()
 	s.init()
@@ -226,6 +273,7 @@ func (s *Service) Start(id int64) {
 		return
 	}
 	s.running[id] = true
+	slots := s.slots
 	s.mu.Unlock()
 	go func() {
 		defer func() {
@@ -233,13 +281,52 @@ func (s *Service) Start(id int64) {
 			delete(s.running, id)
 			s.mu.Unlock()
 		}()
+		slots <- struct{}{}
+		defer func() { <-slots }()
 		// No overall deadline: lego does not honour the context during Obtain (DNS
 		// propagation can take long), and an expired context would then make the
 		// steps after a successful issuance fail and leave the certificate "pending".
-		if err := s.issue(context.Background(), id); err != nil {
-			slog.Warn("ACME issuance failed", "certificate", id, "err", err)
+		err := s.issue(context.Background(), id)
+		s.mu.Lock()
+		if err != nil {
+			f := s.failures[id]
+			f.attempts++
+			f.next = time.Now().Add(retryAfter(f.attempts))
+			s.failures[id] = f
+			slog.Warn("ACME issuance failed", "certificate", id, "err", err, "retry_at", f.next.Format(time.RFC3339))
+		} else {
+			delete(s.failures, id)
 		}
+		s.mu.Unlock()
 	}()
+}
+
+// issued schedules the gateway redeploy after certificate id was written: one
+// call for a burst of completions, DeployDelay after the last; about a second when
+// no other order is running or waiting.
+func (s *Service) issued(id int64) {
+	if s.OnIssued == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.init()
+	delay := s.DeployDelay
+	if delay <= 0 {
+		delay = 30 * time.Second
+	}
+	others := len(s.running)
+	if s.running[id] {
+		others--
+	}
+	if others == 0 {
+		delay = min(delay, time.Second)
+	}
+	if s.deployTimer == nil {
+		s.deployTimer = time.AfterFunc(delay, func() { s.OnIssued(context.Background()) })
+		return
+	}
+	s.deployTimer.Reset(delay)
 }
 
 func (s *Service) issue(ctx context.Context, id int64) error {
@@ -296,44 +383,99 @@ func (s *Service) issue(ctx context.Context, id int64) error {
 		return err
 	}
 	slog.Info("ACME certificate issued", "certificate", id, "domains", info.Domains, "not_after", info.NotAfter)
-	if s.OnIssued != nil {
-		s.OnIssued(ctx)
-	}
+	s.issued(id)
 	return nil
 }
 
-// RenewLoop renews ACME certificates that expire within 30 days.
+// renewCheckEvery is how often RenewLoop looks for due orders; it only starts
+// those whose renewal window or retry time has been reached.
+const renewCheckEvery = 15 * time.Minute
+
+// RenewLoop renews ACME certificates in their renewal window, resumes orders
+// interrupted by a restart and retries failed orders with backoff.
 func (s *Service) RenewLoop(ctx context.Context) {
-	check := func() {
-		list, err := s.Store.ListCertificates(ctx)
-		if err != nil {
-			return
-		}
-		for _, c := range list {
-			if c.Kind != "acme" {
-				continue
-			}
-			switch {
-			case c.Status == "pending":
-				// an order interrupted by a restart (Start ignores orders still running)
-				slog.Info("resuming ACME order", "certificate", c.ID)
-				s.Start(c.ID)
-			case c.AutoRenew && time.Until(c.NotAfter) < 30*24*time.Hour:
-				slog.Info("renewing ACME certificate", "certificate", c.ID, "not_after", c.NotAfter)
-				s.Start(c.ID)
-			}
-		}
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(time.Minute):
 	}
-	t := time.NewTicker(12 * time.Hour)
+	s.checkDue(ctx, time.Now())
+	t := time.NewTicker(renewCheckEvery)
 	defer t.Stop()
-	time.Sleep(time.Minute)
-	check()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			check()
+			s.checkDue(ctx, time.Now())
 		}
 	}
+}
+
+// checkDue starts the orders that are due at now.
+func (s *Service) checkDue(ctx context.Context, now time.Time) {
+	list, err := s.Store.ListCertificates(ctx)
+	if err != nil {
+		return
+	}
+	s.mu.Lock()
+	s.init()
+	failures := make(map[int64]failure, len(s.failures))
+	exists := map[int64]bool{}
+	for _, c := range list {
+		exists[c.ID] = true
+	}
+	for id, f := range s.failures {
+		if !exists[id] {
+			delete(s.failures, id) // certificate deleted
+			continue
+		}
+		failures[id] = f
+	}
+	s.mu.Unlock()
+	for _, c := range list {
+		if c.Kind != "acme" {
+			continue
+		}
+		f, failed := failures[c.ID]
+		switch {
+		case failed && now.Before(f.next):
+			// the last order failed: wait for the retry time
+		case failed && (c.AutoRenew || c.Status != "valid"):
+			slog.Info("retrying failed ACME order", "certificate", c.ID, "attempt", f.attempts+1)
+			s.Start(c.ID)
+		case c.Status == "pending":
+			// an order interrupted by a restart (Start ignores orders still running)
+			slog.Info("resuming ACME order", "certificate", c.ID)
+			s.Start(c.ID)
+		case c.AutoRenew && c.NotAfter.Sub(now) < s.renewWindow(c.ID):
+			slog.Info("renewing ACME certificate", "certificate", c.ID, "not_after", c.NotAfter)
+			s.Start(c.ID)
+		}
+	}
+}
+
+// renewWindow is how long before expiry a certificate is renewed: 30 days, or a
+// third of its lifetime for short-lived certificates.
+func (s *Service) renewWindow(id int64) time.Duration {
+	const window = 30 * 24 * time.Hour
+	if s.CertDir == nil {
+		return window
+	}
+	raw, err := os.ReadFile(filepath.Join(s.CertDir(id), "fullchain.pem"))
+	if err != nil {
+		return window
+	}
+	blk, _ := pem.Decode(raw)
+	if blk == nil {
+		return window
+	}
+	leaf, err := x509.ParseCertificate(blk.Bytes)
+	if err != nil {
+		return window
+	}
+	if life := leaf.NotAfter.Sub(leaf.NotBefore); life > 0 {
+		return min(window, life/3)
+	}
+	return window
 }

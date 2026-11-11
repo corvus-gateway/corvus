@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -50,6 +51,7 @@ type fakeCA struct {
 	gate       chan struct{} // when set, newOrder waits for it to be closed
 	validity   time.Duration
 	challenges int
+	atGate     int // orders waiting at the gate
 }
 
 func newFakeCA(t *testing.T, svc *Service) *fakeCA {
@@ -182,6 +184,7 @@ func (f *fakeCA) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if g := f.gate; g != nil {
+			f.atGate++
 			f.mu.Unlock()
 			<-g
 			f.mu.Lock()
@@ -247,15 +250,16 @@ func (f *fakeCA) serve(w http.ResponseWriter, r *http.Request) {
 }
 
 // acmeEnv is a Service wired to a fake CA and a temporary certificate directory.
-func acmeEnv(t *testing.T) (*Service, *fakeCA, *int) {
+func acmeEnv(t *testing.T) (*Service, *fakeCA, *atomic.Int32) {
 	t.Helper()
 	s := testService(t)
 	f := newFakeCA(t, s)
 	s.Directory = f.dir()
 	dir := t.TempDir()
 	s.CertDir = func(id int64) string { return filepath.Join(dir, strconv.FormatInt(id, 10)) }
-	issued := new(int)
-	s.OnIssued = func(context.Context) { *issued++ }
+	issued := new(atomic.Int32)
+	s.OnIssued = func(context.Context) { issued.Add(1) }
+	s.DeployDelay = 10 * time.Millisecond
 	return s, f, issued
 }
 
@@ -282,8 +286,8 @@ func TestCovIssueHTTP01EndToEnd(t *testing.T) {
 	if strings.Join(c.Domains, ",") != "www.example.com,example.com" && strings.Join(c.Domains, ",") != "example.com,www.example.com" {
 		t.Fatalf("domains = %v", c.Domains)
 	}
-	if *issued != 1 || f.accounts != 1 || f.challenges != 2 {
-		t.Fatalf("issued=%d accounts=%d challenges=%d", *issued, f.accounts, f.challenges)
+	if waitCount(issued, 1) != 1 || f.accounts != 1 || f.challenges != 2 {
+		t.Fatalf("issued=%d accounts=%d challenges=%d", issued.Load(), f.accounts, f.challenges)
 	}
 	chain, err := os.ReadFile(filepath.Join(s.CertDir(id), "fullchain.pem"))
 	if err != nil || strings.Count(string(chain), "BEGIN CERTIFICATE") != 2 {
@@ -313,8 +317,8 @@ func TestCovIssueHTTP01EndToEnd(t *testing.T) {
 	if f.accounts != 1 {
 		t.Fatalf("stored account must be reused, registrations = %d", f.accounts)
 	}
-	if *issued != 2 {
-		t.Fatalf("OnIssued calls = %d", *issued)
+	if waitCount(issued, 2) != 2 {
+		t.Fatalf("OnIssued calls = %d", issued.Load())
 	}
 }
 
@@ -386,7 +390,7 @@ func TestCovRenewalFailureKeepsValidCertificate(t *testing.T) {
 	if c, _ = s.Store.CertificateByID(ctx, expired); c.Status != "error" {
 		t.Fatalf("expired certificate renewal failure must show error, got %q", c.Status)
 	}
-	if *issued != 0 {
+	if issued.Load() != 0 {
 		t.Fatal("nothing was issued")
 	}
 }
