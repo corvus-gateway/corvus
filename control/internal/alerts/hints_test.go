@@ -22,7 +22,7 @@ func TestACMEFailedAlertHasHint(t *testing.T) {
 	if err := e.Store.CreateCertificate(ctx, c); err != nil {
 		t.Fatal(err)
 	}
-	e.Evaluate(ctx, time.Now())
+	evalWait(e, ctx, time.Now())
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if len(h.msgs) != 1 {

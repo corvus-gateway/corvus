@@ -255,39 +255,75 @@ type attempt struct {
 }
 
 // Delivery retries: a failed delivery is attempted again after each of these delays
-// (a 429's Retry-After replaces the delay, capped at maxRetryAfter).
+// (a 429's Retry-After replaces the delay, capped at maxRetryAfter). Retry-After is
+// read up to maxRetryAt: the alert's next round waits at least that long.
 var (
 	retryDelays   = []time.Duration{5 * time.Second, 30 * time.Second}
 	maxRetryAfter = 2 * time.Minute
+	maxRetryAt    = time.Hour
 )
 
+// The clock of deliveries; tests replace it to simulate time.
+var (
+	clockNow = time.Now
+	sleep    = func(ctx context.Context, d time.Duration) bool { // false: ctx ended first
+		timer := time.NewTimer(d)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return false
+		case <-timer.C:
+			return true
+		}
+	}
+)
+
+// delivery is the outcome of a delivery with retries.
+type delivery struct {
+	code       int
+	err        error
+	retryAfter time.Duration // Retry-After of the last attempt (429)
+}
+
 // sendRetry delivers m, retrying transport errors, 408, 429 and 5xx responses;
-// other 4xx answers (a wrong URL or token) are final. Each attempt has its own timeout.
-func sendRetry(ctx context.Context, kind string, t Target, m Message) (int, error) {
+// other 4xx answers (a wrong URL or token) are final. Each attempt has its own timeout
+// and holds a slot of sem (if any); the wait between attempts does not.
+func sendRetry(ctx context.Context, kind string, t Target, m Message, sem chan struct{}) delivery {
+	var last delivery
 	for i := 0; ; i++ {
+		if sem != nil {
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				if last.err == nil {
+					last.err = ctx.Err()
+				}
+				return last
+			}
+		}
 		actx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		a := send(actx, kind, t, m)
 		cancel()
+		if sem != nil {
+			<-sem
+		}
+		last = delivery{code: a.code, err: a.err, retryAfter: a.retryAfter}
 		if a.err == nil || !a.retry || i >= len(retryDelays) {
-			return a.code, a.err
+			return last
 		}
 		wait := retryDelays[i]
 		if a.retryAfter > 0 {
-			wait = a.retryAfter
+			wait = min(a.retryAfter, maxRetryAfter)
 		}
 		slog.Info("alert delivery failed, retrying", "kind", kind, "err", a.err, "in", wait)
-		timer := time.NewTimer(wait)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return a.code, a.err
-		case <-timer.C:
+		if !sleep(ctx, wait) {
+			return last
 		}
 	}
 }
 
 // parseRetryAfter reads a Retry-After header (seconds or an HTTP date), capped at
-// maxRetryAfter; 0 when absent or unreadable.
+// maxRetryAt; 0 when absent or unreadable.
 func parseRetryAfter(v string, now time.Time) time.Duration {
 	v = strings.TrimSpace(v)
 	if v == "" {
@@ -297,10 +333,10 @@ func parseRetryAfter(v string, now time.Time) time.Duration {
 		if n <= 0 {
 			return 0
 		}
-		return min(time.Duration(n)*time.Second, maxRetryAfter)
+		return time.Duration(min(n, int(maxRetryAt/time.Second))) * time.Second
 	}
 	if at, err := http.ParseTime(v); err == nil && at.After(now) {
-		return min(at.Sub(now), maxRetryAfter)
+		return min(at.Sub(now), maxRetryAt)
 	}
 	return 0
 }
@@ -334,7 +370,7 @@ func send(ctx context.Context, kind string, t Target, m Message) attempt {
 		a := attempt{code: resp.StatusCode, err: fmt.Errorf("HTTP %d", resp.StatusCode)}
 		switch {
 		case resp.StatusCode == http.StatusTooManyRequests:
-			a.retry, a.retryAfter = true, parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())
+			a.retry, a.retryAfter = true, parseRetryAfter(resp.Header.Get("Retry-After"), clockNow())
 		case resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode >= 500:
 			a.retry = true
 		}

@@ -19,6 +19,12 @@ func evalWait(e *Engine, ctx context.Context, now time.Time) {
 	e.wait()
 }
 
+// sendR is sendRetry without a concurrency bound, as (code, error).
+func sendR(ctx context.Context, kind string, t Target, m Message) (int, error) {
+	d := sendRetry(ctx, kind, t, m, nil)
+	return d.code, d.err
+}
+
 // fastRetries shortens the delivery retry delays for a test.
 func fastRetries(t *testing.T) {
 	t.Helper()
@@ -49,13 +55,13 @@ func flaky(t *testing.T, header http.Header, codes ...int) (*httptest.Server, *a
 func TestRetryFailsTwiceThenSucceeds(t *testing.T) {
 	fastRetries(t)
 	srv, n := flaky(t, nil, 502, 503)
-	code, err := sendRetry(context.Background(), "slack", Target{URL: srv.URL}, Message{Title: "t", Time: time.Now()})
+	code, err := sendR(context.Background(), "slack", Target{URL: srv.URL}, Message{Title: "t", Time: time.Now()})
 	if err != nil || code != 200 || n.Load() != 3 {
 		t.Fatalf("code=%d err=%v attempts=%d", code, err, n.Load())
 	}
 	// three failures: the last error is reported
 	srv, n = flaky(t, nil, 500, 500, 500, 500)
-	if code, err := sendRetry(context.Background(), "slack", Target{URL: srv.URL}, Message{Time: time.Now()}); err == nil || code != 500 || n.Load() != 3 {
+	if code, err := sendR(context.Background(), "slack", Target{URL: srv.URL}, Message{Time: time.Now()}); err == nil || code != 500 || n.Load() != 3 {
 		t.Fatalf("code=%d err=%v attempts=%d", code, err, n.Load())
 	}
 }
@@ -64,12 +70,12 @@ func TestRetryNotForClientErrors(t *testing.T) {
 	fastRetries(t)
 	for _, c := range []int{400, 401, 404} {
 		srv, n := flaky(t, nil, c)
-		if code, err := sendRetry(context.Background(), "discord", Target{URL: srv.URL}, Message{Time: time.Now()}); err == nil || code != c || n.Load() != 1 {
+		if code, err := sendR(context.Background(), "discord", Target{URL: srv.URL}, Message{Time: time.Now()}); err == nil || code != c || n.Load() != 1 {
 			t.Fatalf("%d: code=%d err=%v attempts=%d", c, code, err, n.Load())
 		}
 	}
 	srv, n := flaky(t, nil, 408)
-	if _, err := sendRetry(context.Background(), "discord", Target{URL: srv.URL}, Message{Time: time.Now()}); err != nil || n.Load() != 2 {
+	if _, err := sendR(context.Background(), "discord", Target{URL: srv.URL}, Message{Time: time.Now()}); err != nil || n.Load() != 2 {
 		t.Fatalf("408 must be retried: err=%v attempts=%d", err, n.Load())
 	}
 }
@@ -80,7 +86,7 @@ func TestRetryHonoursRetryAfter(t *testing.T) {
 	maxRetryAfter = 50 * time.Millisecond               // and it is capped
 	srv, n := flaky(t, http.Header{"Retry-After": {"3600"}}, 429)
 	start := time.Now()
-	if _, err := sendRetry(context.Background(), "slack", Target{URL: srv.URL}, Message{Time: time.Now()}); err != nil || n.Load() != 2 {
+	if _, err := sendR(context.Background(), "slack", Target{URL: srv.URL}, Message{Time: time.Now()}); err != nil || n.Load() != 2 {
 		t.Fatalf("err=%v attempts=%d", err, n.Load())
 	}
 	if d := time.Since(start); d < 40*time.Millisecond || d > 10*time.Second {
@@ -91,7 +97,7 @@ func TestRetryHonoursRetryAfter(t *testing.T) {
 	srv, n = flaky(t, nil, 503, 503, 503)
 	retryDelays = []time.Duration{time.Hour}
 	time.AfterFunc(20*time.Millisecond, cancel)
-	if _, err := sendRetry(ctx, "slack", Target{URL: srv.URL}, Message{Time: time.Now()}); err == nil || n.Load() != 1 {
+	if _, err := sendR(ctx, "slack", Target{URL: srv.URL}, Message{Time: time.Now()}); err == nil || n.Load() != 1 {
 		t.Fatalf("cancelled: err=%v attempts=%d", err, n.Load())
 	}
 }
@@ -99,7 +105,7 @@ func TestRetryHonoursRetryAfter(t *testing.T) {
 func TestParseRetryAfter(t *testing.T) {
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	for v, want := range map[string]time.Duration{
-		"": 0, "7": 7 * time.Second, "-1": 0, "0": 0, "99999": 2 * time.Minute, "soon": 0,
+		"": 0, "7": 7 * time.Second, "-1": 0, "0": 0, "99999": time.Hour, "soon": 0,
 		now.Add(30 * time.Second).Format(http.TimeFormat): 30 * time.Second,
 		now.Add(-time.Minute).Format(http.TimeFormat):     0,
 	} {
@@ -145,7 +151,7 @@ func TestFailedNotificationRetriedSoon(t *testing.T) {
 	if hits.Load() != 3 {
 		t.Fatalf("retried within the pause: %d", hits.Load())
 	}
-	evalWait(e, ctx, now.Add(failedRetry)) // well within the 15 min cooldown, but not yet delivered
+	evalWait(e, ctx, now.Add(failedRetry+time.Second)) // after the pause (from the end of the delivery), within the cooldown
 	hist, _ = e.Store.ListAlerts(ctx, 10)
 	if hits.Load() != 4 || len(hist) != 2 || !hist[0].Results[0].OK || hist[0].Status != "firing" {
 		t.Fatalf("attempts=%d history=%+v", hits.Load(), hist)

@@ -60,7 +60,9 @@ alerts are also shown at the top of the dashboard.
 
 A failed delivery is retried twice (after 5 and 30 seconds; a `429` response's `Retry-After` is
 followed, up to 2 minutes). Other `4xx` answers, such as a wrong URL or token, are not retried. If
-no channel received a firing alert, it is sent again 2 minutes later while it is still firing.
+no channel received a firing alert, it is sent again while it is still firing: 2 minutes after the
+failed delivery, or later if the service asked for that with `Retry-After`. The history shows the
+first failed delivery and the one that gets through, not every retry.
 
 A failed delivery shows only the HTTP status (for example `HTTP 404`) or the connection error with
 the destination's host name. The path of the webhook URL, which holds its secret, and the response
