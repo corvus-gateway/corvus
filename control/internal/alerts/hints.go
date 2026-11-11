@@ -6,7 +6,7 @@ var hintTexts = map[string]map[string]string{
 	"ko": {
 		"acme.rate_limited":       "Let's Encrypt 발급 한도에 걸렸습니다. 같은 도메인으로 반복 발급하지 말고 오류에 표시된 시각 이후 다시 시도하세요.",
 		"acme.dns_servfail":       "도메인의 네임서버가 _acme-challenge 조회에 SERVFAIL/REFUSED로 응답합니다. DNS 서비스에서 DNSSEC·NS 위임 설정을 확인하세요.",
-		"acme.dns_propagation":    "_acme-challenge TXT 레코드가 제한 시간 안에 모든 네임서버에 퍼지지 않았습니다. 잠시 후 다시 시도하고, 도메인의 NS가 DNS 자격 증명의 공급자를 가리키는지 확인하세요.",
+		"acme.dns_propagation":    "_acme-challenge TXT 레코드가 제한 시간 안에 모든 네임서버에 반영되지 않았습니다. 잠시 후 다시 시도하고, 도메인의 NS가 DNS 인증 정보의 공급자를 가리키는지 확인하세요.",
 		"acme.dns_credential":     "DNS 공급자가 TXT 레코드 생성을 거부했습니다. API 토큰의 권한(해당 영역 DNS 편집)과 영역 이름을 확인하세요.",
 		"acme.dns_lookup":         "도메인의 권한 네임서버를 찾지 못했습니다. 도메인이 등록·위임되어 있고 Corvus 서버에서 DNS 조회가 되는지 확인하세요.",
 		"acme.caa":                "도메인의 CAA 레코드가 Let's Encrypt 발급을 막고 있습니다. CAA에 letsencrypt.org를 추가하거나 레코드를 지우세요.",

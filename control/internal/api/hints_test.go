@@ -70,7 +70,7 @@ func (g *notAcceptGW) WaitActive(_ context.Context, name string, _ time.Duration
 // reload_rejected (not 500) and recorded as a failed version.
 func TestReloadRejected(t *testing.T) {
 	e := newFullEnv(t)
-	e.must(200, "POST", "/api/deployments", map[string]any{"message": "first"})
+	e.must(201, "POST", "/api/deployments", map[string]any{"message": "first"})
 	e.s.Deployer.Runner = &notAcceptGW{}
 	code, m := e.call("POST", "/api/deployments", map[string]any{"message": "port clash"})
 	if code != 422 || m["error"] != "reload_rejected" || m["hint"] != "deploy.port_in_use" {
