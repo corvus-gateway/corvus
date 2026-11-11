@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"corvus/control/internal/hints"
 	"corvus/control/internal/store"
 )
 
@@ -126,6 +127,8 @@ type Status struct {
 	CheckedAt   *time.Time `json:"checked_at,omitempty"`
 	Error       string     `json:"error,omitempty"`
 	Settings    Settings   `json:"settings"`
+
+	ErrorHint string `json:"error_hint,omitempty"` // classifies Error (internal/hints)
 }
 
 type Service struct {
@@ -190,7 +193,7 @@ func (s *Service) Status(ctx context.Context) Status {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return Status{Serial: s.active.Serial, Version: s.active.Version, Source: s.source, Signatures: len(s.active.Signatures),
-		Templates: len(s.active.Templates), InstalledAt: s.installed, CheckedAt: s.checked, Error: s.lastErr, Settings: s.Settings(ctx)}
+		Templates: len(s.active.Templates), InstalledAt: s.installed, CheckedAt: s.checked, Error: s.lastErr, ErrorHint: hints.Net(s.lastErr), Settings: s.Settings(ctx)}
 }
 
 // Install verifies and activates a bundle (from the update URL or an upload).

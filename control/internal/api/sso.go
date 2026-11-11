@@ -33,6 +33,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"corvus/control/internal/auth"
+	"corvus/control/internal/hints"
 	"corvus/control/internal/seal"
 	"corvus/control/internal/sso"
 	"corvus/control/internal/store"
@@ -293,7 +294,7 @@ func (s *Server) putSSOSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if c.Enabled {
 		if _, _, err := sso.Discover(ctx, nil, c.Issuer); err != nil {
-			fail(w, validate.Errors{{Field: "issuer", Code: "discovery", Message: trimMsg(err.Error())}})
+			failFieldHint(w, "issuer", "discovery", trimMsg(err.Error()), hints.Net(err.Error()))
 			return
 		}
 	}
@@ -317,7 +318,7 @@ func (s *Server) testSSODiscovery(w http.ResponseWriter, r *http.Request) {
 	}
 	_, d, err := sso.Discover(r.Context(), nil, strings.TrimSpace(in.Issuer))
 	if err != nil {
-		fail(w, validate.Errors{{Field: "issuer", Code: "discovery", Message: trimMsg(err.Error())}})
+		failFieldHint(w, "issuer", "discovery", trimMsg(err.Error()), hints.Net(err.Error()))
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "discovery": d})

@@ -136,6 +136,11 @@ func (d *Deployer) Apply(ctx context.Context, by *int64, message string, mutate 
 				testErr.VersionID = fv.ID
 			}
 		}
+		if na := (*gateway.NotAcceptedError)(nil); testErr == nil && errors.As(err, &na) {
+			// the reload did not take effect (e.g. a port in use): record it like a rejected test
+			rev, _ := d.Store.ConfigRev(ctx)
+			_ = d.Store.CreateVersion(ctx, &store.ConfigVersion{CreatedBy: by, Message: message, Status: "failed", TestOutput: na.Error(), ConfigRev: rev})
+		}
 		return nil, err
 	}
 	d.prune(ctx)

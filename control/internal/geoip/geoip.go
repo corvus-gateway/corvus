@@ -32,6 +32,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"corvus/control/internal/hints"
 )
 
 const (
@@ -52,6 +54,8 @@ type Status struct {
 	Error       string     `json:"error"`
 	Attribution string     `json:"attribution"`
 	Disabled    bool       `json:"disabled"`
+
+	ErrorHint string `json:"error_hint,omitempty"` // classifies Error (internal/hints)
 }
 
 type Service struct {
@@ -88,6 +92,7 @@ func (s *Service) Status() Status {
 	}
 	s.mu.Lock()
 	st.Error = s.lastErr
+	st.ErrorHint = hints.Net(st.Error)
 	s.mu.Unlock()
 	return st
 }

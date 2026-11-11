@@ -361,7 +361,7 @@ func (e *Engine) detect(ctx context.Context, set Settings, tr map[string]string,
 			}
 			if acmeOn && c.Kind == "acme" && c.LastError != "" && c.Status != "pending" {
 				out = append(out, finding{rule: "acme_failed", key: key, title: fmt.Sprintf(tr["acme_failed"], name),
-					text: trim(c.LastError, 400), fields: [][2]string{{tr["certificate"], name}, {tr["status"], c.Status}}})
+					text: trim(c.LastError, 400) + hintSuffix(set.Language, c.LastErrorHint), fields: [][2]string{{tr["certificate"], name}, {tr["status"], c.Status}}})
 			}
 		}
 	}

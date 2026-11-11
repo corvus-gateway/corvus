@@ -21,6 +21,8 @@ import (
 	"corvus/control/internal/autoban"
 	"corvus/control/internal/compiler"
 	"corvus/control/internal/deploy"
+	"corvus/control/internal/gateway"
+	"corvus/control/internal/hints"
 	"corvus/control/internal/history"
 	"corvus/control/internal/live"
 	"corvus/control/internal/store"
@@ -324,6 +326,26 @@ func writeErr(w http.ResponseWriter, code int, kind, msg string) {
 	writeJSON(w, code, map[string]any{"error": kind, "message": msg})
 }
 
+// writeErrHint is writeErr with a hint code (internal/hints) the console turns into
+// an actionable sentence; an empty hint is omitted.
+func writeErrHint(w http.ResponseWriter, code int, kind, msg, hint string) {
+	m := map[string]any{"error": kind, "message": msg}
+	if hint != "" {
+		m["hint"] = hint
+	}
+	writeJSON(w, code, m)
+}
+
+// failFieldHint reports a validation error on one field together with a hint code.
+func failFieldHint(w http.ResponseWriter, field, code, msg, hint string) {
+	verr := validate.Errors{{Field: field, Code: code, Message: msg}}
+	m := map[string]any{"error": "validation", "message": verr.Error(), "fields": verr}
+	if hint != "" {
+		m["hint"] = hint
+	}
+	writeJSON(w, http.StatusUnprocessableEntity, m)
+}
+
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	dec := json.NewDecoder(r.Body)
@@ -349,12 +371,17 @@ func fail(w http.ResponseWriter, err error) {
 	var verr validate.Errors
 	var terr *deploy.TestError
 	var cerr conflictError
+	var naerr *gateway.NotAcceptedError
 	switch {
 	case errors.As(err, &verr):
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": "validation", "message": verr.Error(), "fields": verr})
 	case errors.As(err, &terr):
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": "config_rejected",
-			"message": "the gateway rejected the generated configuration; nothing was changed", "output": terr.Output, "version_id": terr.VersionID})
+			"message": "the gateway rejected the generated configuration; nothing was changed", "output": terr.Output, "version_id": terr.VersionID,
+			"hint": hints.Deploy(terr.Output)})
+	case errors.As(err, &naerr):
+		// nginx -t passed but the reload did not take effect (e.g. a port already in use)
+		writeErrHint(w, http.StatusUnprocessableEntity, "reload_rejected", naerr.Error(), hints.DeployPortInUse)
 	case errors.As(err, &cerr):
 		writeErr(w, http.StatusConflict, "conflict", cerr.Error())
 	case errors.Is(err, store.ErrNotFound):

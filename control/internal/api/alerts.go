@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"corvus/control/internal/alerts"
+	"corvus/control/internal/hints"
 	"corvus/control/internal/seal"
 	"corvus/control/internal/store"
 	"corvus/control/internal/validate"
@@ -230,7 +231,7 @@ func (s *Server) testChannel(w http.ResponseWriter, r *http.Request) {
 	}
 	res := s.Alerts.Test(r.Context(), *c)
 	s.audit(r, "alert_channel.test", fmt.Sprintf("alert_channel:%d", id), map[string]any{"ok": res.OK})
-	writeJSON(w, 200, map[string]any{"ok": res.OK, "error": res.Error})
+	writeJSON(w, 200, map[string]any{"ok": res.OK, "error": res.Error, "hint": hints.Net(res.Error)})
 }
 
 func (s *Server) getAlertRules(w http.ResponseWriter, r *http.Request) {

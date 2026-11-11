@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"time"
+
+	"corvus/control/internal/hints"
 )
 
 type AlertChannel struct {
@@ -100,6 +102,8 @@ type DeliveryResult struct {
 	Channel   string `json:"channel"`
 	OK        bool   `json:"ok"`
 	Error     string `json:"error,omitempty"`
+	// Hint classifies Error (internal/hints); computed when read, not stored.
+	Hint string `json:"hint,omitempty"`
 }
 
 type AlertRecord struct {
@@ -144,6 +148,9 @@ func (s *Store) ListAlerts(ctx context.Context, limit int) ([]AlertRecord, error
 			return nil, err
 		}
 		_ = json.Unmarshal([]byte(res), &a.Results)
+		for i := range a.Results {
+			a.Results[i].Hint = hints.Net(a.Results[i].Error)
+		}
 		out = append(out, a)
 	}
 	return out, rows.Err()

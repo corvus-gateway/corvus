@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"corvus/control/internal/hints"
 	"corvus/control/internal/sigs"
 	"corvus/control/internal/store"
 	"corvus/control/internal/validate"
@@ -136,7 +137,7 @@ func (s *Server) checkManagedRules(w http.ResponseWriter, r *http.Request) {
 	st, err := s.Rules.Check(r.Context())
 	s.audit(r, "managed_rules.check", "managed_rules", map[string]any{"ok": err == nil, "version": st.Version})
 	if err != nil {
-		writeJSON(w, 502, map[string]any{"error": "update_failed", "message": err.Error(), "status": st})
+		writeJSON(w, 502, map[string]any{"error": "update_failed", "message": err.Error(), "hint": hints.Net(err.Error()), "status": st})
 		return
 	}
 	writeJSON(w, 200, st)

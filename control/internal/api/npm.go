@@ -13,6 +13,7 @@ import (
 	"corvus/control/internal/auth"
 	"corvus/control/internal/certs"
 	"corvus/control/internal/compiler"
+	"corvus/control/internal/hints"
 	"corvus/control/internal/npmimport"
 	"corvus/control/internal/store"
 	"corvus/control/internal/validate"
@@ -68,7 +69,7 @@ func (s *Server) npmRead(w http.ResponseWriter, r *http.Request) (*npmimport.Sna
 	}
 	snap, err := npmimport.Read(r.Context(), src)
 	if err != nil {
-		fail(w, validate.Errors{{Field: "path", Code: "unreadable", Message: err.Error()}})
+		failFieldHint(w, "path", "unreadable", err.Error(), hints.Net(err.Error()))
 		return nil, in, false
 	}
 	// mark domain conflicts with existing Corvus hosts

@@ -674,6 +674,7 @@ func (s *Server) replaceCertificate(w http.ResponseWriter, r *http.Request) {
 	}
 	after := *before
 	after.Name, after.Domains, after.NotAfter, after.Status, after.LastError = name, info.Domains, info.NotAfter, "valid", ""
+	after.LastErrorHint = ""
 	s.audit(r, "certificate.replace", fmt.Sprintf("certificate:%d", id), map[string]any{
 		"name": name, "domains_before": before.Domains, "domains": info.Domains, "not_after_before": before.NotAfter, "not_after": info.NotAfter})
 	writeJSON(w, 200, map[string]any{"certificate": after, "version": v})

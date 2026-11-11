@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"corvus/control/internal/hints"
 )
 
 // ------------------------------------------------------------------ security rules
@@ -246,6 +248,9 @@ type IPList struct {
 	Rules        int        `json:"rules"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
+
+	// FetchErrorHint classifies FetchError (internal/hints); computed when read, not stored.
+	FetchErrorHint string `json:"fetch_error_hint,omitempty"`
 }
 
 func (s *Store) ListIPLists(ctx context.Context) ([]IPList, error) {
@@ -272,6 +277,7 @@ func (s *Store) ListIPLists(ctx context.Context) ([]IPList, error) {
 			l.CheckedAt = &t
 		}
 		_ = json.Unmarshal([]byte(items), &l.Items)
+		l.FetchErrorHint = hints.Net(l.FetchError)
 		if l.Items == nil {
 			l.Items = []string{}
 		}

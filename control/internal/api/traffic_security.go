@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"corvus/control/internal/auth"
+	"corvus/control/internal/hints"
 	"corvus/control/internal/netcfg"
 	"corvus/control/internal/store"
 	"corvus/control/internal/traffic"
@@ -374,7 +375,7 @@ func (s *Server) refreshCloudflare(w http.ResponseWriter, r *http.Request) {
 	extendDeadlines(w, 2*time.Minute) // download plus deploy
 	cf, err := netcfg.FetchCloudflare(r.Context())
 	if err != nil {
-		writeErr(w, http.StatusBadGateway, "fetch_failed", "could not download Cloudflare IP ranges: "+err.Error())
+		writeErrHint(w, http.StatusBadGateway, "fetch_failed", "could not download Cloudflare IP ranges: "+err.Error(), hints.Net(err.Error()))
 		return
 	}
 	ver, err := s.Deployer.Apply(r.Context(), userID(r), "refresh Cloudflare IP ranges", func(tx *store.Store) error {
