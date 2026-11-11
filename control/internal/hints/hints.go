@@ -111,6 +111,16 @@ func Deploy(output string) string {
 	return ""
 }
 
+// Reload classifies a reload the gateway did not take (the configuration test passed):
+// a port conflict only when the message names one (nginx: "bind() to … failed (98:
+// Address already in use)").
+func Reload(msg string) string {
+	if m := strings.ToLower(msg); has(m, "address already in use", "bind()") {
+		return DeployPortInUse
+	}
+	return ""
+}
+
 // Net classifies an outbound request error (list feeds, country database, signature
 // updates, alert channels, Cloudflare ranges, NPM MySQL import, SSO discovery).
 func Net(msg string) string {

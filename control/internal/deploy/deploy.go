@@ -34,6 +34,32 @@ type TestError struct {
 
 func (e *TestError) Error() string { return "configuration rejected: " + e.Output }
 
+// ReloadError: the configuration passed the test but the gateway kept serving the
+// previous one after the reload (gateway.NotAcceptedError). The attempt is recorded as
+// a failed version (VersionID, 0 if recording failed).
+type ReloadError struct {
+	VersionID int64
+	Err       *gateway.NotAcceptedError
+}
+
+func (e *ReloadError) Error() string { return e.Err.Error() }
+func (e *ReloadError) Unwrap() error { return e.Err }
+
+// notAccepted records a reload the gateway did not take as a failed version and
+// returns it as a ReloadError; other errors are returned unchanged.
+func (d *Deployer) notAccepted(ctx context.Context, err error, v store.ConfigVersion) error {
+	var na *gateway.NotAcceptedError
+	if !errors.As(err, &na) {
+		return err
+	}
+	v.Status, v.TestOutput = "failed", na.Error()
+	re := &ReloadError{Err: na}
+	if e := d.Store.CreateVersion(ctx, &v); e == nil {
+		re.VersionID = v.ID
+	}
+	return re
+}
+
 type Deployer struct {
 	Store    *store.Store
 	Compiler *compiler.Compiler
@@ -136,10 +162,10 @@ func (d *Deployer) Apply(ctx context.Context, by *int64, message string, mutate 
 				testErr.VersionID = fv.ID
 			}
 		}
-		if na := (*gateway.NotAcceptedError)(nil); testErr == nil && errors.As(err, &na) {
+		if testErr == nil {
 			// the reload did not take effect (e.g. a port in use): record it like a rejected test
 			rev, _ := d.Store.ConfigRev(ctx)
-			_ = d.Store.CreateVersion(ctx, &store.ConfigVersion{CreatedBy: by, Message: message, Status: "failed", TestOutput: na.Error(), ConfigRev: rev})
+			err = d.notAccepted(ctx, err, store.ConfigVersion{CreatedBy: by, Message: message, ConfigRev: rev})
 		}
 		return nil, err
 	}
@@ -170,10 +196,12 @@ func (d *Deployer) Rollback(ctx context.Context, by *int64, targetID int64) (*st
 	if err != nil {
 		return nil, &TestError{Output: out}
 	}
+	msg := fmt.Sprintf("rollback to #%d", targetID)
 	if err := d.activate(target.Dir); err != nil {
-		return nil, err
+		// activate pointed the link back to the version still serving
+		return nil, d.notAccepted(ctx, err, store.ConfigVersion{CreatedBy: by, Message: msg, RollbackOf: &targetID, ConfigRev: target.ConfigRev})
 	}
-	v := &store.ConfigVersion{CreatedBy: by, Message: fmt.Sprintf("rollback to #%d", targetID), RollbackOf: &targetID, Dir: target.Dir, ConfigRev: target.ConfigRev}
+	v := &store.ConfigVersion{CreatedBy: by, Message: msg, RollbackOf: &targetID, Dir: target.Dir, ConfigRev: target.ConfigRev}
 	if err := d.Store.CreateVersion(ctx, v); err != nil {
 		return nil, err
 	}
@@ -228,10 +256,10 @@ func (d *Deployer) EnsureCurrent(ctx context.Context) error {
 	return nil
 }
 
-// waitActiveTimeout bounds the wait for the gateway to report a reloaded version.
-// Workers finish their requests before loading the new configuration, so a large
-// configuration on a small host can take tens of seconds; a timeout is only logged.
-const waitActiveTimeout = 60 * time.Second
+// waitActiveTimeout bounds the wait for the gateway to report a reloaded version. Apply
+// waits inside the store transaction (one SQLite connection: every other write waits
+// too), so it stays short; a timeout is only logged, the deployment still counts.
+const waitActiveTimeout = 15 * time.Second
 
 // activate repoints the symlink and reloads; on reload failure the old target is restored.
 func (d *Deployer) activate(dirName string) error {

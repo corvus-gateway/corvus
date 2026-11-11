@@ -381,7 +381,14 @@ func fail(w http.ResponseWriter, err error) {
 			"hint": hints.Deploy(terr.Output)})
 	case errors.As(err, &naerr):
 		// nginx -t passed but the reload did not take effect (e.g. a port already in use)
-		writeErrHint(w, http.StatusUnprocessableEntity, "reload_rejected", naerr.Error(), hints.DeployPortInUse)
+		m := map[string]any{"error": "reload_rejected", "message": naerr.Error()}
+		if h := hints.Reload(naerr.Error()); h != "" {
+			m["hint"] = h
+		}
+		if rerr := (*deploy.ReloadError)(nil); errors.As(err, &rerr) && rerr.VersionID != 0 {
+			m["version_id"] = rerr.VersionID
+		}
+		writeJSON(w, http.StatusUnprocessableEntity, m)
 	case errors.As(err, &cerr):
 		writeErr(w, http.StatusConflict, "conflict", cerr.Error())
 	case errors.Is(err, store.ErrNotFound):

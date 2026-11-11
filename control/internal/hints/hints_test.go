@@ -55,6 +55,18 @@ func TestDeploy(t *testing.T) {
 	}
 }
 
+func TestReload(t *testing.T) {
+	for msg, want := range map[string]string{
+		"nginx: [emerg] bind() to 0.0.0.0:8443 failed (98: Address already in use)":                                                                 DeployPortInUse,
+		"the gateway kept the previous configuration (v000008) instead of v000009; see the gateway log (for example a port that is already in use)": "",
+		"": "",
+	} {
+		if got := Reload(msg); got != want {
+			t.Errorf("Reload(%q) = %q, want %q", msg, got, want)
+		}
+	}
+}
+
 func TestNet(t *testing.T) {
 	cases := []struct{ msg, want string }{
 		{`Get "https://lists.example/x.txt": dial tcp: lookup lists.example on 127.0.0.11:53: no such host`, NetDNS},

@@ -3,12 +3,14 @@ package deploy
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"corvus/control/internal/gateway"
 	"corvus/control/internal/store"
 )
 
@@ -115,7 +117,7 @@ func TestCovReloadFailureRestoresLink(t *testing.T) {
 	// a confirmation timeout (not a rejection) still counts as deployed
 	fr.failReload, fr.waitErr = false, errors.New("timed out")
 	v, err := d.Apply(ctx, nil, "third", addHost(ctx, ""))
-	if err != nil || v.Status != "active" || fr.waits == 0 || fr.timeout != time.Minute {
+	if err != nil || v.Status != "active" || fr.waits == 0 || fr.timeout != 15*time.Second {
 		t.Fatalf("apply with slow confirmation: %+v %v", v, err)
 	}
 }
@@ -231,5 +233,44 @@ func TestCovSameTree(t *testing.T) {
 	}
 	if sameTree(filepath.Join(a, "missing"), b) {
 		t.Fatal("a missing tree differs")
+	}
+}
+
+// A reload the gateway did not take (Apply or Rollback) is recorded as a failed version,
+// returned as a ReloadError with that id, and the link points back to the serving version.
+func TestCovReloadNotAccepted(t *testing.T) {
+	d, _, _ := setup(t)
+	ctx := context.Background()
+	v1, err := d.Apply(ctx, nil, "first", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v2, err := d.Apply(ctx, nil, "second", addHost(ctx, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.Readlink(d.currentLink())
+	d.Runner = &flakyRunner{waitErr: &gateway.NotAcceptedError{Want: "x", Serving: v2.Dir}}
+	check := func(what string, err error, msg string) {
+		t.Helper()
+		var re *ReloadError
+		var na *gateway.NotAcceptedError
+		if !errors.As(err, &re) || re.VersionID == 0 || !errors.As(err, &na) || re.Error() != na.Error() {
+			t.Fatalf("%s: %v", what, err)
+		}
+		fv, err := d.Store.VersionByID(ctx, re.VersionID)
+		if err != nil || fv.Status != "failed" || fv.Message != msg || fv.TestOutput != na.Error() {
+			t.Fatalf("%s: failed version %+v %v", what, fv, err)
+		}
+		if after, _ := os.Readlink(d.currentLink()); after != before {
+			t.Fatalf("%s: link %q, want %q", what, after, before)
+		}
+	}
+	_, err = d.Apply(ctx, nil, "third", nil)
+	check("apply", err, "third")
+	_, err = d.Rollback(ctx, nil, v1.ID)
+	check("rollback", err, fmt.Sprintf("rollback to #%d", v1.ID))
+	if av, err := d.Store.ActiveVersion(ctx); err != nil || av.ID != v2.ID {
+		t.Fatalf("active version = %+v %v, want #%d", av, err, v2.ID)
 	}
 }
