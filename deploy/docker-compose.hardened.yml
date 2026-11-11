@@ -27,8 +27,9 @@ services:
       - "443:443"
       - "9443:9443"   # admin console — allow only trusted networks
     tmpfs:
-      # request bodies read for body inspection (up to each host's inspection limit);
-      # other uploads and downloads stream through without using /tmp
+      # request bodies that body inspection reads (Content-Length within the inspection
+      # limit, or chunked/HTTP/2 bodies without one, up to the host's upload limit);
+      # responses never use /tmp
       - /tmp:size=256m,mode=1777,noexec,nosuid,nodev
     environment:
       # Extra names/IPs for the self-signed admin certificate, e.g. "corvus.example.com,203.0.113.10"
