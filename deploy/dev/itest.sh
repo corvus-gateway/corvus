@@ -218,6 +218,9 @@ chk "$(c -o /dev/null -w '%{http_code}' -X DELETE $A/api/bans/$BID)" 200 "unban"
 sleep 2
 chk "$(code "$G/ban-check")" 200 "unbanned IP allowed again"
 chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/settings/autoban -d '{"enabled":true,"threshold":3,"window_s":60,"duration_s":120,"include_scans":false,"scan_threshold":200,"exempt":[]}')" 200 "auto ban: threshold 3 in 1 min"
+# Detections are counted in 10-second slots; right after the unban above only slots that
+# start after it count, so attack in the next slot.
+sleep 11
 for i in 1 2 3 4 5; do code "$G/.git/config?n=$i" >/dev/null; done
 banned=""
 for i in $(seq 1 12); do sleep 2; if [ "$(code "$G/after-attack")" = 403 ]; then banned=1; break; fi; done
