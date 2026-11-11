@@ -33,6 +33,11 @@ Supported providers: Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner,
 Create an API token at your provider that can edit DNS records and paste it into the form (for
 Cloudflare: permission *Zone → DNS → Edit*). The token is stored encrypted and never shown again.
 
+After creating the record, Corvus waits until the domain's authoritative name servers return it
+before Let's Encrypt checks it, for up to 10 minutes (Gandi and Namecheap, whose updates can take
+longer: up to 20 minutes and 1 hour). Most records appear within a minute or two; until then the
+certificate shows **Issuing**.
+
 #### Saved DNS credentials
 
 You enter a token only once. The first time, it is saved as a **DNS credential** named after the
