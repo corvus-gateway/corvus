@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-acme/lego/v4/challenge"
 	"github.com/go-acme/lego/v4/providers/dns/cloudflare"
@@ -40,6 +41,18 @@ func tmpl(lines ...string) string {
 	return strings.ReplaceAll(strings.Join(lines, "\n"), "TOKEN", PlaceholderToken)
 }
 
+// MinPropagation is the shortest time Corvus waits for the DNS-01 record to appear on the
+// domain's authoritative name servers. lego's defaults (1–2 minutes for several providers)
+// are too short for some DNS hosts; issuance runs in the background, so waiting longer
+// only delays a failure.
+const MinPropagation = 10 * time.Minute
+
+func atLeast(d *time.Duration) {
+	if *d < MinPropagation {
+		*d = MinPropagation
+	}
+}
+
 var Providers = []Provider{
 	{ID: "cloudflare", Name: "Cloudflare",
 		Template: tmpl("# Cloudflare API token (Zone · DNS · Edit)", "dns_cloudflare_api_token=TOKEN"),
@@ -50,6 +63,7 @@ var Providers = []Provider{
 			if cfg.AuthToken == "" {
 				cfg.AuthEmail, cfg.AuthKey = v["dns_cloudflare_email"], v["dns_cloudflare_api_key"]
 			}
+			atLeast(&cfg.PropagationTimeout)
 			return cloudflare.NewDNSProviderConfig(cfg)
 		}},
 	{ID: "digitalocean", Name: "DigitalOcean",
@@ -58,6 +72,7 @@ var Providers = []Provider{
 		build: func(v map[string]string) (challenge.Provider, error) {
 			cfg := digitalocean.NewDefaultConfig()
 			cfg.AuthToken = v["dns_digitalocean_token"]
+			atLeast(&cfg.PropagationTimeout)
 			return digitalocean.NewDNSProviderConfig(cfg)
 		}},
 	{ID: "duckdns", Name: "DuckDNS",
@@ -66,6 +81,7 @@ var Providers = []Provider{
 		build: func(v map[string]string) (challenge.Provider, error) {
 			cfg := duckdns.NewDefaultConfig()
 			cfg.Token = v["dns_duckdns_token"]
+			atLeast(&cfg.PropagationTimeout)
 			return duckdns.NewDNSProviderConfig(cfg)
 		}},
 	{ID: "gandi", Name: "Gandi",
@@ -74,6 +90,7 @@ var Providers = []Provider{
 		build: func(v map[string]string) (challenge.Provider, error) {
 			cfg := gandiv5.NewDefaultConfig()
 			cfg.PersonalAccessToken, cfg.APIKey = v["dns_gandi_token"], v["dns_gandi_api_key"]
+			atLeast(&cfg.PropagationTimeout)
 			return gandiv5.NewDNSProviderConfig(cfg)
 		}},
 	{ID: "godaddy", Name: "GoDaddy",
@@ -82,6 +99,7 @@ var Providers = []Provider{
 		build: func(v map[string]string) (challenge.Provider, error) {
 			cfg := godaddy.NewDefaultConfig()
 			cfg.APIKey, cfg.APISecret = v["dns_godaddy_key"], v["dns_godaddy_secret"]
+			atLeast(&cfg.PropagationTimeout)
 			return godaddy.NewDNSProviderConfig(cfg)
 		}},
 	{ID: "hetzner", Name: "Hetzner",
@@ -94,6 +112,7 @@ var Providers = []Provider{
 			if cfg.APIToken != "" {
 				cfg.APIKey = ""
 			}
+			atLeast(&cfg.PropagationTimeout)
 			return hetzner.NewDNSProviderConfig(cfg)
 		}},
 	{ID: "namecheap", Name: "Namecheap",
@@ -102,6 +121,7 @@ var Providers = []Provider{
 		build: func(v map[string]string) (challenge.Provider, error) {
 			cfg := namecheap.NewDefaultConfig()
 			cfg.APIUser, cfg.APIKey = v["dns_namecheap_username"], v["dns_namecheap_api_key"]
+			atLeast(&cfg.PropagationTimeout)
 			return namecheap.NewDNSProviderConfig(cfg)
 		}},
 }
