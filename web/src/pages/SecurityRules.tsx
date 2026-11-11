@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   Activity, AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, CornerDownRight, Eye, Globe, GripVertical, ListFilter, Pencil, Plus, RefreshCw, ShieldBan, Trash2, FileStack } from "lucide-react";
 import { ApiError, api, type ChallengeBind, type ChallengeMode, type GeoipStatus, type IpList, type ProxyHost, type RuleAction, type RuleEvent, type RuleEventAction, type SecurityRule } from "../api";
+import { ErrorHint } from "../components/ErrorHint";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
 import { RuleExpression } from "../components/RuleExpression";
 import { Button } from "../components/ui/button";
@@ -325,7 +326,7 @@ function GeoipCard({ geo }: { geo: Resource<GeoipStatus> }) {
                   <div><dt className="text-xs text-fg-subtle">{t("geoipSource")}</dt><dd className="mt-0.5 truncate text-fg-muted">{g.source || "–"}</dd></div>
                 </dl>
                 {!g.available && <Callout tone="warn" icon={AlertTriangle}>{t("geoipUnavailableDesc")}</Callout>}
-                {g.error && <Callout tone="danger" title={t("geoipError")}><span className="font-mono text-xs">{g.error}</span></Callout>}
+                {g.error && <Callout tone="danger" title={t("geoipError")}><span className="font-mono text-xs">{g.error}</span><ErrorHint code={g.error_hint} className="mt-1.5" /></Callout>}
               </>)}
         {sub.error != null && !(sub.error instanceof ApiError && sub.error.status === 403) && <ErrorBox error={sub.error} />}
         <p className="text-xs text-fg-subtle">

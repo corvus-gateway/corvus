@@ -1,6 +1,7 @@
 import { templatesStrings } from "./templates.i18n";
 import { retentionStrings } from "./retention.i18n";
 import { ssoStrings } from "./sso.i18n";
+import { hintsStrings } from "./hints.i18n";
 import { tokensStrings } from "./tokens.i18n";
 import { redirectsStrings } from "./redirects.i18n";
 import { streamsStrings } from "./streams.i18n";
@@ -224,6 +225,7 @@ export const en: Record<keyof typeof ko, string> = {
   ...dnsCredsStrings.en,
   ...listFeedsStrings.en,
   ...ssoStrings.en,
+  ...hintsStrings.en,
   ...retentionStrings.en,
   ...templatesStrings.en,
   ...backupStrings.en,

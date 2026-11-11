@@ -6,6 +6,7 @@ import {
   api, type AlertActive, type AlertChannel, type AlertHistoryItem, type AlertKind, type AlertRuleCfg, type AlertRuleInfo, type AlertSettings, type AlertSeverity,
 } from "../api";
 import { ErrorBox, PageHeader, useSubmit } from "../components/common";
+import { ErrorHint, useHintText } from "../components/ErrorHint";
 import { Button } from "../components/ui/button";
 import { Badge, Callout, Card, CardHeader, ComingSoon, EmptyState, Skeleton, TableSkeleton, type Tone } from "../components/ui/display";
 import { Field, FormSection, IdField, Input, NumberInput, Segmented, Select, Switch, SwitchRow, fieldErr } from "../components/ui/form";
@@ -120,6 +121,7 @@ const chBlank: ChForm = { name: "", kind: "slack", enabled: true, min_severity: 
 
 function Channels({ res }: { res: ReturnType<typeof useResource<AlertChannel[]>> }) {
   const { t } = useI18n();
+  const hintText = useHintText();
   const { can } = useCan();
   const [editing, setEditing] = useState<{ id: number | null; form: ChForm } | null>(null);
   const [created, setCreated] = useState<AlertChannel | null>(null);
@@ -148,9 +150,9 @@ function Channels({ res }: { res: ReturnType<typeof useResource<AlertChannel[]>>
   };
   const test = async (c: AlertChannel) => {
     try {
-      const r = await api.post<{ ok: boolean; status_code?: number; error?: string }>(`/api/alerts/channels/${c.id}/test`);
+      const r = await api.post<{ ok: boolean; status_code?: number; error?: string; hint?: string }>(`/api/alerts/channels/${c.id}/test`);
       if (r.ok) toast.success(`${t("testOk")} · ${c.name}`);
-      else toast.error(`${t("testFail")}: ${r.error || r.status_code || ""}`);
+      else toast.error(`${t("testFail")}: ${r.error || r.status_code || ""}`, { description: hintText(r.hint) || undefined, duration: r.hint ? 10_000 : undefined });
     } catch (e) { toast.error(`${t("testFail")}: ${(e as Error).message}`); }
   };
   const toggle = async (c: AlertChannel, enabled: boolean) => {
@@ -399,7 +401,7 @@ function History() {
                     <tr className="border-b border-line bg-surface-2/40"><td colSpan={6} className="px-4 py-3">
                       <pre className="whitespace-pre-wrap break-words font-sans text-sm text-fg-muted">{h.message}</pre>
                       {h.results?.some((r) => !r.ok) && (
-                        <ul className="mt-2 space-y-1 text-xs text-danger"><AlertTriangle className="mr-1 inline h-3 w-3" />{h.results.filter((r) => !r.ok).map((r) => <li key={r.channel_id} className="ml-4 list-disc">{r.channel}: {r.error}</li>)}</ul>
+                        <ul className="mt-2 space-y-1 text-xs text-danger"><AlertTriangle className="mr-1 inline h-3 w-3" />{h.results.filter((r) => !r.ok).map((r) => <li key={r.channel_id} className="ml-4 list-disc">{r.channel}: {r.error}<ErrorHint code={r.hint} className="mt-0.5" /></li>)}</ul>
                       )}
                     </td></tr>
                   )}

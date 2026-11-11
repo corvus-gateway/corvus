@@ -7,12 +7,15 @@ export class ApiError extends Error {
   kind: string;
   fields: FieldError[];
   output?: string;
+  /** Actionable hint code (components/ErrorHint.tsx), when the server recognised the cause. */
+  hint?: string;
   constructor(status: number, body: any) {
     super(body?.message ?? `HTTP ${status}`);
     this.status = status;
     this.kind = body?.error ?? "error";
     this.fields = body?.fields ?? body?.errors ?? [];
     this.output = body?.output;
+    this.hint = body?.hint || undefined;
   }
 }
 
@@ -146,7 +149,7 @@ export interface Waitroom {
 
 export interface Certificate {
   id: number; name: string; kind: "selfsigned" | "custom" | "acme" | string; domains: string[]; not_after: string; created_at: string;
-  status?: "valid" | "pending" | "error"; last_error?: string; auto_renew?: boolean; challenge?: string; dns_credential_id?: number;
+  status?: "valid" | "pending" | "error"; last_error?: string; last_error_hint?: string; auto_renew?: boolean; challenge?: string; dns_credential_id?: number;
 }
 
 /** Saved DNS-01 provider credential; the secret is never returned. */
@@ -216,12 +219,12 @@ export interface RuleEvent {
   t: number | string; rule_id: number; rule: string; action: RuleEventAction; host: string; ip: string;
   country?: string; method?: string; path?: string; ua?: string; status?: number;
 }
-export interface GeoipStatus { available: boolean; source?: string; updated_at?: string | null; ranges?: number; error?: string; attribution?: string }
+export interface GeoipStatus { available: boolean; source?: string; updated_at?: string | null; ranges?: number; error?: string; error_hint?: string; attribution?: string }
 export type ListKind = "ip" | "user_agent";
 /** A list for security rules: IPs/CIDRs or User-Agent substrings; optionally fed from a URL (then read-only). */
 export interface IpList {
   id: number; name: string; description: string; kind?: ListKind; items: string[]; rules?: number; created_at?: string; updated_at?: string;
-  source_url?: string; refresh_s?: number; fetched_at?: string | null; checked_at?: string | null; fetch_error?: string; fetch_warning?: string;
+  source_url?: string; refresh_s?: number; fetched_at?: string | null; checked_at?: string | null; fetch_error?: string; fetch_error_hint?: string; fetch_warning?: string;
 }
 
 export interface TimePoint {
@@ -260,6 +263,6 @@ export interface AlertSettings { cooldown_s: number; send_resolved: boolean; lan
 export interface AlertRuleInfo { id: string; default: AlertRuleCfg; params: string[]; unit?: string }
 export interface AlertHistoryItem {
   id: number; ts: number | string; rule: string; severity: AlertSeverity; status: "firing" | "resolved" | "test"; key: string; title: string; message: string;
-  results?: { channel_id: number; channel: string; ok: boolean; error?: string }[];
+  results?: { channel_id: number; channel: string; ok: boolean; error?: string; hint?: string }[];
 }
 export interface AlertActive { rule: string; key: string; severity: AlertSeverity; title: string; text?: string; since: number | string }

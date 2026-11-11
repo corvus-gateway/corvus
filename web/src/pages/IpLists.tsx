@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { AlertTriangle, ChevronDown, Eye, Link2, ListChecks, Pencil, Plus, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { ApiError, api, deployedVersion, type IpList, type ListKind } from "../api";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
+import { ErrorHint, useHintText } from "../components/ErrorHint";
 import { Button } from "../components/ui/button";
 import { Badge, Callout, Card, ComingSoon, EmptyState, TableSkeleton } from "../components/ui/display";
 import { FormSection, IdField, Input, SearchInput, Segmented, Select, Textarea, fieldErr } from "../components/ui/form";
@@ -30,6 +31,7 @@ const REFRESH = [300, 900, 3600, 6 * 3600, 12 * 3600, 86400, 7 * 86400];
 
 export default function IpLists() {
   const { t, lang } = useI18n();
+  const hintText = useHintText();
   const { can } = useCan();
   const list = useResource<IpList[]>("/api/ip-lists", { poll: 30000 });
   const [q, setQ] = useState("");
@@ -61,7 +63,7 @@ export default function IpLists() {
     try {
       const res = await api.post<{ ip_list: IpList }>(`/api/ip-lists/${r.id}/refresh`);
       const l = res.ip_list;
-      if (l.fetch_error) toast.error(t("listFetchFailed"), { description: `${l.fetch_error} · ${t("listFetchFailedDesc")}` });
+      if (l.fetch_error) toast.error(t("listFetchFailed"), { description: `${l.fetch_error} · ${hintText(l.fetch_error_hint) || t("listFetchFailedDesc")}` });
       else toast.success(t("listRefreshed"), { description: t("nItems", { n: fmtNum(l.items?.length ?? 0) }) });
       setEditing((e) => (e && e.id === l.id ? { ...e, orig: l, form: { ...e.form, text: (l.items ?? []).join("\n") } } : e));
       done();
@@ -207,7 +209,7 @@ export default function IpLists() {
                     {t("listLastFetched")}: {orig.fetched_at ? <span title={fmtDateTime(orig.fetched_at, lang)}>{relTime(orig.fetched_at, lang)}</span> : t("listNotFetched")}
                     {" · "}<span className="num">{t("listFeedEntries", { n: fmtNum(orig.items?.length ?? 0) })}</span>
                   </div>
-                  {orig.fetch_error && <Callout tone="warn" icon={AlertTriangle} title={t("listFetchFailed")}><span className="break-all">{orig.fetch_error}</span> {t("listFetchFailedDesc")}</Callout>}
+                  {orig.fetch_error && <Callout tone="warn" icon={AlertTriangle} title={t("listFetchFailed")}><span className="break-all">{orig.fetch_error}</span> {t("listFetchFailedDesc")}<ErrorHint code={orig.fetch_error_hint} className="mt-1.5" /></Callout>}
                   {orig.fetch_warning && <Callout tone="neutral" icon={AlertTriangle} title={t("listFetchWarning")}>{orig.fetch_warning}</Callout>}
                   {(orig.items?.length ?? 0) > 0 && (
                     <Textarea aria-label={t("entries")} rows={8} readOnly spellCheck={false} className="bg-surface font-mono text-xs leading-5" value={(orig.items ?? []).join("\n")} />

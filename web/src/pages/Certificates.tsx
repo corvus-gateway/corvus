@@ -14,6 +14,7 @@ import { DnsCredentialsCard } from "../components/DnsCredentialsCard";
 import { useCan } from "../lib/rbac";
 import { localeTag, useI18n } from "../i18n";
 import { cn, daysUntil } from "../lib/utils";
+import { ErrorHint } from "../components/ErrorHint";
 
 type Challenge = "http-01" | "dns-01";
 interface Acme { domains: string[]; email: string; challenge: Challenge; dnsc: DnsChoice; staging: boolean }
@@ -116,7 +117,10 @@ export default function Certificates() {
                           : renewErr ? <Tip label={t("renewFailedTip", { e: c.last_error! })}><span><Badge tone={d !== null && d <= 7 ? "danger" : "warn"} icon={AlertCircle}>{t("renewFailed")}</Badge></span></Tip>
                           : soon ? <Badge tone={d! <= 7 ? "danger" : "warn"} dot>{d! < 0 ? t("expired") : t("expiringSoon")}</Badge>
                             : <Badge tone="ok" dot>{t("certValid")}</Badge>}
-                      {(st === "error" || renewErr) && c.last_error && <div className={cn("mt-1 max-w-[16rem] truncate text-xs", st === "error" ? "text-danger" : "text-warn")}>{c.last_error}</div>}
+                      {(st === "error" || renewErr) && c.last_error && (c.last_error_hint
+                        // known cause: the actionable line (the raw error stays in the badge tooltip)
+                        ? <ErrorHint code={c.last_error_hint} className="mt-1 max-w-[20rem]" />
+                        : <div className={cn("mt-1 max-w-[16rem] truncate text-xs", st === "error" ? "text-danger" : "text-warn")} title={c.last_error}>{c.last_error}</div>)}
                     </Td>
                     <Td className="hidden sm:table-cell">
                       {c.not_after && d !== null ? <><div className="num text-sm">{new Date(c.not_after).toLocaleDateString(localeTag(lang))}</div>

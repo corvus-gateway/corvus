@@ -5,6 +5,7 @@ import { ApiError, api, deployedVersion } from "../api";
 import { useI18n } from "../i18n";
 import { cn } from "../lib/utils";
 import { Callout, CodeBlock } from "./ui/display";
+import { ErrorHint } from "./ErrorHint";
 import { Crumbs } from "./layout/Crumbs";
 import { useCan } from "../lib/rbac";
 import { Button } from "./ui/button";
@@ -40,6 +41,7 @@ export function ErrorBox({ error, className }: { error: unknown; className?: str
       <Callout tone="danger" icon={ShieldAlert} title={title}>
         {msg}
         {general.map((f, i) => <div key={i}>{f.message}</div>)}
+        <ErrorHint code={e?.hint} className="mt-1.5" />
       </Callout>
       {e?.output && <CodeBlock code={e.output} tone="danger" maxHeight="14rem" />}
     </div>

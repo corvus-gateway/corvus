@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { FileUp, PackageCheck, RefreshCw, Save } from "lucide-react";
 import { api, type IpList, type ProxyHost } from "../api";
 import { ErrorBox, useSubmit } from "./common";
+import { ErrorHint } from "./ErrorHint";
 import { Button } from "./ui/button";
 import { Badge, Callout, Card, TableSkeleton } from "./ui/display";
 import { Field, FormSection, IdField, Input, Segmented, Select, SwitchRow, fieldErr } from "./ui/form";
@@ -22,7 +23,7 @@ interface Template {
 }
 interface BundleStatus {
   serial: number; version: string; source: "builtin" | "installed"; signatures: number; templates: number;
-  installed_at?: string; checked_at?: string; error?: string; settings: { url: string; auto_update: boolean };
+  installed_at?: string; checked_at?: string; error?: string; error_hint?: string; settings: { url: string; auto_update: boolean };
 }
 
 const pickLang = (m: Record<string, string> | undefined, lang: Lang) => (m ? m[lang] ?? m.en ?? "" : "");
@@ -152,7 +153,7 @@ export function ManagedRulesCard() {
                 <div><dt className="text-xs text-fg-subtle">{t("mrTemplates")}</dt><dd className="num">{d.templates}</dd></div>
                 <div><dt className="text-xs text-fg-subtle">{t("mrChecked")}</dt><dd className="text-fg-muted">{d.checked_at ? fmtDateTime(d.checked_at, lang) : "–"}</dd></div>
               </dl>
-              {d.error && <div className="mt-3"><Callout tone="warn">{d.error}</Callout></div>}
+              {d.error && <div className="mt-3"><Callout tone="warn">{d.error}<ErrorHint code={d.error_hint} className="mt-1.5" /></Callout></div>}
               {isAdmin && (
                 <div className="mt-5 grid gap-5 lg:grid-cols-2">
                   <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); void onSave(); }}>

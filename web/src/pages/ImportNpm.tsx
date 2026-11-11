@@ -3,6 +3,7 @@ import { Lock, AlertTriangle, ArrowRight, CheckCircle2, FileInput, FolderSearch,
 import { toast } from "sonner";
 import { api, deployedVersion, isMissing, type NpmPreview } from "../api";
 import { ErrorBox, PageHeader, useSubmit } from "../components/common";
+import { ErrorHint, hintOf } from "../components/ErrorHint";
 import { Button } from "../components/ui/button";
 import { Badge, Callout, Card, CardHeader, EmptyState } from "../components/ui/display";
 import { Field, Input, Segmented, fieldErr } from "../components/ui/form";
@@ -102,7 +103,7 @@ function ImportNpmInner() {
             <Button type="submit" variant="primary" loading={prev.busy} disabled={!path.trim()} className="sm:mb-[22px]"><FolderSearch className="h-4 w-4" />{t("preview")}</Button>
             </div>
           </form>
-          {missing ? <Callout tone="warn" title={t("comingSoon")}>{t("comingSoonDesc")}</Callout> : !fieldErr(prev.error, "path") && <ErrorBox error={prev.error} />}
+          {missing ? <Callout tone="warn" title={t("comingSoon")}>{t("comingSoonDesc")}</Callout> : !fieldErr(prev.error, "path") ? <ErrorBox error={prev.error} /> : <ErrorHint code={hintOf(prev.error)} />}
         </div>
       </Card>
 

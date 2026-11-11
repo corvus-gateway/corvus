@@ -3,6 +3,7 @@ import { Copy, Fingerprint, Lock, Save, SearchCheck, UsersRound } from "lucide-r
 import { toast } from "sonner";
 import { api } from "../api";
 import { ErrorBox, PageHeader, useSubmit } from "../components/common";
+import { ErrorHint, hintOf } from "../components/ErrorHint";
 import { Button } from "../components/ui/button";
 import { Callout, Card, CardHeader, ComingSoon, EmptyState, Skeleton } from "../components/ui/display";
 import { Field, Input, Select, SwitchRow, TagInput, fieldErr } from "../components/ui/form";
@@ -90,6 +91,7 @@ export default function SsoPage() {
                     <Button onClick={onTest} loading={test.busy} disabled={!f.issuer.trim()}><SearchCheck className="h-4 w-4" />{t("ssoTestDiscovery")}</Button>
                   </div>
                 </Field>
+                {testErr && <ErrorHint code={hintOf(test.error)} className="-mt-2" />}
                 {disc && (
                   <dl className="divide-y divide-line rounded-lg border border-line text-xs">
                     {([["authorization", disc.authorization_endpoint], ["token", disc.token_endpoint], ["jwks", disc.jwks_uri], ["userinfo", disc.userinfo_endpoint]] as const)
