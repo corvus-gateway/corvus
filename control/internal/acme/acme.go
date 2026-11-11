@@ -55,9 +55,11 @@ type Service struct {
 	DirectorySuffix string
 	// OnIssued re-deploys the gateway so new files are loaded. Completions in a burst
 	// (an import, a renewal round) are combined into one call, DeployDelay (default
-	// 30 s) after the last of them; when no other order is in flight it runs sooner.
-	OnIssued    func(ctx context.Context)
-	DeployDelay time.Duration
+	// 30 s) after the last of them, but no later than DeployMaxDelay (default 2 min)
+	// after the first; when no other order is in flight it runs sooner.
+	OnIssued       func(ctx context.Context)
+	DeployDelay    time.Duration
+	DeployMaxDelay time.Duration
 	// Concurrency bounds simultaneous orders (default 2); more wait for a slot.
 	Concurrency int
 
@@ -67,6 +69,7 @@ type Service struct {
 	failures    map[int64]failure // failed orders and when to try again (in memory)
 	slots       chan struct{}
 	deployTimer *time.Timer
+	burstStart  time.Time // first completion not yet deployed
 
 	accountMu sync.Mutex // one account lookup/registration at a time
 }
@@ -302,8 +305,9 @@ func (s *Service) Start(id int64) {
 }
 
 // issued schedules the gateway redeploy after certificate id was written: one
-// call for a burst of completions, DeployDelay after the last; about a second when
-// no other order is running or waiting.
+// call for a burst of completions, DeployDelay after the last but at most
+// DeployMaxDelay after the first; about a second when no other order is running or
+// waiting.
 func (s *Service) issued(id int64) {
 	if s.OnIssued == nil {
 		return
@@ -322,11 +326,28 @@ func (s *Service) issued(id int64) {
 	if others == 0 {
 		delay = min(delay, time.Second)
 	}
+	maxDelay := s.DeployMaxDelay
+	if maxDelay <= 0 {
+		maxDelay = 2 * time.Minute
+	}
+	now := time.Now()
+	if s.burstStart.IsZero() {
+		s.burstStart = now
+	}
+	delay = max(min(delay, s.burstStart.Add(maxDelay).Sub(now)), 0)
 	if s.deployTimer == nil {
-		s.deployTimer = time.AfterFunc(delay, func() { s.OnIssued(context.Background()) })
+		s.deployTimer = time.AfterFunc(delay, s.redeploy)
 		return
 	}
 	s.deployTimer.Reset(delay)
+}
+
+// redeploy runs OnIssued for the completions so far; the next one starts a new burst.
+func (s *Service) redeploy() {
+	s.mu.Lock()
+	s.burstStart = time.Time{}
+	s.mu.Unlock()
+	s.OnIssued(context.Background())
 }
 
 func (s *Service) issue(ctx context.Context, id int64) error {

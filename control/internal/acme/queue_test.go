@@ -125,6 +125,34 @@ func TestRedeployDebounced(t *testing.T) {
 	(&Service{}).issued(1) // no callback: nothing to do
 }
 
+// A steady stream of completions still redeploys DeployMaxDelay after the first one.
+func TestRedeployDelayCapped(t *testing.T) {
+	s := testService(t)
+	var calls atomic.Int32
+	s.OnIssued = func(context.Context) { calls.Add(1) }
+	s.DeployDelay, s.DeployMaxDelay = 150*time.Millisecond, 200*time.Millisecond
+	s.mu.Lock()
+	s.init()
+	s.running[1], s.running[2] = true, true
+	s.mu.Unlock()
+	for i := 0; i < 15; i++ { // 750 ms, each completion within DeployDelay of the last
+		s.issued(1)
+		time.Sleep(50 * time.Millisecond)
+	}
+	if calls.Load() == 0 {
+		t.Fatal("no redeploy during a long burst")
+	}
+	time.Sleep(400 * time.Millisecond)
+	if n := calls.Load(); n < 2 || n > 5 {
+		t.Fatalf("calls = %d, want a few (capped bursts plus the last)", n)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.burstStart.IsZero() {
+		t.Error("burst start kept after the redeploy")
+	}
+}
+
 func TestRetryBackoff(t *testing.T) {
 	for attempts, want := range map[int]time.Duration{1: time.Hour, 2: 2 * time.Hour, 3: 4 * time.Hour, 4: 8 * time.Hour, 5: 12 * time.Hour, 9: 12 * time.Hour} {
 		if got := retryAfter(attempts); got != want {
