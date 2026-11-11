@@ -228,6 +228,7 @@ func (s *Server) geoipRefresh(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, "conflict", "country database is not available")
 		return
 	}
+	extendDeadlines(w, 6*time.Minute) // the download can outlast the server's write timeout
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
 	st, err := s.GeoIP.Refresh(ctx)
@@ -376,6 +377,7 @@ func (s *Server) refreshIPList(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusServiceUnavailable, "unavailable", "list feeds are not available")
 		return
 	}
+	extendDeadlines(w, 3*time.Minute) // fetch plus deploy
 	l, err := s.Feeds.Refresh(r.Context(), id)
 	if l == nil {
 		// no list to show: it does not exist (any more, e.g. deleted during the fetch)

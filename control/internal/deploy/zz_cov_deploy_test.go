@@ -19,6 +19,7 @@ type flakyRunner struct {
 	failReload bool
 	waitErr    error
 	waits      int
+	timeout    time.Duration // of the last WaitActive
 }
 
 func (f *flakyRunner) Reload() error {
@@ -29,7 +30,8 @@ func (f *flakyRunner) Reload() error {
 	return nil
 }
 
-func (f *flakyRunner) WaitActive(context.Context, string, time.Duration) error {
+func (f *flakyRunner) WaitActive(_ context.Context, _ string, timeout time.Duration) error {
+	f.timeout = timeout
 	f.waits++
 	return f.waitErr
 }
@@ -113,7 +115,7 @@ func TestCovReloadFailureRestoresLink(t *testing.T) {
 	// a confirmation timeout (not a rejection) still counts as deployed
 	fr.failReload, fr.waitErr = false, errors.New("timed out")
 	v, err := d.Apply(ctx, nil, "third", addHost(ctx, ""))
-	if err != nil || v.Status != "active" || fr.waits == 0 {
+	if err != nil || v.Status != "active" || fr.waits == 0 || fr.timeout != time.Minute {
 		t.Fatalf("apply with slow confirmation: %+v %v", v, err)
 	}
 }

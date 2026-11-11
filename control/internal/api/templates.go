@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"corvus/control/internal/sigs"
 	"corvus/control/internal/store"
@@ -131,6 +132,7 @@ func (s *Server) putManagedRules(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) checkManagedRules(w http.ResponseWriter, r *http.Request) {
+	extendDeadlines(w, 3*time.Minute) // download, verification and deploy
 	st, err := s.Rules.Check(r.Context())
 	s.audit(r, "managed_rules.check", "managed_rules", map[string]any{"ok": err == nil, "version": st.Version})
 	if err != nil {

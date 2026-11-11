@@ -371,6 +371,7 @@ func (s *Server) putNetwork(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) refreshCloudflare(w http.ResponseWriter, r *http.Request) {
+	extendDeadlines(w, 2*time.Minute) // download plus deploy
 	cf, err := netcfg.FetchCloudflare(r.Context())
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, "fetch_failed", "could not download Cloudflare IP ranges: "+err.Error())

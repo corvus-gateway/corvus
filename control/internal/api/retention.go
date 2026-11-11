@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"corvus/control/internal/history"
 	"corvus/control/internal/validate"
@@ -66,6 +67,7 @@ func (s *Server) downloadArchive(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(name, ".gz") {
 		ctype = "application/gzip"
 	}
+	extendDeadlines(w, 30*time.Minute) // archives can be large
 	w.Header().Set("Content-Type", ctype)
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(p)+`"`)
 	http.ServeFile(w, r, p)

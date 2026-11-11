@@ -223,6 +223,11 @@ func (d *Deployer) EnsureCurrent(ctx context.Context) error {
 	return nil
 }
 
+// waitActiveTimeout bounds the wait for the gateway to report a reloaded version.
+// Workers finish their requests before loading the new configuration, so a large
+// configuration on a small host can take tens of seconds; a timeout is only logged.
+const waitActiveTimeout = 60 * time.Second
+
 // activate repoints the symlink and reloads; on reload failure the old target is restored.
 func (d *Deployer) activate(dirName string) error {
 	prev, _ := os.Readlink(d.currentLink())
@@ -239,7 +244,7 @@ func (d *Deployer) activate(dirName string) error {
 	if w, ok := d.Runner.(interface {
 		WaitActive(ctx context.Context, name string, timeout time.Duration) error
 	}); ok {
-		if err := w.WaitActive(context.Background(), dirName, 15*time.Second); err != nil {
+		if err := w.WaitActive(context.Background(), dirName, waitActiveTimeout); err != nil {
 			var na *gateway.NotAcceptedError
 			if errors.As(err, &na) {
 				// nginx keeps running the old configuration: point the link back to it
