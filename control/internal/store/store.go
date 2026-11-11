@@ -519,7 +519,7 @@ type ProxyHost struct {
 	UnderAttackConfig UnderAttackConfig `json:"under_attack_config"`
 
 	MaxUploadMB      *int `json:"max_upload_mb"`      // nil = global default (100 MB), 0 = unlimited
-	UpstreamTimeoutS *int `json:"upstream_timeout_s"` // upstream read/send timeout; nil = default (60 s, WebSocket 1 h)
+	UpstreamTimeoutS *int `json:"upstream_timeout_s"` // upstream read/send timeout; nil = default (60 s); WebSocket hosts at least 1 h
 	Gzip             bool `json:"gzip"`               // compress text responses
 
 	Notes string `json:"notes"` // free text for people; not used by the gateway

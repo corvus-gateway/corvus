@@ -42,6 +42,7 @@ With `network_mode: host` nothing else is needed.
 - Ports Corvus uses itself (80, 443, 9443 and its internal ports) can't be used, and a stream can't
   forward to Corvus's own admin console or internal ports.
 - Two enabled streams can't share a port and protocol.
+- Idle connections are closed after 1 hour (TCP) or 60 seconds (UDP) without traffic.
 - Streams have no request log, and IP bans and security rules don't apply to them yet. Restrict
   access with a firewall if needed.
 

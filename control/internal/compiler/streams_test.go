@@ -96,10 +96,11 @@ func TestRenderStreams(t *testing.T) {
 
 	s1 := read("streams/1.conf")
 	mustHave("1.conf", s1, "zone corvus_stream_1 64k;", "server demo:80 max_fails=0 resolve;", "listen 8090;", "proxy_pass corvus_stream_1;")
-	mustNot("1.conf", s1, "udp", "ssl")
+	mustHave("1.conf", s1, "proxy_timeout 1h;")
+	mustNot("1.conf", s1, "udp", "ssl", "proxy_timeout 60s")
 
 	s2 := read("streams/2.conf")
-	mustHave("2.conf", s2, "server 10.0.0.53:53 max_fails=0;", "listen 5353;", "listen 5353 udp;")
+	mustHave("2.conf", s2, "server 10.0.0.53:53 max_fails=0;", "listen 5353;", "listen 5353 udp;", "proxy_timeout 1h;", "proxy_timeout 60s;")
 	mustNot("2.conf", s2, "resolve;", "zone")
 
 	// Loopback means the Docker host; TLS termination with the issued certificate.
@@ -162,6 +163,29 @@ func TestRenderStreamsIPv6(t *testing.T) {
 	for _, want := range []string{"listen [::]:5353;", "listen [::]:5353 udp;"} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("missing %q in\n%s", want, b)
+		}
+	}
+}
+
+// The stream resolver returns IPv6 answers under the same setting as the http resolver.
+func TestRenderStreamsResolverIPv6(t *testing.T) {
+	ctx := context.Background()
+	c, st, _, dir := streamEnv(t)
+	if err := st.SaveStream(ctx, &store.Stream{IncomingPort: 5353, TCP: true, ForwardHost: "dns", ForwardPort: 53, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	for i, v6 := range []bool{false, true} {
+		c.P.ResolverIPv6 = v6
+		out := filepath.Join(dir, "v"+string(rune('1'+i)))
+		if err := c.Render(ctx, st, out); err != nil {
+			t.Fatal(err)
+		}
+		want := "resolver 127.0.0.11 ipv6=off valid=30s;"
+		if v6 {
+			want = "resolver 127.0.0.11 ipv6=on valid=30s;"
+		}
+		if n := strings.Count(readFile(t, filepath.Join(out, "nginx.conf")), want); n != 2 { // http and stream
+			t.Errorf("ResolverIPv6=%v: %q found %d times, want 2", v6, want, n)
 		}
 	}
 }

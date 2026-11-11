@@ -32,7 +32,7 @@ interface CertReq { email: string; dns: boolean; dnsc: DnsChoice; staging: boole
 type Form = Omit<ProxyHost, "id" | "created_at" | "updated_at">;
 
 const blank: Form = {
-  domains: [], forward_scheme: "http", forward_host: "", forward_port: 80, websocket: false, certificate_id: null,
+  domains: [], forward_scheme: "http", forward_host: "", forward_port: 80, websocket: true, certificate_id: null,
   ssl_forced: false, http2: true, waitroom_id: null, waitroom_path: "/", advanced_config: "", enabled: true,
   client_ip: "direct", rate_limit_id: null, access_list_id: null, block_exploits: true,
   body_inspection: "log", body_max_kb: 1024, security_headers: "off",

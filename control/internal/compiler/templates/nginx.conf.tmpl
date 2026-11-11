@@ -49,7 +49,7 @@ http {
 
     # Slow-client / resource exhaustion limits (F7)
     client_header_timeout 15s;
-    client_body_timeout   30s;
+    client_body_timeout   60s;
     send_timeout          60s;
     keepalive_requests    1000;
     reset_timedout_connection on;
@@ -59,6 +59,15 @@ http {
     proxy_buffer_size       16k;
     proxy_buffers           8 16k;
     proxy_busy_buffers_size 32k;
+    # Responses larger than the memory buffers go to the client at its pace instead of
+    # being spooled to /tmp (a tmpfs on hardened installs; large downloads filled it).
+    proxy_max_temp_file_size 0;
+    # Request bodies stream to the upstream as they arrive (large uploads do not wait in
+    # /tmp). Body inspection and "http.body" rules read the whole body first, in the
+    # rewrite phase; nginx then sends that buffered body.
+    proxy_request_buffering off;
+    client_body_buffer_size 128k;
+    proxy_connect_timeout   10s;
     # a bucket must hold one exact name (8 + name rounded up to 8 + 8 bytes): 512 fits the
     # longest valid domain (253 characters); 128 stopped at 110
     server_names_hash_bucket_size 512;
@@ -127,8 +136,9 @@ http {
         ""      "";
     }
 
-    # Upstream responses must not steer nginx internally (X-Accel-* headers).
-    proxy_ignore_headers X-Accel-Redirect X-Accel-Expires X-Accel-Limit-Rate X-Accel-Buffering X-Accel-Charset;
+    # Upstream responses must not steer nginx internally (X-Accel-* headers), except
+    # X-Accel-Buffering: no, which streaming apps send to turn response buffering off.
+    proxy_ignore_headers X-Accel-Redirect X-Accel-Expires X-Accel-Limit-Rate X-Accel-Charset;
 
     # Known scanner / exploit request patterns. Logged for every host (detect-only);
     # hosts with "block exploits" enabled answer 403.
@@ -279,7 +289,7 @@ http {
 # TCP/UDP port forwarding ({{.Streams}} stream(s)). No access log (nginx's stream default);
 # errors go to the main error log.
 stream {
-    resolver {{.P.Resolver}} ipv6=off valid=30s;
+    resolver {{.P.Resolver}} ipv6={{if .P.ResolverIPv6}}on{{else}}off{{end}} valid=30s;
     resolver_timeout 5s;
     proxy_connect_timeout 10s;
 

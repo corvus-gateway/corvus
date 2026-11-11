@@ -32,6 +32,7 @@ func TestRenderHostLimitsAndGzip(t *testing.T) {
 		{Domains: []string{"big.example.com"}, MaxUploadMB: n(2048), UpstreamTimeoutS: n(300)},                                // 3
 		{Domains: []string{"unlimited.example.com"}, MaxUploadMB: n(0), Websocket: true, UpstreamTimeoutS: n(30), Gzip: true}, // 4
 		{Domains: []string{"adv.example.com"}, MaxUploadMB: n(5), AdvancedConfig: "client_max_body_size 20m;\ngzip on;"},      // 5
+		{Domains: []string{"wslong.example.com"}, Websocket: true, UpstreamTimeoutS: n(7200)},                                 // 6
 	} {
 		h.ForwardHost, h.ForwardPort, h.Enabled = "app", 8080, true
 		if err := st.SaveProxyHost(ctx, h); err != nil {
@@ -50,10 +51,17 @@ func TestRenderHostLimitsAndGzip(t *testing.T) {
 		return string(b)
 	}
 	main := read("nginx.conf")
-	for _, w := range []string{"client_max_body_size 100m;", "gzip on;", "gzip_proxied any;", "gzip_vary on;", "application/json"} {
+	for _, w := range []string{"client_max_body_size 100m;", "gzip on;", "gzip_proxied any;", "gzip_vary on;", "application/json",
+		// downloads are not spooled to /tmp, uploads stream to the upstream
+		"proxy_max_temp_file_size 0;", "proxy_request_buffering off;", "client_body_buffer_size 128k;",
+		"proxy_connect_timeout   10s;", "client_body_timeout   60s;",
+		"proxy_ignore_headers X-Accel-Redirect X-Accel-Expires X-Accel-Limit-Rate X-Accel-Charset;"} {
 		if !strings.Contains(main, w) {
 			t.Errorf("nginx.conf: missing %q", w)
 		}
+	}
+	if strings.Contains(main, "X-Accel-Buffering X-") {
+		t.Error("X-Accel-Buffering must reach nginx (streaming upstreams turn buffering off)")
 	}
 	if strings.Contains(main, "text/event-stream") {
 		t.Error("event streams must not be compressed (buffering)")
@@ -63,10 +71,12 @@ func TestRenderHostLimitsAndGzip(t *testing.T) {
 		want, deny []string
 	}{
 		{"1", nil, []string{"\n    client_max_body_size", "gzip off", "proxy_read_timeout", "proxy_send_timeout"}},
-		{"2", []string{"proxy_read_timeout 1h;"}, []string{"proxy_send_timeout", "gzip off"}},
+		{"2", []string{"proxy_read_timeout 3600s;", "proxy_send_timeout 3600s;"}, []string{"gzip off"}},
 		{"3", []string{"client_max_body_size 2048m;", "gzip off;", "proxy_read_timeout 300s;", "proxy_send_timeout 300s;"}, nil},
-		{"4", []string{"client_max_body_size 0;", "proxy_read_timeout 30s;", "proxy_send_timeout 30s;"}, []string{"1h", "gzip off"}},
+		// WebSocket: a shorter host timeout is raised to 1 h (upgraded connections idle)
+		{"4", []string{"client_max_body_size 0;", "proxy_read_timeout 3600s;", "proxy_send_timeout 3600s;"}, []string{"30s", "gzip off"}},
 		{"5", []string{"client_max_body_size 20m;", "gzip on;"}, []string{"client_max_body_size 5m", "gzip off"}},
+		{"6", []string{"proxy_read_timeout 7200s;", "proxy_send_timeout 7200s;"}, []string{"3600s"}},
 	}
 	for _, tc := range cases {
 		conf := read("hosts/" + tc.id + ".conf")

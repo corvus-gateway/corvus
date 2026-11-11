@@ -109,7 +109,7 @@ type proxyHostInput struct {
 	Locations *[]store.Location `json:"locations"`
 
 	MaxUploadMB      *int  `json:"max_upload_mb"`      // null = global default (100 MB), 0 = unlimited
-	UpstreamTimeoutS *int  `json:"upstream_timeout_s"` // null = default (60 s, WebSocket 1 h)
+	UpstreamTimeoutS *int  `json:"upstream_timeout_s"` // null = default (60 s); WebSocket hosts at least 1 h
 	Gzip             *bool `json:"gzip"`               // omitted = on
 
 	Notes *string `json:"notes"` // omitted = unchanged

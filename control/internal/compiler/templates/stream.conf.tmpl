@@ -26,6 +26,7 @@ server {
     ssl_certificate_key {{.CertDir}}/privkey.pem;
 {{- end}}
     proxy_pass corvus_stream_{{.ID}};
+    proxy_timeout 1h;   # idle time before the connection is closed
 }
 {{- end}}
 {{- if .UDP}}
@@ -36,5 +37,6 @@ server {
     listen [::]:{{.IncomingPort}} udp;
 {{- end}}
     proxy_pass corvus_stream_{{.ID}};
+    proxy_timeout 60s;  # idle time before the client's UDP session is dropped
 }
 {{- end}}
