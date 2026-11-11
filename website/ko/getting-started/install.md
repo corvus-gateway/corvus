@@ -20,6 +20,11 @@ services:
   corvus:
     image: 'ghcr.io/corvus-gateway/gateway:latest'
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     ports:
       - '80:80'
       - '443:443'

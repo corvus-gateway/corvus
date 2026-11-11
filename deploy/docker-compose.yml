@@ -14,6 +14,11 @@ services:
   corvus:
     image: ghcr.io/corvus-gateway/gateway:latest
     restart: unless-stopped
+    logging:          # keep the container log bounded (3 × 10 MB)
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "80:80"
       - "443:443"
