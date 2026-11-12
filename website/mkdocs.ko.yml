@@ -12,6 +12,7 @@ theme:
 nav:
   - 홈: index.md
   - 시작하기:
+      - 동작 방식: getting-started/how-it-works.md
       - 설치: getting-started/install.md
       - NAS에 설치: getting-started/nas.md
       - 첫 프록시 호스트: getting-started/first-host.md

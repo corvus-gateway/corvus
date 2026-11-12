@@ -7,7 +7,7 @@ description: "Corvus에서 첫 프록시 호스트를 만듭니다. 도메인을
 **프록시 호스트**는 어떤 도메인(예: `shop.example.com`)으로 들어온 요청을 Corvus 뒤에 있는
 서비스(예: 80 포트의 `shop-web` 컨테이너)로 보냅니다.
 
-## 시작하기 전에
+## 시작하기 전에 { #before-you-start }
 
 - 도메인의 DNS(`A`/`AAAA` 레코드)가 Corvus 서버를 가리켜야 합니다.
 - Corvus가 서비스에 접속할 수 있어야 합니다. 다른 컨테이너라면 두 컨테이너가 같은 Docker

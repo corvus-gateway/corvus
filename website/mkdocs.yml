@@ -81,6 +81,7 @@ validation:
 nav:
   - Home: index.md
   - Getting started:
+      - How Corvus works: getting-started/how-it-works.md
       - Install: getting-started/install.md
       - Install on a NAS: getting-started/nas.md
       - First proxy host: getting-started/first-host.md

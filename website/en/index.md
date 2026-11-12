@@ -12,6 +12,11 @@ as Nginx Proxy Manager (domains, forwarding and free SSL in a few clicks), and i
 protects and controls** the traffic that passes through it. Everything runs on your own server; no
 traffic goes to a third-party cloud.
 
+Corvus takes ports 80 and 443 and passes each request on to the right app or web server behind it,
+so you can run several sites on one server with HTTPS and protection in front of all of them.
+[How it works](getting-started/how-it-works.md), including how to put Corvus in front of a web
+server you already run.
+
 ![Corvus demo](img/demo.gif){ .shot }
 
 <div class="grid cards" markdown>

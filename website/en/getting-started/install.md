@@ -10,7 +10,9 @@ inside it.
 ## Requirements
 
 - A Linux server (amd64 or arm64) with [Docker and the Compose plugin](https://docs.docker.com/engine/install/)
-- Ports **80** and **443** free (the gateway), and **9443** for the admin console
+- Ports **80** and **443** free (the gateway), and **9443** for the admin console. Already running a
+  web server on 80 and 443? Move it to another port first: see
+  [I already have a web server](how-it-works.md#i-already-have-a-web-server-on-ports-80-and-443).
 - For Let's Encrypt certificates: your domain's DNS pointing at the server
 
 ## 1. Create `docker-compose.yml`

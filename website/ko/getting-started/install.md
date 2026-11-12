@@ -10,7 +10,9 @@ Corvus는 **컨테이너 하나**로 동작합니다. 게이트웨이, 관리 �
 ## 요구 사항
 
 - [Docker와 Compose 플러그인](https://docs.docker.com/engine/install/)이 설치된 Linux 서버(amd64 또는 arm64)
-- 게이트웨이용 **80**, **443** 포트와 관리 콘솔용 **9443** 포트가 비어 있어야 합니다
+- 게이트웨이용 **80**, **443** 포트와 관리 콘솔용 **9443** 포트가 비어 있어야 합니다. 이미 80·443을 쓰는
+  웹 서버가 있다면 먼저 다른 포트로 옮기세요:
+  [이미 웹 서버가 있어요](how-it-works.md#i-already-have-a-web-server-on-ports-80-and-443)
 - Let's Encrypt 인증서를 쓰려면 도메인의 DNS가 서버를 가리켜야 합니다
 
 ## 1. `docker-compose.yml` 만들기
