@@ -135,16 +135,19 @@ func TestRedeployDelayCapped(t *testing.T) {
 	s.init()
 	s.running[1], s.running[2] = true, true
 	s.mu.Unlock()
-	for i := 0; i < 15; i++ { // 750 ms, each completion within DeployDelay of the last
+	start := time.Now()
+	for i := 0; i < 15; i++ { // ~750 ms, each completion within DeployDelay of the last
 		s.issued(1)
 		time.Sleep(50 * time.Millisecond)
 	}
+	burst := time.Since(start) // longer on a slow machine: allow one redeploy per cap
 	if calls.Load() == 0 {
 		t.Fatal("no redeploy during a long burst")
 	}
 	time.Sleep(400 * time.Millisecond)
-	if n := calls.Load(); n < 2 || n > 5 {
-		t.Fatalf("calls = %d, want a few (capped bursts plus the last)", n)
+	max := int32(burst/s.DeployMaxDelay) + 2
+	if n := calls.Load(); n < 2 || n > max {
+		t.Fatalf("calls = %d in a %s burst, want 2..%d (capped bursts plus the last)", n, burst, max)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
