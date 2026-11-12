@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,6 +37,12 @@ func TestFailHints(t *testing.T) {
 	code, m = failBody(t, fmt.Errorf("x: %w", &gateway.NotAcceptedError{Want: "v000009", Serving: "v000008"}))
 	if _, ok := m["hint"]; code != 422 || m["error"] != "reload_rejected" || ok || m["message"] == "" || m["version_id"] != nil {
 		t.Errorf("reload_rejected: %d %v", code, m)
+	}
+	// with the gateway's error line the cause is known: message and hint
+	code, m = failBody(t, &gateway.NotAcceptedError{Want: "v000009", Serving: "v000008", Log: []string{
+		"2026/11/12 01:55:16 [emerg] 1#1: bind() to 0.0.0.0:8090 failed (98: Address already in use)"}})
+	if msg, _ := m["message"].(string); code != 422 || m["hint"] != "deploy.port_in_use" || !strings.Contains(msg, "0.0.0.0:8090") {
+		t.Errorf("reload_rejected with gateway log: %d %v", code, m)
 	}
 	code, m = failBody(t, &deploy.ReloadError{VersionID: 4, Err: &gateway.NotAcceptedError{Want: "v000009", Serving: "v000008"}})
 	if code != 422 || m["error"] != "reload_rejected" || m["version_id"] != float64(4) {

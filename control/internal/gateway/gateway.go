@@ -32,10 +32,12 @@ type OpenResty struct {
 	Env         []string // extra environment (secrets, Redis address)
 	StatusURL   string   // e.g. http://127.0.0.1:9180/version
 
-	mu      sync.Mutex
-	cmd     *exec.Cmd
-	done    chan error
-	started time.Time
+	mu       sync.Mutex
+	cmd      *exec.Cmd
+	done     chan error
+	started  time.Time
+	errs     *errLog   // recent serious lines of the gateway's stderr
+	reloadAt time.Time // when the last reload was requested
 }
 
 // Status reports whether the gateway process is running and since when.
@@ -77,7 +79,8 @@ func (o *OpenResty) Start() error {
 	}
 	cmd := exec.Command(o.Bin, "-e", "stderr", "-c", o.CurrentConf, "-g", "daemon off;") // -e: no write to the read-only prefix
 	cmd.Env = o.env()
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	o.errs = newErrLog(os.Stderr)
+	cmd.Stdout, cmd.Stderr = os.Stdout, o.errs
 	if err := cmd.Start(); err != nil {
 		return err
 	}
@@ -106,6 +109,7 @@ func (o *OpenResty) Reload() error {
 	if o.cmd.ProcessState != nil {
 		return errors.New("gateway is not running")
 	}
+	o.reloadAt = time.Now()
 	return o.cmd.Process.Signal(syscall.SIGHUP)
 }
 
@@ -152,7 +156,7 @@ func (o *OpenResty) WaitActive(ctx context.Context, name string, timeout time.Du
 		}
 		if time.Now().After(deadline) {
 			if serving != "" {
-				return &NotAcceptedError{Want: name, Serving: serving}
+				return &NotAcceptedError{Want: name, Serving: serving, Log: o.reloadErrors()}
 			}
 			return fmt.Errorf("gateway did not report version %s within %s", name, timeout)
 		}
@@ -164,13 +168,54 @@ func (o *OpenResty) WaitActive(ctx context.Context, name string, timeout time.Du
 	}
 }
 
+// reloadErrors returns the gateway's serious log lines since the last reload request.
+func (o *OpenResty) reloadErrors() []string {
+	o.mu.Lock()
+	errs, at := o.errs, o.reloadAt
+	o.mu.Unlock()
+	if errs == nil {
+		return nil
+	}
+	return errs.since(at)
+}
+
 // NotAcceptedError: after a reload the gateway kept serving another version, i.e. it
 // rejected the new configuration at run time (for example a port that is already in
-// use; `nginx -t` does not open sockets).
-type NotAcceptedError struct{ Want, Serving string }
+// use; `nginx -t` does not open sockets). Log holds the gateway's error lines since
+// the reload, when there were any.
+type NotAcceptedError struct {
+	Want, Serving string
+	Log           []string
+}
 
 func (e *NotAcceptedError) Error() string {
-	return fmt.Sprintf("the gateway kept the previous configuration (%s) instead of %s; see the gateway log (for example a port that is already in use)", e.Serving, e.Want)
+	if len(e.Log) == 0 {
+		return fmt.Sprintf("the gateway kept the previous configuration (%s) instead of %s; see the gateway log (for example a port that is already in use)", e.Serving, e.Want)
+	}
+	var msgs []string // nginx repeats a failed bind() a few times: once each
+	seen := map[string]bool{}
+	for _, l := range e.Log {
+		if m := logMessage(l); !seen[m] {
+			seen[m] = true
+			msgs = append(msgs, m)
+		}
+	}
+	return fmt.Sprintf("the gateway kept the previous configuration (%s) instead of %s: %s", e.Serving, e.Want, strings.Join(msgs, "; "))
+}
+
+// logMessage trims an nginx error log line to its message:
+// "2026/11/12 01:55:15 [emerg] 63#63: bind() to ... failed" → "bind() to ... failed".
+func logMessage(line string) string {
+	for _, lvl := range []string{"[emerg]", "[alert]", "[crit]"} {
+		if i := strings.Index(line, lvl); i >= 0 {
+			rest := strings.TrimSpace(line[i+len(lvl):])
+			if j := strings.Index(rest, ": "); j > 0 && strings.Contains(rest[:j], "#") {
+				rest = rest[j+2:]
+			}
+			return rest
+		}
+	}
+	return line
 }
 
 // Noop is used when running the control plane without a gateway (development).
