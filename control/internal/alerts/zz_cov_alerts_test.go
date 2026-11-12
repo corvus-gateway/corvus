@@ -153,8 +153,8 @@ func TestCovHelpers(t *testing.T) {
 }
 
 func TestCovSendErrors(t *testing.T) {
-	allowLoopback = true
-	t.Cleanup(func() { allowLoopback = false })
+	allowLoopback.Store(true)
+	t.Cleanup(func() { allowLoopback.Store(false) })
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "  channel_not_found  ", http.StatusNotFound)
 	}))

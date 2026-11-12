@@ -38,8 +38,8 @@ func (h *hook) n() int { h.mu.Lock(); defer h.mu.Unlock(); return len(h.msgs) }
 
 func setup(t *testing.T) (*Engine, *traffic.Collector, *hook, *httptest.Server) {
 	t.Helper()
-	allowLoopback = true
-	t.Cleanup(func() { allowLoopback = false })
+	allowLoopback.Store(true)
+	t.Cleanup(func() { allowLoopback.Store(false) })
 	st, err := store.Open(filepath.Join(t.TempDir(), "x.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +55,9 @@ func setup(t *testing.T) (*Engine, *traffic.Collector, *hook, *httptest.Server) 
 		t.Fatal(err)
 	}
 	tc := traffic.New()
-	return &Engine{Store: st, Key: key, Src: Sources{Traffic: tc}}, tc, h, srv
+	e := &Engine{Store: st, Key: key, Src: Sources{Traffic: tc}}
+	t.Cleanup(e.wait) // deliveries run in the background: let them finish before the rest is torn down
+	return e, tc, h, srv
 }
 
 func feed(tc *traffic.Collector, at time.Time, n int, status int) {
@@ -163,7 +165,7 @@ func TestWebhookSignatureAndSSRF(t *testing.T) {
 	if sig := h.hdr[0].Get("X-Corvus-Signature"); !strings.HasPrefix(sig, "sha256=") || h.hdr[0].Get("X-Corvus-Timestamp") == "" {
 		t.Fatalf("signature headers: %v", h.hdr[0])
 	}
-	allowLoopback = false
+	allowLoopback.Store(false)
 	client.CloseIdleConnections() // the check runs when a connection is dialed
 	if _, err := Send(context.Background(), "slack", Target{URL: srv.URL}, m); err == nil {
 		t.Fatal("loopback destination must be refused")

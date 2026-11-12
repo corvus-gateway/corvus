@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -208,7 +209,7 @@ func payload(kind string, t Target, m Message) (string, []byte, error) {
 // blockedIP refuses loopback, link-local (cloud metadata) and unspecified
 // destinations so a webhook URL cannot be used to reach the host itself.
 // Private networks stay allowed for self-hosted Mattermost etc.
-var allowLoopback = false // tests only
+var allowLoopback atomic.Bool // tests only
 
 func blockedIP(ip net.IP) bool {
 	if v4, transition := netcfg.EmbeddedIPv4(ip); transition {
@@ -216,7 +217,7 @@ func blockedIP(ip net.IP) bool {
 		// local-use NAT64 have no reliably readable IPv4 part and are refused.
 		return v4 == nil || blockedIP(v4)
 	}
-	if allowLoopback && ip.IsLoopback() {
+	if allowLoopback.Load() && ip.IsLoopback() {
 		return false
 	}
 	return ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast()

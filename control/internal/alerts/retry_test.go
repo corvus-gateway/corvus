@@ -36,8 +36,8 @@ func fastRetries(t *testing.T) {
 // flaky answers with the given status codes in turn, then 200.
 func flaky(t *testing.T, header http.Header, codes ...int) (*httptest.Server, *atomic.Int32) {
 	t.Helper()
-	allowLoopback = true
-	t.Cleanup(func() { allowLoopback = false })
+	allowLoopback.Store(true)
+	t.Cleanup(func() { allowLoopback.Store(false) })
 	n := new(atomic.Int32)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		i := int(n.Add(1)) - 1

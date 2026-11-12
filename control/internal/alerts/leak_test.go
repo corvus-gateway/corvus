@@ -15,8 +15,8 @@ import (
 // Delivery errors are stored in the alert history; they must not carry the secret
 // parts of a webhook URL or the receiver's response body.
 func TestSendErrorsHideWebhookSecrets(t *testing.T) {
-	allowLoopback = true
-	t.Cleanup(func() { allowLoopback = false })
+	allowLoopback.Store(true)
+	t.Cleanup(func() { allowLoopback.Store(false) })
 	m := Message{Title: "t", Time: time.Now()}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
