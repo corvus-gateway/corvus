@@ -32,12 +32,12 @@ proves the image came from the `release.yml` workflow of this repository. Use co
 `--new-bundle-format`).
 
 ```bash
-cosign verify ghcr.io/corvus-gateway/gateway:1.2.4 \
+cosign verify ghcr.io/corvus-gateway/gateway:1.2.9 \
   --certificate-identity-regexp '^https://github.com/corvus-gateway/corvus/.github/workflows/release.yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 # build provenance (SLSA), with the GitHub CLI
-gh attestation verify oci://ghcr.io/corvus-gateway/gateway:1.2.4 --owner corvus-gateway
+gh attestation verify oci://ghcr.io/corvus-gateway/gateway:1.2.9 --owner corvus-gateway
 ```
 
 Each [GitHub release](https://github.com/corvus-gateway/corvus/releases) also has these files:

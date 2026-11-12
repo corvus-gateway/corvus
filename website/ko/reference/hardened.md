@@ -32,12 +32,12 @@ cosign으로 키 없이(keyless) 서명됩니다. 따로 받아 둘 공개 키�
 2.6)을 사용하세요.
 
 ```bash
-cosign verify ghcr.io/corvus-gateway/gateway:1.2.4 \
+cosign verify ghcr.io/corvus-gateway/gateway:1.2.9 \
   --certificate-identity-regexp '^https://github.com/corvus-gateway/corvus/.github/workflows/release.yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 # 빌드 출처(SLSA) 확인, GitHub CLI 사용
-gh attestation verify oci://ghcr.io/corvus-gateway/gateway:1.2.4 --owner corvus-gateway
+gh attestation verify oci://ghcr.io/corvus-gateway/gateway:1.2.9 --owner corvus-gateway
 ```
 
 각 [GitHub 릴리즈](https://github.com/corvus-gateway/corvus/releases)에는 다음 파일도 첨부됩니다.
