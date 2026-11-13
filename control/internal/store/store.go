@@ -33,10 +33,14 @@ type querier interface {
 // Store is bound either to the database or to an open transaction (see WithTx).
 type Store struct {
 	db      *sql.DB
+	rdb     *sql.DB // SQLite read pool (nil: reads use db); see routedQuerier
 	q       querier
 	tx      bool
 	dialect string
 }
+
+// readPoolSize is the number of SQLite connections used for plain reads.
+const readPoolSize = 4
 
 // Open opens (and creates/migrates) the configuration database. target is either
 // a SQLite file path or a PostgreSQL URL (postgres://user:pass@host/db).
@@ -61,7 +65,7 @@ func Open(target string) (*Store, error) {
 		if db, err = sql.Open("sqlite", dsn); err != nil {
 			return nil, err
 		}
-		db.SetMaxOpenConns(1) // SQLite: serialize writers; reads are fast enough for a control plane
+		db.SetMaxOpenConns(1) // SQLite: one writer connection serializes all writes
 	}
 	s.db = db
 	s.q = s.wrap(db)
@@ -69,10 +73,46 @@ func Open(target string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if s.dialect == SQLite && fileTarget(target) {
+		// Reads get their own pool so they never wait for the writer connection, which a
+		// deploy holds for its whole transaction (render, openresty -t, reload). In WAL mode
+		// a reader sees the last committed state and is not blocked by an open write
+		// transaction. Opened after the migrations, so readers see the final schema.
+		rdb, err := sql.Open("sqlite", "file:"+target+"?_pragma=busy_timeout(5000)&_pragma=query_only(1)")
+		if err == nil {
+			rdb.SetMaxOpenConns(readPoolSize)
+			rdb.SetMaxIdleConns(readPoolSize)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			err = rdb.PingContext(ctx)
+			cancel()
+			if err != nil {
+				rdb.Close()
+			}
+		}
+		if err != nil {
+			db.Close()
+			return nil, fmt.Errorf("open read connections: %w", err)
+		}
+		s.rdb = rdb
+		s.q = routedQuerier{w: db, r: rdb}
+	}
 	return s, nil
 }
 
-func (s *Store) Close() error { return s.db.Close() }
+// fileTarget reports whether a SQLite target is a file a second connection pool can share
+// (an in-memory database is private to its connection).
+func fileTarget(target string) bool {
+	t := strings.ToLower(target)
+	return t != "" && t != ":memory:" && !strings.HasPrefix(t, "file::memory:") && !strings.Contains(t, "mode=memory")
+}
+
+func (s *Store) Close() error {
+	var err error
+	if s.rdb != nil {
+		err = s.rdb.Close()
+	}
+	return errors.Join(err, s.db.Close())
+}
 
 // WithTx runs fn with a Store bound to a single transaction; fn's error rolls it back.
 func (s *Store) WithTx(ctx context.Context, fn func(tx *Store) error) error {
@@ -88,6 +128,94 @@ func (s *Store) WithTx(ctx context.Context, fn func(tx *Store) error) error {
 		return err
 	}
 	return t.Commit()
+}
+
+// routedQuerier sends plain reads to the SQLite read pool and everything else (Exec,
+// statements with RETURNING, PRAGMAs, ...) to the single writer connection. Writes made
+// outside a transaction are committed when they return, so a following read sees them;
+// inside WithTx every statement stays on the transaction.
+type routedQuerier struct{ w, r *sql.DB }
+
+func (q routedQuerier) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	return q.w.ExecContext(ctx, query, args...)
+}
+
+func (q routedQuerier) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	if readOnlySQL(query) {
+		return q.r.QueryContext(ctx, query, args...)
+	}
+	return q.w.QueryContext(ctx, query, args...)
+}
+
+func (q routedQuerier) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	if readOnlySQL(query) {
+		return q.r.QueryRowContext(ctx, query, args...)
+	}
+	return q.w.QueryRowContext(ctx, query, args...)
+}
+
+// readOnlySQL reports whether query is a plain read: a SELECT, or a WITH … SELECT that
+// does not mention a writing keyword anywhere (conservative: when in doubt, the writer).
+func readOnlySQL(query string) bool {
+	q := skipSQLSpace(query)
+	end := 0
+	for end < len(q) && (q[end] >= 'a' && q[end] <= 'z' || q[end] >= 'A' && q[end] <= 'Z') {
+		end++
+	}
+	switch strings.ToUpper(q[:end]) {
+	case "SELECT":
+		return !hasSQLWord(q, "RETURNING")
+	case "WITH":
+		for _, w := range []string{"INSERT", "UPDATE", "DELETE", "REPLACE", "RETURNING"} {
+			if hasSQLWord(q, w) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// skipSQLSpace drops leading whitespace and comments.
+func skipSQLSpace(q string) string {
+	for {
+		q = strings.TrimLeft(q, " \t\r\n\f\v")
+		switch {
+		case strings.HasPrefix(q, "--"):
+			i := strings.IndexByte(q, '\n')
+			if i < 0 {
+				return ""
+			}
+			q = q[i+1:]
+		case strings.HasPrefix(q, "/*"):
+			i := strings.Index(q[2:], "*/")
+			if i < 0 {
+				return ""
+			}
+			q = q[i+4:]
+		default:
+			return q
+		}
+	}
+}
+
+// hasSQLWord reports whether word (upper case) occurs in q as a whole word, ignoring case.
+func hasSQLWord(q, word string) bool {
+	u := strings.ToUpper(q)
+	isWord := func(c byte) bool {
+		return c == '_' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
+	}
+	for i := 0; ; {
+		j := strings.Index(u[i:], word)
+		if j < 0 {
+			return false
+		}
+		j += i
+		if (j == 0 || !isWord(u[j-1])) && (j+len(word) == len(u) || !isWord(u[j+len(word)])) {
+			return true
+		}
+		i = j + 1
+	}
 }
 
 // BumpConfigRev marks the configuration as changed and returns the new revision.
@@ -250,6 +378,9 @@ func (s *Store) CreateSession(ctx context.Context, tokenHash string, userID int6
 // SessionIdle is how long a session may stay unused before it expires.
 const SessionIdle = 30 * time.Minute
 
+// sessionTouchWait bounds how long SessionUser waits to record session activity.
+var sessionTouchWait = 250 * time.Millisecond
+
 // SessionUser returns the user for a live session (absolute and idle expiry).
 func (s *Store) SessionUser(ctx context.Context, tokenHash string) (*User, error) {
 	t := now()
@@ -259,7 +390,11 @@ func (s *Store) SessionUser(ctx context.Context, tokenHash string) (*User, error
 	if err != nil {
 		return nil, err
 	}
-	_, _ = s.q.ExecContext(ctx, `UPDATE sessions SET last_seen_at = ? WHERE token_hash = ? AND COALESCE(last_seen_at, created_at) < ?`, t, tokenHash, t.Add(-time.Minute))
+	// Best effort and bounded: while a deploy holds the writer, skip the touch (it is
+	// retried on the next request) instead of stalling every console request.
+	tctx, cancel := context.WithTimeout(ctx, sessionTouchWait)
+	defer cancel()
+	_, _ = s.q.ExecContext(tctx, `UPDATE sessions SET last_seen_at = ? WHERE token_hash = ? AND COALESCE(last_seen_at, created_at) < ?`, t, tokenHash, t.Add(-time.Minute))
 	return u, nil
 }
 
