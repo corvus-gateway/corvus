@@ -87,8 +87,10 @@ func (s *Server) touchToken(ctx context.Context, id int64) {
 	if v, ok := tokenTouched.Load(id); ok && now.Sub(v.(time.Time)) < time.Minute {
 		return
 	}
-	tokenTouched.Store(id, now)
-	_ = s.Store.TouchAPIToken(ctx, id)
+	// remembered only once written: a touch skipped during a deploy is retried next time
+	if s.Store.TouchAPIToken(ctx, id) == nil {
+		tokenTouched.Store(id, now)
+	}
 }
 
 // bearerPrincipal resolves a Bearer token to the synthetic user the request runs as.

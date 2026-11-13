@@ -327,18 +327,11 @@ func (d *Deployer) prune(ctx context.Context) {
 
 // Dirty reports whether stored settings changed since the active version was rendered.
 func (d *Deployer) Dirty(ctx context.Context) (bool, error) {
-	rev, err := d.Store.ConfigRev(ctx)
+	rev, activeRev, hasActive, err := d.Store.DeployState(ctx)
 	if err != nil {
 		return false, err
 	}
-	v, err := d.Store.ActiveVersion(ctx)
-	if errors.Is(err, store.ErrNotFound) {
-		return true, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return v.ConfigRev != rev, nil
+	return !hasActive || activeRev != rev, nil
 }
 
 // rendersSame reports whether rendering the stored settings now gives exactly the files

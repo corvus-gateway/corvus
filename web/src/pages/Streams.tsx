@@ -169,7 +169,9 @@ export default function Streams() {
                 <SwitchRow label={t("streamPPIn")} description={t("streamPPInDesc")} checked={!!f.proxy_protocol_in} onChange={(v) => set({ proxy_protocol_in: v })} />
                 <SwitchRow label={t("streamPPOut")} description={t("streamPPOutDesc")} checked={!!f.proxy_protocol_out} onChange={(v) => set({ proxy_protocol_out: v })} />
               </div>
-              {fieldErr(error, "proxy_protocol_in") && <p role="alert" className="text-xs text-danger">{fieldErr(error, "proxy_protocol_in")}</p>}
+              {(fieldErr(error, "proxy_protocol_in") || fieldErr(error, "proxy_protocol_out")) && (
+                <p role="alert" className="text-xs text-danger">{fieldErr(error, "proxy_protocol_in") || fieldErr(error, "proxy_protocol_out")}</p>
+              )}
             </FormSection>
           )}
 

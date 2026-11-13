@@ -226,6 +226,17 @@ func (s *Store) BumpConfigRev(ctx context.Context) (int64, error) {
 	return s.ConfigRev(ctx)
 }
 
+// DeployState returns the settings revision and the revision of the active version in
+// one statement, so a deploy committing in between can't make them look out of step.
+// hasActive is false before the first successful deploy.
+func (s *Store) DeployState(ctx context.Context) (rev, activeRev int64, hasActive bool, err error) {
+	var active sql.NullInt64
+	err = s.q.QueryRowContext(ctx, `SELECT
+		(SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'config_rev'),
+		(SELECT config_rev FROM config_versions WHERE status = 'active' ORDER BY id DESC LIMIT 1)`).Scan(&rev, &active)
+	return rev, active.Int64, active.Valid, err
+}
+
 func (s *Store) ConfigRev(ctx context.Context) (int64, error) {
 	var v int64
 	err := s.q.QueryRowContext(ctx, `SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'config_rev'`).Scan(&v)
