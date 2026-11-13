@@ -48,6 +48,11 @@ func checkStream(r *http.Request, tx *store.Store, p compiler.Paths, st *store.S
 	if err != nil {
 		return err
 	}
+	n, err := tx.Network(ctx)
+	if err != nil {
+		return err
+	}
+	p = p.WithNetwork(n) // the PROXY protocol listeners are Corvus's ports too
 	if why := compiler.StreamConflict(p, others, st); why != "" {
 		errs = append(errs, validate.FieldError{Field: "incoming_port", Code: "conflict", Message: why})
 	}

@@ -241,6 +241,17 @@ http {
         location / { return 404; }
     }
 
+{{- if .P.PPHTTPPort}}
+    # PROXY protocol listeners (ports {{.P.PPHTTPPort}}/{{.P.PPHTTPSPort}}): the client address is taken
+    # from the PROXY header when the connection comes from a trusted proxy. Connections
+    # on {{.P.HTTPPort}}/{{.P.HTTPSPort}} carry no header and keep their address. Proxy hosts that
+    # read the address from a header (Cloudflare, trusted proxies) set their own.
+{{- range .TrustedProxies}}
+    set_real_ip_from {{.}};
+{{- end}}
+    real_ip_header proxy_protocol;
+{{- end}}
+
     # Requests for unknown hosts. TLS handshakes for unknown names are refused,
     # so no certificate (and none of its names) is disclosed (F11).
     server {
@@ -249,6 +260,14 @@ http {
 {{- if .P.IPv6}}
         listen [::]:{{.P.HTTPPort}} default_server;
         listen [::]:{{.P.HTTPSPort}} ssl default_server;
+{{- end}}
+{{- if .P.PPHTTPPort}}
+        listen {{.P.PPHTTPPort}} proxy_protocol default_server;
+        listen {{.P.PPHTTPSPort}} ssl proxy_protocol default_server;
+{{- if .P.IPv6}}
+        listen [::]:{{.P.PPHTTPPort}} proxy_protocol default_server;
+        listen [::]:{{.P.PPHTTPSPort}} ssl proxy_protocol default_server;
+{{- end}}
 {{- end}}
         server_name _;
         ssl_reject_handshake on;

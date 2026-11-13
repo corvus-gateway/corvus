@@ -1,0 +1,17 @@
+{{- /* PROXY protocol listeners of a public server (dot = Paths; see Paths.PPHTTPPort). */ -}}
+{{- define "pp_http"}}
+{{- if .PPHTTPPort}}
+    listen {{.PPHTTPPort}} proxy_protocol;
+{{- if .IPv6}}
+    listen [::]:{{.PPHTTPPort}} proxy_protocol;
+{{- end}}
+{{- end}}
+{{- end}}
+{{- define "pp_https"}}
+{{- if .PPHTTPSPort}}
+    listen {{.PPHTTPSPort}} ssl proxy_protocol;
+{{- if .IPv6}}
+    listen [::]:{{.PPHTTPSPort}} ssl proxy_protocol;
+{{- end}}
+{{- end}}
+{{- end}}

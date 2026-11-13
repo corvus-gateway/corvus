@@ -116,9 +116,15 @@ func (s *Server) npmRead(w http.ResponseWriter, r *http.Request) (*npmimport.Sna
 		fail(w, err)
 		return nil, in, false
 	}
+	network, err := s.Store.Network(r.Context())
+	if err != nil {
+		fail(w, err)
+		return nil, in, false
+	}
+	paths := s.Paths.WithNetwork(network)
 	for i := range snap.Streams {
 		x := npmStream(snap.Streams[i], nil)
-		snap.Streams[i].Conflict = compiler.StreamConflict(s.Paths, streams, x)
+		snap.Streams[i].Conflict = compiler.StreamConflict(paths, streams, x)
 	}
 	if snap.Streams == nil {
 		snap.Streams = []npmimport.Stream{}

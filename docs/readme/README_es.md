@@ -61,7 +61,7 @@ OpenResty, plano de control en Go, consola en React) que puede **importar una co
 - Certificados gratuitos de Let's Encrypt (HTTP-01 o DNS-01 mediante Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap, con credenciales del proveedor guardadas y reutilizables) con renovación automática, o suba los suyos (y reemplácelos en su sitio al renovarlos)
 - Streams: reenvíe puertos TCP/UDP (bases de datos, SSH, MQTT, servidores de juegos) a otro host, con terminación TLS opcional para TCP
 - Los nombres de host desconocidos reciben, a su elección, una página 404, el cierre de la conexión o una redirección
-- IP real del cliente detrás de Cloudflare o de proxies de confianza; protección opcional con contraseña por host
+- IP real del cliente detrás de Cloudflare, de proxies de confianza o mediante PROXY protocol (FRP, HAProxy, balanceadores de carga); protección opcional con contraseña por host
 - Ajustes predefinidos de cabeceras de seguridad por host (Básico / Estricto: nosniff, políticas de frame y de referrer, CSP en modo solo informe, atributos de cookie HttpOnly/SameSite/Secure), sin sobrescribir nunca lo que la aplicación ya envía
 - Compresión gzip de las respuestas de texto (activada por defecto), y límite de tamaño de subida y tiempo de espera del upstream por host
 - Cada cambio se valida con `openresty -t`, se aplica de forma atómica y se puede revertir

@@ -42,7 +42,7 @@ Corvus가 80·443 포트로 요청을 받아 뒤에 있는 알맞은 앱이나 �
 
 | | |
 |---|---|
-| **프록시와 TLS** | [메모](proxy/proxy-hosts.md#notes)를 남길 수 있는 프록시 호스트, [사용자 지정 위치](proxy/locations.md), [리디렉션](proxy/redirection-hosts.md), [TCP/UDP 스트림](proxy/streams.md), 자동 갱신되는 [Let's Encrypt 인증서](proxy/certificates.md)와 저장해 두고 다시 쓰는 DNS 인증 정보, [알 수 없는 호스트](operations/pages.md#unknown-hosts) 응답 선택(404, 연결 끊기, 리디렉션) |
+| **프록시와 TLS** | [메모](proxy/proxy-hosts.md#notes)를 남길 수 있는 프록시 호스트, [사용자 지정 위치](proxy/locations.md), [리디렉션](proxy/redirection-hosts.md), [TCP/UDP 스트림](proxy/streams.md), 자동 갱신되는 [Let's Encrypt 인증서](proxy/certificates.md)와 저장해 두고 다시 쓰는 DNS 인증 정보, Cloudflare·프록시·TCP 터널([PROXY protocol](proxy/proxy-hosts.md#behind-a-tcp-tunnel-or-load-balancer-proxy-protocol)) 뒤에서도 [실제 클라이언트 IP](proxy/proxy-hosts.md#client-ip) 확인, [알 수 없는 호스트](operations/pages.md#unknown-hosts) 응답 선택(404, 연결 끊기, 리디렉션) |
 | **보안** | 알려진 공격 패턴 기본 차단, [보안 규칙](security/rules.md), [IP·User-Agent 목록](security/ip-lists.md), [브라우저 챌린지와 공격 대응 모드](security/challenge.md), [자동 차단](security/bans.md) |
 | **접속 대기열** | 트래픽 급증에 대비한 [정원 기반 대기실](access-queue.md) |
 | **관제** | [실시간 트래픽, 요청 로그, 보안 이벤트](operations/traffic.md), Slack·Discord·Teams·Telegram 등으로 보내는 [알림](operations/alerts.md) |

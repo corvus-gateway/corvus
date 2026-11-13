@@ -39,7 +39,8 @@ description: "스트림으로 HTTP가 아닌 서비스(데이터베이스, SSH, 
 
 ## 제한 사항
 
-- Corvus가 직접 쓰는 포트(80, 443, 9443과 내부 포트)는 사용할 수 없고, 스트림을 Corvus 자신의 관리
+- Corvus가 직접 쓰는 포트(80, 443, 9443, 내부 포트, 그리고 켜져 있을 때의 [PROXY protocol
+  포트](proxy-hosts.md#behind-a-tcp-tunnel-or-load-balancer-proxy-protocol))는 사용할 수 없고, 스트림을 Corvus 자신의 관리
   콘솔이나 내부 포트로 전달할 수도 없습니다.
 - 사용 중인 두 스트림이 같은 포트와 프로토콜을 함께 쓸 수 없습니다.
 - 트래픽이 없는 연결은 TCP는 1시간, UDP는 60초 뒤에 닫힙니다.

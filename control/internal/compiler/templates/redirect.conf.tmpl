@@ -4,11 +4,13 @@ server {
 {{- if .P.IPv6}}
     listen [::]:{{.P.HTTPPort}};
 {{- end}}
+{{- template "pp_http" .P}}
 {{- if .CertDir}}
     listen {{.P.HTTPSPort}} ssl;
 {{- if .P.IPv6}}
     listen [::]:{{.P.HTTPSPort}} ssl;
 {{- end}}
+{{- template "pp_https" .P}}
 {{- if .HTTP2}}
     http2 on;
 {{- end}}

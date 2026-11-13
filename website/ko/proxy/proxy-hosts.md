@@ -54,7 +54,7 @@ SSE(server-sent events)가 끊기지 않습니다.
 - **HTTPS로 강제 이동**은 HTTP를 HTTPS로 리디렉션하고 `Strict-Transport-Security`를 보냅니다.
 - **HTTP/2**는 HTTPS 연결에서 HTTP/2를 사용합니다.
 
-### 클라이언트 IP
+### 클라이언트 IP { #client-ip }
 
 실제 방문자 IP를 어디서 가져올지 정합니다. 규칙, 차단, Rate Limit, 로그에 이 IP를 사용합니다.
 
@@ -66,6 +66,81 @@ SSE(server-sent events)가 끊기지 않습니다.
 
 !!! warning
     신뢰 프록시를 잘못 설정하면 클라이언트가 IP를 속여 Rate Limit과 차단을 피할 수 있습니다.
+
+#### TCP 터널이나 로드 밸런서 뒤에 있을 때 (PROXY protocol) { #behind-a-tcp-tunnel-or-load-balancer-proxy-protocol }
+
+TCP 터널이나 로드 밸런서(FRP, HAProxy, 클라우드 로드 밸런서)는 연결 내용을 읽지 않고 그대로 넘기므로,
+Corvus에는 모든 방문자가 터널의 주소로 보입니다. 이런 도구는 대부분 연결 맨 앞에
+[PROXY protocol](https://www.haproxy.org/download/2.9/doc/proxy-protocol.txt) 헤더(v1 또는 v2)로
+방문자 주소를 실어 보낼 수 있고, Corvus는 별도의 포트 두 개에서 이 헤더를 받습니다.
+
+1. **네트워크** 페이지에서 **PROXY protocol 받기**를 켭니다. 포트는 기본값이 **8080**(HTTP),
+   **8443**(HTTPS)이며, Corvus가 직접 쓰는 포트나 스트림이 쓰는 포트는 고를 수 없습니다.
+2. 같은 페이지의 **신뢰 프록시**에 터널이 접속해 오는 주소를 추가합니다. 헤더는 그 주소에서 온
+   연결에서만 사용합니다(목록이 비어 있으면 설정을 켤 수 없습니다). 어떤 주소인지 모르겠다면
+   **트래픽** 페이지를 보세요. 터널을 거쳐 온 방문자는 모두 같은 주소로 보입니다.
+3. `docker-compose.yml`에서 포트를 공개합니다(왼쪽은 호스트에서 비어 있는 아무 포트나 됩니다).
+
+    ```yaml
+        ports:
+          - '80:80'
+          - '443:443'
+          - '9443:9443'
+          - '8080:8080'   # PROXY protocol, HTTP
+          - '8443:8443'   # PROXY protocol, HTTPS
+    ```
+
+4. 터널이 PROXY protocol을 켠 채로 이 포트에 연결하도록 설정합니다.
+
+80/443 포트는 그대로라서, 내부망 방문자와 터널이 Corvus를 함께 쓸 수 있습니다. (헤더를 기다리는
+포트는 헤더 없는 연결을 거부하므로, 추가 포트는 터널만 쓰도록 하세요.)
+
+=== "FRP"
+
+    Corvus 옆 머신의 `frpc.toml`(frp 0.52 이상):
+
+    ```toml
+    [[proxies]]
+    name = "corvus-https"
+    type = "tcp"
+    localIP = "127.0.0.1"      # Corvus 호스트
+    localPort = 8443
+    remotePort = 443
+    transport.proxyProtocolVersion = "v2"
+
+    [[proxies]]
+    name = "corvus-http"
+    type = "tcp"
+    localIP = "127.0.0.1"
+    localPort = 8080
+    remotePort = 80
+    transport.proxyProtocolVersion = "v2"
+    ```
+
+=== "HAProxy"
+
+    ```
+    frontend https_in
+        mode tcp
+        bind :443
+        default_backend corvus_https
+
+    backend corvus_https
+        mode tcp
+        server corvus 192.168.1.10:8443 send-proxy-v2
+    ```
+
+TLS는 여전히 Corvus에서 처리하므로 인증서(HTTP 포트를 통한 Let's Encrypt HTTP-01 포함)는 평소처럼
+동작합니다.
+
+헤더의 주소는 **직접 연결**로 설정한 호스트, 리디렉션 호스트, 알 수 없는 호스트에 쓰입니다.
+**Cloudflare**나 **신뢰 프록시**로 설정한 호스트는 계속 각자의 헤더에서 주소를 읽습니다. 터널 앞에
+Cloudflare가 있다면 호스트를 **신뢰 프록시**와 `CF-Connecting-IP` 헤더로 설정하고 터널의 주소를 신뢰
+프록시에 추가하세요. 단, 터널의 공개 포트가 Cloudflare 주소에서 오는 연결만 받을 때만 그렇게 해야
+합니다. 그렇지 않으면 누구나 터널을 통해 그 헤더를 보낼 수 있습니다.
+
+!!! note
+    [스트림](streams.md)은 아직 PROXY protocol을 받지 않습니다.
 
 ### 보호
 

@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import { Cloud, Network as NetworkIcon, RefreshCw, Save } from "lucide-react";
-import { api, type NetworkSettings } from "../api";
+import { api, type NetworkSettings, type ProxyProtocolSettings } from "../api";
 import { ErrorBox, PageHeader, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Badge, Callout, Card, CardHeader, ComingSoon, Skeleton } from "../components/ui/display";
-import { Field, IdField, Input, Select, SwitchRow, TagInput, fieldErr } from "../components/ui/form";
+import { Field, IdField, Input, NumberInput, Select, SwitchRow, TagInput, fieldErr } from "../components/ui/form";
 import { useResource } from "../hooks/useResource";
 import { useCan } from "../lib/rbac";
 import { useI18n } from "../i18n";
 import { fmtDateTime } from "../lib/utils";
 
 const DEFAULT_HEADERS = ["X-Forwarded-For", "X-Real-IP", "CF-Connecting-IP", "True-Client-IP"];
+const PP_DEFAULT: ProxyProtocolSettings = { enabled: false, http_port: 8080, https_port: 8443 };
 
 export default function NetworkPage() {
   const { t, lang } = useI18n();
@@ -21,6 +22,7 @@ export default function NetworkPage() {
   const [custom, setCustom] = useState(false);
   const [mask, setMask] = useState(false);
   const [allow, setAllow] = useState<string[]>([]);
+  const [pp, setPP] = useState<ProxyProtocolSettings>(PP_DEFAULT);
   const HEADERS = res.data?.real_ip_headers?.length ? res.data.real_ip_headers : DEFAULT_HEADERS;
   const save = useSubmit();
   const cf = useSubmit();
@@ -32,12 +34,14 @@ export default function NetworkPage() {
     setCustom(!!res.data.real_ip_header && !HEADERS.includes(res.data.real_ip_header));
     setMask(!!res.data.mask_ips);
     setAllow((res.data as { admin_allow?: string[] }).admin_allow ?? []);
+    setPP(res.data.proxy_protocol ?? PP_DEFAULT);
   }, [res.data]);
 
-  const dirty = !!res.data && (JSON.stringify(proxies) !== JSON.stringify(res.data.trusted_proxies ?? []) || header !== (res.data.real_ip_header || "X-Forwarded-For") || ("mask_ips" in res.data && mask !== !!res.data.mask_ips) || JSON.stringify(allow) !== JSON.stringify((res.data as { admin_allow?: string[] }).admin_allow ?? []));
+  const dirty = !!res.data && (JSON.stringify(proxies) !== JSON.stringify(res.data.trusted_proxies ?? []) || header !== (res.data.real_ip_header || "X-Forwarded-For") || ("mask_ips" in res.data && mask !== !!res.data.mask_ips) || JSON.stringify(allow) !== JSON.stringify((res.data as { admin_allow?: string[] }).admin_allow ?? [])
+    || (!!res.data.proxy_protocol && JSON.stringify(pp) !== JSON.stringify(res.data.proxy_protocol)));
 
   const onSave = async () => {
-    const r = await save.run(() => api.put("/api/settings/network", { trusted_proxies: proxies, real_ip_header: header, admin_allow: allow, ...(res.data && "mask_ips" in res.data ? { mask_ips: mask } : {}) }), { success: t("savedDeployed") });
+    const r = await save.run(() => api.put("/api/settings/network", { trusted_proxies: proxies, real_ip_header: header, admin_allow: allow, ...(res.data && "mask_ips" in res.data ? { mask_ips: mask } : {}), ...(res.data?.proxy_protocol ? { proxy_protocol: pp } : {}) }), { success: t("savedDeployed") });
     if (r !== undefined) { res.reload(); window.dispatchEvent(new Event("corvus:refresh")); }
   };
   const onRefresh = async () => {
@@ -76,6 +80,20 @@ export default function NetworkPage() {
               <Field label={t("adminAllow")} hint={t("adminAllowHint")} error={fieldErr(save.error, "admin_allow")}>
                 <TagInput label={t("adminAllow")} value={allow} onChange={setAllow} placeholder="203.0.113.0/24, 10.0.0.0/8" invalid={!!fieldErr(save.error, "admin_allow")} />
               </Field>
+              {res.data?.proxy_protocol && <div className="space-y-4 border-t border-line pt-5">
+                <SwitchRow label={t("ppTitle")} description={t("ppDesc")} checked={pp.enabled} onChange={(v) => setPP({ ...pp, enabled: v })} />
+                {pp.enabled && <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <IdField label={t("ppHttpPort")} error={fieldErr(save.error, "proxy_protocol.http_port")}>
+                      {(id) => <NumberInput id={id} min={1} max={65535} value={pp.http_port} onChange={(v) => setPP({ ...pp, http_port: v })} aria-invalid={!!fieldErr(save.error, "proxy_protocol.http_port") || undefined} />}
+                    </IdField>
+                    <IdField label={t("ppHttpsPort")} error={fieldErr(save.error, "proxy_protocol.https_port")}>
+                      {(id) => <NumberInput id={id} min={1} max={65535} value={pp.https_port} onChange={(v) => setPP({ ...pp, https_port: v })} aria-invalid={!!fieldErr(save.error, "proxy_protocol.https_port") || undefined} />}
+                    </IdField>
+                  </div>
+                  <Callout tone="info">{t("ppHint")}</Callout>
+                </>}
+              </div>}
               {isAdmin && <div className="flex justify-end gap-2">
                 <Button type="submit" variant="primary" loading={save.busy} disabled={!dirty}><Save className="h-4 w-4" />{t("saveAndDeploy")}</Button>
               </div>}

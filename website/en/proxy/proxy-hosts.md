@@ -67,6 +67,84 @@ Where the real visitor IP comes from. It is used by rules, bans, rate limits and
 !!! warning
     A wrong trusted-proxy setting lets clients fake their IP and get around rate limits and bans.
 
+#### Behind a TCP tunnel or load balancer (PROXY protocol)
+
+A TCP tunnel or load balancer (FRP, HAProxy, a cloud load balancer) passes the connection through
+without reading it, so Corvus sees the tunnel's address for every visitor. Most of them can send
+the visitor's address in a [PROXY protocol](https://www.haproxy.org/download/2.9/doc/proxy-protocol.txt)
+header (v1 or v2) at the start of the connection. Corvus accepts that header on two extra ports:
+
+1. On the **Network** page, turn on **Accept PROXY protocol**. The ports default to **8080** (HTTP)
+   and **8443** (HTTPS); they can't be Corvus's own ports or a stream's port.
+2. Add the address the tunnel connects from to **Trusted proxies** on the same page. The header is
+   used only on connections from there (Corvus refuses to turn the setting on with an empty list).
+   Not sure which address that is? Look at the **Traffic** page: with the tunnel in front, every
+   visitor has the same address.
+3. Publish the ports in `docker-compose.yml` (the left side can be any free port on the host):
+
+    ```yaml
+        ports:
+          - '80:80'
+          - '443:443'
+          - '9443:9443'
+          - '8080:8080'   # PROXY protocol, HTTP
+          - '8443:8443'   # PROXY protocol, HTTPS
+    ```
+
+4. Point the tunnel at these ports with the PROXY protocol turned on.
+
+Ports 80 and 443 stay as they are: visitors on your network and the tunnel can use Corvus side by
+side. (A port that expects the header refuses connections without one, so the extra ports should be
+used by the tunnel only.)
+
+=== "FRP"
+
+    `frpc.toml` on the machine next to Corvus (frp 0.52 or later):
+
+    ```toml
+    [[proxies]]
+    name = "corvus-https"
+    type = "tcp"
+    localIP = "127.0.0.1"      # the Corvus host
+    localPort = 8443
+    remotePort = 443
+    transport.proxyProtocolVersion = "v2"
+
+    [[proxies]]
+    name = "corvus-http"
+    type = "tcp"
+    localIP = "127.0.0.1"
+    localPort = 8080
+    remotePort = 80
+    transport.proxyProtocolVersion = "v2"
+    ```
+
+=== "HAProxy"
+
+    ```
+    frontend https_in
+        mode tcp
+        bind :443
+        default_backend corvus_https
+
+    backend corvus_https
+        mode tcp
+        server corvus 192.168.1.10:8443 send-proxy-v2
+    ```
+
+TLS still ends at Corvus, so certificates (including Let's Encrypt HTTP-01 through the HTTP port)
+work as usual.
+
+The address from the header is used by hosts set to **Direct**, by redirection hosts and for
+unknown hosts. Hosts set to **Cloudflare** or **Trusted proxies** keep reading the address from
+their header. If Cloudflare is in front of the tunnel, set the host to **Trusted proxies** with the
+`CF-Connecting-IP` header and add the tunnel's address to the trusted proxies, but only when the
+tunnel's public ports accept nothing but Cloudflare's addresses: otherwise anyone could send that
+header through the tunnel.
+
+!!! note
+    [Streams](streams.md) don't accept the PROXY protocol yet.
+
 ### Protection
 
 ![Protection section](../img/proxy-host-protection.png){ .shot .panel }

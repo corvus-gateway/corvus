@@ -184,8 +184,12 @@ export interface RateLimit {
   dry_run: boolean; exempt_cidrs: string[]; enabled: boolean; hosts?: number;
 }
 
+/** Extra gateway listeners that expect a PROXY protocol header (ports 80/443 are unchanged). */
+export interface ProxyProtocolSettings { enabled: boolean; http_port: number; https_port: number }
+
 export interface NetworkSettings {
   trusted_proxies: string[]; real_ip_header: string; real_ip_headers?: string[]; mask_ips?: boolean;
+  proxy_protocol?: ProxyProtocolSettings;
   cloudflare?: { ipv4: number; ipv6: number; updated_at?: string; source?: "builtin" | "remote" };
 }
 

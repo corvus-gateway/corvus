@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"corvus/control/internal/auth"
+	"corvus/control/internal/compiler"
 	"corvus/control/internal/hints"
 	"corvus/control/internal/netcfg"
 	"corvus/control/internal/store"
@@ -325,6 +326,8 @@ func (s *Server) putNetwork(w http.ResponseWriter, r *http.Request) {
 		RealIPHeader   string    `json:"real_ip_header"`
 		MaskIPs        *bool     `json:"mask_ips"`
 		AdminAllow     *[]string `json:"admin_allow"`
+		// omitted = unchanged
+		ProxyProtocol *store.ProxyProtocol `json:"proxy_protocol"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -358,6 +361,25 @@ func (s *Server) putNetwork(w http.ResponseWriter, r *http.Request) {
 		}
 		if in.AdminAllow != nil {
 			n.AdminAllow = allow
+		}
+		if pp := in.ProxyProtocol; pp != nil {
+			if pp.HTTPPort == 0 {
+				pp.HTTPPort = store.DefaultProxyProtocolHTTPPort
+			}
+			if pp.HTTPSPort == 0 {
+				pp.HTTPSPort = store.DefaultProxyProtocolHTTPSPort
+			}
+			n.ProxyProtocol = *pp
+		}
+		// Checked also when only the trusted proxies change: PROXY protocol needs them.
+		if n.ProxyProtocol.Enabled || in.ProxyProtocol != nil {
+			streams, err := tx.ListStreams(r.Context())
+			if err != nil {
+				return err
+			}
+			if err := compiler.CheckProxyProtocol(s.Paths, n.ProxyProtocol, n.TrustedProxies, streams).OrNil(); err != nil {
+				return err
+			}
 		}
 		return tx.SetNetwork(r.Context(), n)
 	})

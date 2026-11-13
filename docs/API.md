@@ -383,7 +383,7 @@ tested, deployed and rolled back with the rest of the configuration.
 
 | Method | Path | Role | Description |
 |---|---|---|---|
-| GET / PUT | `/api/settings/network` | viewer / admin | Trusted proxies, real IP header, admin allowlist |
+| GET / PUT | `/api/settings/network` | viewer / admin | Trusted proxies, real IP header, admin allowlist, PROXY protocol listeners (see below) |
 | POST | `/api/settings/network/cloudflare/refresh` | admin | Refresh Cloudflare IP ranges |
 | GET / PUT | `/api/settings/sso` | admin | OIDC settings |
 | POST | `/api/settings/sso/test` | admin | Test OIDC discovery |
@@ -394,6 +394,17 @@ tested, deployed and rolled back with the rest of the configuration.
 | GET / POST | `/api/tokens` | session | API tokens (`{ "name", "role", "expires_days" }`) |
 | DELETE | `/api/tokens/{id}` | session | Revoke a token |
 | POST | `/api/import/npm/preview`, `/apply` | admin | Import from Nginx Proxy Manager (`/apply` takes `proxy_host_ids`, `redirection_host_ids`, `stream_ids`, `certificate_ids`, `access_list_ids`; omitted = all) |
+
+`PUT /api/settings/network` takes `{ "trusted_proxies": [...], "real_ip_header", "mask_ips",
+"admin_allow": [...], "proxy_protocol": { "enabled", "http_port", "https_port" } }`.
+`trusted_proxies` is always replaced (send the current list to keep it); the other fields keep
+their value when omitted. `proxy_protocol` adds gateway listeners that expect a PROXY protocol
+(v1/v2) header (defaults `8080` / `8443`; ports 80/443 are unchanged). While enabled, the ports
+must differ, can't be Corvus's own ports or used by any stream (`422`, field
+`proxy_protocol.http_port` / `proxy_protocol.https_port`, code `conflict`), and `trusted_proxies`
+can't be empty (field `trusted_proxies`, code `no_trusted_proxies`): the client address in the
+header is used only on connections from a trusted proxy. Streams can't use the ports while they
+are enabled.
 
 ### Backup and restore
 

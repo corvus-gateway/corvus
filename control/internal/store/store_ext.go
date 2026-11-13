@@ -28,14 +28,31 @@ func (s *Store) SetMeta(ctx context.Context, key, value string) error {
 // ------------------------------------------------------------------ network settings
 
 type NetworkSettings struct {
-	TrustedProxies []string `json:"trusted_proxies"`
-	RealIPHeader   string   `json:"real_ip_header"`
-	MaskIPs        bool     `json:"mask_ips"`
-	AdminAllow     []string `json:"admin_allow"` // networks allowed to reach the admin console (empty = any)
+	TrustedProxies []string      `json:"trusted_proxies"`
+	RealIPHeader   string        `json:"real_ip_header"`
+	MaskIPs        bool          `json:"mask_ips"`
+	AdminAllow     []string      `json:"admin_allow"` // networks allowed to reach the admin console (empty = any)
+	ProxyProtocol  ProxyProtocol `json:"proxy_protocol"`
 }
 
+// ProxyProtocol adds gateway listeners that expect a PROXY protocol (v1/v2) header, for
+// a TCP tunnel or load balancer in front of Corvus. Ports 80/443 are unchanged: nginx
+// refuses connections without the header on such a listener.
+type ProxyProtocol struct {
+	Enabled   bool `json:"enabled"`
+	HTTPPort  int  `json:"http_port"`  // plain HTTP with the PROXY header (default 8080)
+	HTTPSPort int  `json:"https_port"` // TLS with the PROXY header (default 8443)
+}
+
+// Default PROXY protocol listener ports.
+const (
+	DefaultProxyProtocolHTTPPort  = 8080
+	DefaultProxyProtocolHTTPSPort = 8443
+)
+
 func (s *Store) Network(ctx context.Context) (NetworkSettings, error) {
-	n := NetworkSettings{TrustedProxies: []string{}, RealIPHeader: "X-Forwarded-For"}
+	n := NetworkSettings{TrustedProxies: []string{}, RealIPHeader: "X-Forwarded-For",
+		ProxyProtocol: ProxyProtocol{HTTPPort: DefaultProxyProtocolHTTPPort, HTTPSPort: DefaultProxyProtocolHTTPSPort}}
 	v, err := s.GetMeta(ctx, "network")
 	if err != nil || v == "" {
 		return n, err
@@ -43,6 +60,12 @@ func (s *Store) Network(ctx context.Context) (NetworkSettings, error) {
 	err = json.Unmarshal([]byte(v), &n)
 	if n.TrustedProxies == nil {
 		n.TrustedProxies = []string{}
+	}
+	if n.ProxyProtocol.HTTPPort == 0 {
+		n.ProxyProtocol.HTTPPort = DefaultProxyProtocolHTTPPort
+	}
+	if n.ProxyProtocol.HTTPSPort == 0 {
+		n.ProxyProtocol.HTTPSPort = DefaultProxyProtocolHTTPSPort
 	}
 	return n, err
 }

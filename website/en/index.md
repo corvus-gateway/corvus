@@ -44,7 +44,7 @@ server you already run.
 
 | | |
 |---|---|
-| **Proxy & TLS** | Proxy hosts with [notes](proxy/proxy-hosts.md#notes), [custom locations](proxy/locations.md), [redirections](proxy/redirection-hosts.md), [TCP/UDP streams](proxy/streams.md), [Let's Encrypt certificates](proxy/certificates.md) with automatic renewal and saved DNS credentials, what [unknown hosts](operations/pages.md#unknown-hosts) get: 404, closed connection or a redirect |
+| **Proxy & TLS** | Proxy hosts with [notes](proxy/proxy-hosts.md#notes), [custom locations](proxy/locations.md), [redirections](proxy/redirection-hosts.md), [TCP/UDP streams](proxy/streams.md), [Let's Encrypt certificates](proxy/certificates.md) with automatic renewal and saved DNS credentials, [real client IP](proxy/proxy-hosts.md#client-ip) behind Cloudflare, proxies or a TCP tunnel ([PROXY protocol](proxy/proxy-hosts.md#behind-a-tcp-tunnel-or-load-balancer-proxy-protocol)), what [unknown hosts](operations/pages.md#unknown-hosts) get: 404, closed connection or a redirect |
 | **Security** | Known attack patterns blocked by default, [security rules](security/rules.md), [IP and User-Agent lists](security/ip-lists.md), [browser challenge and "under attack" mode](security/challenge.md), [automatic bans](security/bans.md) |
 | **Access queue** | [Capacity-based waiting room](access-queue.md) for traffic spikes |
 | **Monitoring** | [Live traffic, request logs and security events](operations/traffic.md), [alerts](operations/alerts.md) to Slack, Discord, Teams, Telegram and more |
