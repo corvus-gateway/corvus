@@ -89,10 +89,14 @@ func (s *Store) ListAPITokens(ctx context.Context) ([]APIToken, error) {
 	return out, rows.Err()
 }
 
-// TouchAPIToken records use, at most once a minute per token.
+// TouchAPIToken records use, at most once a minute per token. Like the session touch it
+// waits at most sessionTouchWait: while a deploy holds the writer, the update is skipped
+// (and retried on a later request) instead of stalling the API call.
 func (s *Store) TouchAPIToken(ctx context.Context, id int64) error {
 	t := now()
-	_, err := s.q.ExecContext(ctx, `UPDATE api_tokens SET last_used_at = ? WHERE id = ? AND (last_used_at IS NULL OR last_used_at < ?)`, t, id, t.Add(-time.Minute))
+	tctx, cancel := context.WithTimeout(ctx, sessionTouchWait)
+	defer cancel()
+	_, err := s.q.ExecContext(tctx, `UPDATE api_tokens SET last_used_at = ? WHERE id = ? AND (last_used_at IS NULL OR last_used_at < ?)`, t, id, t.Add(-time.Minute))
 	return err
 }
 
