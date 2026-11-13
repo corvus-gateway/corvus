@@ -11,7 +11,7 @@ import { useI18n } from "../i18n";
 import { fmtDateTime } from "../lib/utils";
 
 const DEFAULT_HEADERS = ["X-Forwarded-For", "X-Real-IP", "CF-Connecting-IP", "True-Client-IP"];
-const PP_DEFAULT: ProxyProtocolSettings = { enabled: false, http_port: 8080, https_port: 8443 };
+const PP_DEFAULT: ProxyProtocolSettings = { enabled: false, http_port: 8080, https_port: 8443, trusted: [] };
 
 export default function NetworkPage() {
   const { t, lang } = useI18n();
@@ -40,7 +40,14 @@ export default function NetworkPage() {
   const dirty = !!res.data && (JSON.stringify(proxies) !== JSON.stringify(res.data.trusted_proxies ?? []) || header !== (res.data.real_ip_header || "X-Forwarded-For") || ("mask_ips" in res.data && mask !== !!res.data.mask_ips) || JSON.stringify(allow) !== JSON.stringify((res.data as { admin_allow?: string[] }).admin_allow ?? [])
     || (!!res.data.proxy_protocol && JSON.stringify(pp) !== JSON.stringify(res.data.proxy_protocol)));
 
+  // Empty or out-of-range ports are refused here (JSON would send an empty field as null).
+  const badPort = (v: number) => pp.enabled && (!Number.isInteger(v) || v < 1 || v > 65535) ? t("ppPortInvalid") : undefined;
+  const httpErr = badPort(pp.http_port) ?? fieldErr(save.error, "proxy_protocol.http_port");
+  const httpsErr = badPort(pp.https_port) ?? fieldErr(save.error, "proxy_protocol.https_port");
+  const portsBad = !!badPort(pp.http_port) || !!badPort(pp.https_port);
+
   const onSave = async () => {
+    if (portsBad) return;
     const r = await save.run(() => api.put("/api/settings/network", { trusted_proxies: proxies, real_ip_header: header, admin_allow: allow, ...(res.data && "mask_ips" in res.data ? { mask_ips: mask } : {}), ...(res.data?.proxy_protocol ? { proxy_protocol: pp } : {}) }), { success: t("savedDeployed") });
     if (r !== undefined) { res.reload(); window.dispatchEvent(new Event("corvus:refresh")); }
   };
@@ -84,18 +91,21 @@ export default function NetworkPage() {
                 <SwitchRow label={t("ppTitle")} description={t("ppDesc")} checked={pp.enabled} onChange={(v) => setPP({ ...pp, enabled: v })} />
                 {pp.enabled && <>
                   <div className="grid grid-cols-2 gap-3">
-                    <IdField label={t("ppHttpPort")} error={fieldErr(save.error, "proxy_protocol.http_port")}>
-                      {(id) => <NumberInput id={id} min={1} max={65535} value={pp.http_port} onChange={(v) => setPP({ ...pp, http_port: v })} aria-invalid={!!fieldErr(save.error, "proxy_protocol.http_port") || undefined} />}
+                    <IdField label={t("ppHttpPort")} error={httpErr}>
+                      {(id) => <NumberInput id={id} min={1} max={65535} value={pp.http_port} onChange={(v) => setPP({ ...pp, http_port: v })} aria-invalid={!!httpErr || undefined} />}
                     </IdField>
-                    <IdField label={t("ppHttpsPort")} error={fieldErr(save.error, "proxy_protocol.https_port")}>
-                      {(id) => <NumberInput id={id} min={1} max={65535} value={pp.https_port} onChange={(v) => setPP({ ...pp, https_port: v })} aria-invalid={!!fieldErr(save.error, "proxy_protocol.https_port") || undefined} />}
+                    <IdField label={t("ppHttpsPort")} error={httpsErr}>
+                      {(id) => <NumberInput id={id} min={1} max={65535} value={pp.https_port} onChange={(v) => setPP({ ...pp, https_port: v })} aria-invalid={!!httpsErr || undefined} />}
                     </IdField>
                   </div>
+                  <Field label={t("ppTrusted")} hint={t("ppTrustedHint")} error={fieldErr(save.error, "proxy_protocol.trusted")}>
+                    <TagInput label={t("ppTrusted")} value={pp.trusted ?? []} onChange={(v) => setPP({ ...pp, trusted: v })} placeholder="172.20.0.5, 10.8.0.0/24" invalid={!!fieldErr(save.error, "proxy_protocol.trusted")} />
+                  </Field>
                   <Callout tone="info">{t("ppHint")}</Callout>
                 </>}
               </div>}
               {isAdmin && <div className="flex justify-end gap-2">
-                <Button type="submit" variant="primary" loading={save.busy} disabled={!dirty}><Save className="h-4 w-4" />{t("saveAndDeploy")}</Button>
+                <Button type="submit" variant="primary" loading={save.busy} disabled={!dirty || portsBad}><Save className="h-4 w-4" />{t("saveAndDeploy")}</Button>
               </div>}
             </fieldset>
             </form>

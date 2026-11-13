@@ -70,13 +70,17 @@ func (p Paths) WithNetwork(n store.NetworkSettings) Paths {
 
 // CheckProxyProtocol validates the PROXY protocol settings: two distinct valid ports
 // that neither Corvus nor a stream uses (any stream: a disabled one may be enabled
-// later), and trusted proxies to accept the header from (without them the client
-// address in the header would never be used).
-// While disabled, only the port range is checked.
-func CheckProxyProtocol(p Paths, pp store.ProxyProtocol, trusted []string, streams []store.Stream) validate.Errors {
+// later), and trusted sources to accept the header from (pp.Trusted; without them the
+// client address in the header would never be used). While disabled, only the port
+// range and the trusted list's format are checked.
+func CheckProxyProtocol(p Paths, pp store.ProxyProtocol, streams []store.Stream) validate.Errors {
 	p.PPHTTPPort, p.PPHTTPSPort = 0, 0
 	reserved := p.ReservedPorts()
 	var errs validate.Errors
+	trusted, err := netcfg.NormalizeTrustedCIDRs(pp.Trusted)
+	if err != nil {
+		errs = append(errs, validate.FieldError{Field: "proxy_protocol.trusted", Code: "invalid", Message: err.Error()})
+	}
 	for _, f := range []struct {
 		field string
 		port  int
@@ -105,9 +109,9 @@ func CheckProxyProtocol(p Paths, pp store.ProxyProtocol, trusted []string, strea
 	if pp.HTTPPort == pp.HTTPSPort {
 		errs = append(errs, validate.FieldError{Field: "proxy_protocol.https_port", Code: "conflict", Message: "the HTTP and HTTPS ports must differ"})
 	}
-	if len(trusted) == 0 {
-		errs = append(errs, validate.FieldError{Field: "trusted_proxies", Code: "no_trusted_proxies",
-			Message: "PROXY protocol needs the address of the tunnel or load balancer in trusted proxies"})
+	if err == nil && len(trusted) == 0 {
+		errs = append(errs, validate.FieldError{Field: "proxy_protocol.trusted", Code: "required",
+			Message: "add the address of the tunnel or load balancer that sends the PROXY protocol header"})
 	}
 	return errs
 }
@@ -325,9 +329,10 @@ type mainView struct {
 	Streams    int // enabled streams; the stream {} block is rendered only when > 0
 	RateLimits []store.RateLimit
 	Unknown    store.UnknownHosts // what the HTTP default server answers (validated)
-	// TrustedProxies may send a PROXY protocol header with the client address (used
-	// only with the PROXY protocol listeners, P.PPHTTPPort).
-	TrustedProxies []string
+	// PPTrusted may send a PROXY protocol header with the client address (used only
+	// with the PROXY protocol listeners, P.PPHTTPPort). Not the general trusted proxies:
+	// those are trusted for X-Forwarded-For.
+	PPTrusted []string
 }
 
 type redirectView struct {
@@ -365,10 +370,12 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 	if !validate.RealIPHeader(network.RealIPHeader) {
 		return fmt.Errorf("network settings: invalid real IP header")
 	}
+	var ppTrusted []string
 	if network.ProxyProtocol.Enabled {
-		if err := CheckProxyProtocol(c.P, network.ProxyProtocol, network.TrustedProxies, nil).OrNil(); err != nil {
+		if err := CheckProxyProtocol(c.P, network.ProxyProtocol, nil).OrNil(); err != nil {
 			return fmt.Errorf("network settings: %w", err)
 		}
+		ppTrusted, _ = netcfg.NormalizeTrustedCIDRs(network.ProxyProtocol.Trusted)
 	}
 	// The PROXY protocol listeners are part of the rendered configuration (Paths).
 	cc := *c
@@ -575,7 +582,7 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 	if err := os.WriteFile(filepath.Join(dir, "policy.json"), pj, 0o644); err != nil {
 		return err
 	}
-	return writeTemplate(filepath.Join(dir, "nginx.conf"), "nginx.conf.tmpl", mainView{Dir: slash, Name: filepath.Base(dir), P: c.P, Hosts: n, Redirects: nr, Streams: ns, RateLimits: enabledLimits, Unknown: unknown, TrustedProxies: network.TrustedProxies})
+	return writeTemplate(filepath.Join(dir, "nginx.conf"), "nginx.conf.tmpl", mainView{Dir: slash, Name: filepath.Base(dir), P: c.P, Hosts: n, Redirects: nr, Streams: ns, RateLimits: enabledLimits, Unknown: unknown, PPTrusted: ppTrusted})
 }
 
 // certDir returns the certificate directory for id, or "" while its files don't exist

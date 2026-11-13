@@ -76,26 +76,44 @@ header (v1 or v2) at the start of the connection. Corvus accepts that header on 
 
 1. On the **Network** page, turn on **Accept PROXY protocol**. The ports default to **8080** (HTTP)
    and **8443** (HTTPS); they can't be Corvus's own ports or a stream's port.
-2. Add the address the tunnel connects from to **Trusted proxies** on the same page. The header is
-   used only on connections from there (Corvus refuses to turn the setting on with an empty list).
-   Not sure which address that is? Look at the **Traffic** page: with the tunnel in front, every
-   visitor has the same address.
-3. Publish the ports in `docker-compose.yml` (the left side can be any free port on the host):
+2. Enter the address the tunnel connects from in **Trusted PROXY protocol sources** (in the same
+   section). The header is used only on connections from there, and the setting can't be turned on
+   with an empty list. This is a separate list: don't add the tunnel to **Trusted proxies**, which
+   are trusted for `X-Forwarded-For` (see below).
+3. Publish the ports in `docker-compose.yml`. When the tunnel runs on the same host, publish them on
+   loopback only:
 
     ```yaml
         ports:
           - '80:80'
           - '443:443'
           - '9443:9443'
-          - '8080:8080'   # PROXY protocol, HTTP
-          - '8443:8443'   # PROXY protocol, HTTPS
+          - '127.0.0.1:8080:8080'   # PROXY protocol, HTTP
+          - '127.0.0.1:8443:8443'   # PROXY protocol, HTTPS
     ```
+
+    When the tunnel or load balancer is on another machine, publish them without `127.0.0.1:` and
+    let a firewall allow only that machine's address to reach them.
 
 4. Point the tunnel at these ports with the PROXY protocol turned on.
 
 Ports 80 and 443 stay as they are: visitors on your network and the tunnel can use Corvus side by
 side. (A port that expects the header refuses connections without one, so the extra ports should be
 used by the tunnel only.)
+
+**Which address to trust.** Enter the address Corvus sees the tunnel connect from:
+
+- **frpc (or HAProxy) in a container on a Docker network shared with Corvus**, connecting to the
+  Corvus container by name: that container's address, or the network's subnet if it changes. The
+  ports don't need to be published at all in this case.
+- **frpc on the host, ports published on `127.0.0.1` as above**: the Docker bridge gateway
+  (e.g. `172.18.0.1`, shown as the client address on the **Traffic** page before you add it).
+- **A load balancer on another machine**: its address.
+
+!!! warning "Don't trust the Docker gateway unless the ports are on loopback"
+    With ports published on all addresses, Docker often makes outside connections appear to come
+    from the bridge gateway (its userland proxy, IPv6 without ip6tables, Docker Desktop, rootless
+    Docker). Trusting the gateway then lets anyone who reaches the port set their own address.
 
 === "FRP"
 
@@ -105,7 +123,7 @@ used by the tunnel only.)
     [[proxies]]
     name = "corvus-https"
     type = "tcp"
-    localIP = "127.0.0.1"      # the Corvus host
+    localIP = "127.0.0.1"      # the Corvus host (or the Corvus container's name)
     localPort = 8443
     remotePort = 443
     transport.proxyProtocolVersion = "v2"
@@ -137,10 +155,17 @@ work as usual.
 
 The address from the header is used by hosts set to **Direct**, by redirection hosts and for
 unknown hosts. Hosts set to **Cloudflare** or **Trusted proxies** keep reading the address from
-their header. If Cloudflare is in front of the tunnel, set the host to **Trusted proxies** with the
-`CF-Connecting-IP` header and add the tunnel's address to the trusted proxies, but only when the
-tunnel's public ports accept nothing but Cloudflare's addresses: otherwise anyone could send that
-header through the tunnel.
+their header with their own rules, also when reached through the tunnel. Don't add the tunnel to
+**Trusted proxies** for them unless the tunnel sets `X-Forwarded-For` itself: the tunnel passes on
+whatever the visitor sent, so trusting it would let visitors choose their own address. With
+Cloudflare in front of the tunnel, set the host to **Trusted proxies** with the `CF-Connecting-IP`
+header and add the tunnel to **Trusted proxies** only when the tunnel's public ports accept nothing
+but Cloudflare's addresses (a firewall on the tunnel server).
+
+!!! note "Advanced configuration with real IP directives"
+    While the PROXY protocol is on, Corvus sets `set_real_ip_from` and `real_ip_header` for all
+    servers. An advanced configuration that sets only one of them (only `real_ip_header`, or only
+    `set_real_ip_from`) is combined with the other one from Corvus. Set both, or neither.
 
 !!! note
     [Streams](streams.md) don't accept the PROXY protocol yet.

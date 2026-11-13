@@ -184,8 +184,9 @@ export interface RateLimit {
   dry_run: boolean; exempt_cidrs: string[]; enabled: boolean; hosts?: number;
 }
 
-/** Extra gateway listeners that expect a PROXY protocol header (ports 80/443 are unchanged). */
-export interface ProxyProtocolSettings { enabled: boolean; http_port: number; https_port: number }
+/** Extra gateway listeners that expect a PROXY protocol header (ports 80/443 are unchanged).
+ *  trusted: tunnels / load balancers whose header is believed (not the X-Forwarded-For trusted proxies). */
+export interface ProxyProtocolSettings { enabled: boolean; http_port: number; https_port: number; trusted?: string[] }
 
 export interface NetworkSettings {
   trusted_proxies: string[]; real_ip_header: string; real_ip_headers?: string[]; mask_ips?: boolean;

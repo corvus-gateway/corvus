@@ -39,6 +39,7 @@ func TestRenderProxyProtocol(t *testing.T) {
 		{Domains: []string{"tls.example.com"}, ForwardHost: "app", ForwardPort: 8080, Enabled: true, CertificateID: &cert.ID, HTTP2: true},
 		{Domains: []string{"plain.example.com"}, ForwardHost: "app", ForwardPort: 8080, Enabled: true},
 		{Domains: []string{"cf.example.com"}, ForwardHost: "app", ForwardPort: 8080, Enabled: true, ClientIP: "cloudflare"},
+		{Domains: []string{"xff.example.com"}, ForwardHost: "app", ForwardPort: 8080, Enabled: true, ClientIP: "trusted_proxies"},
 	} {
 		if err := st.SaveProxyHost(ctx, h); err != nil {
 			t.Fatal(err)
@@ -76,6 +77,11 @@ func TestRenderProxyProtocol(t *testing.T) {
 		}
 	}
 
+	// The general trusted proxies (X-Forwarded-For) are needed by host 4.
+	general := []string{"192.168.0.0/16"}
+	if err := st.SetNetwork(ctx, store.NetworkSettings{TrustedProxies: general, RealIPHeader: "X-Forwarded-For"}); err != nil {
+		t.Fatal(err)
+	}
 	// Off (default): nothing changes.
 	read, err := render("off", p)
 	if err != nil {
@@ -85,17 +91,26 @@ func TestRenderProxyProtocol(t *testing.T) {
 		check(read(f), nil, []string{"proxy_protocol", "8443", "listen 8080"})
 	}
 
-	// Enabled without trusted proxies: refused (the header would never be used).
+	// Enabled without trusted PROXY protocol sources: refused (the header would never
+	// be used), also when the general trusted proxies are set.
 	pp := store.ProxyProtocol{Enabled: true, HTTPPort: 8080, HTTPSPort: 8443}
-	if err := st.SetNetwork(ctx, store.NetworkSettings{RealIPHeader: "X-Forwarded-For", ProxyProtocol: pp}); err != nil {
+	if err := st.SetNetwork(ctx, store.NetworkSettings{TrustedProxies: general, RealIPHeader: "X-Forwarded-For", ProxyProtocol: pp}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := render("untrusted", p); err == nil || !strings.Contains(err.Error(), "trusted proxies") {
-		t.Fatalf("no trusted proxies: %v", err)
+	if _, err := render("untrusted", p); err == nil || !strings.Contains(err.Error(), "proxy_protocol.trusted") {
+		t.Fatalf("no trusted sources: %v", err)
+	}
+	// an invalid stored list (e.g. from a restored backup) is refused too
+	pp.Trusted = []string{"0.0.0.0/0"}
+	if err := st.SetNetwork(ctx, store.NetworkSettings{TrustedProxies: general, RealIPHeader: "X-Forwarded-For", ProxyProtocol: pp}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := render("broad", p); err == nil || !strings.Contains(err.Error(), "too broad") {
+		t.Fatalf("broad: %v", err)
 	}
 
-	if err := st.SetNetwork(ctx, store.NetworkSettings{TrustedProxies: []string{"10.0.0.0/8", "2001:db8::/32"},
-		RealIPHeader: "X-Forwarded-For", ProxyProtocol: pp}); err != nil {
+	pp.Trusted = []string{"10.0.0.5", "2001:db8::/32"}
+	if err := st.SetNetwork(ctx, store.NetworkSettings{TrustedProxies: general, RealIPHeader: "X-Forwarded-For", ProxyProtocol: pp}); err != nil {
 		t.Fatal(err)
 	}
 	read, err = render("on", p)
@@ -106,8 +121,12 @@ func TestRenderProxyProtocol(t *testing.T) {
 	check(main, []string{
 		"listen 80 default_server;", "listen 443 ssl default_server;",
 		"listen 8080 proxy_protocol default_server;", "listen 8443 ssl proxy_protocol default_server;",
-		"    set_real_ip_from 10.0.0.0/8;\n    set_real_ip_from 2001:db8::/32;\n    real_ip_header proxy_protocol;",
-	}, []string{"[::]"})
+		// the PROXY protocol list (normalized), not the general trusted proxies
+		"    set_real_ip_from 10.0.0.5/32;\n    set_real_ip_from 2001:db8::/32;\n    real_ip_header proxy_protocol;",
+	}, []string{"[::]", "192.168.0.0/16"})
+	// Trusted-proxies host: its own X-Forwarded-For settings with the general list only.
+	check(read("hosts/4.conf"), []string{"listen 8080 proxy_protocol;", "set_real_ip_from 192.168.0.0/16;", "real_ip_header X-Forwarded-For;"},
+		[]string{"10.0.0.5", "real_ip_header proxy_protocol"})
 	// http-level realip, before the servers (inherited by those that don't set their own)
 	if strings.Index(main, "real_ip_header proxy_protocol;") > strings.Index(main, "server_name _;") {
 		t.Error("realip is not at http level")
@@ -143,27 +162,29 @@ func TestRenderProxyProtocol(t *testing.T) {
 
 func TestCheckProxyProtocol(t *testing.T) {
 	p := Paths{HTTPPort: 80, HTTPSPort: 443, StatusPort: 9180, ACMEPort: 9181, AdminPort: 9443, RedisPort: 6379}
-	trusted := []string{"10.0.0.0/8"}
+	tr := []string{"10.0.0.0/8"}
 	streams := []store.Stream{{ID: 4, IncomingPort: 8080, TCP: true}}
 	for _, c := range []struct {
-		name    string
-		pp      store.ProxyProtocol
-		trusted []string
-		field   string
-		msg     string
+		name  string
+		pp    store.ProxyProtocol
+		field string
+		msg   string
 	}{
-		{"ok", store.ProxyProtocol{Enabled: true, HTTPPort: 8081, HTTPSPort: 8443}, trusted, "", ""},
-		{"off ignores conflicts", store.ProxyProtocol{HTTPPort: 80, HTTPSPort: 80}, nil, "", ""},
-		{"off checks the range", store.ProxyProtocol{HTTPPort: 0, HTTPSPort: 8443}, nil, "proxy_protocol.http_port", "between 1 and 65535"},
-		{"range", store.ProxyProtocol{Enabled: true, HTTPPort: 8081, HTTPSPort: 70000}, trusted, "proxy_protocol.https_port", "between 1 and 65535"},
-		{"same", store.ProxyProtocol{Enabled: true, HTTPPort: 8443, HTTPSPort: 8443}, trusted, "proxy_protocol.https_port", "must differ"},
-		{"http", store.ProxyProtocol{Enabled: true, HTTPPort: 80, HTTPSPort: 8443}, trusted, "proxy_protocol.http_port", "used by Corvus (HTTP)"},
-		{"admin", store.ProxyProtocol{Enabled: true, HTTPPort: 8081, HTTPSPort: 9443}, trusted, "proxy_protocol.https_port", "admin console"},
-		{"redis", store.ProxyProtocol{Enabled: true, HTTPPort: 6379, HTTPSPort: 8443}, trusted, "proxy_protocol.http_port", "Valkey"},
-		{"stream", store.ProxyProtocol{Enabled: true, HTTPPort: 8080, HTTPSPort: 8443}, trusted, "proxy_protocol.http_port", "stream #4"},
-		{"trusted", store.ProxyProtocol{Enabled: true, HTTPPort: 8081, HTTPSPort: 8443}, nil, "trusted_proxies", "trusted proxies"},
+		{"ok", store.ProxyProtocol{Enabled: true, HTTPPort: 8081, HTTPSPort: 8443, Trusted: tr}, "", ""},
+		{"off ignores conflicts", store.ProxyProtocol{HTTPPort: 80, HTTPSPort: 80}, "", ""},
+		{"off checks the range", store.ProxyProtocol{HTTPPort: 0, HTTPSPort: 8443}, "proxy_protocol.http_port", "between 1 and 65535"},
+		{"off checks the list", store.ProxyProtocol{HTTPPort: 8080, HTTPSPort: 8443, Trusted: []string{"bad"}}, "proxy_protocol.trusted", "invalid"},
+		{"range", store.ProxyProtocol{Enabled: true, HTTPPort: 8081, HTTPSPort: 70000, Trusted: tr}, "proxy_protocol.https_port", "between 1 and 65535"},
+		{"same", store.ProxyProtocol{Enabled: true, HTTPPort: 8443, HTTPSPort: 8443, Trusted: tr}, "proxy_protocol.https_port", "must differ"},
+		{"http", store.ProxyProtocol{Enabled: true, HTTPPort: 80, HTTPSPort: 8443, Trusted: tr}, "proxy_protocol.http_port", "used by Corvus (HTTP)"},
+		{"admin", store.ProxyProtocol{Enabled: true, HTTPPort: 8081, HTTPSPort: 9443, Trusted: tr}, "proxy_protocol.https_port", "admin console"},
+		{"redis", store.ProxyProtocol{Enabled: true, HTTPPort: 6379, HTTPSPort: 8443, Trusted: tr}, "proxy_protocol.http_port", "Valkey"},
+		{"stream", store.ProxyProtocol{Enabled: true, HTTPPort: 8080, HTTPSPort: 8443, Trusted: tr}, "proxy_protocol.http_port", "stream #4"},
+		{"no sources", store.ProxyProtocol{Enabled: true, HTTPPort: 8081, HTTPSPort: 8443}, "proxy_protocol.trusted", "address of the tunnel"},
+		{"too broad v4", store.ProxyProtocol{Enabled: true, HTTPPort: 8081, HTTPSPort: 8443, Trusted: []string{"10.0.0.0/7"}}, "proxy_protocol.trusted", "too broad"},
+		{"too broad v6", store.ProxyProtocol{Enabled: true, HTTPPort: 8081, HTTPSPort: 8443, Trusted: []string{"2001::/15"}}, "proxy_protocol.trusted", "too broad"},
 	} {
-		errs := CheckProxyProtocol(p, c.pp, c.trusted, streams)
+		errs := CheckProxyProtocol(p, c.pp, streams)
 		if c.field == "" {
 			if len(errs) != 0 {
 				t.Errorf("%s: %v", c.name, errs)

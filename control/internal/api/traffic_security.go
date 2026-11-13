@@ -326,8 +326,13 @@ func (s *Server) putNetwork(w http.ResponseWriter, r *http.Request) {
 		RealIPHeader   string    `json:"real_ip_header"`
 		MaskIPs        *bool     `json:"mask_ips"`
 		AdminAllow     *[]string `json:"admin_allow"`
-		// omitted = unchanged
-		ProxyProtocol *store.ProxyProtocol `json:"proxy_protocol"`
+		// omitted = unchanged (also each field inside)
+		ProxyProtocol *struct {
+			Enabled   *bool     `json:"enabled"`
+			HTTPPort  int       `json:"http_port"`
+			HTTPSPort int       `json:"https_port"`
+			Trusted   *[]string `json:"trusted"`
+		} `json:"proxy_protocol"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -363,21 +368,28 @@ func (s *Server) putNetwork(w http.ResponseWriter, r *http.Request) {
 			n.AdminAllow = allow
 		}
 		if pp := in.ProxyProtocol; pp != nil {
-			if pp.HTTPPort == 0 {
-				pp.HTTPPort = store.DefaultProxyProtocolHTTPPort
+			// Merged with the stored settings: omitted fields (and ports 0) are unchanged.
+			if pp.Enabled != nil {
+				n.ProxyProtocol.Enabled = *pp.Enabled
 			}
-			if pp.HTTPSPort == 0 {
-				pp.HTTPSPort = store.DefaultProxyProtocolHTTPSPort
+			if pp.HTTPPort != 0 {
+				n.ProxyProtocol.HTTPPort = pp.HTTPPort
 			}
-			n.ProxyProtocol = *pp
-		}
-		// Checked also when only the trusted proxies change: PROXY protocol needs them.
-		if n.ProxyProtocol.Enabled || in.ProxyProtocol != nil {
+			if pp.HTTPSPort != 0 {
+				n.ProxyProtocol.HTTPSPort = pp.HTTPSPort
+			}
+			if pp.Trusted != nil {
+				list, err := netcfg.NormalizeTrustedCIDRs(*pp.Trusted)
+				if err != nil {
+					return validate.Errors{{Field: "proxy_protocol.trusted", Code: "invalid", Message: err.Error()}}
+				}
+				n.ProxyProtocol.Trusted = list
+			}
 			streams, err := tx.ListStreams(r.Context())
 			if err != nil {
 				return err
 			}
-			if err := compiler.CheckProxyProtocol(s.Paths, n.ProxyProtocol, n.TrustedProxies, streams).OrNil(); err != nil {
+			if err := compiler.CheckProxyProtocol(s.Paths, n.ProxyProtocol, streams).OrNil(); err != nil {
 				return err
 			}
 		}

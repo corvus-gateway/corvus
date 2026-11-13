@@ -42,6 +42,10 @@ type ProxyProtocol struct {
 	Enabled   bool `json:"enabled"`
 	HTTPPort  int  `json:"http_port"`  // plain HTTP with the PROXY header (default 8080)
 	HTTPSPort int  `json:"https_port"` // TLS with the PROXY header (default 8443)
+	// Trusted are the tunnels / load balancers whose PROXY header is believed. Separate
+	// from TrustedProxies (X-Forwarded-For): trusting a tunnel for that header would let
+	// visitors behind it set their own address.
+	Trusted []string `json:"trusted"`
 }
 
 // Default PROXY protocol listener ports.
@@ -52,7 +56,7 @@ const (
 
 func (s *Store) Network(ctx context.Context) (NetworkSettings, error) {
 	n := NetworkSettings{TrustedProxies: []string{}, RealIPHeader: "X-Forwarded-For",
-		ProxyProtocol: ProxyProtocol{HTTPPort: DefaultProxyProtocolHTTPPort, HTTPSPort: DefaultProxyProtocolHTTPSPort}}
+		ProxyProtocol: ProxyProtocol{HTTPPort: DefaultProxyProtocolHTTPPort, HTTPSPort: DefaultProxyProtocolHTTPSPort, Trusted: []string{}}}
 	v, err := s.GetMeta(ctx, "network")
 	if err != nil || v == "" {
 		return n, err
@@ -60,6 +64,9 @@ func (s *Store) Network(ctx context.Context) (NetworkSettings, error) {
 	err = json.Unmarshal([]byte(v), &n)
 	if n.TrustedProxies == nil {
 		n.TrustedProxies = []string{}
+	}
+	if n.ProxyProtocol.Trusted == nil {
+		n.ProxyProtocol.Trusted = []string{}
 	}
 	if n.ProxyProtocol.HTTPPort == 0 {
 		n.ProxyProtocol.HTTPPort = DefaultProxyProtocolHTTPPort
