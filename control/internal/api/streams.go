@@ -20,6 +20,9 @@ type streamInput struct {
 	CertificateID *int64  `json:"certificate_id"`
 	Enabled       *bool   `json:"enabled"`
 	Notes         *string `json:"notes"` // omitted = unchanged
+	// PROXY protocol (TCP only); omitted = unchanged (off for a new stream).
+	ProxyProtocolIn  *bool `json:"proxy_protocol_in"`
+	ProxyProtocolOut *bool `json:"proxy_protocol_out"`
 }
 
 func (in streamInput) apply(st *store.Stream) {
@@ -28,6 +31,12 @@ func (in streamInput) apply(st *store.Stream) {
 	st.Enabled = in.Enabled == nil || *in.Enabled
 	if in.Notes != nil {
 		st.Notes = *in.Notes
+	}
+	if in.ProxyProtocolIn != nil {
+		st.ProxyProtocolIn = *in.ProxyProtocolIn
+	}
+	if in.ProxyProtocolOut != nil {
+		st.ProxyProtocolOut = *in.ProxyProtocolOut
 	}
 }
 
@@ -51,6 +60,12 @@ func checkStream(r *http.Request, tx *store.Store, p compiler.Paths, st *store.S
 	n, err := tx.Network(ctx)
 	if err != nil {
 		return err
+	}
+	if st.ProxyProtocolIn {
+		// The header is believed only from the trusted PROXY protocol sources.
+		if _, err := compiler.StreamPPTrusted(n.ProxyProtocol); err != nil {
+			errs = append(errs, validate.FieldError{Field: "proxy_protocol_in", Code: "trusted_required", Message: err.Error()})
+		}
 	}
 	p = p.WithNetwork(n) // the PROXY protocol listeners are Corvus's ports too
 	if why := compiler.StreamConflict(p, others, st); why != "" {

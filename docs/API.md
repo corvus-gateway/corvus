@@ -230,7 +230,14 @@ Stream fields: `incoming_port` (1–65535, the container port to listen on), `tc
 (default `true`), `udp_forwarding` (default `false`; at least one of the two), `forward_host`
 (container name, DNS name or IPv4; `127.0.0.1`/`localhost` mean the Docker host, as for proxy hosts),
 `forward_port`, `certificate_id` (optional TLS termination, TCP only: TLS from clients, plain TCP to
-the forward host; the TCP listener opens once the certificate is issued), `enabled` (default `true`).
+the forward host; the TCP listener opens once the certificate is issued), `enabled` (default `true`),
+`proxy_protocol_in` and `proxy_protocol_out` (default `false`; omitted on update = unchanged; TCP
+only, on a UDP-only stream `422` code `needs_tcp`; with TCP and UDP they apply to the TCP listener).
+`proxy_protocol_in` makes the TCP listener expect a PROXY protocol (v1/v2) header on every
+connection and take the client address from it on connections from the network settings'
+`proxy_protocol.trusted` sources, which must not be empty (`422`, field `proxy_protocol_in`, code
+`trusted_required`; the network `proxy_protocol.enabled` switch is not needed).
+`proxy_protocol_out` sends the client address to the forward host in a PROXY protocol v1 header.
 Ports Corvus listens on itself (HTTP, HTTPS, admin, internal status/ACME ports, the bundled Valkey)
 are refused (`422`, field `incoming_port`), and an enabled stream may not share a port and protocol
 with another enabled stream. On a Docker bridge network the port must also be published in compose.
@@ -408,7 +415,9 @@ header is believed (IPs or CIDRs, at least /8 for IPv4 and /16 for IPv6; field
 for `X-Forwarded-For`. While enabled, the ports must differ, can't be Corvus's own ports or used by
 any stream (`422`, field `proxy_protocol.http_port` / `proxy_protocol.https_port`, code
 `conflict`), and `trusted` can't be empty (field `proxy_protocol.trusted`, code `required`).
-Streams can't use the ports while they are enabled.
+Streams can't use the ports while they are enabled. `trusted` is also used by streams with
+`proxy_protocol_in`, whatever `enabled` is: while such a stream exists, it can't be emptied (field
+`proxy_protocol.trusted`, code `required`).
 
 ### Backup and restore
 

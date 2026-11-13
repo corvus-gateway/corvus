@@ -168,7 +168,8 @@ but Cloudflare's addresses (a firewall on the tunnel server).
     `set_real_ip_from`) is combined with the other one from Corvus. Set both, or neither.
 
 !!! note
-    [Streams](streams.md) don't accept the PROXY protocol yet.
+    [Streams](streams.md#proxy-protocol) accept the PROXY protocol per stream, with the same
+    trusted sources; this switch is not needed for them.
 
 ### Protection
 

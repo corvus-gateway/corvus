@@ -32,5 +32,13 @@ func Stream(st *store.Stream) error {
 	if st.CertificateID != nil && !st.TCP {
 		errs.add("certificate_id", "needs_tcp", "TLS termination requires TCP")
 	}
+	// nginx accepts and sends the PROXY protocol only on TCP connections; with TCP and
+	// UDP both on, it applies to the TCP listener.
+	if st.ProxyProtocolIn && !st.TCP {
+		errs.add("proxy_protocol_in", "needs_tcp", "the PROXY protocol requires TCP")
+	}
+	if st.ProxyProtocolOut && !st.TCP {
+		errs.add("proxy_protocol_out", "needs_tcp", "the PROXY protocol requires TCP")
+	}
 	return errs.OrNil()
 }

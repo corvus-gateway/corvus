@@ -58,7 +58,7 @@ Corvus は Nginx Proxy Manager のフォークではありません。既存の 
 - カスタムロケーション: パス（例: `/api`）ごとに別のアップストリームへ転送し、ホストの保護をそのまま適用
 - リダイレクトホスト: ドメインを別のドメインへ転送(301/302/303/307/308、パスの維持も可能)。TLS と保護機能も同じように適用
 - 自動更新される無料の Let's Encrypt 証明書(HTTP-01、または DNS-01: Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap、プロバイダーの認証情報は保存して再利用可能)、または独自証明書のアップロード(更新時はそのまま置き換え可能)
-- ストリーム: TCP/UDP ポート(データベース、SSH、MQTT、ゲームサーバー)を別のホストへ転送。TCP では TLS 終端も可能
+- ストリーム: TCP/UDP ポート(データベース、SSH、MQTT、ゲームサーバー)を別のホストへ転送。TCP では TLS 終端と PROXY protocol(受信・送信)も可能
 - 未登録のホスト名への応答を選択: 404 ページ、接続の切断、リダイレクト
 - Cloudflare、信頼できるプロキシ、PROXY protocol(FRP、HAProxy、ロードバランサー)の背後でも実際のクライアント IP を取得、ホストごとのパスワード保護(任意)
 - ホストごとのセキュリティヘッダーのプリセット(基本 / 厳格: nosniff、フレーム・リファラーポリシー、レポート専用 CSP、HttpOnly/SameSite/Secure Cookie フラグ)。アプリがすでに送っているヘッダーは上書きしません
