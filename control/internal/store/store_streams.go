@@ -20,21 +20,28 @@ type Stream struct {
 	Notes         string    `json:"notes"` // free text for people; not used by the gateway
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
+
+	// PROXY protocol (TCP only): accept it on the incoming port (the client address is
+	// taken from the header of the network's trusted PROXY protocol sources) and send it
+	// to the upstream.
+	ProxyProtocolIn  bool `json:"proxy_protocol_in"`
+	ProxyProtocolOut bool `json:"proxy_protocol_out"`
 }
 
-const streamCols = `id, incoming_port, tcp_forwarding, udp_forwarding, forward_host, forward_port, certificate_id, enabled, notes, created_at, updated_at`
+const streamCols = `id, incoming_port, tcp_forwarding, udp_forwarding, forward_host, forward_port, certificate_id, enabled, notes, proxy_protocol_in, proxy_protocol_out, created_at, updated_at`
 
 func scanStream(row interface{ Scan(...any) error }) (*Stream, error) {
 	st := &Stream{}
-	var tcp, udp, en int
+	var tcp, udp, en, ppIn, ppOut int
 	var cert sql.NullInt64
-	if err := row.Scan(&st.ID, &st.IncomingPort, &tcp, &udp, &st.ForwardHost, &st.ForwardPort, &cert, &en, &st.Notes, &st.CreatedAt, &st.UpdatedAt); err != nil {
+	if err := row.Scan(&st.ID, &st.IncomingPort, &tcp, &udp, &st.ForwardHost, &st.ForwardPort, &cert, &en, &st.Notes, &ppIn, &ppOut, &st.CreatedAt, &st.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 		return nil, err
 	}
 	st.TCP, st.UDP, st.Enabled = tcp == 1, udp == 1, en == 1
+	st.ProxyProtocolIn, st.ProxyProtocolOut = ppIn == 1, ppOut == 1
 	if cert.Valid {
 		st.CertificateID = &cert.Int64
 	}
@@ -65,9 +72,10 @@ func (s *Store) StreamByID(ctx context.Context, id int64) (*Stream, error) {
 func (s *Store) SaveStream(ctx context.Context, st *Stream) error {
 	t := now()
 	if st.ID == 0 {
-		res, err := s.q.ExecContext(ctx, `INSERT INTO streams(incoming_port, tcp_forwarding, udp_forwarding, forward_host, forward_port, certificate_id, enabled, notes, created_at, updated_at)
-			VALUES (?,?,?,?,?,?,?,?,?,?)`,
-			st.IncomingPort, b2i(st.TCP), b2i(st.UDP), st.ForwardHost, st.ForwardPort, st.CertificateID, b2i(st.Enabled), st.Notes, t, t)
+		res, err := s.q.ExecContext(ctx, `INSERT INTO streams(incoming_port, tcp_forwarding, udp_forwarding, forward_host, forward_port, certificate_id, enabled, notes, proxy_protocol_in, proxy_protocol_out, created_at, updated_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+			st.IncomingPort, b2i(st.TCP), b2i(st.UDP), st.ForwardHost, st.ForwardPort, st.CertificateID, b2i(st.Enabled), st.Notes,
+			b2i(st.ProxyProtocolIn), b2i(st.ProxyProtocolOut), t, t)
 		if err != nil {
 			return err
 		}
@@ -75,8 +83,9 @@ func (s *Store) SaveStream(ctx context.Context, st *Stream) error {
 		st.CreatedAt, st.UpdatedAt = t, t
 		return nil
 	}
-	res, err := s.q.ExecContext(ctx, `UPDATE streams SET incoming_port=?, tcp_forwarding=?, udp_forwarding=?, forward_host=?, forward_port=?, certificate_id=?, enabled=?, notes=?, updated_at=? WHERE id=?`,
-		st.IncomingPort, b2i(st.TCP), b2i(st.UDP), st.ForwardHost, st.ForwardPort, st.CertificateID, b2i(st.Enabled), st.Notes, t, st.ID)
+	res, err := s.q.ExecContext(ctx, `UPDATE streams SET incoming_port=?, tcp_forwarding=?, udp_forwarding=?, forward_host=?, forward_port=?, certificate_id=?, enabled=?, notes=?, proxy_protocol_in=?, proxy_protocol_out=?, updated_at=? WHERE id=?`,
+		st.IncomingPort, b2i(st.TCP), b2i(st.UDP), st.ForwardHost, st.ForwardPort, st.CertificateID, b2i(st.Enabled), st.Notes,
+		b2i(st.ProxyProtocolIn), b2i(st.ProxyProtocolOut), t, st.ID)
 	if err != nil {
 		return err
 	}

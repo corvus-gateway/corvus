@@ -59,7 +59,7 @@ OpenResty, plan de contrôle en Go, console React) capable d'**importer une conf
 - Emplacements personnalisés : des chemins (ex. `/api`) vers leur propre upstream, avec les protections de l'hôte
 - Hôtes de redirection : renvoyer des domaines vers un autre domaine (301/302/303/307/308, en conservant éventuellement le chemin), avec le même TLS et la même protection
 - Certificats Let's Encrypt gratuits (HTTP-01, ou DNS-01 via Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap, avec des identifiants de fournisseur enregistrés et réutilisables) avec renouvellement automatique, ou import des vôtres (remplaçables sur place lors du renouvellement)
-- Flux (streams) : rediriger des ports TCP/UDP (bases de données, SSH, MQTT, serveurs de jeu) vers un autre hôte, avec terminaison TLS optionnelle pour TCP
+- Flux (streams) : rediriger des ports TCP/UDP (bases de données, SSH, MQTT, serveurs de jeu) vers un autre hôte, avec terminaison TLS et PROXY protocol (entrant et sortant) optionnels pour TCP
 - Les noms d’hôte inconnus reçoivent au choix une page 404, une connexion fermée ou une redirection
 - Véritable IP client derrière Cloudflare, des proxys de confiance ou via le PROXY protocol (FRP, HAProxy, répartiteurs de charge) ; protection par mot de passe optionnelle par hôte
 - Préréglages d'en-têtes de sécurité par hôte (Basique / Strict : nosniff, politiques de frame et de referrer, CSP en mode rapport seul, attributs de cookie HttpOnly/SameSite/Secure), sans jamais écraser ce que l'application envoie déjà

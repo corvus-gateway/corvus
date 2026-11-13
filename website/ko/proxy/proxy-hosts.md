@@ -164,7 +164,8 @@ TLS는 여전히 Corvus에서 처리하므로 인증서(HTTP 포트를 통한 Le
     나머지 하나는 Corvus의 설정과 합쳐집니다. 둘 다 지정하거나 둘 다 빼세요.
 
 !!! note
-    [스트림](streams.md)은 아직 PROXY protocol을 받지 않습니다.
+    [스트림](streams.md#proxy-protocol)은 스트림마다 같은 신뢰 출처로 PROXY protocol을 받을 수
+    있습니다. 스트림에는 이 스위치가 필요 없습니다.
 
 ### 보호
 

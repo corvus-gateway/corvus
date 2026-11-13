@@ -136,6 +136,8 @@ export interface RedirectionHost {
 export interface Stream {
   id: number; incoming_port: number; tcp_forwarding: boolean; udp_forwarding: boolean; forward_host: string; forward_port: number;
   certificate_id: number | null; enabled: boolean; notes?: string; created_at: string; updated_at: string;
+  /** PROXY protocol on the TCP listener: accept it (trusted sources on the Network page) / send it to the upstream. */
+  proxy_protocol_in?: boolean; proxy_protocol_out?: boolean;
 }
 
 export interface LiveStats { name: string; available: boolean; active: number; waiting: number; capacity: number }

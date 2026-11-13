@@ -48,7 +48,7 @@ cd "openresty-${OPENRESTY_VERSION}"
   --with-http_ssl_module --with-http_v2_module --with-http_realip_module \
   --with-http_stub_status_module --with-http_gzip_static_module --with-http_gunzip_module \
   --with-http_auth_request_module --with-http_secure_link_module \
-  --with-stream --with-stream_ssl_module --with-stream_ssl_preread_module \
+  --with-stream --with-stream_ssl_module --with-stream_ssl_preread_module --with-stream_realip_module \
   --without-mail_pop3_module --without-mail_imap_module --without-mail_smtp_module \
   --without-http_ssi_module --without-http_autoindex_module --without-http_userid_module \
   --without-http_memcached_module --without-http_empty_gif_module --without-http_browser_module \

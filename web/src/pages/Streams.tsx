@@ -16,7 +16,7 @@ import { relTime } from "../lib/utils";
 type Form = Omit<Stream, "id" | "created_at" | "updated_at">;
 type Proto = "tcp" | "udp" | "both";
 
-const blank: Form = { incoming_port: NaN, tcp_forwarding: true, udp_forwarding: false, forward_host: "", forward_port: NaN, certificate_id: null, enabled: true, notes: "" };
+const blank: Form = { incoming_port: NaN, tcp_forwarding: true, udp_forwarding: false, forward_host: "", forward_port: NaN, certificate_id: null, enabled: true, notes: "", proxy_protocol_in: false, proxy_protocol_out: false };
 
 function toForm(s: Stream): Form {
   const { id: _i, created_at: _c, updated_at: _u, ...rest } = s;
@@ -49,7 +49,7 @@ export default function Streams() {
   const open = (s?: Stream) => { setError(null); setEditing({ id: s?.id ?? null, form: s ? toForm(s) : { ...blank } }); };
   const f = editing?.form;
   const set = (patch: Partial<Form>) => setEditing((e) => (e ? { ...e, form: { ...e.form, ...patch } } : e));
-  const setProto = (p: Proto) => set({ tcp_forwarding: p !== "udp", udp_forwarding: p !== "tcp", ...(p === "udp" ? { certificate_id: null } : {}) });
+  const setProto = (p: Proto) => set({ tcp_forwarding: p !== "udp", udp_forwarding: p !== "tcp", ...(p === "udp" ? { certificate_id: null, proxy_protocol_in: false, proxy_protocol_out: false } : {}) });
   const incomplete = !f || !Number.isFinite(f.incoming_port) || !Number.isFinite(f.forward_port) || !f.forward_host.trim();
   const pending = !!f?.certificate_id && cert(f.certificate_id)?.status === "pending";
 
@@ -162,6 +162,16 @@ export default function Streams() {
               )}
             </IdField>
           </FormSection>
+
+          {f.tcp_forwarding && (
+            <FormSection title={t("secStreamPP")} description={f.udp_forwarding ? t("streamPPBoth") : undefined}>
+              <div className="divide-y divide-line">
+                <SwitchRow label={t("streamPPIn")} description={t("streamPPInDesc")} checked={!!f.proxy_protocol_in} onChange={(v) => set({ proxy_protocol_in: v })} />
+                <SwitchRow label={t("streamPPOut")} description={t("streamPPOutDesc")} checked={!!f.proxy_protocol_out} onChange={(v) => set({ proxy_protocol_out: v })} />
+              </div>
+              {fieldErr(error, "proxy_protocol_in") && <p role="alert" className="text-xs text-danger">{fieldErr(error, "proxy_protocol_in")}</p>}
+            </FormSection>
+          )}
 
           <NotesSection value={f.notes ?? ""} onChange={(v) => set({ notes: v })} error={error} disabled={!can} />
 

@@ -17,15 +17,25 @@ upstream corvus_stream_{{.ID}} {
 {{- else if .TCP}}
 
 server {
-    listen {{.IncomingPort}}{{if .CertDir}} ssl{{end}};
+    listen {{.IncomingPort}}{{if .CertDir}} ssl{{end}}{{if .ProxyProtocolIn}} proxy_protocol{{end}};
 {{- if .IPv6}}
-    listen [::]:{{.IncomingPort}}{{if .CertDir}} ssl{{end}};
+    listen [::]:{{.IncomingPort}}{{if .CertDir}} ssl{{end}}{{if .ProxyProtocolIn}} proxy_protocol{{end}};
+{{- end}}
+{{- if .ProxyProtocolIn}}
+    # Every connection must start with a PROXY protocol header; the client address is
+    # taken from it only on connections from the trusted PROXY protocol sources.
+{{- range .PPTrusted}}
+    set_real_ip_from {{.}};
+{{- end}}
 {{- end}}
 {{- if .CertDir}}
     ssl_certificate     {{.CertDir}}/fullchain.pem;
     ssl_certificate_key {{.CertDir}}/privkey.pem;
 {{- end}}
     proxy_pass corvus_stream_{{.ID}};
+{{- if .ProxyProtocolOut}}
+    proxy_protocol on;  # the upstream receives the client address in a PROXY protocol (v1) header
+{{- end}}
     proxy_timeout 1h;   # idle time before the connection is closed
 }
 {{- end}}

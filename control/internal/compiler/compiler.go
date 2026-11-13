@@ -72,7 +72,8 @@ func (p Paths) WithNetwork(n store.NetworkSettings) Paths {
 // that neither Corvus nor a stream uses (any stream: a disabled one may be enabled
 // later), and trusted sources to accept the header from (pp.Trusted; without them the
 // client address in the header would never be used). While disabled, only the port
-// range and the trusted list's format are checked.
+// range and the trusted list's format are checked, and that the list isn't empty while
+// a stream accepts the PROXY protocol.
 func CheckProxyProtocol(p Paths, pp store.ProxyProtocol, streams []store.Stream) validate.Errors {
 	p.PPHTTPPort, p.PPHTTPSPort = 0, 0
 	reserved := p.ReservedPorts()
@@ -99,6 +100,18 @@ func CheckProxyProtocol(p Paths, pp store.ProxyProtocol, streams []store.Stream)
 		for _, st := range streams {
 			if st.IncomingPort == f.port {
 				errs = append(errs, validate.FieldError{Field: f.field, Code: "conflict", Message: fmt.Sprintf("port %d is already used by stream #%d", f.port, st.ID)})
+				break
+			}
+		}
+	}
+	// Streams that accept the PROXY protocol use the same trusted list, also while the
+	// HTTP/HTTPS listeners are off (any stream: a disabled one may be enabled later;
+	// while they are on, the list is required below anyway).
+	if !pp.Enabled && err == nil && len(trusted) == 0 {
+		for _, st := range streams {
+			if st.ProxyProtocolIn {
+				errs = append(errs, validate.FieldError{Field: "proxy_protocol.trusted", Code: "required",
+					Message: fmt.Sprintf("stream #%d accepts the PROXY protocol from these sources", st.ID)})
 				break
 			}
 		}
@@ -569,7 +582,7 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		nr++
 	}
 
-	ns, err := c.renderStreams(ctx, s, dir, static, hostGW)
+	ns, err := c.renderStreams(ctx, s, dir, static, hostGW, network.ProxyProtocol)
 	if err != nil {
 		return err
 	}

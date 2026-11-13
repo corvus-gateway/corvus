@@ -59,7 +59,7 @@ Go-Steuerungsebene, React-Konsole), die ein **bestehendes NPM-Setup importieren*
 - Eigene Locations: Pfade (z. B. `/api`) an einen eigenen Upstream weiterleiten, mit dem Schutz des Hosts
 - Weiterleitungs-Hosts: Domains auf eine andere Domain umleiten (301/302/303/307/308, optional mit Beibehaltung des Pfads), mit demselben TLS und Schutz
 - Kostenlose Let's-Encrypt-Zertifikate (HTTP-01 oder DNS-01 über Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap, mit gespeicherten, wiederverwendbaren Anbieter-Zugangsdaten) mit automatischer Erneuerung oder eigene Zertifikate per Upload (bei Erneuerung direkt ersetzbar)
-- Streams: TCP/UDP-Ports (Datenbanken, SSH, MQTT, Spieleserver) an einen anderen Host weiterleiten, für TCP optional mit TLS-Terminierung
+- Streams: TCP/UDP-Ports (Datenbanken, SSH, MQTT, Spieleserver) an einen anderen Host weiterleiten, für TCP optional mit TLS-Terminierung und PROXY protocol (eingehend und ausgehend)
 - Unbekannte Hostnamen erhalten wahlweise eine 404-Seite, eine geschlossene Verbindung oder eine Weiterleitung
 - Echte Client-IP hinter Cloudflare, vertrauenswürdigen Proxys oder per PROXY protocol (FRP, HAProxy, Load Balancer); optionaler Passwortschutz pro Host
 - Voreinstellungen für Sicherheits-Header pro Host (Basis / Streng: nosniff, Frame- und Referrer-Policy, CSP im Report-Only-Modus, Cookie-Flags HttpOnly/SameSite/Secure), ohne zu überschreiben, was die Anwendung bereits sendet
