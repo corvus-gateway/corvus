@@ -131,11 +131,19 @@ func TestSyncSkipsUnchangedAndSendsChanges(t *testing.T) {
 	if ok, _ := s.sync(ctx, now.Add(FullSyncEvery+15*time.Second), false); ok {
 		t.Fatal("same epoch must not force a push")
 	}
+	restarts := 0
+	s.OnGatewayRestart = func() { restarts++ }
 	g.mu.Lock()
 	g.epoch = "e2"
 	g.mu.Unlock()
 	if _, err := s.Pull(ctx); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := s.Pull(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if restarts != 1 {
+		t.Fatalf("OnGatewayRestart called %d times, want once", restarts)
 	}
 	if ok, _ := s.sync(ctx, now.Add(FullSyncEvery+30*time.Second), false); !ok || g.pushes() != n+1 {
 		t.Fatal("new gateway epoch did not force a push")

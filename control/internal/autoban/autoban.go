@@ -140,6 +140,10 @@ type Service struct {
 	PushURL string // gateway status endpoint, e.g. http://127.0.0.1:9180/bans
 	HitsURL string // pending bad-behaviour bans, e.g. http://127.0.0.1:9180/bad-behaviour
 	Client  *http.Client
+	// OnGatewayRestart (may be nil) is called when the gateway's shared-memory epoch
+	// changes (it restarted with empty shared memory), so other services that push to it
+	// (under attack mode) can push at once.
+	OnGatewayRestart func()
 
 	mu      sync.Mutex
 	trigger chan struct{}
@@ -396,11 +400,15 @@ func (s *Service) noteEpoch(epoch string) {
 		return
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.epoch != "" && s.epoch != epoch {
+	restarted := s.epoch != "" && s.epoch != epoch
+	if restarted {
 		s.resync = true
 	}
 	s.epoch = epoch
+	s.mu.Unlock()
+	if restarted && s.OnGatewayRestart != nil {
+		s.OnGatewayRestart()
+	}
 }
 
 func (s *Service) client() *http.Client {

@@ -99,8 +99,10 @@ type Service struct {
 	forced   bool      // push in the next round even when unchanged (Trigger)
 }
 
-// maxPushAge is the longest an unchanged set goes without being pushed, so a restarted
-// gateway (empty shared memory) is back in sync within it.
+// maxPushAge is the longest an unchanged set goes without being pushed. A restarted
+// gateway (empty shared memory) is noticed sooner by the automatic bans (new epoch with
+// the bad-behaviour poll), which call Trigger (see autoban.Service.OnGatewayRestart);
+// maxPushAge only bounds the case where that poll is not available.
 const maxPushAge = time.Minute
 
 // SyncStatus reports how the active hosts reach the gateway (last success, last error).
@@ -379,8 +381,9 @@ func (s *Service) Trigger() {
 }
 
 // Run evaluates every 10 seconds (and on Trigger) until ctx is done and pushes the
-// active hosts when they changed, and at least every maxPushAge. The push is a full
-// replacement, so a restarted gateway is back in sync within maxPushAge.
+// active hosts when they changed, after Trigger (also on a gateway restart) and at least
+// every maxPushAge. The push is a full replacement, so a restarted gateway is back in
+// sync with the next push.
 func (s *Service) Run(ctx context.Context) {
 	s.Trigger()
 	s.mu.Lock()

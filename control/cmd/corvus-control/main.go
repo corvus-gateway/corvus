@@ -488,13 +488,13 @@ func run() error {
 		ban.PushURL = "http://127.0.0.1:9180/bans"
 		ban.HitsURL = "http://127.0.0.1:9180/bad-behaviour"
 	}
-	go ban.Run(ctx)
-
 	// "Under attack" mode, automatic activations pushed to the gateway's shared memory.
 	ua := &underattack.Service{Store: st, Traffic: tc}
 	if withGateway {
 		ua.PushURL = "http://127.0.0.1:9180/under-attack"
+		ban.OnGatewayRestart = ua.Trigger // empty shared memory: push the activations at once
 	}
+	go ban.Run(ctx)
 	go ua.Run(ctx)
 
 	// Lists fed from a URL (e.g. Tor exit nodes, bad-bot User-Agents).
