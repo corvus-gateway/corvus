@@ -129,6 +129,8 @@ type Limiter struct {
 
 	mu        sync.Mutex
 	fails     map[string][]time.Time
+	lastFail  map[string]uint64 // order of each key's last failure (ties of time.Now)
+	seq       uint64
 	lastSweep time.Time
 }
 
@@ -136,7 +138,7 @@ type Limiter struct {
 const DefaultMaxKeys = 100_000
 
 func NewLimiter(max int, window time.Duration) *Limiter {
-	return &Limiter{Max: max, Window: window, MaxKeys: DefaultMaxKeys, fails: map[string][]time.Time{}}
+	return &Limiter{Max: max, Window: window, MaxKeys: DefaultMaxKeys, fails: map[string][]time.Time{}, lastFail: map[string]uint64{}}
 }
 
 // limiterKey counts an IPv6 address per /64; other keys are used as they are.
@@ -159,7 +161,7 @@ func (l *Limiter) sweep(now time.Time) {
 	l.lastSweep = now
 	for k, list := range l.fails {
 		if len(list) == 0 || now.Sub(list[len(list)-1]) > l.Window {
-			delete(l.fails, k)
+			l.forget(k)
 		}
 	}
 }
@@ -178,19 +180,27 @@ func (l *Limiter) makeRoom(now time.Time) {
 	if len(l.fails) < limit {
 		return
 	}
+	// Ordered by when each key last failed: the failure sequence number, not the time,
+	// since time.Now can return the same value for many calls (coarse clocks).
 	type entry struct {
 		key  string
-		last time.Time
+		last uint64
 	}
 	all := make([]entry, 0, len(l.fails))
-	for k, list := range l.fails {
-		all = append(all, entry{k, list[len(list)-1]})
+	for k := range l.fails {
+		all = append(all, entry{k, l.lastFail[k]})
 	}
-	sort.Slice(all, func(i, j int) bool { return all[i].last.Before(all[j].last) })
+	sort.Slice(all, func(i, j int) bool { return all[i].last < all[j].last })
 	drop := len(all) - limit + 1 + limit/10
 	for i := 0; i < drop && i < len(all); i++ {
-		delete(l.fails, all[i].key)
+		l.forget(all[i].key)
 	}
+}
+
+// forget drops a key from the table.
+func (l *Limiter) forget(key string) {
+	delete(l.fails, key)
+	delete(l.lastFail, key)
 }
 
 // Len reports how many keys are tracked.
@@ -207,7 +217,7 @@ func (l *Limiter) prune(key string, now time.Time) []time.Time {
 	}
 	list = list[i:]
 	if len(list) == 0 {
-		delete(l.fails, key)
+		l.forget(key)
 	} else {
 		l.fails[key] = list
 	}
@@ -244,11 +254,16 @@ func (l *Limiter) Fail(key string) {
 		list = append(list[:0:0], list[len(list)-l.Max+1:]...)
 	}
 	l.fails[key] = append(list, now)
+	if l.lastFail == nil {
+		l.lastFail = map[string]uint64{}
+	}
+	l.seq++
+	l.lastFail[key] = l.seq
 }
 
 func (l *Limiter) Reset(key string) {
 	key = limiterKey(key)
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	delete(l.fails, key)
+	l.forget(key)
 }

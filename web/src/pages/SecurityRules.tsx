@@ -165,8 +165,15 @@ function RulesTab({ list, lists, hosts, geo, onEdit, onEvents }: {
     setOrderBusy(false);
     done();
   };
-  // Leaving the page before the delay: still save.
-  useEffect(() => () => { if (queued.current) void api.put("/api/security-rules/order", { ids: queued.current }).catch(() => undefined); }, []);
+  // Leaving the page before the delay: still save, once (no second PUT from the timer or
+  // from a save still in flight).
+  useEffect(() => () => {
+    window.clearTimeout(timer.current);
+    timer.current = 0;
+    const ids = queued.current;
+    queued.current = null;
+    if (ids) void api.put("/api/security-rules/order", { ids }).catch(() => undefined);
+  }, []);
   const move = (id: number, to: number, now = false) => {
     const from = rules.findIndex((r) => r.id === id);
     if (from < 0 || to < 0 || to >= rules.length || to === from) return;
