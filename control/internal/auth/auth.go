@@ -9,6 +9,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
+	"sort"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -112,17 +114,90 @@ func (s *SetupToken) Consume(t string) bool {
 	return true
 }
 
-// Limiter throttles failed login attempts per key (client IP).
+// Limiter throttles failed login attempts per key (client IP, or account).
+//
+// Memory is bounded: keys whose failures have all expired are swept at most once per
+// window (from Fail), and the table holds at most MaxKeys keys — when it is full after
+// a sweep, the keys with the oldest last failure are dropped first. An IPv6 address
+// counts per /64 (one host usually has the whole prefix), so one client cannot fill
+// the table, or escape the limit, by rotating addresses.
 type Limiter struct {
 	Max    int
 	Window time.Duration
+	// MaxKeys caps the number of tracked keys (default DefaultMaxKeys).
+	MaxKeys int
 
-	mu    sync.Mutex
-	fails map[string][]time.Time
+	mu        sync.Mutex
+	fails     map[string][]time.Time
+	lastSweep time.Time
 }
 
+// DefaultMaxKeys bounds a Limiter's table: about 100k keys of a few hundred bytes.
+const DefaultMaxKeys = 100_000
+
 func NewLimiter(max int, window time.Duration) *Limiter {
-	return &Limiter{Max: max, Window: window, fails: map[string][]time.Time{}}
+	return &Limiter{Max: max, Window: window, MaxKeys: DefaultMaxKeys, fails: map[string][]time.Time{}}
+}
+
+// limiterKey counts an IPv6 address per /64; other keys are used as they are.
+func limiterKey(key string) string {
+	ip := net.ParseIP(key)
+	if ip == nil || ip.To4() != nil {
+		return key
+	}
+	return (&net.IPNet{IP: ip.Mask(net.CIDRMask(64, 128)), Mask: net.CIDRMask(64, 128)}).String()
+}
+
+// Sweep removes the keys whose failures have all expired.
+func (l *Limiter) Sweep() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.sweep(time.Now())
+}
+
+func (l *Limiter) sweep(now time.Time) {
+	l.lastSweep = now
+	for k, list := range l.fails {
+		if len(list) == 0 || now.Sub(list[len(list)-1]) > l.Window {
+			delete(l.fails, k)
+		}
+	}
+}
+
+// makeRoom keeps the table below MaxKeys before a new key is added: expired keys go
+// first, then (only when that is not enough) the tenth of keys failed longest ago.
+func (l *Limiter) makeRoom(now time.Time) {
+	limit := l.MaxKeys
+	if limit <= 0 {
+		limit = DefaultMaxKeys
+	}
+	if len(l.fails) < limit {
+		return
+	}
+	l.sweep(now)
+	if len(l.fails) < limit {
+		return
+	}
+	type entry struct {
+		key  string
+		last time.Time
+	}
+	all := make([]entry, 0, len(l.fails))
+	for k, list := range l.fails {
+		all = append(all, entry{k, list[len(list)-1]})
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].last.Before(all[j].last) })
+	drop := len(all) - limit + 1 + limit/10
+	for i := 0; i < drop && i < len(all); i++ {
+		delete(l.fails, all[i].key)
+	}
+}
+
+// Len reports how many keys are tracked.
+func (l *Limiter) Len() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.fails)
 }
 
 func (l *Limiter) prune(key string, now time.Time) []time.Time {
@@ -141,6 +216,7 @@ func (l *Limiter) prune(key string, now time.Time) []time.Time {
 
 // Blocked reports whether key has too many recent failures and when it may retry.
 func (l *Limiter) Blocked(key string) (bool, time.Duration) {
+	key = limiterKey(key)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := time.Now()
@@ -152,12 +228,26 @@ func (l *Limiter) Blocked(key string) (bool, time.Duration) {
 }
 
 func (l *Limiter) Fail(key string) {
+	key = limiterKey(key)
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.fails[key] = append(l.prune(key, time.Now()), time.Now())
+	now := time.Now()
+	if now.Sub(l.lastSweep) > l.Window {
+		l.sweep(now)
+	}
+	list := l.prune(key, now)
+	if len(list) == 0 {
+		l.makeRoom(now)
+	}
+	if l.Max > 0 && len(list) >= l.Max {
+		// only the newest Max failures matter; older ones are not kept
+		list = append(list[:0:0], list[len(list)-l.Max+1:]...)
+	}
+	l.fails[key] = append(list, now)
 }
 
 func (l *Limiter) Reset(key string) {
+	key = limiterKey(key)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	delete(l.fails, key)
