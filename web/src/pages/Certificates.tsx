@@ -5,7 +5,7 @@ import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Badge, Callout, Card, EmptyState, TableSkeleton } from "../components/ui/display";
 import { Field, FormSection, IdField, Input, SearchInput, SwitchRow, TagInput, Textarea, fieldErr } from "../components/ui/form";
-import { ConfirmDialog, RowMenu, Sheet, SheetCancel, Tip, useDirty } from "../components/ui/overlay";
+import { ConfirmDialog, RowMenu, Sheet, SheetCancel, Tip, tipTrigger, useDirty } from "../components/ui/overlay";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
 import { useResource } from "../hooks/useResource";
 import { useDnsProviders } from "../hooks/useDnsProviders";
@@ -115,8 +115,8 @@ export default function Certificates() {
                     <Td className="hidden md:table-cell"><div className="flex max-w-xs flex-wrap gap-1">{c.domains.slice(0, 3).map((x) => <span key={x} className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg-muted">{x}</span>)}{c.domains.length > 3 && <Badge>+{c.domains.length - 3}</Badge>}</div></Td>
                     <Td>
                       {st === "pending" ? <Badge tone="info" icon={Loader2} className="[&_svg]:animate-spin">{t("certPending")}</Badge>
-                        : st === "error" ? <Tip label={c.last_error || t("certError")}><span><Badge tone="danger" icon={AlertCircle}>{t("certError")}</Badge></span></Tip>
-                          : renewErr ? <Tip label={t("renewFailedTip", { e: c.last_error! })}><span><Badge tone={d !== null && d <= 7 ? "danger" : "warn"} icon={AlertCircle}>{t("renewFailed")}</Badge></span></Tip>
+                        : st === "error" ? <Tip label={c.last_error || t("certError")}><span tabIndex={0} className={tipTrigger}><Badge tone="danger" icon={AlertCircle}>{t("certError")}</Badge></span></Tip>
+                          : renewErr ? <Tip label={t("renewFailedTip", { e: c.last_error! })}><span tabIndex={0} className={tipTrigger}><Badge tone={d !== null && d <= 7 ? "danger" : "warn"} icon={AlertCircle}>{t("renewFailed")}</Badge></span></Tip>
                           : soon ? <Badge tone={d! <= 7 ? "danger" : "warn"} dot>{d! < 0 ? t("expired") : t("expiringSoon")}</Badge>
                             : <Badge tone="ok" dot>{t("certValid")}</Badge>}
                       {(st === "error" || renewErr) && c.last_error && (c.last_error_hint
