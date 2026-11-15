@@ -1,0 +1,28 @@
+import type { StreamKey } from "../streams.i18n";
+
+export const streamsStrings: Record<StreamKey, string> = {
+  navStreams: "Потоки",
+  streamsDesc: "Перенаправление TCP/UDP-портов на другой хост (базы данных, SSH, MQTT, игровые серверы). Изменения развёртываются на шлюзе сразу после сохранения.",
+  addStream: "Добавить поток",
+  editStream: "Изменить поток",
+  streamSheetDesc: "Укажите порт и протокол для приёма, а также хост и порт назначения.",
+  noStreams: "Потоков пока нет",
+  noStreamsDesc: "Добавьте поток, чтобы перенаправить TCP- или UDP-сервис, который не работает по HTTP.",
+  searchStreams: "Поиск по портам или хостам",
+  incomingPort: "Входящий порт",
+  incomingPortHint: "Порт, который слушает контейнер шлюза. В сети Docker bridge его также нужно опубликовать в ports compose (например, \"5432:5432\").",
+  streamProtocol: "Протокол",
+  streamProtocolHint: "TCP, UDP или оба.",
+  secStreamSource: "Приём",
+  secStreamForward: "Перенаправлять на",
+  streamTlsHint: "Если задано, TLS для TCP-соединений завершается на шлюзе, дальше трафик идёт открытым текстом. Для UDP не используется.",
+  streamTlsPending: "TCP не откроется, пока не будет выпущен сертификат.",
+  streamEnabledDesc: "Если выключено, порт не открывается.",
+  deleteStreamTitle: "Удалить поток",
+  secStreamPP: "PROXY protocol",
+  streamPPBoth: "Применяется только к TCP-соединениям; UDP не меняется.",
+  streamPPIn: "Принимать PROXY protocol",
+  streamPPInDesc: "Каждое подключение должно начинаться с заголовка PROXY protocol (FRP, HAProxy, балансировщики). IP клиента из заголовка используется только для подключений от доверенных источников PROXY protocol на странице «Сеть».",
+  streamPPOut: "Отправлять PROXY protocol бэкенду",
+  streamPPOutDesc: "Бэкенд получает IP клиента в заголовке (v1). Бэкенд должен ожидать PROXY protocol, иначе подключения не будут работать.",
+};

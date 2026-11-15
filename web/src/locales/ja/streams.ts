@@ -1,0 +1,28 @@
+import type { StreamKey } from "../streams.i18n";
+
+export const streamsStrings: Record<StreamKey, string> = {
+  navStreams: "ストリーム",
+  streamsDesc: "TCP/UDP ポートを別のホストへ転送します（データベース、SSH、MQTT、ゲームサーバーなど）。保存するとすぐにゲートウェイへデプロイされます。",
+  addStream: "ストリームを追加",
+  editStream: "ストリームを編集",
+  streamSheetDesc: "待ち受けるポートとプロトコル、転送先のホストとポートを設定します。",
+  noStreams: "ストリームはまだありません",
+  noStreamsDesc: "HTTP 以外の TCP/UDP サービスを転送するにはストリームを追加します。",
+  searchStreams: "ポートまたはホストを検索",
+  incomingPort: "受信ポート",
+  incomingPortHint: "ゲートウェイコンテナが待ち受けるポートです。Docker のブリッジネットワークでは compose の ports にも公開してください（例: \"5432:5432\"）。",
+  streamProtocol: "プロトコル",
+  streamProtocolHint: "TCP、UDP、または両方。",
+  secStreamSource: "待ち受け",
+  secStreamForward: "転送先",
+  streamTlsHint: "設定すると、TCP 接続の TLS をゲートウェイで終端し、平文で転送します。UDP には使われません。",
+  streamTlsPending: "証明書が発行されるまで TCP は開きません。",
+  streamEnabledDesc: "オフにするとこのポートは開きません。",
+  deleteStreamTitle: "ストリームを削除",
+  secStreamPP: "PROXY protocol",
+  streamPPBoth: "TCP 接続にのみ適用され、UDP は変わりません。",
+  streamPPIn: "PROXY protocol を受け付ける",
+  streamPPInDesc: "すべての接続は PROXY protocol ヘッダーで始まる必要があります（FRP、HAProxy、ロードバランサー）。ネットワークページの「信頼する PROXY protocol の送信元」からの接続だけが、ヘッダーのクライアント IP を使います。",
+  streamPPOut: "バックエンドに PROXY protocol を送る",
+  streamPPOutDesc: "バックエンドはクライアント IP をヘッダー（v1）で受け取ります。バックエンドが PROXY protocol を受け付ける設定でないと接続は失敗します。",
+};

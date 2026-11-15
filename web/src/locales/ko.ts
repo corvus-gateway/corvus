@@ -1,3 +1,4 @@
+import { koConsole } from "./console.i18n";
 import { koTemplates } from "./templates.i18n";
 import { koRetention } from "./retention.i18n";
 import { koSso } from "./sso.i18n";
@@ -233,4 +234,5 @@ export const ko = {
   ...koConsoleHost,
   ...koChallenge,
   ...koUnderAttack,
+  ...koConsole,
 } as const;

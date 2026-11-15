@@ -110,4 +110,10 @@ func TestNetworkProxyProtocol(t *testing.T) {
 	if zsCount(zsAudit(t, e), "network.update") != 5 {
 		t.Fatalf("audit: %v", zsAudit(t, e))
 	}
+	// the trusted sources (also used by streams) can be edited while the listeners are off
+	m = put(200, map[string]any{"proxy_protocol": map[string]any{"trusted": []string{"10.0.0.5", "10.0.0.9"}}})
+	if pp := zsObj(t, zsObj(t, m, "network"), "proxy_protocol"); pp["enabled"] != false || len(pp["trusted"].([]any)) != 2 {
+		t.Fatalf("sources while off: %v", pp)
+	}
+	put(200, map[string]any{"proxy_protocol": map[string]any{"trusted": []string{}}})
 }

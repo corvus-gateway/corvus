@@ -1,25 +1,26 @@
-import { templatesStrings } from "./templates.i18n";
-import { retentionStrings } from "./retention.i18n";
-import { ssoStrings } from "./sso.i18n";
-import { hintsStrings } from "./hints.i18n";
-import { tokensStrings } from "./tokens.i18n";
-import { redirectsStrings } from "./redirects.i18n";
-import { streamsStrings } from "./streams.i18n";
-import { notesStrings } from "./notes.i18n";
-import { proxyProtocolStrings } from "./proxyprotocol.i18n";
-import { updateStrings } from "./update.i18n";
-import { headersStrings } from "./headers.i18n";
-import { locationsStrings } from "./locations.i18n";
-import { limitsStrings } from "./limits.i18n";
-import { certReplaceStrings } from "./certreplace.i18n";
-import { dnsCredsStrings } from "./dnscreds.i18n";
-import { listFeedsStrings } from "./listfeeds.i18n";
-import { bansStrings } from "./bans.i18n";
-import { backupStrings } from "./backup.i18n";
-import { pagesStrings } from "./pages.i18n";
-import { consoleHostStrings } from "./consolehost.i18n";
-import { challengeStrings } from "./challenge.i18n";
-import { underAttackStrings } from "./underattack.i18n";
+import { consoleStrings } from "./de/console";
+import { templatesStrings } from "./de/templates";
+import { retentionStrings } from "./de/retention";
+import { ssoStrings } from "./de/sso";
+import { hintsStrings } from "./de/hints";
+import { tokensStrings } from "./de/tokens";
+import { redirectsStrings } from "./de/redirects";
+import { streamsStrings } from "./de/streams";
+import { notesStrings } from "./de/notes";
+import { proxyProtocolStrings } from "./de/proxyprotocol";
+import { updateStrings } from "./de/update";
+import { headersStrings } from "./de/headers";
+import { locationsStrings } from "./de/locations";
+import { limitsStrings } from "./de/limits";
+import { certReplaceStrings } from "./de/certreplace";
+import { dnsCredsStrings } from "./de/dnscreds";
+import { listFeedsStrings } from "./de/listfeeds";
+import { bansStrings } from "./de/bans";
+import { backupStrings } from "./de/backup";
+import { pagesStrings } from "./de/pages";
+import { consoleHostStrings } from "./de/consolehost";
+import { challengeStrings } from "./de/challenge";
+import { underAttackStrings } from "./de/underattack";
 import type { ko } from "./ko";
 import type { RuleLabels } from "../lib/rules";
 import type { AuditLabels } from "../lib/audit";
@@ -313,28 +314,29 @@ export const de: Partial<Record<keyof typeof ko, string>> = {
   ipRulesMovedDesc: "Diese Seite verwaltet jetzt nur noch Basic-Auth-Benutzer. Bestehende IP-Regeln der Zugriffslisten wurden in Sicherheitsregeln mit dem Namen „(aus Zugriffsliste konvertiert)“ umgewandelt.",
   basicAuthHostHint: "Fordert eine Browser-Anmeldung an. Für IP-Zulassen/-Verweigern", goSecurityRules: "Sicherheitsregeln verwenden →",
   pagination: "Seitennavigation", pageSize: "Pro Seite", pageRange: "{from}–{to} von {total}", pageNofM: "Seite {n} von {m}", prevPage: "Vorherige Seite", nextPage: "Nächste Seite",
-  ...bansStrings.de,
-  ...tokensStrings.de,
-  ...redirectsStrings.de,
-  ...streamsStrings.de,
-  ...notesStrings.de,
-  ...proxyProtocolStrings.de,
-  ...updateStrings.de,
-  ...headersStrings.de,
-  ...locationsStrings.de,
-  ...limitsStrings.de,
-  ...certReplaceStrings.de,
-  ...dnsCredsStrings.de,
-  ...listFeedsStrings.de,
-  ...ssoStrings.de,
-  ...hintsStrings.de,
-  ...retentionStrings.de,
-  ...templatesStrings.de,
-  ...backupStrings.de,
-  ...pagesStrings.de,
-  ...consoleHostStrings.de,
-  ...challengeStrings.de,
-  ...underAttackStrings.de,
+  ...bansStrings,
+  ...tokensStrings,
+  ...redirectsStrings,
+  ...streamsStrings,
+  ...notesStrings,
+  ...proxyProtocolStrings,
+  ...updateStrings,
+  ...headersStrings,
+  ...locationsStrings,
+  ...limitsStrings,
+  ...certReplaceStrings,
+  ...dnsCredsStrings,
+  ...listFeedsStrings,
+  ...ssoStrings,
+  ...hintsStrings,
+  ...retentionStrings,
+  ...templatesStrings,
+  ...backupStrings,
+  ...pagesStrings,
+  ...consoleHostStrings,
+  ...challengeStrings,
+  ...underAttackStrings,
+  ...consoleStrings,
 };
 
 export const deRuleLabels: RuleLabels | undefined = {

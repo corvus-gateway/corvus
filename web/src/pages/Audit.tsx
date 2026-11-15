@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { ChevronDown, ScrollText } from "lucide-react";
 import type { AuditEntry } from "../api";
-import { ErrorBox, PageHeader, Toolbar } from "../components/common";
+import { ErrorBox, PageHeader, RefreshError, Toolbar } from "../components/common";
 import { Badge, Card, CodeBlock, EmptyState, TableSkeleton } from "../components/ui/display";
 import { SearchInput, Select } from "../components/ui/form";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
@@ -37,6 +37,7 @@ export default function Audit() {
           <div className="w-32"><Select aria-label={t("rows")} value={limit} onChange={(e) => setLimit(Number(e.target.value))} className="!h-8">{LIMITS.map((l) => <option key={l} value={l}>{t("lastN", { n: l })}</option>)}</Select></div>
           <span className="ml-auto text-xs text-fg-subtle num">{t("nItems", { n: rows.length })}</span>
         </Toolbar>
+        <RefreshError res={res} className="m-3" />
         {res.loading ? <TableSkeleton cols={5} rows={8} /> : res.error && !res.data ? <div className="p-4"><ErrorBox error={res.error} /></div> : !rows.length ? (
           <EmptyState icon={ScrollText} title={t("noAudit")} description={res.data?.length ? t("noResultsDesc") : t("noAuditDesc")} />
         ) : (

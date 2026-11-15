@@ -63,6 +63,7 @@ export const api = {
   get: <T>(p: string) => request<T>("GET", p),
   post: <T>(p: string, b?: unknown) => request<T>("POST", p, b ?? {}),
   put: <T>(p: string, b: unknown) => request<T>("PUT", p, b),
+  patch: <T>(p: string, b: unknown) => request<T>("PATCH", p, b),
   del: <T>(p: string) => request<T>("DELETE", p),
 };
 
@@ -192,6 +193,8 @@ export interface ProxyProtocolSettings { enabled: boolean; http_port: number; ht
 
 export interface NetworkSettings {
   trusted_proxies: string[]; real_ip_header: string; real_ip_headers?: string[]; mask_ips?: boolean;
+  /** Addresses allowed to reach the admin console (empty = any). */
+  admin_allow?: string[];
   proxy_protocol?: ProxyProtocolSettings;
   cloudflare?: { ipv4: number; ipv6: number; updated_at?: string; source?: "builtin" | "remote" };
 }
