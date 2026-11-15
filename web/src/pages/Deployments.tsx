@@ -3,7 +3,7 @@ import { ArrowLeftRight, CheckCircle2, FileCode2, History, Rocket, RotateCcw, XC
 import { api, type DeploymentPage, type Version } from "../api";
 import { Pagination } from "../components/Pagination";
 import { useApp } from "../lib/app";
-import { ErrorBox, PageHeader, useSubmit } from "../components/common";
+import { ErrorBox, PageHeader, RefreshError, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Badge, Card, CodeBlock, EmptyState, Skeleton, type Tone } from "../components/ui/display";
 import { Input, Field } from "../components/ui/form";
@@ -65,6 +65,7 @@ export default function Deployments() {
     <>
       <PageHeader title={t("navDeploy")} description={t("deployDesc")} actions={can && <Button variant="primary" onClick={() => { act.setError(null); setDeploying(""); }}><Rocket className="h-4 w-4" />{t("deployNow")}</Button>} />
       <ErrorBox error={deploying === null ? act.error : null} className="mb-4" />
+      <RefreshError res={res} className="mb-4" />
       {res.loading ? <div className="space-y-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
         : res.error && !res.data ? <ErrorBox error={res.error} />
           : !versions.length && offset === 0 ? <Card><EmptyState icon={History} title={t("noDeployments")} description={t("noDeploymentsDesc")} /></Card> : (

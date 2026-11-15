@@ -1,3 +1,4 @@
+import { consoleStrings } from "./en/console";
 import { templatesStrings } from "./en/templates";
 import { retentionStrings } from "./en/retention";
 import { ssoStrings } from "./en/sso";
@@ -235,4 +236,5 @@ export const en: Record<keyof typeof ko, string> = {
   ...consoleHostStrings,
   ...challengeStrings,
   ...underAttackStrings,
+  ...consoleStrings,
 };

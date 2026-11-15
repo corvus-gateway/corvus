@@ -2,11 +2,11 @@ import { useMemo, useState } from "react";
 import { ArrowRight, Cable, Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import { api, type Certificate, type Stream } from "../api";
 import { NoteLine, NotesSection, notesMatch } from "../components/NotesField";
-import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
+import { ErrorBox, PageHeader, RefreshError, Toolbar, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Badge, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
 import { Field, FormSection, IdField, Input, NumberInput, Segmented, Select, SearchInput, Switch, SwitchRow, fieldErr } from "../components/ui/form";
-import { ConfirmDialog, RowMenu, Sheet } from "../components/ui/overlay";
+import { ConfirmDialog, RowMenu, Sheet, SheetCancel, useDirty } from "../components/ui/overlay";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
 import { useResource } from "../hooks/useResource";
 import { useCan } from "../lib/rbac";
@@ -34,6 +34,7 @@ export default function Streams() {
 
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<{ id: number | null; form: Form } | null>(null);
+  const dirty = useDirty(editing);
   const [deleting, setDeleting] = useState<Stream | null>(null);
   const { busy, error, setError, run } = useSubmit();
   const rowAction = useSubmit({ toastAll: true });
@@ -79,6 +80,7 @@ export default function Streams() {
           <SearchInput className="w-full sm:w-72" value={q} onChange={setQ} placeholder={t("searchStreams")} />
           <span className="ml-auto text-xs text-fg-subtle num">{t("nItems", { n: filtered.length })}</span>
         </Toolbar>
+        <RefreshError res={streams} className="m-3" />
         {streams.loading ? <TableSkeleton cols={4} /> : streams.error && !streams.data ? <div className="p-4"><ErrorBox error={streams.error} /></div> :
           !streams.data?.length ? (
             <EmptyState icon={Cable} title={t("noStreams")} description={t("noStreamsDesc")} action={can ? <Button variant="primary" onClick={() => open()}><Plus className="h-4 w-4" />{t("addStream")}</Button> : undefined} />
@@ -126,9 +128,9 @@ export default function Streams() {
           )}
       </Card>
 
-      <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(null)} onSubmit={save} width="max-w-[34rem]"
+      <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(null)} onSubmit={save} dirty={dirty} error={error} width="max-w-[34rem]"
         title={editing?.id ? t("editStream") : t("addStream")} description={t("streamSheetDesc")}
-        footer={<><Button onClick={() => setEditing(null)}>{t("cancel")}</Button><Button type="submit" variant="primary" loading={busy} disabled={incomplete || !can}>{t("saveAndDeploy")}</Button></>}>
+        footer={<><SheetCancel /><Button type="submit" variant="primary" loading={busy} disabled={incomplete || !can}>{t("saveAndDeploy")}</Button></>}>
         {f && (<>
           {error && <div className="px-6 pt-5"><ErrorBox error={error} /></div>}
           <FormSection title={t("secStreamSource")}>

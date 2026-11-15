@@ -1,3 +1,4 @@
+import { consoleStrings } from "./zh/console";
 import { templatesStrings } from "./zh/templates";
 import { retentionStrings } from "./zh/retention";
 import { ssoStrings } from "./zh/sso";
@@ -336,6 +337,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   ...consoleHostStrings,
   ...challengeStrings,
   ...underAttackStrings,
+  ...consoleStrings,
 };
 
 export const zhRuleLabels: RuleLabels | undefined = {

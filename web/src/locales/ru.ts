@@ -1,3 +1,4 @@
+import { consoleStrings } from "./ru/console";
 import { templatesStrings } from "./ru/templates";
 import { retentionStrings } from "./ru/retention";
 import { ssoStrings } from "./ru/sso";
@@ -335,6 +336,7 @@ export const ru: Partial<Record<keyof typeof ko, string>> = {
   ...consoleHostStrings,
   ...challengeStrings,
   ...underAttackStrings,
+  ...consoleStrings,
 };
 
 export const ruRuleLabels: RuleLabels | undefined = {

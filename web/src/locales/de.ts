@@ -1,3 +1,4 @@
+import { consoleStrings } from "./de/console";
 import { templatesStrings } from "./de/templates";
 import { retentionStrings } from "./de/retention";
 import { ssoStrings } from "./de/sso";
@@ -335,6 +336,7 @@ export const de: Partial<Record<keyof typeof ko, string>> = {
   ...consoleHostStrings,
   ...challengeStrings,
   ...underAttackStrings,
+  ...consoleStrings,
 };
 
 export const deRuleLabels: RuleLabels | undefined = {

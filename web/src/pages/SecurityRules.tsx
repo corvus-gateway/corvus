@@ -6,13 +6,13 @@ import {
   Activity, AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, CornerDownRight, Eye, Globe, GripVertical, ListFilter, Pencil, Plus, RefreshCw, ShieldBan, Trash2, FileStack } from "lucide-react";
 import { ApiError, api, type ChallengeBind, type ChallengeMode, type GeoipStatus, type IpList, type ProxyHost, type RuleAction, type RuleEvent, type RuleEventAction, type SecurityRule } from "../api";
 import { ErrorHint } from "../components/ErrorHint";
-import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
+import { ErrorBox, PageHeader, RefreshError, Toolbar, useSubmit } from "../components/common";
 import { RuleExpression } from "../components/RuleExpression";
 import { Button } from "../components/ui/button";
 import { Badge, Callout, Card, CardHeader, CodeBlock, ComingSoon, EmptyState, Mono, TableSkeleton, type Tone } from "../components/ui/display";
 import { Field, FormSection, IdField, Input, SearchInput, Segmented, Select, Switch, SwitchRow, Textarea } from "../components/ui/form";
 import { MultiPicker } from "../components/ui/picker";
-import { ConfirmDialog, RowMenu, Sheet, Tip } from "../components/ui/overlay";
+import { ConfirmDialog, RowMenu, Sheet, SheetCancel, Tip, useDirty } from "../components/ui/overlay";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
 import { useResource, type Resource } from "../hooks/useResource";
 import { useCan } from "../lib/rbac";
@@ -209,6 +209,7 @@ function RulesTab({ list, lists, hosts, geo, onEdit, onEvents }: {
           <span>{t("evalOrderNote")}{s && can && <span className="ml-1 text-fg-subtle">{t("reorderDisabledSearch")}</span>}</span>
         </div>
         <div aria-live="polite" className="sr-only">{announce}</div>
+        <RefreshError res={list} className="m-3" />
         {list.loading ? <TableSkeleton cols={6} /> : list.error && !list.data ? <div className="p-4"><ErrorBox error={list.error} /></div> : !rules.length ? (
           <EmptyState icon={ShieldBan} title={t("noRules")} description={t("noRulesDesc")} action={<Button variant="primary" onClick={() => onEdit()}><Plus className="h-4 w-4" />{t("addRule")}</Button>} />
         ) : !shown.length ? <EmptyState icon={ShieldBan} title={t("noResults")} description={t("noResultsDesc")} /> : (
@@ -408,6 +409,8 @@ function RuleSheet({ editing, setEditing, lists, hosts, geoipAvailable, onSaved 
   const ro = !can;
   const isOpen = !!editing;
   useEffect(() => { if (isOpen) setError(null); }, [isOpen, setError]);
+  const dirty = useDirty(editing && !ro ? { form: editing.form, rows: editing.rows } : null);
+  const [attempt, setAttempt] = useState(0);
 
   const f = editing?.form;
   const set = (p: Partial<Form>) => setEditing((e) => (e ? { ...e, form: { ...e.form, ...p } } : e));
@@ -426,7 +429,7 @@ function RuleSheet({ editing, setEditing, lists, hosts, geoipAvailable, onSaved 
 
   const save = async () => {
     if (!editing || !f || ro) return;
-    if (Object.keys(clientErr).length) { setEditing((e) => (e ? { ...e, tried: true } : e)); return; }
+    if (Object.keys(clientErr).length) { setEditing((e) => (e ? { ...e, tried: true } : e)); setAttempt((a) => a + 1); return; }
     const body = bodyOf(f, groups);
     const r = await run(() => (editing.id ? api.put(`/api/security-rules/${editing.id}`, body) : api.post("/api/security-rules", body)), { success: t("savedDeployed") });
     if (r !== undefined) { setEditing(() => null); onSaved(); }
@@ -435,10 +438,11 @@ function RuleSheet({ editing, setEditing, lists, hosts, geoipAvailable, onSaved 
   const generalServer = error instanceof ApiError && error.kind === "validation" && Object.keys(serverErr).length === 0;
 
   return (
-    <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(() => null)} onSubmit={save} width="max-w-[46rem]"
+    <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(() => null)} onSubmit={save} width="max-w-[46rem]" dirty={dirty}
+      error={error ?? (editing?.tried && Object.keys(clientErr).length ? attempt : null)}
       title={ro ? t("viewRule") : editing?.id ? t("editRule") : t("addRule")} description={t("ruleSheetDesc")}
       footer={ro ? <Button onClick={() => setEditing(() => null)}>{t("close")}</Button>
-        : <><Button onClick={() => setEditing(() => null)}>{t("cancel")}</Button><Button type="submit" variant="primary" loading={busy}>{t("saveAndDeploy")}</Button></>}>
+        : <><SheetCancel /><Button type="submit" variant="primary" loading={busy}>{t("saveAndDeploy")}</Button></>}>
       {editing && f && (<>
         {ro && <div className="px-6 pt-5"><Callout tone="neutral" icon={Eye}>{t("readOnlyNotice")}</Callout></div>}
         {error != null && (!(error instanceof ApiError) || error.kind !== "validation" || generalServer || error.fields.some((x) => !x.field)) && <div className="px-6 pt-5"><ErrorBox error={error} /></div>}

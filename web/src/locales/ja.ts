@@ -1,3 +1,4 @@
+import { consoleStrings } from "./ja/console";
 import { templatesStrings } from "./ja/templates";
 import { retentionStrings } from "./ja/retention";
 import { ssoStrings } from "./ja/sso";
@@ -336,6 +337,7 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   ...consoleHostStrings,
   ...challengeStrings,
   ...underAttackStrings,
+  ...consoleStrings,
 };
 
 export const jaRuleLabels: RuleLabels | undefined = {

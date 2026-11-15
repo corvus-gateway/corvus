@@ -3,11 +3,11 @@ import { AlertCircle, ArrowRight, Copy, ExternalLink, Loader2, Lock, Pencil, Plu
 import { toast } from "sonner";
 import { api, type Certificate, type RedirectionHost, type RedirectScheme } from "../api";
 import { NoteLine, NotesSection, notesMatch } from "../components/NotesField";
-import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
+import { ErrorBox, PageHeader, RefreshError, Toolbar, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Badge, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
 import { Field, FormSection, IdField, Input, Segmented, Select, SearchInput, Switch, SwitchRow, TagInput, Textarea, fieldErr } from "../components/ui/form";
-import { ConfirmDialog, RowMenu, Sheet, Tip } from "../components/ui/overlay";
+import { ConfirmDialog, RowMenu, Sheet, SheetCancel, Tip, useDirty } from "../components/ui/overlay";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
 import { useResource } from "../hooks/useResource";
 import { useCan } from "../lib/rbac";
@@ -53,6 +53,7 @@ export default function RedirectionHosts() {
 
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<{ id: number | null; form: Form; req: CertReq | null } | null>(null);
+  const dirty = useDirty(editing);
   const [deleting, setDeleting] = useState<RedirectionHost | null>(null);
   const { busy, error, setError, run } = useSubmit();
   const rowAction = useSubmit({ toastAll: true });
@@ -109,6 +110,7 @@ export default function RedirectionHosts() {
           <SearchInput className="w-full sm:w-72" value={q} onChange={setQ} placeholder={t("searchRedirects")} />
           <span className="ml-auto text-xs text-fg-subtle num">{t("nItems", { n: filtered.length })}</span>
         </Toolbar>
+        <RefreshError res={hosts} className="m-3" />
         {hosts.loading ? <TableSkeleton cols={5} /> : hosts.error && !hosts.data ? <div className="p-4"><ErrorBox error={hosts.error} /></div> :
           !hosts.data?.length ? (
             <EmptyState icon={Signpost} title={t("noRedirects")} description={t("noRedirectsDesc")} action={can ? <Button variant="primary" onClick={() => open()}><Plus className="h-4 w-4" />{t("addRedirect")}</Button> : undefined} />
@@ -169,9 +171,9 @@ export default function RedirectionHosts() {
           )}
       </Card>
 
-      <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(null)} onSubmit={save} width="max-w-[38rem]"
+      <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(null)} onSubmit={save} dirty={dirty} error={error} width="max-w-[38rem]"
         title={editing?.id ? t("editRedirect") : t("addRedirect")} description={t("redirectSheetDesc")}
-        footer={<><Button onClick={() => setEditing(null)}>{t("cancel")}</Button><Button type="submit" variant="primary" loading={busy} disabled={incomplete || !can || (!!req && !req.agree)}>{t("saveAndDeploy")}</Button></>}>
+        footer={<><SheetCancel /><Button type="submit" variant="primary" loading={busy} disabled={incomplete || !can || (!!req && !req.agree)}>{t("saveAndDeploy")}</Button></>}>
         {f && (<>
           {error && <div className="px-6 pt-5"><ErrorBox error={error} /></div>}
           <FormSection title={t("secDomains")}>

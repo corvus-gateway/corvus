@@ -1,6 +1,8 @@
+import { useCallback } from "react";
 import { Lightbulb } from "lucide-react";
+import { toast } from "sonner";
 import { ApiError } from "../api";
-import { useI18n, type Key } from "../i18n";
+import { useI18n, type Key, type TFn } from "../i18n";
 import { cn } from "../lib/utils";
 
 /** Hint codes from the control plane (internal/hints) → sentence and troubleshooting anchor. */
@@ -44,6 +46,45 @@ export const hintOf = (e: unknown) => (e instanceof ApiError ? e.hint : undefine
 export function useHintText() {
   const { t } = useI18n();
   return (code?: string) => (code && HINTS[code] ? t(HINTS[code].key) : "");
+}
+
+// Server messages the console knows (conflicts that refuse a change): shown translated.
+const IN_USE = /^(?:certificate|access queue|rate limit policy|access list|list|DNS credential) is used by (\d+) (proxy host|redirection host|stream|security rule|certificate)\(s\)$/;
+const IN_USE_BY: Record<string, Key> = {
+  "proxy host": "navHosts", "redirection host": "navRedirects", stream: "navStreams", "security rule": "navSecurityRules", certificate: "navCerts",
+};
+const FIXED: Record<string, Key> = {
+  "at least one active administrator is required": "errLastAdmin",
+  "you cannot delete your own account": "errDeleteSelf",
+  "you cannot change your own role or disable your own account": "errSelfRole",
+  "change your own password on the account page": "errOwnPassword",
+};
+
+/** The message of a failure in the console language when the server's text is a known one. */
+export function errorText(t: TFn, e: unknown): string {
+  if (!(e instanceof ApiError)) return e instanceof Error ? e.message : t("requestFailed");
+  const m = e.message;
+  const u = IN_USE.exec(m);
+  if (u) return t("errInUse", { n: u[1], what: t(IN_USE_BY[u[2]]) });
+  const max = /^at most (\d+) security rules$/.exec(m);
+  if (max) return t("errMaxRules", { n: max[1] });
+  return FIXED[m] ? t(FIXED[m]) : m;
+}
+
+/** Shows a failure as a toast: translated message, the hint sentence and a "How to fix" link. */
+export function useErrorToast() {
+  const { t, lang } = useI18n();
+  return useCallback((e: unknown, o: { title?: string; description?: string } = {}) => {
+    const code = hintOf(e);
+    const hint = code && HINTS[code] ? t(HINTS[code].key) : "";
+    const link = hintLink(code, lang);
+    const detail = o.description ?? (o.title ? errorText(t, e) : "");
+    toast.error(o.title ?? errorText(t, e), {
+      description: [detail, hint].filter(Boolean).join("\n") || undefined,
+      duration: hint || detail ? 10_000 : undefined,
+      action: link ? { label: t("hintHowToFix"), onClick: () => window.open(link, "_blank", "noopener,noreferrer") } : undefined,
+    });
+  }, [t, lang]);
 }
 
 /** One actionable line for an error hint code plus a "How to fix" link; nothing for unknown codes. */

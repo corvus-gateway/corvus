@@ -5,11 +5,11 @@ import { api, type AccessList, type Certificate, type ClientIPMode, type ProxyHo
 import { UnderAttackFields, uaConfig, UA_DEFAULTS } from "../components/UnderAttackFields";
 import { LocationsFields } from "../components/LocationsFields";
 import { NoteLine, NotesSection, notesMatch } from "../components/NotesField";
-import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
+import { ErrorBox, PageHeader, RefreshError, Toolbar, useSubmit } from "../components/common";
 import { Button, IconButton } from "../components/ui/button";
 import { Badge, Callout, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
 import { Field, FormSection, IdField, Input, NumberInput, Segmented, Select, SearchInput, Switch, SwitchRow, TagInput, Textarea, fieldErr } from "../components/ui/form";
-import { ConfirmDialog, RowMenu, Sheet, Tip } from "../components/ui/overlay";
+import { ConfirmDialog, RowMenu, Sheet, SheetCancel, Tip, useDirty } from "../components/ui/overlay";
 import { servesConsole } from "../locales/consolehost.i18n";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
 import { useResource } from "../hooks/useResource";
@@ -62,6 +62,7 @@ export default function ProxyHosts() {
 
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<{ id: number | null; form: Form; req: CertReq | null; auth: BasicAuthForm } | null>(null);
+  const dirty = useDirty(editing);
   const [deleting, setDeleting] = useState<ProxyHost | null>(null);
   const { busy, error, setError, run } = useSubmit();
   const rowAction = useSubmit({ toastAll: true });
@@ -154,6 +155,7 @@ export default function ProxyHosts() {
           <SearchInput className="w-full sm:w-72" value={q} onChange={setQ} placeholder={t("searchHosts")} />
           <span className="ml-auto text-xs text-fg-subtle num">{t("nItems", { n: filtered.length })}</span>
         </Toolbar>
+        <RefreshError res={hosts} className="m-3" />
         {hosts.loading ? <TableSkeleton cols={5} /> : hosts.error && !hosts.data ? <div className="p-4"><ErrorBox error={hosts.error} /></div> :
           !hosts.data?.length ? (
             <EmptyState icon={Globe} title={t("noHosts")} description={t("noHostsDesc")} action={<Button variant="primary" onClick={() => open()}><Plus className="h-4 w-4" />{t("addHost")}</Button>} />
@@ -225,9 +227,9 @@ export default function ProxyHosts() {
           )}
       </Card>
 
-      <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(null)} onSubmit={save} width="max-w-[38rem]"
+      <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(null)} onSubmit={save} dirty={dirty} error={error} width="max-w-[38rem]"
         title={editing?.id ? t("editHost") : t("addHost")} description={t("hostSheetDesc")}
-        footer={<><Button onClick={() => setEditing(null)}>{t("cancel")}</Button><Button type="submit" variant="primary" loading={busy} disabled={!!noDomain || (!!req && !req.agree)}>{t("saveAndDeploy")}</Button></>}>
+        footer={<><SheetCancel /><Button type="submit" variant="primary" loading={busy} disabled={!!noDomain || (!!req && !req.agree)}>{t("saveAndDeploy")}</Button></>}>
         {f && (<>
           {error && <div className="px-6 pt-5"><ErrorBox error={error} /></div>}
           {editingConsole && <div className="px-6 pt-5"><Callout tone="warn" icon={AlertTriangle} title={t("consoleHostTitle")}>{t("consoleHostEdit")}</Callout></div>}

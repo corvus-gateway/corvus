@@ -6,11 +6,11 @@ import {
   api, type AlertActive, type AlertChannel, type AlertHistoryItem, type AlertKind, type AlertRuleCfg, type AlertRuleInfo, type AlertSettings, type AlertSeverity,
 } from "../api";
 import { ErrorBox, PageHeader, useSubmit } from "../components/common";
-import { ErrorHint, useHintText } from "../components/ErrorHint";
+import { ErrorHint, useErrorToast, useHintText } from "../components/ErrorHint";
 import { Button } from "../components/ui/button";
 import { Badge, Callout, Card, CardHeader, ComingSoon, EmptyState, Skeleton, TableSkeleton, type Tone } from "../components/ui/display";
 import { Field, FormSection, IdField, Input, NumberInput, Segmented, Select, Switch, SwitchRow, fieldErr } from "../components/ui/form";
-import { ConfirmDialog, RowMenu, Sheet, Tip } from "../components/ui/overlay";
+import { ConfirmDialog, RowMenu, Sheet, SheetCancel, Tip, useDirty } from "../components/ui/overlay";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
 import { useResource } from "../hooks/useResource";
 import { useCan } from "../lib/rbac";
@@ -122,8 +122,10 @@ const chBlank: ChForm = { name: "", kind: "slack", enabled: true, min_severity: 
 function Channels({ res }: { res: ReturnType<typeof useResource<AlertChannel[]>> }) {
   const { t } = useI18n();
   const hintText = useHintText();
+  const toastError = useErrorToast();
   const { can } = useCan();
   const [editing, setEditing] = useState<{ id: number | null; form: ChForm } | null>(null);
+  const dirty = useDirty(editing);
   const [created, setCreated] = useState<AlertChannel | null>(null);
   const [deleting, setDeleting] = useState<AlertChannel | null>(null);
   const { busy, error, setError, run } = useSubmit();
@@ -153,7 +155,7 @@ function Channels({ res }: { res: ReturnType<typeof useResource<AlertChannel[]>>
       const r = await api.post<{ ok: boolean; status_code?: number; error?: string; hint?: string }>(`/api/alerts/channels/${c.id}/test`);
       if (r.ok) toast.success(`${t("testOk")} · ${c.name}`);
       else toast.error(`${t("testFail")}: ${r.error || r.status_code || ""}`, { description: hintText(r.hint) || undefined, duration: r.hint ? 10_000 : undefined });
-    } catch (e) { toast.error(`${t("testFail")}: ${(e as Error).message}`); }
+    } catch (e) { toastError(e, { title: t("testFail") }); }
   };
   const toggle = async (c: AlertChannel, enabled: boolean) => {
     const r = await row.run(() => api.put(`/api/alerts/channels/${c.id}`, { name: c.name, kind: c.kind, enabled, min_severity: c.min_severity, events: c.events ?? [] }), { deployed: false });
@@ -208,8 +210,8 @@ function Channels({ res }: { res: ReturnType<typeof useResource<AlertChannel[]>>
             </div>
           )}
 
-      <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(null)} onSubmit={save} title={isEdit ? t("editChannel") : t("addChannel")} description={t("channelSheetDesc")}
-        footer={<><Button onClick={() => setEditing(null)}>{t("cancel")}</Button><Button type="submit" variant="primary" loading={busy}>{t("save")}</Button></>}>
+      <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(null)} onSubmit={save} dirty={dirty} error={error} title={isEdit ? t("editChannel") : t("addChannel")} description={t("channelSheetDesc")}
+        footer={<><SheetCancel /><Button type="submit" variant="primary" loading={busy}>{t("save")}</Button></>}>
         {f && (<>
           {error && <div className="px-6 pt-5"><ErrorBox error={error} /></div>}
           <FormSection title={t("chKindPick")}>

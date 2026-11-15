@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import * as Tooltip from "@radix-ui/react-tooltip";
@@ -8,20 +8,55 @@ import { useI18n } from "../../i18n";
 import { useCan } from "../../lib/rbac";
 import { Button, IconButton } from "./button";
 
-/** Right-hand slide-over. With `onSubmit` the body + footer are wrapped in a <form>. */
-export function Sheet({ open, onOpenChange, title, description, children, footer, onSubmit, width = "max-w-[34rem]" }: {
+/** True while `value` (a form being edited; null = closed) differs from how it was when it opened. */
+export function useDirty(value: unknown): boolean {
+  const base = useRef<string | null>(null);
+  if (value == null) { base.current = null; return false; }
+  const now = JSON.stringify(value);
+  if (base.current === null) base.current = now;
+  return base.current !== now;
+}
+
+/** Cancel button for a Sheet footer: closes through the Sheet, so unsaved changes are confirmed. */
+export function SheetCancel({ children }: { children?: ReactNode }) {
+  const { t } = useI18n();
+  return <Dialog.Close asChild><Button>{children ?? t("cancel")}</Button></Dialog.Close>;
+}
+
+/** Right-hand slide-over. With `onSubmit` the body + footer are wrapped in a <form>.
+ *  `dirty`: closing (Esc, outside click, ×, SheetCancel) asks before discarding changes.
+ *  `error`: when it changes to a failure, the first invalid field is scrolled to and focused. */
+export function Sheet({ open, onOpenChange, title, description, children, footer, onSubmit, width = "max-w-[34rem]", dirty = false, error }: {
   open: boolean; onOpenChange: (o: boolean) => void; title: ReactNode; description?: ReactNode;
-  children: ReactNode; footer?: ReactNode; onSubmit?: () => void; width?: string;
+  children: ReactNode; footer?: ReactNode; onSubmit?: () => void; width?: string; dirty?: boolean; error?: unknown;
 }) {
   const { t } = useI18n();
+  const [confirm, setConfirm] = useState(false);
+  const body = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!error || !open) return;
+    // After the error has rendered: the first field marked invalid, else the error box at the top.
+    const id = requestAnimationFrame(() => {
+      const el = body.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
+      if (el) {
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+        (el.matches("input, select, textarea, button, [tabindex]") ? el : el.querySelector<HTMLElement>("input, select, textarea, button") ?? el).focus({ preventScroll: true });
+      } else body.current?.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [error, open]);
+  const change = (o: boolean) => {
+    if (!o && dirty) { setConfirm(true); return; }
+    onOpenChange(o);
+  };
   const inner = (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
+      <div ref={body} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
       {footer && <div className="flex shrink-0 items-center justify-end gap-2 border-t border-line bg-surface px-6 py-3.5">{footer}</div>}
     </>
   );
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={change}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out" />
         <Dialog.Content
@@ -37,6 +72,8 @@ export function Sheet({ open, onOpenChange, title, description, children, footer
           {onSubmit ? (
             <form className="flex min-h-0 flex-1 flex-col" onSubmit={(e: FormEvent) => { e.preventDefault(); onSubmit(); }}>{inner}</form>
           ) : inner}
+          <ConfirmDialog open={confirm} onOpenChange={setConfirm} title={t("discardTitle")} description={t("discardDesc")}
+            confirmLabel={t("discardConfirm")} cancelLabel={t("keepEditing")} onConfirm={() => { setConfirm(false); onOpenChange(false); }} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -65,8 +102,8 @@ export function Modal({ open, onOpenChange, title, description, children, footer
   );
 }
 
-export function ConfirmDialog({ open, onOpenChange, title, description, confirmLabel, onConfirm, danger = true, children }: {
-  open: boolean; onOpenChange: (o: boolean) => void; title: ReactNode; description?: ReactNode; confirmLabel: string;
+export function ConfirmDialog({ open, onOpenChange, title, description, confirmLabel, cancelLabel, onConfirm, danger = true, children }: {
+  open: boolean; onOpenChange: (o: boolean) => void; title: ReactNode; description?: ReactNode; confirmLabel: string; cancelLabel?: string;
   onConfirm: () => void | Promise<void>; danger?: boolean; children?: ReactNode;
 }) {
   const { t } = useI18n();
@@ -80,7 +117,7 @@ export function ConfirmDialog({ open, onOpenChange, title, description, confirmL
       <span className="flex items-center gap-2">{danger && <AlertTriangle className="h-4 w-4 text-danger" aria-hidden />}{title}</span>}
       description={description}
       footer={<>
-        <Button onClick={() => onOpenChange(false)} disabled={busy}>{t("cancel")}</Button>
+        <Button onClick={() => onOpenChange(false)} disabled={busy}>{cancelLabel ?? t("cancel")}</Button>
         <Button variant={danger ? "danger" : "primary"} loading={busy} onClick={run}>{confirmLabel}</Button>
       </>}>
       {children}

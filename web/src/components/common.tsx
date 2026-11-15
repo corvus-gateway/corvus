@@ -1,11 +1,11 @@
 import { useCallback, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { Rocket, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Rocket, ShieldAlert } from "lucide-react";
 import { ApiError, api, deployedVersion } from "../api";
 import { useI18n } from "../i18n";
 import { cn } from "../lib/utils";
 import { Callout, CodeBlock } from "./ui/display";
-import { ErrorHint } from "./ErrorHint";
+import { ErrorHint, errorText, hintOf, useErrorToast } from "./ErrorHint";
 import { Crumbs } from "./layout/Crumbs";
 import { useCan } from "../lib/rbac";
 import { Button } from "./ui/button";
@@ -35,7 +35,7 @@ export function ErrorBox({ error, className }: { error: unknown; className?: str
   const e = error instanceof ApiError ? error : null;
   const general = e ? e.fields.filter((f) => !f.field) : [];
   const title = e?.kind === "config_rejected" ? t("configRejected") : e?.kind === "validation" ? t("validationFailed") : e?.status === 429 ? t("rateLimited") : t("requestFailed");
-  const msg = e?.kind === "config_rejected" ? t("configRejectedDesc") : e?.kind === "validation" ? null : (e?.message ?? String(error));
+  const msg = e?.kind === "config_rejected" ? t("configRejectedDesc") : e?.kind === "validation" ? null : errorText(t, error);
   return (
     <div className={cn("space-y-2", className)}>
       <Callout tone="danger" icon={ShieldAlert} title={title}>
@@ -48,12 +48,25 @@ export function ErrorBox({ error, className }: { error: unknown; className?: str
   );
 }
 
+/** A failed refresh while older data is still shown (useResource keeps it): a compact warning. */
+export function RefreshError({ res, className }: { res: { data: unknown; error: unknown; missing?: boolean }; className?: string }) {
+  const { t } = useI18n();
+  if (!res.error || res.data == null || res.missing) return null;
+  return (
+    <Callout tone="warn" icon={AlertTriangle} title={t("refreshFailed")} className={className}>
+      {errorText(t, res.error)}
+      <ErrorHint code={hintOf(res.error)} className="mt-1.5" />
+    </Callout>
+  );
+}
+
 /** Wraps a mutation: busy flag, error capture, success toast with deployed version.
  *  Validation and "configuration rejected" errors are left to the page's ErrorBox; pass
  *  toastAll for actions that have no ErrorBox (table row switches, delete confirmations,
  *  the redeploy banner), so those failures are not silent. */
 export function useSubmit({ toastAll = false }: { toastAll?: boolean } = {}) {
   const { t } = useI18n();
+  const toastError = useErrorToast();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const run = useCallback(async <T,>(fn: () => Promise<T>, o: { success?: string; deployed?: boolean; silentError?: boolean } = {}): Promise<T | undefined> => {
@@ -70,13 +83,13 @@ export function useSubmit({ toastAll = false }: { toastAll?: boolean } = {}) {
       if (e instanceof ApiError && e.status === 403 && e.kind !== "invalid_credentials") toast.error(t("forbidden"));
       else if (o.silentError) { /* the caller shows it */ }
       else if (e instanceof ApiError && (e.kind === "validation" || e.kind === "config_rejected")) {
-        if (toastAll) toast.error(e.kind === "config_rejected" ? t("configRejected") : t("validationFailed"), { description: errorSummary(e), duration: 10_000 });
+        if (toastAll) toastError(e, { title: e.kind === "config_rejected" ? t("configRejected") : t("validationFailed"), description: errorSummary(e) });
       } else {
-        toast.error(e instanceof ApiError ? e.message : t("requestFailed"));
+        toastError(e instanceof ApiError ? e : new Error(t("requestFailed")));
       }
       return undefined;
     } finally { setBusy(false); }
-  }, [t, toastAll]);
+  }, [t, toastAll, toastError]);
   return { busy, error, setError, run };
 }
 

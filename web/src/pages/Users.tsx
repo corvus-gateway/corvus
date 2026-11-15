@@ -4,10 +4,11 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, ApiError, type User } from "../api";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
+import { errorText } from "../components/ErrorHint";
 import { Button } from "../components/ui/button";
 import { Badge, Callout, Card, ComingSoon, EmptyState, TableSkeleton } from "../components/ui/display";
 import { FormSection, IdField, Input, SearchInput, Select, fieldErr } from "../components/ui/form";
-import { ConfirmDialog, Modal, RowMenu, Sheet } from "../components/ui/overlay";
+import { ConfirmDialog, Modal, RowMenu, Sheet, SheetCancel, useDirty } from "../components/ui/overlay";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
 import { useResource } from "../hooks/useResource";
 import { useI18n } from "../i18n";
@@ -37,6 +38,7 @@ export default function Users() {
   const list = useResource<User[]>(isAdmin ? "/api/users" : null, { poll: 20000 });
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<{ id: number | null; form: Form } | null>(null);
+  const dirty = useDirty(editing);
   const [pw, setPw] = useState<{ user: User; value: string } | null>(null);
   const [mfaFor, setMfaFor] = useState<User | null>(null);
   const [ssoFor, setSsoFor] = useState<User | null>(null);
@@ -136,10 +138,10 @@ export default function Users() {
         </>)}
       </Card>
 
-      <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(null)} onSubmit={save} title={editing?.id ? t("editUser") : t("addUser")} description={t("userSheetDesc")}
-        footer={<><Button onClick={() => setEditing(null)}>{t("cancel")}</Button><Button type="submit" variant="primary" loading={busy}>{t("save")}</Button></>}>
+      <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(null)} onSubmit={save} dirty={dirty} error={error} title={editing?.id ? t("editUser") : t("addUser")} description={t("userSheetDesc")}
+        footer={<><SheetCancel /><Button type="submit" variant="primary" loading={busy}>{t("save")}</Button></>}>
         {f && (<>
-          {error && <div className="px-6 pt-5">{conflict ? <Callout tone="danger" title={t("conflictTitle")}>{conflict.message}</Callout> : <ErrorBox error={error} />}</div>}
+          {error && <div className="px-6 pt-5">{conflict ? <Callout tone="danger" title={t("conflictTitle")}>{errorText(t, conflict)}</Callout> : <ErrorBox error={error} />}</div>}
           <FormSection title={t("secBasic")}>
             <IdField label={t("email")} required error={fieldErr(error, "email")}>{(id) => <Input id={id} type="email" autoComplete="off" disabled={!!editing?.id} value={f.email} onChange={(e) => set({ email: e.target.value })} invalid={!!fieldErr(error, "email")} />}</IdField>
             <IdField label={t("name")} error={fieldErr(error, "name")}>{(id) => <Input id={id} value={f.name} onChange={(e) => set({ name: e.target.value })} invalid={!!fieldErr(error, "name")} />}</IdField>

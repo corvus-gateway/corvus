@@ -1,18 +1,19 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { KeyRound, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { api, ApiError, type DnsCredential } from "../api";
+import { api, type DnsCredential } from "../api";
 import { ErrorBox, useSubmit } from "./common";
 import { Button } from "./ui/button";
 import { Card, CardHeader } from "./ui/display";
 import { FormSection, IdField, Input, fieldErr } from "./ui/form";
-import { ConfirmDialog, RowMenu, Sheet } from "./ui/overlay";
+import { ConfirmDialog, RowMenu, Sheet, SheetCancel, useDirty } from "./ui/overlay";
 import { Table, THead, Td, Th, Tr } from "./ui/table";
 import type { Resource } from "../hooks/useResource";
 import type { DnsProvider } from "../hooks/useDnsProviders";
 import { DnsCredentialInputs, autoCredName } from "./DnsFields";
 import { useCan } from "../lib/rbac";
 import { useI18n } from "../i18n";
+import { useErrorToast } from "./ErrorHint";
 
 type Mode = "add" | "replace" | "rename";
 interface Edit { mode: Mode; id?: number; name: string; provider: string; creds: string }
@@ -21,8 +22,10 @@ interface Edit { mode: Mode; id?: number; name: string; provider: string; creds:
 export function DnsCredentialsCard({ list, providers }: { list: Resource<DnsCredential[]>; providers: DnsProvider[] }) {
   const { t } = useI18n();
   const { can } = useCan();
+  const toastError = useErrorToast();
   const [edit, setEdit] = useState<Edit | null>(null);
   const [deleting, setDeleting] = useState<DnsCredential | null>(null);
+  const dirty = useDirty(edit);
   const sub = useSubmit();
   const row = useSubmit();
   const items = list.data ?? [];
@@ -43,7 +46,7 @@ export function DnsCredentialsCard({ list, providers }: { list: Resource<DnsCred
   const remove = async () => {
     if (!deleting) return;
     // A refusal (credential still in use) is a validation error, which useSubmit doesn't toast.
-    await row.run(() => api.del(`/api/dns-credentials/${deleting.id}`).catch((e) => { toast.error(e instanceof ApiError ? e.message : t("requestFailed")); throw e; }),
+    await row.run(() => api.del(`/api/dns-credentials/${deleting.id}`).catch((e) => { toastError(e); throw e; }),
       { success: t("dnsCredDeleted"), deployed: false, silentError: true });
     list.reload();
   };
@@ -79,8 +82,8 @@ export function DnsCredentialsCard({ list, providers }: { list: Resource<DnsCred
         )}
       </Card>
 
-      <Sheet open={!!edit} onOpenChange={(o) => !o && setEdit(null)} onSubmit={save} title={title} description={desc}
-        footer={<><Button onClick={() => setEdit(null)}>{t("cancel")}</Button><Button type="submit" variant="primary" loading={sub.busy}>{t("save")}</Button></>}>
+      <Sheet open={!!edit} onOpenChange={(o) => !o && setEdit(null)} onSubmit={save} dirty={dirty} error={sub.error} title={title} description={desc}
+        footer={<><SheetCancel /><Button type="submit" variant="primary" loading={sub.busy}>{t("save")}</Button></>}>
         {edit && <>
           {sub.error && !nameErr && !fieldErr(sub.error, "credentials") ? <div className="px-6 pt-5"><ErrorBox error={sub.error} /></div> : null}
           <FormSection title={edit.mode === "replace" ? edit.name : t("secBasic")}>

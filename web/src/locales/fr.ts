@@ -1,3 +1,4 @@
+import { consoleStrings } from "./fr/console";
 import { templatesStrings } from "./fr/templates";
 import { retentionStrings } from "./fr/retention";
 import { ssoStrings } from "./fr/sso";
@@ -335,6 +336,7 @@ export const fr: Partial<Record<keyof typeof ko, string>> = {
   ...consoleHostStrings,
   ...challengeStrings,
   ...underAttackStrings,
+  ...consoleStrings,
 };
 
 export const frRuleLabels: RuleLabels | undefined = {

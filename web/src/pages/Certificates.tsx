@@ -5,7 +5,7 @@ import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Badge, Callout, Card, EmptyState, TableSkeleton } from "../components/ui/display";
 import { Field, FormSection, IdField, Input, SearchInput, SwitchRow, TagInput, Textarea, fieldErr } from "../components/ui/form";
-import { ConfirmDialog, RowMenu, Sheet, Tip } from "../components/ui/overlay";
+import { ConfirmDialog, RowMenu, Sheet, SheetCancel, Tip, useDirty } from "../components/ui/overlay";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
 import { useResource } from "../hooks/useResource";
 import { useDnsProviders } from "../hooks/useDnsProviders";
@@ -37,6 +37,8 @@ export default function Certificates() {
   const [upload, setUpload] = useState<{ id?: number; name: string; certificate: string; private_key: string } | null>(null);
   const [wizard, setWizard] = useState<{ step: 0 | 1 | 2; form: Acme } | null>(null);
   const [deleting, setDeleting] = useState<Certificate | null>(null);
+  const uploadDirty = useDirty(upload);
+  const wizardDirty = useDirty(wizard?.form ?? null);
   const providers = useDnsProviders();
   const creds = useDnsCredentials();
   const up = useSubmit();
@@ -142,8 +144,8 @@ export default function Certificates() {
 
       <DnsCredentialsCard list={creds} providers={providers} />
 
-      <Sheet open={!!upload} onOpenChange={(o) => !o && setUpload(null)} onSubmit={doUpload} title={upload?.id ? t("replaceCertTitle") : t("uploadCert")} description={upload?.id ? t("replaceCertDesc") : t("uploadCertDesc")}
-        footer={<><Button onClick={() => setUpload(null)}>{t("cancel")}</Button><Button type="submit" variant="primary" loading={up.busy}>{upload?.id ? t("replaceCertAction") : t("upload")}</Button></>}>
+      <Sheet open={!!upload} onOpenChange={(o) => !o && setUpload(null)} onSubmit={doUpload} dirty={uploadDirty} error={up.error} title={upload?.id ? t("replaceCertTitle") : t("uploadCert")} description={upload?.id ? t("replaceCertDesc") : t("uploadCertDesc")}
+        footer={<><SheetCancel /><Button type="submit" variant="primary" loading={up.busy}>{upload?.id ? t("replaceCertAction") : t("upload")}</Button></>}>
         {upload && <>
           {up.error && <div className="px-6 pt-5"><ErrorBox error={up.error} /></div>}
           <FormSection title={t("secBasic")}>
@@ -156,15 +158,15 @@ export default function Certificates() {
         </>}
       </Sheet>
 
-      <Sheet open={!!w} onOpenChange={(o) => !o && setWizard(null)} title={t("acmeWizardTitle")} description={t("acmeWizardDesc")}
+      <Sheet open={!!w} onOpenChange={(o) => !o && setWizard(null)} dirty={wizardDirty} error={ac.error} title={t("acmeWizardTitle")} description={t("acmeWizardDesc")}
         footer={w && <>
           {w.step > 0 && <Button className="mr-auto" onClick={() => setWizard({ ...w, step: (w.step - 1) as 0 | 1 })}>{t("back")}</Button>}
-          <Button onClick={() => setWizard(null)}>{t("cancel")}</Button>
+          <SheetCancel />
           {w.step < 2 ? <Button variant="primary" disabled={w.step === 0 ? !step0Ok : !step1Ok} onClick={() => setWizard({ ...w, step: (w.step + 1) as 1 | 2 })}>{t("next")}</Button>
             : <Button variant="primary" loading={ac.busy} onClick={doAcme}><Sparkles className="h-4 w-4" />{t("issueNow")}</Button>}
         </>}>
         {w && wf && <>
-          <ol className="flex items-center gap-2 border-b border-line px-6 py-3" aria-label="steps">
+          <ol className="flex items-center gap-2 border-b border-line px-6 py-3" aria-label={t("wizardSteps")}>
             {steps.map((s, i) => (
               <li key={s} className="flex flex-1 items-center gap-2 last:flex-none" aria-current={i === w.step ? "step" : undefined}>
                 <span className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full text-2xs font-semibold", i < w.step ? "bg-brand-solid text-white" : i === w.step ? "border-2 border-brand text-brand" : "border border-line-strong text-fg-subtle")}>
