@@ -2,6 +2,7 @@ package backup
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -160,5 +161,37 @@ func TestCleanRestoreDirs(t *testing.T) {
 		if !got[n] {
 			t.Fatalf("%s removed; left %v", n, got)
 		}
+	}
+}
+
+// An interrupted restore that cannot be rolled back is a distinct error (the caller
+// must not start), and the journal is kept for the next try.
+func TestInterruptedRestoreRollbackFails(t *testing.T) {
+	b := t.TempDir()
+	rb := filepath.Join(b, "restore-backup-20261104-120000")
+	write(t, filepath.Join(rb, JournalName),
+		`{"moves":[{"from":"corvus.db","to":"restore-backup-20261104-120000/corvus.db"}],"complete":false}`)
+	write(t, filepath.Join(rb, "corvus.db"), "OLD-DB")
+	write(t, filepath.Join(b, "corvus.db"), "RESTORED-DB") // both copies: cannot move back
+	_, err := ApplyPending(b, discard{}, time.Now())
+	var ie *InterruptedRestoreError
+	if !errors.As(err, &ie) {
+		t.Fatalf("err = %v (%T), want *InterruptedRestoreError", err, err)
+	}
+	if _, err := os.Stat(filepath.Join(rb, JournalName)); err != nil {
+		t.Fatalf("journal must be kept: %v", err)
+	}
+
+	// an unreadable journal: the state is unknown, also refused
+	write(t, filepath.Join(rb, JournalName), "{")
+	if _, err := ApplyPending(b, discard{}, time.Now()); !errors.As(err, &ie) {
+		t.Fatalf("unreadable journal: %v", err)
+	}
+
+	// a staged restore that is merely rejected is not such an error
+	c := stagedRestore(t)
+	write(t, filepath.Join(c, PendingDir, "corvus.db"), "TAMPERED")
+	if _, err := ApplyPending(c, discard{}, time.Now()); err == nil || errors.As(err, &ie) {
+		t.Fatalf("rejected restore: %v", err)
 	}
 }

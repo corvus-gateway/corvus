@@ -670,8 +670,21 @@ var testCrash func(n int) bool
 
 var errCrash = errors.New("simulated crash")
 
+// InterruptedRestoreError: a restore interrupted before it completed could not be rolled
+// back (files could not be moved back, or its journal is unreadable). The data directory
+// mixes old and restored files, possibly without a database or data key: Corvus must not
+// start on it (it would create an empty database and a new data key). The journal is
+// kept for the next try.
+type InterruptedRestoreError struct{ Err error }
+
+func (e *InterruptedRestoreError) Error() string {
+	return "an interrupted restore from backup could not be rolled back: " + e.Err.Error()
+}
+func (e *InterruptedRestoreError) Unwrap() error { return e.Err }
+
 // recoverInterrupted rolls back restores interrupted before they completed. It returns
-// an error when a rollback could not be finished (the journal is kept for the next try).
+// an *InterruptedRestoreError when a rollback could not be finished (the journal is
+// kept for the next try).
 func recoverInterrupted(dataDir string, log Logger) error {
 	dirs, _ := filepath.Glob(filepath.Join(dataDir, "restore-backup-*"))
 	sort.Strings(dirs)
@@ -702,7 +715,10 @@ func recoverInterrupted(dataDir string, log Logger) error {
 		}
 		log.Info("interrupted restore rolled back; the previous state is in place")
 	}
-	return errors.Join(errs...)
+	if len(errs) > 0 {
+		return &InterruptedRestoreError{Err: errors.Join(errs...)}
+	}
+	return nil
 }
 
 // cleanRestoreDirs removes restore-backup-* and restore-failed-* directories older than
@@ -749,6 +765,9 @@ func cleanRestoreDirs(dataDir string, log Logger, now time.Time) {
 // is made, and the journal is marked complete at the end: a restore interrupted by a
 // power cut is rolled back on the next start and then applied again. Restore
 // directories older than 30 days are removed (the newest of each kind is kept).
+//
+// An interrupted restore that cannot be rolled back is reported as an
+// *InterruptedRestoreError: the caller must not start on that data directory.
 func ApplyPending(dataDir string, log Logger, now time.Time) (string, error) {
 	if err := recoverInterrupted(dataDir, log); err != nil {
 		// files of the interrupted restore are still mixed in: do not apply on top

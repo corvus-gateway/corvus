@@ -213,15 +213,31 @@ func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
 	return nil
 }
 
+// applyStagedRestore applies a restore confirmed in the console, before anything opens
+// the data. When it fails the previous state stays in place and startup continues with
+// it. An interrupted restore that could not be rolled back is the exception: the data
+// directory may lack the database or the data key, and starting would create an empty
+// database and a new key, so startup stops with the error.
+func applyStagedRestore(dataDir string, now time.Time) error {
+	rb, err := backup.ApplyPending(dataDir, slog.Default(), now)
+	var ie *backup.InterruptedRestoreError
+	switch {
+	case errors.As(err, &ie):
+		return fmt.Errorf("refusing to start: %w; restore-journal.json in the restore-backup-* directory "+
+			"lists the moves to undo by hand (or restore the data directory from a copy), then start again", err)
+	case err != nil:
+		slog.Error("staged restore was not applied", "err", err)
+	case rb != "":
+		slog.Warn("configuration restored from backup; the replaced files are kept for a manual rollback", "dir", rb)
+	}
+	return nil
+}
+
 func run() error {
 	dataDir := env("CORVUS_DATA_DIR", "/data")
 	withGateway := envBool("CORVUS_GATEWAY", true)
-	// A restore confirmed in the console is applied now, before anything opens the data.
-	// On failure the previous state stays in place and startup continues with it.
-	if rb, err := backup.ApplyPending(dataDir, slog.Default(), time.Now()); err != nil {
-		slog.Error("staged restore was not applied", "err", err)
-	} else if rb != "" {
-		slog.Warn("configuration restored from backup; the replaced files are kept for a manual rollback", "dir", rb)
+	if err := applyStagedRestore(dataDir, time.Now()); err != nil {
+		return err
 	}
 	// The image runs as the unprivileged "corvus" user (H9); nginx master and workers
 	// share it. certs/ and secrets/ stay owner-only.
