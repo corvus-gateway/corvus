@@ -3,9 +3,9 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, ty
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  Activity, AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, CornerDownRight, Eye, Globe, GripVertical, ListFilter, Pencil, Plus, RefreshCw, ShieldBan, Trash2, FileStack } from "lucide-react";
-import { ApiError, api, type ChallengeBind, type ChallengeMode, type GeoipStatus, type IpList, type ProxyHost, type RuleAction, type RuleEvent, type RuleEventAction, type SecurityRule } from "../api";
-import { ErrorHint } from "../components/ErrorHint";
+  Activity, AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, CornerDownRight, Eye, Globe, GripVertical, ListFilter, Loader2, Pencil, Plus, RefreshCw, ShieldBan, Trash2, FileStack } from "lucide-react";
+import { ApiError, api, deployedVersion, type ChallengeBind, type ChallengeMode, type GeoipStatus, type IpList, type ProxyHost, type RuleAction, type RuleEvent, type RuleEventAction, type SecurityRule } from "../api";
+import { ErrorHint, useErrorToast } from "../components/ErrorHint";
 import { ErrorBox, PageHeader, RefreshError, Toolbar, useSubmit } from "../components/common";
 import { RuleExpression } from "../components/RuleExpression";
 import { Button } from "../components/ui/button";
@@ -124,12 +124,17 @@ function RulesTab({ list, lists, hosts, geo, onEdit, onEvents }: {
   const [drag, setDrag] = useState<{ id: number; over: number | null; after: boolean } | null>(null);
   const [armed, setArmed] = useState<number | null>(null);
   const [announce, setAnnounce] = useState("");
-  const pending = useRef(false);
   const handles = useRef(new Map<number, HTMLButtonElement>());
   const row = useSubmit({ toastAll: true });
-  const order = useSubmit();
+  const toastError = useErrorToast();
+  // Moves change the order locally; it is saved (and deployed) once: 800 ms after the last
+  // move, when focus leaves the handle, or on drop. queued = the order still to be saved.
+  const queued = useRef<number[] | null>(null);
+  const saving = useRef(false);
+  const timer = useRef(0);
+  const [orderBusy, setOrderBusy] = useState(false);
 
-  useEffect(() => { if (!pending.current) setLocal(null); }, [list.data]);
+  useEffect(() => { if (!queued.current && !saving.current) setLocal(null); }, [list.data]);
   const rules = useMemo(() => local ?? [...(list.data ?? [])].sort((a, b) => a.position - b.position), [local, list.data]);
   const s = q.trim().toLowerCase();
   const shown = useMemo(() => (s ? rules.filter((r) => `${r.name} ${r.description ?? ""}`.toLowerCase().includes(s)) : rules), [rules, s]);
@@ -137,29 +142,54 @@ function RulesTab({ list, lists, hosts, geo, onEdit, onEvents }: {
   const hostName = (id: number) => hosts?.find((h) => h.id === id)?.domains[0] ?? `#${id}`;
   const done = () => { list.reload(); window.dispatchEvent(new Event("corvus:refresh")); };
 
-  const reorder = async (next: SecurityRule[], movedId: number) => {
-    setLocal(next); pending.current = true;
-    const idx = next.findIndex((r) => r.id === movedId);
-    setAnnounce(t("movedTo", { name: next[idx]?.name ?? "", n: idx + 1 }));
-    const r = await order.run(() => api.put("/api/security-rules/order", { ids: next.map((x) => x.id) }), { success: t("orderSaved"), silentError: true });
-    pending.current = false;
-    if (r === undefined) {
+  const saveOrder = async () => {
+    window.clearTimeout(timer.current);
+    const ids = queued.current;
+    if (!ids || saving.current) return; // a save in flight picks up the queued order when it ends
+    queued.current = null;
+    saving.current = true;
+    try {
+      const r = await api.put("/api/security-rules/order", { ids });
+      if (!queued.current) {
+        const v = deployedVersion(r);
+        toast.success(v != null ? `${t("orderSaved")} · ${t("versionN", { n: v })}` : t("orderSaved"));
+      }
+    } catch (e) {
+      queued.current = null;
       setLocal(null);
-      toast.error(t("orderFailed"));
-    } else done();
+      toastError(e, { title: t("orderFailed") });
+    } finally {
+      saving.current = false;
+    }
+    if (queued.current) return saveOrder();
+    setOrderBusy(false);
+    done();
   };
-  const move = (id: number, to: number) => {
+  // Leaving the page before the delay: still save.
+  useEffect(() => () => { if (queued.current) void api.put("/api/security-rules/order", { ids: queued.current }).catch(() => undefined); }, []);
+  const move = (id: number, to: number, now = false) => {
     const from = rules.findIndex((r) => r.id === id);
     if (from < 0 || to < 0 || to >= rules.length || to === from) return;
     const next = [...rules];
     const [it] = next.splice(from, 1);
     next.splice(to, 0, it);
-    reorder(next, id);
+    setLocal(next);
+    setAnnounce(t("movedTo", { name: it.name, n: to + 1 }));
+    queued.current = next.map((x) => x.id);
+    setOrderBusy(true);
+    window.clearTimeout(timer.current);
+    if (now) void saveOrder();
+    else timer.current = window.setTimeout(() => void saveOrder(), 800);
     requestAnimationFrame(() => handles.current.get(id)?.focus());
   };
 
+  // Focus leaving the handles saves now. Checked a moment later: a moved row's handle may lose
+  // focus briefly while React moves it, and move() focuses it again.
+  const onHandleBlur = () => window.setTimeout(() => {
+    if (![...handles.current.values()].some((h) => h === document.activeElement)) void saveOrder();
+  }, 100);
   const onHandleKey = (e: KeyboardEvent<HTMLButtonElement>, r: SecurityRule, i: number) => {
-    if (!canReorder || order.busy) return;
+    if (!canReorder) return;
     if (e.key === "ArrowUp") { e.preventDefault(); move(r.id, i - 1); }
     else if (e.key === "ArrowDown") { e.preventDefault(); move(r.id, i + 1); }
     else if (e.key === "Home") { e.preventDefault(); move(r.id, 0); }
@@ -180,7 +210,7 @@ function RulesTab({ list, lists, hosts, geo, onEdit, onEvents }: {
     let to = rules.findIndex((x) => x.id === drag.over) + (drag.after ? 1 : 0);
     if (from < to) to -= 1;
     setDrag(null); setArmed(null);
-    move(drag.id, to);
+    move(drag.id, to, true);
   };
 
   const toggle = async (r: SecurityRule, enabled: boolean) => {
@@ -202,7 +232,8 @@ function RulesTab({ list, lists, hosts, geo, onEdit, onEvents }: {
       <Card>
         <Toolbar>
           <SearchInput className="w-full sm:w-64" value={q} onChange={setQ} placeholder={t("searchRules")} />
-          <span className="ml-auto text-xs text-fg-subtle num">{t("nOfMax", { n: rules.length, max: LIMITS.rules })}</span>
+          {orderBusy && <span role="status" className="ml-auto inline-flex items-center gap-1.5 text-xs text-fg-muted"><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />{t("orderSaving")}</span>}
+          <span className={cn("text-xs text-fg-subtle num", !orderBusy && "ml-auto")}>{t("nOfMax", { n: rules.length, max: LIMITS.rules })}</span>
         </Toolbar>
         <div className="flex items-start gap-2 border-b border-line bg-surface-2/50 px-4 py-2 text-xs text-fg-muted">
           <ArrowDown className="mt-0.5 h-3.5 w-3.5 shrink-0 text-fg-subtle" aria-hidden />
@@ -235,7 +266,7 @@ function RulesTab({ list, lists, hosts, geo, onEdit, onEvents }: {
                       <div className="flex items-center gap-1">
                         {canReorder ? (
                           <button type="button" ref={(el) => { if (el) handles.current.set(r.id, el); else handles.current.delete(r.id); }}
-                            aria-label={t("reorderHandle", { name: r.name, n: i + 1 })} aria-describedby="reorder-help" disabled={order.busy}
+                            aria-label={t("reorderHandle", { name: r.name, n: i + 1 })} aria-describedby="reorder-help" onBlur={onHandleBlur}
                             onPointerDown={() => setArmed(r.id)} onPointerUp={() => setArmed(null)} onKeyDown={(e) => onHandleKey(e, r, i)}
                             className="grid h-7 w-5 cursor-grab place-items-center rounded text-fg-subtle hover:bg-surface-3 hover:text-fg active:cursor-grabbing disabled:opacity-40">
                             <GripVertical className="h-4 w-4" aria-hidden />
@@ -273,8 +304,8 @@ function RulesTab({ list, lists, hosts, geo, onEdit, onEvents }: {
                     <Td className="text-right"><RowMenu items={[
                       { label: t("edit"), icon: Pencil, onSelect: () => onEdit(r) },
                       { label: t("viewEvents"), icon: Activity, onSelect: () => onEvents(r.id) },
-                      { label: t("moveUp"), icon: ArrowUp, separatorBefore: true, disabled: !canReorder || i === 0 || order.busy, onSelect: () => move(r.id, i - 1) },
-                      { label: t("moveDown"), icon: ArrowDown, disabled: !canReorder || i === rules.length - 1 || order.busy, onSelect: () => move(r.id, i + 1) },
+                      { label: t("moveUp"), icon: ArrowUp, separatorBefore: true, disabled: !canReorder || i === 0, onSelect: () => move(r.id, i - 1, true) },
+                      { label: t("moveDown"), icon: ArrowDown, disabled: !canReorder || i === rules.length - 1, onSelect: () => move(r.id, i + 1, true) },
                       { label: t("delete"), icon: Trash2, danger: true, separatorBefore: true, onSelect: () => setDeleting(r) },
                     ]} /></Td>
                   </Tr>
