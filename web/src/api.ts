@@ -63,6 +63,7 @@ export const api = {
   get: <T>(p: string) => request<T>("GET", p),
   post: <T>(p: string, b?: unknown) => request<T>("POST", p, b ?? {}),
   put: <T>(p: string, b: unknown) => request<T>("PUT", p, b),
+  patch: <T>(p: string, b: unknown) => request<T>("PATCH", p, b),
   del: <T>(p: string) => request<T>("DELETE", p),
 };
 
@@ -160,6 +161,8 @@ export interface DnsCredential { id: number; name: string; provider: string; use
 export interface Version {
   id: number; created_at: string; created_by: number | null; email: string; status: string; message: string;
   test_output: string; rollback_of: number | null; dir: string; config_rev: number;
+  /** made by the control plane (fallback, safe mode): the stored settings are tried again at the next start */
+  automatic: boolean;
 }
 
 export interface DeploymentPage { versions: Version[]; dirty: boolean; total?: number; limit?: number; offset?: number }
@@ -174,7 +177,8 @@ export interface TrafficSummary {
 export interface Overview {
   proxy_hosts: number; proxy_hosts_enabled: number; waitrooms: number; certificates: number;
   active_version: Version | null; dirty: boolean; redis: boolean; rooms: LiveStats[]; version: string;
-  gateway?: { running: boolean; uptime_s?: number };
+  /** error: why the gateway is down (set only while it is not running). */
+  gateway?: { running: boolean; uptime_s?: number; error?: string };
   traffic?: TrafficSummary | null;
   certificates_expiring?: number;
   /** A newer Corvus release (checked on GitHub by the server), or null. */
@@ -192,6 +196,8 @@ export interface ProxyProtocolSettings { enabled: boolean; http_port: number; ht
 
 export interface NetworkSettings {
   trusted_proxies: string[]; real_ip_header: string; real_ip_headers?: string[]; mask_ips?: boolean;
+  /** Addresses allowed to reach the admin console (empty = any). */
+  admin_allow?: string[];
   proxy_protocol?: ProxyProtocolSettings;
   cloudflare?: { ipv4: number; ipv6: number; updated_at?: string; source?: "builtin" | "remote" };
 }

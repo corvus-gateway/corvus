@@ -2,15 +2,22 @@
 -- (CI lua job):  luajit gateway/test/accesslog_test.lua
 package.path = "gateway/lua/?.lua;" .. package.path
 
-local sent, timers, every = {}, 0, 0
+local sent, timers, every, every_fails, logged = {}, 0, 0, 0, 0
 _G.ngx = {
   now = function() return 1762243516.123 end,
   var = {},
   timer = {
     at = function(_, fn, data) timers = timers + 1; sent[#sent + 1] = data; return true end,
-    every = function() every = every + 1; return true end,
+    every = function()
+      every = every + 1
+      if every_fails > 0 then
+        every_fails = every_fails - 1
+        return nil, "too many pending timers"
+      end
+      return true
+    end,
   },
-  log = function() end, NOTICE = 6,
+  log = function() logged = logged + 1 end, NOTICE = 6, ERR = 4,
 }
 local al = require("corvus.accesslog")
 
@@ -59,6 +66,20 @@ eq(lines, n, "every record in the datagram")
 eq(sent[1]:match("\n(c1[^\n]*)\n$"), "c1\t1762243516.123\th\tGET\t200\t0\t0\t1.1.1.1\t-\t\t\t\t\t\t\t/\t", "absent User-Agent")
 al.record()
 eq(every, 1, "timer not started again")
+
+-- the flush timer cannot be created (fresh worker): logged, and retried with the next
+-- request instead of never flushing
+package.loaded["corvus.accesslog"] = nil
+local al2 = require("corvus.accesslog")
+al2.init("/data/run/corvus-access.sock")
+every, every_fails, logged = 0, 1, 0
+al2.record()
+eq(every, 1, "timer creation attempted")
+eq(logged, 1, "failure logged")
+al2.record()
+eq(every, 2, "timer creation retried with the next request")
+al2.record()
+eq(every, 2, "timer not started again once it works")
 
 if failed > 0 then
   io.stderr:write(failed .. " test(s) failed\n")

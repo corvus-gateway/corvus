@@ -1,0 +1,28 @@
+import type { StreamKey } from "../streams.i18n";
+
+export const streamsStrings: Record<StreamKey, string> = {
+  navStreams: "流转发",
+  streamsDesc: "将 TCP/UDP 端口转发到其他主机（数据库、SSH、MQTT、游戏服务器等）。保存后立即部署到网关。",
+  addStream: "添加流",
+  editStream: "编辑流",
+  streamSheetDesc: "设置监听的端口和协议，以及转发到的主机和端口。",
+  noStreams: "暂无流",
+  noStreamsDesc: "添加流以转发非 HTTP 的 TCP 或 UDP 服务。",
+  searchStreams: "搜索端口或主机",
+  incomingPort: "入站端口",
+  incomingPortHint: "网关容器监听的端口。在 Docker 桥接网络中，还需在 compose 的 ports 中发布（例如 \"5432:5432\"）。",
+  streamProtocol: "协议",
+  streamProtocolHint: "TCP、UDP 或两者。",
+  secStreamSource: "监听",
+  secStreamForward: "转发到",
+  streamTlsHint: "设置后，TCP 连接的 TLS 由网关终止并以明文转发。不适用于 UDP。",
+  streamTlsPending: "证书签发前 TCP 不会开放。",
+  streamEnabledDesc: "关闭后不会打开此端口。",
+  deleteStreamTitle: "删除流",
+  secStreamPP: "PROXY protocol",
+  streamPPBoth: "仅适用于 TCP 连接，UDP 不变。",
+  streamPPIn: "接受 PROXY protocol",
+  streamPPInDesc: "每个连接都必须以 PROXY protocol 头开始（FRP、HAProxy、负载均衡器）。只有来自网络页面中“受信任的 PROXY protocol 来源”的连接才会使用头中的客户端 IP。",
+  streamPPOut: "向后端发送 PROXY protocol",
+  streamPPOutDesc: "后端通过头（v1）获得客户端 IP。后端必须配置为接受 PROXY protocol，否则连接会失败。",
+};

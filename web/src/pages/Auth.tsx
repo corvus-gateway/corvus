@@ -224,6 +224,7 @@ function SsoButton() {
 export function CodeInput({ value, onChange, onComplete, disabled, autoFocus }: {
   value: string; onChange: (v: string) => void; onComplete?: (v: string) => void; disabled?: boolean; autoFocus?: boolean;
 }) {
+  const { t } = useI18n();
   const refs = useRef<(HTMLInputElement | null)[]>([]);
   const digits = Array.from({ length: 6 }, (_, i) => value[i] ?? "");
   useEffect(() => { if (autoFocus) refs.current[0]?.focus(); }, [autoFocus]);
@@ -234,7 +235,7 @@ export function CodeInput({ value, onChange, onComplete, disabled, autoFocus }: 
     return v;
   };
   return (
-    <div className="flex justify-between gap-2" role="group" aria-label="verification code">
+    <div className="flex justify-between gap-2" role="group" aria-label={t("verificationCodeLabel")}>
       {digits.map((d, i) => (
         <input key={i} ref={(el) => { refs.current[i] = el; }} value={d} inputMode="numeric" autoComplete={i === 0 ? "one-time-code" : "off"} maxLength={1}
           disabled={disabled} aria-label={`${i + 1}/6`}

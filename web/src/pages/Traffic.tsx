@@ -3,11 +3,11 @@ import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Activity, AlertOctagon, Ban, BadgeCheck, Download, Gauge, Hourglass, ListFilter, Puzzle, Radio, ScrollText, ServerCrash, TimerReset, type LucideIcon } from "lucide-react";
 import { getText, type EventKind, type HostTraffic, type LogLine, type PathTraffic, type Timeseries, type TrafficEvent, type TrafficSummary } from "../api";
 import { ChartLegend, StackBar, TimeChart, type Series } from "../components/charts";
-import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
+import { ErrorBox, PageHeader, RefreshError, Toolbar, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Badge, Card, CardHeader, ComingSoon, EmptyState, Skeleton, TableSkeleton, type Tone } from "../components/ui/display";
 import { SearchInput, Segmented, Select, Switch } from "../components/ui/form";
-import { Table, THead, Td, Th, Tr } from "../components/ui/table";
+import { Table, THead, Td, Th, Tr, clickableRow } from "../components/ui/table";
 import { useResource } from "../hooks/useResource";
 import { useI18n, type Key } from "../i18n";
 import { cn, download, fmtBytes, fmtClock, fmtCompact, fmtDateTime, fmtMs, fmtNum, toMs } from "../lib/utils";
@@ -69,7 +69,7 @@ export default function Traffic() {
           </label>
         </div>} />
 
-      <div role="tablist" aria-label="traffic views" className="mb-4 flex gap-1 border-b border-line">
+      <div role="tablist" aria-label={t("trafficViews")} className="mb-4 flex gap-1 border-b border-line">
         {([["overview", t("tabOverview"), Activity], ["logs", t("tabLogs"), ScrollText], ["events", t("tabEvents"), AlertOctagon]] as const).map(([k, l, I]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
             className={cn("-mb-px flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-medium transition", tab === k ? "border-brand text-fg" : "border-transparent text-fg-subtle hover:text-fg")}>
@@ -109,7 +109,7 @@ function Overview({ qs, poll, summary, loading, error, hosts, hostsLoading, onHo
 
   return (
     <div className="space-y-5">
-      {error && !summary ? <ErrorBox error={error} /> : null}
+      {error && !summary ? <ErrorBox error={error} /> : <RefreshError res={{ data: summary, error }} />}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {loading || !summary ? Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-[88px] rounded-xl" />) : (<>
           <Stat icon={Activity} label={t("kpiRequests")} value={fmtCompact(summary.requests)} sub={`${fmtNum(summary.rps, 1)} req/s`} />
@@ -142,7 +142,7 @@ function Overview({ qs, poll, summary, loading, error, hosts, hostsLoading, onHo
                 {hosts.map((h) => {
                   const er = h.requests ? (h.s5xx / h.requests) * 100 : 0;
                   return (
-                    <Tr key={h.host} className="cursor-pointer" onClick={() => onHost(h.host)}>
+                    <Tr key={h.host} {...clickableRow(() => onHost(h.host))}>
                       <Td className="font-medium">{h.host}</Td>
                       <Td className="num text-right">{fmtNum(h.requests)}</Td>
                       <Td className="num hidden text-right text-fg-muted sm:table-cell">{fmtNum(h.rps, 1)}</Td>
@@ -220,6 +220,7 @@ function Logs({ qs, poll, initialQ = "" }: { qs: string; poll: number; initialQ?
           <Button size="sm" loading={exp.busy} onClick={() => doExport("json")}><Download className="h-3.5 w-3.5" />JSON</Button>
         </div>
       </Toolbar>
+      <RefreshError res={res} className="m-3" />
       {res.loading ? <TableSkeleton cols={6} rows={8} /> : res.error && !res.data ? <div className="p-4"><ErrorBox error={res.error} /></div> : !items.length ? (
         <EmptyState icon={ScrollText} title={t("noLogs")} description={t("noLogsDesc")} />
       ) : (
@@ -231,7 +232,7 @@ function Logs({ qs, poll, initialQ = "" }: { qs: string; poll: number; initialQ?
               const isOpen = open === id;
               return (
               <Fragment key={i}>
-              <Tr className="cursor-pointer" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? "" : id)}>
+              <Tr aria-expanded={isOpen} {...clickableRow(() => setOpen(isOpen ? "" : id))}>
                 <Td className="whitespace-nowrap font-mono text-xs text-fg-muted" title={fmtDateTime(toMs(l.ts), lang)}>{fmtClock(toMs(l.ts))}</Td>
                 <Td className="max-w-[28rem]"><div className="flex items-baseline gap-1"><span className={methodCls}>{l.method}</span><span className="truncate font-mono text-xs" title={l.path}>{l.path}</span></div><div className="text-xs text-fg-subtle">{l.host}</div></Td>
                 <Td><Badge tone={statusTone(l.status)}>{l.status}</Badge></Td>
@@ -302,6 +303,7 @@ function Events({ qs, poll }: { qs: string; poll: number }) {
         <div className="w-52"><Select aria-label={t("eventType")} value={kind} onChange={(e) => setKind(e.target.value as "" | EventKind)} className="!h-8"><option value="">{t("allEvents")}</option>{(Object.keys(eventMeta) as EventKind[]).map((k) => <option key={k} value={k}>{t(eventMeta[k].key)}</option>)}</Select></div>
         <span className="ml-auto text-xs text-fg-subtle num">{t("nItems", { n: items.length })}</span>
       </Toolbar>
+      <RefreshError res={res} className="m-3" />
       {res.loading ? <TableSkeleton cols={4} rows={6} /> : res.error && !res.data ? <div className="p-4"><ErrorBox error={res.error} /></div> : !items.length ? (
         <EmptyState icon={AlertOctagon} title={t("noEvents")} description={t("noEventsDesc")} />
       ) : (

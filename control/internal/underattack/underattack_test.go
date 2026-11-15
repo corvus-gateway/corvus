@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"corvus/control/internal/autoban"
 	"corvus/control/internal/store"
 )
 
@@ -199,5 +200,84 @@ func TestPush(t *testing.T) {
 	// after the period the host is no longer pushed (the gateway entry also expires)
 	if p := s.Payload(ctx, t0.Add(16*time.Minute)); len(p["hosts"].(map[string]int64)) != 0 {
 		t.Fatalf("expired activation pushed: %+v", p)
+	}
+}
+
+func TestSyncSkipsUnchanged(t *testing.T) {
+	ctx := context.Background()
+	st := openStore(t, filepath.Join(t.TempDir(), "corvus.db"))
+	addHost(t, st, "shop.example.com", "auto", store.UnderAttackConfig{})
+	pushes, status := 0, 200
+	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		pushes++
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte("no under-attack store\n"))
+	}))
+	defer gw.Close()
+	s := &Service{Store: st, Traffic: fakeTraffic{}, PushURL: gw.URL}
+	t0 := time.Unix(1_800_000_000, 0)
+	if ok, err := s.sync(ctx, t0, false); !ok || err != nil || pushes != 1 {
+		t.Fatalf("first sync: %v %v %d", ok, err, pushes)
+	}
+	// unchanged: not pushed again until maxPushAge
+	if ok, _ := s.sync(ctx, t0.Add(10*time.Second), false); ok || pushes != 1 {
+		t.Fatal("unchanged set pushed")
+	}
+	if ok, _ := s.sync(ctx, t0.Add(maxPushAge), false); !ok || pushes != 2 {
+		t.Fatal("not pushed after maxPushAge")
+	}
+	s.Trigger()
+	if ok, _ := s.sync(ctx, t0.Add(maxPushAge+time.Second), false); !ok || pushes != 3 {
+		t.Fatal("Trigger did not force a push")
+	}
+	// a failed push is retried every round and reported
+	status = 503
+	s.Trigger()
+	for i := 0; i < 2; i++ {
+		if _, err := s.sync(ctx, t0.Add(maxPushAge+2*time.Second), false); err == nil || err.Error() != "gateway answered 503: no under-attack store" {
+			t.Fatalf("err = %v", err)
+		}
+	}
+	if st := s.SyncStatus(); st.ConsecutiveFailures != 2 || st.LastSuccess == nil {
+		t.Fatalf("status: %+v", st)
+	}
+}
+
+// A gateway restart noticed by the automatic bans (new shared-memory epoch) makes the
+// next round push the unchanged set at once instead of after maxPushAge.
+func TestGatewayRestartForcesPush(t *testing.T) {
+	ctx := context.Background()
+	st := openStore(t, filepath.Join(t.TempDir(), "corvus.db"))
+	addHost(t, st, "shop.example.com", "auto", store.UnderAttackConfig{})
+	pushes, epoch := 0, "e1"
+	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			_, _ = w.Write([]byte(`{"hits":[],"epoch":"` + epoch + `"}`))
+			return
+		}
+		pushes++
+	}))
+	defer gw.Close()
+	s := &Service{Store: st, Traffic: fakeTraffic{}, PushURL: gw.URL + "/under-attack"}
+	ban := &autoban.Service{Store: st, HitsURL: gw.URL + "/bad-behaviour", OnGatewayRestart: s.Trigger}
+	t0 := time.Unix(1_800_000_000, 0)
+	if _, err := ban.Pull(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := s.sync(ctx, t0, false); !ok || err != nil || pushes != 1 {
+		t.Fatalf("first sync: %v %v %d", ok, err, pushes)
+	}
+	if _, err := ban.Pull(ctx); err != nil { // same epoch
+		t.Fatal(err)
+	}
+	if ok, _ := s.sync(ctx, t0.Add(10*time.Second), false); ok {
+		t.Fatal("unchanged set pushed without a gateway restart")
+	}
+	epoch = "e2" // the gateway restarted with empty shared memory
+	if _, err := ban.Pull(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := s.sync(ctx, t0.Add(20*time.Second), false); !ok || pushes != 2 {
+		t.Fatalf("gateway restart did not force a push (%d pushes)", pushes)
 	}
 }

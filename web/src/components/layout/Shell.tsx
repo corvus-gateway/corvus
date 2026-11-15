@@ -50,7 +50,7 @@ function NavList({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: (
   const { isAdmin } = useCan();
   const { pathname } = useLocation();
   return (
-    <nav aria-label="primary" className="flex-1 space-y-4 overflow-y-auto py-3">
+    <nav aria-label={t("primaryNav")} className="flex-1 space-y-4 overflow-y-auto py-3">
       {groups.map((g) => ({ ...g, items: g.items.filter((i) => isAdmin || !i.adminOnly) })).map((g) => (
         <div key={g.label}>
           {!collapsed ? (
@@ -109,7 +109,7 @@ export function Shell() {
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[70] focus:bg-surface focus:px-3 focus:py-2 focus:shadow-pop">{t("skipToContent")}</a>
 
       <header className="z-30 flex h-14 shrink-0 items-center gap-3 border-b border-[#3c3f42] bg-[#151515] pl-2 pr-4 text-white sm:pr-6">
-        <button type="button" onClick={() => setDrawer(true)} aria-label="Menu" className="grid h-9 w-9 place-items-center text-[#d2d2d2] hover:bg-[#2a2d31] hover:text-white lg:hidden">
+        <button type="button" onClick={() => setDrawer(true)} aria-label={t("menu")} className="grid h-9 w-9 place-items-center text-[#d2d2d2] hover:bg-[#2a2d31] hover:text-white lg:hidden">
           <MenuIcon className="h-5 w-5" />
         </button>
         <button type="button" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? t("expandSidebar") : t("collapseSidebar")}
@@ -145,8 +145,8 @@ export function Shell() {
           <Dialog.Portal>
             <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-fade-in lg:hidden" />
             <Dialog.Content className={cn("fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col shadow-pop focus:outline-none data-[state=open]:animate-slide-in-left data-[state=closed]:animate-slide-out-left lg:hidden", SIDEBAR)}>
-              <Dialog.Title className="sr-only">Menu</Dialog.Title>
-              <Dialog.Description className="sr-only">Navigation</Dialog.Description>
+              <Dialog.Title className="sr-only">{t("menu")}</Dialog.Title>
+              <Dialog.Description className="sr-only">{t("navigation")}</Dialog.Description>
               <div className="flex h-14 shrink-0 items-center border-b border-[#3c3f42] bg-[#151515] px-4"><Brand /></div>
               <NavList collapsed={false} onNavigate={() => setDrawer(false)} />
             </Dialog.Content>
@@ -194,9 +194,10 @@ export function Shell() {
   );
 }
 
-function MastPill({ tone, children }: { tone: "ok" | "warn" | "danger" | "neutral"; children: ReactNode }) {
+function MastPill({ tone, title, children }: { tone: "ok" | "warn" | "danger" | "neutral"; title?: string; children: ReactNode }) {
   const dot = { ok: "bg-[#87bb62]", warn: "bg-[#f6be00]", danger: "bg-[#ff7468]", neutral: "bg-[#8a8d90]" }[tone];
-  return <span className="inline-flex h-6 items-center gap-1.5 whitespace-nowrap border border-[#52565a] px-2 text-xs text-[#d2d2d2]"><span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", dot)} />{children}</span>;
+  // a reason (e.g. why the gateway stopped) is shown on hover and on keyboard focus
+  return <span title={title} tabIndex={title ? 0 : undefined} className="inline-flex h-6 items-center gap-1.5 whitespace-nowrap border border-[#52565a] px-2 text-xs text-[#d2d2d2] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[#d2d2d2]"><span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", dot)} />{children}{title && <span className="sr-only">: {title}</span>}</span>;
 }
 
 function StatusPills() {
@@ -204,15 +205,20 @@ function StatusPills() {
   const { t } = useI18n();
   if (!overview) return overviewError ? <MastPill tone="danger">{t("apiUnreachable")}</MastPill> : null;
   const gw = overview.gateway;
-  return (
-    <div className="hidden items-center gap-1.5 md:flex" aria-label="status">
-      {gw && <MastPill tone={gw.running ? "ok" : "danger"}>{t("gateway")} · {gw.running ? t("running") : t("stopped")}</MastPill>}
+  return (<>
+    {/* Narrow screens: only problems, in short form. */}
+    <div className="flex items-center gap-1.5 md:hidden" role="group" aria-label={t("statusPillsLabel")}>
+      {gw && !gw.running && <MastPill tone="danger" title={gw.error}><span className="sr-only">{t("gateway")} · </span>{t("stopped")}</MastPill>}
+      {!overview.redis && <MastPill tone="warn"><span className="sr-only">{t("cacheDb")} · </span>{t("disconnected")}</MastPill>}
+    </div>
+    <div className="hidden items-center gap-1.5 md:flex" role="group" aria-label={t("statusPillsLabel")}>
+      {gw && <MastPill tone={gw.running ? "ok" : "danger"} title={gw.running ? undefined : gw.error}>{t("gateway")} · {gw.running ? t("running") : t("stopped")}</MastPill>}
       <MastPill tone={overview.redis ? "ok" : "warn"}>{t("cacheDb")} · {overview.redis ? t("connected") : t("disconnected")}</MastPill>
       <MastPill tone={overview.active_version ? (overview.dirty ? "warn" : "neutral") : "neutral"}>
         {overview.active_version ? t("appliedVersion", { n: overview.active_version.id }) : t("noVersion")}
       </MastPill>
     </div>
-  );
+  </>);
 }
 
 function UserMenu({ name, email, onLogout }: { name: string; email: string; onLogout: () => void }) {

@@ -583,15 +583,209 @@ type Logger interface {
 	Error(msg string, args ...any)
 }
 
+// JournalName is the move journal ApplyPending keeps in the rollback directory.
+const JournalName = "restore-journal.json"
+
+// keepRestoreDirs is how long restore-backup-* and restore-failed-* directories are
+// kept (the newest of each kind is always kept).
+const keepRestoreDirs = 30 * 24 * time.Hour
+
+// journal records the moves of a restore before they are made, so a restore that is
+// interrupted (power cut, crash) is rolled back on the next start instead of leaving
+// the old database moved aside and Corvus starting empty.
+type journal struct {
+	Moves    []journalMove `json:"moves"`
+	Complete bool          `json:"complete"`
+}
+
+type journalMove struct {
+	From string `json:"from"` // relative to the data directory
+	To   string `json:"to"`
+}
+
+// save writes the journal durably (temporary file, fsync, rename, directory fsync).
+func (j *journal) save(dir string) error {
+	b, err := json.Marshal(j)
+	if err != nil {
+		return err
+	}
+	tmp := filepath.Join(dir, JournalName+".tmp")
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(b)
+	if err == nil {
+		err = f.Sync()
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(tmp, filepath.Join(dir, JournalName))
+	}
+	if err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	syncDir(dir)
+	return nil
+}
+
+// syncDir makes renames in dir durable (best effort: not supported everywhere).
+func syncDir(dir string) {
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync()
+		d.Close()
+	}
+}
+
+// rollback moves the journaled files back, newest move first. A move that never
+// happened (its target is missing) is skipped. It returns how many moves could not be
+// undone.
+func (j *journal) rollback(dataDir string, log Logger) int {
+	failed := 0
+	for i := len(j.Moves) - 1; i >= 0; i-- {
+		from, to := filepath.Join(dataDir, j.Moves[i].From), filepath.Join(dataDir, j.Moves[i].To)
+		if !exists(to) {
+			continue // not moved yet
+		}
+		if exists(from) {
+			log.Error("restore rollback: both copies exist, leaving them as they are", "path", from, "moved", to)
+			failed++
+			continue
+		}
+		if err := os.Rename(to, from); err != nil {
+			log.Error("restore rollback: could not move back", "from", to, "to", from, "err", err)
+			failed++
+		}
+	}
+	syncDir(dataDir)
+	return failed
+}
+
+// testCrash, when set, simulates a power cut before move number n: ApplyPending stops
+// on the spot, as the process would.
+var testCrash func(n int) bool
+
+var errCrash = errors.New("simulated crash")
+
+// InterruptedRestoreError: a restore interrupted before it completed could not be rolled
+// back (files could not be moved back, or its journal is unreadable). The data directory
+// mixes old and restored files, possibly without a database or data key: Corvus must not
+// start on it (it would create an empty database and a new data key). The journal is
+// kept for the next try.
+type InterruptedRestoreError struct{ Err error }
+
+func (e *InterruptedRestoreError) Error() string {
+	return "an interrupted restore from backup could not be rolled back: " + e.Err.Error()
+}
+func (e *InterruptedRestoreError) Unwrap() error { return e.Err }
+
+// recoverInterrupted rolls back restores interrupted before they completed. It returns
+// an *InterruptedRestoreError when a rollback could not be finished (the journal is
+// kept for the next try).
+func recoverInterrupted(dataDir string, log Logger) error {
+	dirs, _ := filepath.Glob(filepath.Join(dataDir, "restore-backup-*"))
+	sort.Strings(dirs)
+	var errs []error
+	for i := len(dirs) - 1; i >= 0; i-- {
+		rb := dirs[i]
+		raw, err := os.ReadFile(filepath.Join(rb, JournalName))
+		if err != nil {
+			continue // completed by an older version, or nothing journaled yet
+		}
+		var j journal
+		if err := json.Unmarshal(raw, &j); err != nil {
+			log.Error("restore journal is unreadable; not rolled back", "dir", rb, "err", err)
+			errs = append(errs, err)
+			continue
+		}
+		if j.Complete {
+			continue
+		}
+		log.Error("a restore from backup was interrupted; rolling it back", "dir", rb, "moves", len(j.Moves))
+		if n := j.rollback(dataDir, log); n > 0 {
+			errs = append(errs, fmt.Errorf("rolling back the interrupted restore in %s: %d files could not be moved back", rb, n))
+			continue
+		}
+		os.Remove(filepath.Join(rb, JournalName))
+		if err := os.Remove(rb); err != nil { // only when empty
+			log.Error("restore rollback: the rollback directory is not empty", "dir", rb, "err", err)
+		}
+		log.Info("interrupted restore rolled back; the previous state is in place")
+	}
+	if len(errs) > 0 {
+		return &InterruptedRestoreError{Err: errors.Join(errs...)}
+	}
+	return nil
+}
+
+// cleanRestoreDirs removes restore-backup-* and restore-failed-* directories older than
+// keepRestoreDirs, keeping the newest of each kind and any with an unfinished journal.
+func cleanRestoreDirs(dataDir string, log Logger, now time.Time) {
+	for _, kind := range []string{"restore-backup-", "restore-failed-"} {
+		dirs, _ := filepath.Glob(filepath.Join(dataDir, kind+"*"))
+		sort.Strings(dirs) // the timestamp sorts chronologically
+		for i := 0; i < len(dirs)-1; i++ {
+			d := dirs[i]
+			st, err := os.Stat(d)
+			if err != nil || !st.IsDir() {
+				continue
+			}
+			t, err := time.Parse("20060102-150405", strings.TrimPrefix(filepath.Base(d), kind))
+			if err != nil {
+				t = st.ModTime()
+			}
+			if now.Sub(t) < keepRestoreDirs {
+				continue
+			}
+			if raw, err := os.ReadFile(filepath.Join(d, JournalName)); err == nil {
+				var j journal
+				if json.Unmarshal(raw, &j) != nil || !j.Complete {
+					continue
+				}
+			}
+			if err := os.RemoveAll(d); err != nil {
+				log.Error("could not remove an old restore directory", "dir", d, "err", err)
+			} else {
+				log.Info("old restore directory removed", "dir", filepath.Base(d))
+			}
+		}
+	}
+}
+
 // ApplyPending applies a confirmed restore (<data>/restore-pending) before the database
 // is opened. The replaced files are moved to <data>/restore-backup-<ts>/. On failure every
 // move is undone, the staged restore is renamed to restore-failed-<ts> (so it is not
 // retried on every start) and the error is returned; the old state stays in place.
 // It returns the rollback directory ("" when nothing was pending).
+//
+// Every move is journaled (restore-backup-<ts>/restore-journal.json, synced) before it
+// is made, and the journal is marked complete at the end: a restore interrupted by a
+// power cut is rolled back on the next start and then applied again. Restore
+// directories older than 30 days are removed (the newest of each kind is kept).
+//
+// An interrupted restore that cannot be rolled back is reported as an
+// *InterruptedRestoreError: the caller must not start on that data directory.
 func ApplyPending(dataDir string, log Logger, now time.Time) (string, error) {
+	if err := recoverInterrupted(dataDir, log); err != nil {
+		// files of the interrupted restore are still mixed in: do not apply on top
+		log.Error("an interrupted restore could not be rolled back completely; check the data directory", "err", err)
+		return "", err
+	}
+	cleanRestoreDirs(dataDir, log, now)
 	pend := filepath.Join(dataDir, PendingDir)
 	if !dirExists(pend) {
 		os.RemoveAll(filepath.Join(dataDir, UploadDir+".tmp"))
+		return "", nil
+	}
+	if !exists(filepath.Join(pend, ManifestName)) {
+		// left behind by a restore that completed just before its staging directory was
+		// removed (the manifest is moved out last, see below)
+		if err := os.RemoveAll(pend); err != nil {
+			log.Error("could not remove the restore staging directory", "dir", pend, "err", err)
+		}
 		return "", nil
 	}
 	ts := now.UTC().Format("20060102-150405")
@@ -607,7 +801,8 @@ func ApplyPending(dataDir string, log Logger, now time.Time) (string, error) {
 	if err != nil {
 		return fail(err)
 	}
-	rb := filepath.Join(dataDir, "restore-backup-"+ts)
+	rbName := "restore-backup-" + ts
+	rb := filepath.Join(dataDir, rbName)
 	if err := os.Mkdir(rb, 0o700); err != nil {
 		return fail(err)
 	}
@@ -621,50 +816,72 @@ func ApplyPending(dataDir string, log Logger, now time.Time) (string, error) {
 	}
 	aside = append(append(aside, stateDirs...), regenerable...)
 
-	type move struct{ from, to string }
-	var done []move
+	j := &journal{}
+	if err := j.save(rb); err != nil {
+		os.Remove(rb)
+		return fail(err)
+	}
 	undo := func() {
-		for i := len(done) - 1; i >= 0; i-- {
-			if err := os.Rename(done[i].to, done[i].from); err != nil {
-				log.Error("restore rollback: could not move back", "from", done[i].to, "to", done[i].from, "err", err)
-			}
+		if j.rollback(dataDir, log) == 0 {
+			os.Remove(filepath.Join(rb, JournalName))
+			os.Remove(rb)
 		}
 	}
+	// mv journals a move durably before making it (paths relative to dataDir).
 	mv := func(from, to string) error {
-		if err := os.Rename(from, to); err != nil {
+		if testCrash != nil && testCrash(len(j.Moves)) {
+			return errCrash
+		}
+		j.Moves = append(j.Moves, journalMove{From: from, To: to})
+		if err := j.save(rb); err != nil {
+			j.Moves = j.Moves[:len(j.Moves)-1]
 			return err
 		}
-		done = append(done, move{from, to})
-		return nil
+		return os.Rename(filepath.Join(dataDir, from), filepath.Join(dataDir, to))
 	}
-	for _, n := range aside {
-		cur := filepath.Join(dataDir, n)
-		if !exists(cur) {
-			continue
+	apply := func() error {
+		for _, n := range aside {
+			if !exists(filepath.Join(dataDir, n)) {
+				continue
+			}
+			if err := mv(n, filepath.Join(rbName, n)); err != nil {
+				return err
+			}
 		}
-		if err := mv(cur, filepath.Join(rb, n)); err != nil {
-			undo()
-			return fail(err)
+		entries, err := os.ReadDir(pend)
+		if err != nil {
+			return err
 		}
+		sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+		for _, e := range entries {
+			n := e.Name()
+			if n == ManifestName || n == ReadmeName {
+				continue
+			}
+			if err := mv(filepath.Join(PendingDir, n), n); err != nil {
+				return err
+			}
+		}
+		// Keep the applied manifest with the rollback copy for reference. Moved last: a
+		// staging directory without a manifest is one whose restore completed.
+		return mv(filepath.Join(PendingDir, ManifestName), filepath.Join(rbName, "applied-"+ManifestName))
 	}
-	entries, err := os.ReadDir(pend)
-	if err != nil {
+	if err := apply(); err != nil {
+		if errors.Is(err, errCrash) {
+			return "", err // the process "died" here (tests)
+		}
 		undo()
 		return fail(err)
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
-	for _, e := range entries {
-		n := e.Name()
-		if n == ManifestName || n == ReadmeName {
-			continue
-		}
-		if err := mv(filepath.Join(pend, n), filepath.Join(dataDir, n)); err != nil {
-			undo()
-			return fail(err)
+	syncDir(dataDir)
+	j.Complete = true
+	if err := j.save(rb); err != nil {
+		// without a journal the restore counts as complete too; never roll back a
+		// finished restore on the next start
+		if rerr := os.Remove(filepath.Join(rb, JournalName)); rerr != nil {
+			log.Error("could not mark the restore as complete; remove the journal before the next start", "journal", filepath.Join(rb, JournalName), "err", errors.Join(err, rerr))
 		}
 	}
-	// Keep the applied manifest with the rollback copy for reference.
-	_ = os.Rename(filepath.Join(pend, ManifestName), filepath.Join(rb, "applied-"+ManifestName))
 	if err := os.RemoveAll(pend); err != nil {
 		log.Error("could not remove the restore staging directory", "dir", pend, "err", err)
 	}

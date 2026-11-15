@@ -1,25 +1,26 @@
-import { templatesStrings } from "./templates.i18n";
-import { retentionStrings } from "./retention.i18n";
-import { ssoStrings } from "./sso.i18n";
-import { hintsStrings } from "./hints.i18n";
-import { tokensStrings } from "./tokens.i18n";
-import { redirectsStrings } from "./redirects.i18n";
-import { streamsStrings } from "./streams.i18n";
-import { notesStrings } from "./notes.i18n";
-import { proxyProtocolStrings } from "./proxyprotocol.i18n";
-import { updateStrings } from "./update.i18n";
-import { headersStrings } from "./headers.i18n";
-import { locationsStrings } from "./locations.i18n";
-import { limitsStrings } from "./limits.i18n";
-import { certReplaceStrings } from "./certreplace.i18n";
-import { dnsCredsStrings } from "./dnscreds.i18n";
-import { listFeedsStrings } from "./listfeeds.i18n";
-import { bansStrings } from "./bans.i18n";
-import { backupStrings } from "./backup.i18n";
-import { pagesStrings } from "./pages.i18n";
-import { consoleHostStrings } from "./consolehost.i18n";
-import { challengeStrings } from "./challenge.i18n";
-import { underAttackStrings } from "./underattack.i18n";
+import { consoleStrings } from "./zh/console";
+import { templatesStrings } from "./zh/templates";
+import { retentionStrings } from "./zh/retention";
+import { ssoStrings } from "./zh/sso";
+import { hintsStrings } from "./zh/hints";
+import { tokensStrings } from "./zh/tokens";
+import { redirectsStrings } from "./zh/redirects";
+import { streamsStrings } from "./zh/streams";
+import { notesStrings } from "./zh/notes";
+import { proxyProtocolStrings } from "./zh/proxyprotocol";
+import { updateStrings } from "./zh/update";
+import { headersStrings } from "./zh/headers";
+import { locationsStrings } from "./zh/locations";
+import { limitsStrings } from "./zh/limits";
+import { certReplaceStrings } from "./zh/certreplace";
+import { dnsCredsStrings } from "./zh/dnscreds";
+import { listFeedsStrings } from "./zh/listfeeds";
+import { bansStrings } from "./zh/bans";
+import { backupStrings } from "./zh/backup";
+import { pagesStrings } from "./zh/pages";
+import { consoleHostStrings } from "./zh/consolehost";
+import { challengeStrings } from "./zh/challenge";
+import { underAttackStrings } from "./zh/underattack";
 import type { ko } from "./ko";
 import type { RuleLabels } from "../lib/rules";
 import type { AuditLabels } from "../lib/audit";
@@ -314,28 +315,29 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   ipRulesMovedDesc: "此页面现在仅管理 Basic 认证用户。原访问列表中的 IP 规则已转换为名为“(converted from access list)”的安全规则。",
   basicAuthHostHint: "要求浏览器登录。如需 IP 允许/拒绝，", goSecurityRules: "请使用安全规则 →",
   pagination: "分页", pageSize: "每页", pageRange: "第 {from}–{to} 条，共 {total} 条", pageNofM: "第 {n} / {m} 页", prevPage: "上一页", nextPage: "下一页",
-  ...bansStrings.zh,
-  ...tokensStrings.zh,
-  ...redirectsStrings.zh,
-  ...streamsStrings.zh,
-  ...notesStrings.zh,
-  ...proxyProtocolStrings.zh,
-  ...updateStrings.zh,
-  ...headersStrings.zh,
-  ...locationsStrings.zh,
-  ...limitsStrings.zh,
-  ...certReplaceStrings.zh,
-  ...dnsCredsStrings.zh,
-  ...listFeedsStrings.zh,
-  ...ssoStrings.zh,
-  ...hintsStrings.zh,
-  ...retentionStrings.zh,
-  ...templatesStrings.zh,
-  ...backupStrings.zh,
-  ...pagesStrings.zh,
-  ...consoleHostStrings.zh,
-  ...challengeStrings.zh,
-  ...underAttackStrings.zh,
+  ...bansStrings,
+  ...tokensStrings,
+  ...redirectsStrings,
+  ...streamsStrings,
+  ...notesStrings,
+  ...proxyProtocolStrings,
+  ...updateStrings,
+  ...headersStrings,
+  ...locationsStrings,
+  ...limitsStrings,
+  ...certReplaceStrings,
+  ...dnsCredsStrings,
+  ...listFeedsStrings,
+  ...ssoStrings,
+  ...hintsStrings,
+  ...retentionStrings,
+  ...templatesStrings,
+  ...backupStrings,
+  ...pagesStrings,
+  ...consoleHostStrings,
+  ...challengeStrings,
+  ...underAttackStrings,
+  ...consoleStrings,
 };
 
 export const zhRuleLabels: RuleLabels | undefined = {

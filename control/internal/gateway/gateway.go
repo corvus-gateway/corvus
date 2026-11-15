@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -32,19 +33,38 @@ type OpenResty struct {
 	Env         []string // extra environment (secrets, Redis address)
 	StatusURL   string   // e.g. http://127.0.0.1:9180/version
 
-	mu       sync.Mutex
-	cmd      *exec.Cmd
-	done     chan error
-	started  time.Time
-	errs     *errLog   // recent serious lines of the gateway's stderr
-	reloadAt time.Time // when the last reload was requested
+	mu         sync.Mutex
+	cmd        *exec.Cmd
+	done       chan error    // receives the exit status (Done)
+	exited     chan struct{} // closed when the process has exited
+	exitErr    error
+	running    bool
+	started    time.Time
+	version    string    // version directory "current" pointed to at the last start
+	errs       *errLog   // recent serious lines of the gateway's stderr
+	reloadAt   time.Time // when the last reload was requested
+	supervised bool      // Supervise restarts the gateway when it exits
+	stopping   bool
+	kick       chan struct{} // restart now (a new configuration was deployed while down)
+	problem    string        // why the gateway last went down
 }
 
 // Status reports whether the gateway process is running and since when.
 func (o *OpenResty) Status() (bool, time.Time) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	return o.cmd != nil && o.cmd.ProcessState == nil, o.started
+	return o.running, o.started
+}
+
+// Problem says why the gateway is down (for example the [emerg] lines of a failed
+// start); empty while it runs.
+func (o *OpenResty) Problem() string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.running {
+		return ""
+	}
+	return o.problem
 }
 
 func (o *OpenResty) env() []string { return append(os.Environ(), o.Env...) }
@@ -71,25 +91,165 @@ func (o *OpenResty) Test(ctx context.Context, conf string) (string, error) {
 }
 
 // Start launches openresty in the foreground (daemon off) and returns immediately.
+// It fails while the gateway is running; after it exited it starts a new process.
 func (o *OpenResty) Start() error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if o.cmd != nil {
+	if o.running {
 		return errors.New("gateway already started")
+	}
+	if o.stopping {
+		return errors.New("gateway stopped")
 	}
 	cmd := exec.Command(o.Bin, "-e", "stderr", "-c", o.CurrentConf, "-g", "daemon off;") // -e: no write to the read-only prefix
 	cmd.Env = o.env()
-	o.errs = newErrLog(os.Stderr)
+	if o.errs == nil {
+		o.errs = newErrLog(os.Stderr)
+	}
 	cmd.Stdout, cmd.Stderr = os.Stdout, o.errs
 	if err := cmd.Start(); err != nil {
 		return err
 	}
 	o.cmd = cmd
 	o.started = time.Now()
-	o.done = make(chan error, 1)
-	go func() { o.done <- cmd.Wait() }()
+	o.version = confVersion(o.CurrentConf)
+	o.running = true
+	done, exited := make(chan error, 1), make(chan struct{})
+	o.done, o.exited = done, exited
+	go func() {
+		err := cmd.Wait()
+		o.mu.Lock()
+		o.running, o.exitErr = false, err
+		o.mu.Unlock()
+		close(exited)
+		done <- err
+	}()
 	slog.Info("gateway started", "pid", cmd.Process.Pid, "conf", o.CurrentConf)
 	return nil
+}
+
+// confVersion returns the version directory the symlinked directory of conf points to
+// ("" when it is not a symlink).
+func confVersion(conf string) string {
+	target, err := os.Readlink(filepath.Dir(filepath.FromSlash(conf)))
+	if err != nil {
+		return ""
+	}
+	return filepath.Base(target)
+}
+
+// Restart policy of Supervise (variables for tests).
+var (
+	// a gateway that exits sooner after starting failed to start (bind() on a port in
+	// use, a certificate that cannot be loaded): counted for OnBootFailure
+	stableAfter = 30 * time.Second
+	minBackoff  = 5 * time.Second
+	maxBackoff  = 2 * time.Minute
+)
+
+// Supervise starts the gateway and keeps it running until ctx ends or Stop is called.
+// When it cannot start or exits, the reason is logged and kept for Problem, and it is
+// started again after a growing delay (5 s up to 2 min), at once when a configuration
+// is deployed meanwhile (Reload). The control plane and its console keep running.
+//
+// onBootFailure (may be nil) is called with the number of consecutive early exits (the
+// process started, then exited within stableAfter) and the version directory the
+// process was started with ("" if unknown); it returns true when it switched the
+// configuration, which is then tried at once.
+func (o *OpenResty) Supervise(ctx context.Context, onBootFailure func(failures int, version string) bool) {
+	o.mu.Lock()
+	o.supervised = true
+	if o.kick == nil {
+		o.kick = make(chan struct{}, 1)
+	}
+	kick := o.kick
+	o.mu.Unlock()
+	backoff, failures := minBackoff, 0
+	for {
+		if ctx.Err() != nil || o.isStopping() {
+			return
+		}
+		var reason, version string
+		early := false
+		if err := o.Start(); err != nil {
+			reason = "cannot start the gateway: " + err.Error()
+		} else {
+			o.mu.Lock()
+			exited, started := o.exited, o.started
+			version = o.version
+			o.mu.Unlock()
+			select {
+			case <-ctx.Done():
+				return
+			case <-exited:
+			}
+			if o.isStopping() {
+				return
+			}
+			o.mu.Lock()
+			exitErr := o.exitErr
+			o.mu.Unlock()
+			reason = o.exitReason(started, exitErr)
+			if early = time.Since(started) < stableAfter; !early {
+				backoff, failures = minBackoff, 0 // it ran fine for a while: a crash
+			}
+		}
+		if early {
+			failures++
+		}
+		o.mu.Lock()
+		o.problem = reason
+		o.mu.Unlock()
+		slog.Error("GATEWAY DOWN: the admin console stays available; retrying", "reason", reason, "failed_starts", failures, "retry_in", backoff)
+		if early && onBootFailure != nil && onBootFailure(failures, version) {
+			// The switch reloaded (kicked) the stopped gateway: that request is served by
+			// the next start. A deployment after this point kicks again and resets the count.
+			select {
+			case <-kick:
+			default:
+			}
+			continue
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-kick:
+			backoff, failures = minBackoff, 0 // a new configuration: fresh attempts
+		case <-time.After(backoff):
+			backoff = min(backoff*2, maxBackoff)
+		}
+	}
+}
+
+func (o *OpenResty) isStopping() bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.stopping
+}
+
+// exitReason describes why the process that started at started exited: its serious
+// log lines since then (once each), else the exit status.
+func (o *OpenResty) exitReason(started time.Time, exitErr error) string {
+	var msgs []string
+	seen := map[string]bool{}
+	o.mu.Lock()
+	errs := o.errs
+	o.mu.Unlock()
+	if errs != nil {
+		for _, l := range errs.since(started) {
+			if m := logMessage(l); !seen[m] {
+				seen[m] = true
+				msgs = append(msgs, m)
+			}
+		}
+	}
+	if len(msgs) > 0 {
+		return "the gateway exited: " + strings.Join(msgs, "; ")
+	}
+	if exitErr != nil {
+		return "the gateway exited: " + exitErr.Error()
+	}
+	return "the gateway exited"
 }
 
 // Done is closed with the exit status when the gateway process exits.
@@ -106,24 +266,36 @@ func (o *OpenResty) Reload() error {
 	if o.cmd == nil {
 		return nil // not started yet: it will load the current configuration when it starts
 	}
-	if o.cmd.ProcessState != nil {
+	if !o.running {
+		if o.supervised && !o.stopping {
+			// down and waiting for a restart: start it now with the new configuration
+			select {
+			case o.kick <- struct{}{}:
+			default:
+			}
+			return nil
+		}
 		return errors.New("gateway is not running")
 	}
 	o.reloadAt = time.Now()
 	return o.cmd.Process.Signal(syscall.SIGHUP)
 }
 
-// Stop performs a graceful shutdown (SIGQUIT) and waits up to timeout.
+// Stop performs a graceful shutdown (SIGQUIT) and waits up to timeout. The gateway is
+// not restarted afterwards.
 func (o *OpenResty) Stop(timeout time.Duration) {
 	o.mu.Lock()
-	cmd, done := o.cmd, o.done
+	cmd, exited := o.cmd, o.exited
+	if cmd != nil {
+		o.stopping = true
+	}
 	o.mu.Unlock()
 	if cmd == nil || cmd.Process == nil {
 		return
 	}
 	_ = cmd.Process.Signal(syscall.SIGQUIT)
 	select {
-	case <-done:
+	case <-exited:
 	case <-time.After(timeout):
 		_ = cmd.Process.Kill()
 	}
@@ -136,10 +308,10 @@ func (o *OpenResty) WaitActive(ctx context.Context, name string, timeout time.Du
 		return nil
 	}
 	o.mu.Lock()
-	started := o.cmd != nil
+	running := o.running
 	o.mu.Unlock()
-	if !started {
-		return nil
+	if !running {
+		return nil // not started, or down: it loads the current configuration when it starts
 	}
 	client := &http.Client{Timeout: time.Second, Transport: &http.Transport{DisableKeepAlives: true}}
 	deadline := time.Now().Add(timeout)

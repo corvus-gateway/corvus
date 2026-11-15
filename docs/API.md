@@ -95,6 +95,7 @@ Role: **public** = no authentication · **viewer** = any signed-in user or token
 | GET | `/api/proxy-hosts/{id}` | viewer | Get one proxy host |
 | POST | `/api/proxy-hosts` | operator | Create (fields below) |
 | PUT | `/api/proxy-hosts/{id}` | operator | Replace |
+| PATCH | `/api/proxy-hosts/{id}` | operator | Turn on or off: `{"enabled": bool}` (nothing else changes) |
 | DELETE | `/api/proxy-hosts/{id}` | operator | Delete |
 | GET | `/api/under-attack` | viewer | Hosts with under attack mode `on` or `auto` and whether it is active now |
 | POST | `/api/proxy-hosts/{id}/under-attack/deactivate` | operator | End an automatic activation now (`409` when none is running) |
@@ -102,11 +103,13 @@ Role: **public** = no authentication · **viewer** = any signed-in user or token
 | GET | `/api/redirection-hosts/{id}` | viewer | Get one redirection host |
 | POST | `/api/redirection-hosts` | operator | Create (fields below) |
 | PUT | `/api/redirection-hosts/{id}` | operator | Replace |
+| PATCH | `/api/redirection-hosts/{id}` | operator | Turn on or off: `{"enabled": bool}` |
 | DELETE | `/api/redirection-hosts/{id}` | operator | Delete |
 | GET | `/api/streams` | viewer | List streams (TCP/UDP port forwarding) |
 | GET | `/api/streams/{id}` | viewer | Get one stream |
 | POST | `/api/streams` | operator | Create (fields below) |
 | PUT | `/api/streams/{id}` | operator | Replace |
+| PATCH | `/api/streams/{id}` | operator | Turn on or off: `{"enabled": bool}` |
 | DELETE | `/api/streams/{id}` | operator | Delete |
 | GET | `/api/certificates` | viewer | List certificates |
 | POST | `/api/certificates` | operator | Upload a custom certificate |
@@ -255,6 +258,7 @@ The same fields work for `POST /api/certificates/acme`.
 |---|---|---|---|
 | GET / POST | `/api/security-rules` | viewer / operator | List / create security rules |
 | PUT / DELETE | `/api/security-rules/{id}` | operator | Update / delete |
+| PATCH | `/api/security-rules/{id}` | operator | Turn on or off: `{"enabled": bool}` |
 | PUT | `/api/security-rules/order` | operator | Reorder rules |
 | GET | `/api/security-rules/events` | viewer | Recent rule matches |
 | GET | `/api/rule-templates` | viewer | Virtual-patch and rule templates |

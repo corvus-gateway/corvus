@@ -52,11 +52,11 @@ listener only; UDP is unchanged):
 | **Accept PROXY protocol** | Every connection on the port must start with a PROXY protocol header (v1 or v2) from a tunnel or load balancer (FRP, HAProxy, a cloud load balancer). Corvus takes the visitor's address from it on connections from the **Trusted PROXY protocol sources** |
 | **Send PROXY protocol to the backend** | Corvus sends the visitor's address to the service in a PROXY protocol (v1) header. The service must expect it, otherwise connections fail |
 
-**Accept** needs at least one address in **Trusted PROXY protocol sources** on the **Network** page
-(the same list as for the [HTTP/HTTPS PROXY protocol ports](proxy-hosts.md#behind-a-tcp-tunnel-or-load-balancer-proxy-protocol);
-see there which address to trust). The **Accept PROXY protocol** switch on the Network page is not
-needed: it only adds the HTTP/HTTPS ports. While a stream accepts the PROXY protocol, the trusted
-list can't be emptied. Connections from other addresses must still send the header, but keep their
+**Accept** needs at least one address in **Trusted PROXY protocol sources**, in the **PROXY protocol**
+card on the **Network** page (the same list as for the [HTTP/HTTPS PROXY protocol ports](proxy-hosts.md#behind-a-tcp-tunnel-or-load-balancer-proxy-protocol);
+see there which address to trust). The stream form warns while the list is empty and links to the
+card. The **Accept PROXY protocol** switch in that card is not needed: it only adds the HTTP/HTTPS
+ports. While a stream accepts the PROXY protocol, the trusted list can't be emptied. Connections from other addresses must still send the header, but keep their
 own address. A port that accepts the PROXY protocol refuses connections without the header, so use
 a separate stream (port) for direct clients.
 

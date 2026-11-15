@@ -46,6 +46,10 @@ type Server struct {
 	Updates      *update.Checker // nil when update checks are off
 	Traffic      *traffic.Collector
 	Gateway      func() (running bool, since time.Time) // nil when running without a gateway
+
+	// GatewayProblem says why the gateway is down ("" while it runs); may be nil.
+	GatewayProblem func() string
+
 	ACME         ACMEService
 	NPMImportDir string
 	DataKey      []byte // AES-256 key for secrets stored in the database
@@ -103,6 +107,7 @@ func (s *Server) Handler() http.Handler {
 	op("POST /api/proxy-hosts", s.createProxyHost)
 	priv("GET /api/proxy-hosts/{id}", s.getProxyHost)
 	op("PUT /api/proxy-hosts/{id}", s.updateProxyHost)
+	op("PATCH /api/proxy-hosts/{id}", s.patchProxyHost)
 	op("DELETE /api/proxy-hosts/{id}", s.deleteProxyHost)
 	op("POST /api/proxy-hosts/{id}/under-attack/deactivate", s.deactivateUnderAttack)
 	priv("GET /api/under-attack", s.listUnderAttack)
@@ -111,12 +116,14 @@ func (s *Server) Handler() http.Handler {
 	op("POST /api/redirection-hosts", s.createRedirectionHost)
 	priv("GET /api/redirection-hosts/{id}", s.getRedirectionHost)
 	op("PUT /api/redirection-hosts/{id}", s.updateRedirectionHost)
+	op("PATCH /api/redirection-hosts/{id}", s.patchRedirectionHost)
 	op("DELETE /api/redirection-hosts/{id}", s.deleteRedirectionHost)
 
 	priv("GET /api/streams", s.listStreams)
 	op("POST /api/streams", s.createStream)
 	priv("GET /api/streams/{id}", s.getStream)
 	op("PUT /api/streams/{id}", s.updateStream)
+	op("PATCH /api/streams/{id}", s.patchStream)
 	op("DELETE /api/streams/{id}", s.deleteStream)
 
 	priv("GET /api/waitrooms", s.listWaitrooms)
@@ -153,6 +160,7 @@ func (s *Server) Handler() http.Handler {
 	op("POST /api/security-rules", s.createSecurityRule)
 	op("PUT /api/security-rules/order", s.reorderSecurityRules)
 	op("PUT /api/security-rules/{id}", s.updateSecurityRule)
+	op("PATCH /api/security-rules/{id}", s.patchSecurityRule)
 	op("DELETE /api/security-rules/{id}", s.deleteSecurityRule)
 	priv("GET /api/security-rules/events", s.securityRuleEvents)
 	priv("GET /api/security-rules/geoip", s.geoipStatus)
@@ -590,15 +598,26 @@ func (s *Server) handlePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	if err := s.Store.UpdatePassword(ctx, u.ID, hash); err != nil {
+	// One transaction: the new password never takes effect while the other sessions or
+	// the API tokens survive (sign out everywhere else; tokens the user created end too).
+	var revoked int64
+	if err := s.Store.WithTx(ctx, func(tx *store.Store) error {
+		if err := tx.UpdatePassword(ctx, u.ID, hash); err != nil {
+			return err
+		}
+		if err := tx.DeleteUserSessions(ctx, u.ID); err != nil {
+			return err
+		}
+		n, err := tx.DeleteUserAPITokens(ctx, u.ID)
+		revoked = n
+		return err
+	}); err != nil {
 		fail(w, err)
 		return
 	}
-	_ = s.Store.DeleteUserSessions(ctx, u.ID) // sign out everywhere else
 	var detail any
-	// API tokens the user created end too, like the other sessions
-	if n, err := s.Store.DeleteUserAPITokens(ctx, u.ID); err == nil && n > 0 {
-		detail = map[string]any{"tokens_revoked": n}
+	if revoked > 0 {
+		detail = map[string]any{"tokens_revoked": revoked}
 	}
 	if err := s.setSession(w, r, u); err != nil {
 		fail(w, err)

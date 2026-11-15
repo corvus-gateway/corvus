@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -141,27 +142,102 @@ func main() {
 	}
 }
 
-// secret returns a persistent random secret stored at path (created on first use).
-func secret(path string) (string, error) {
-	if b, err := os.ReadFile(path); err == nil && len(strings.TrimSpace(string(b))) >= 32 {
-		return strings.TrimSpace(string(b)), nil
+// secretMinLen: generated secrets are 43 characters (32 random bytes, base64); shorter
+// content is damaged (for example a file truncated by a crash).
+const secretMinLen = 32
+
+// secret returns a persistent random secret stored at path, created when the file does
+// not exist. A file that exists but is damaged (empty, too short) is handled per secret:
+//   - replaceable: a new secret is generated in its place. Safe for secrets that only
+//     protect short-lived state or are handed to their users at every start: the
+//     access-queue HMAC (visitors in a queue get new tickets), the debug key and the
+//     Redis password (the ACL file is rewritten at every start).
+//   - not replaceable (secrets/data_key): startup fails with an error, since a new key
+//     would make every sealed setting unreadable.
+func secret(path string, replaceable bool) (string, error) {
+	b, err := os.ReadFile(path)
+	switch {
+	case err == nil:
+		if v := strings.TrimSpace(string(b)); len(v) >= secretMinLen {
+			return v, nil
+		}
+		if !replaceable {
+			return "", fmt.Errorf("%s is damaged (empty or too short): restore it from a backup; "+
+				"deleting it starts with a new key, and settings sealed with the old one "+
+				"(DNS credentials, two-factor secrets, alert and SSO secrets) must be entered again", path)
+		}
+		slog.Warn("secret file damaged, generating a new one", "file", path)
+	case errors.Is(err, fs.ErrNotExist):
+	default:
+		return "", err
 	}
 	v := auth.RandomToken(32)
-	if err := os.WriteFile(path, []byte(v+"\n"), 0o600); err != nil {
+	if err := writeFileAtomic(path, []byte(v+"\n"), 0o600); err != nil {
 		return "", err
 	}
 	return v, nil
 }
 
+// writeFileAtomic replaces path with data so that a crash leaves either the old or the
+// new content: temporary file, fsync, rename, fsync of the directory.
+func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
+	dir := filepath.Dir(path)
+	f, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer os.Remove(tmp) // after a successful rename there is nothing left to remove
+	if err := f.Chmod(mode); err != nil && !errors.Is(err, errors.ErrUnsupported) {
+		f.Close()
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return err
+	}
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync() // persist the rename (not supported everywhere)
+		d.Close()
+	}
+	return nil
+}
+
+// applyStagedRestore applies a restore confirmed in the console, before anything opens
+// the data. When it fails the previous state stays in place and startup continues with
+// it. An interrupted restore that could not be rolled back is the exception: the data
+// directory may lack the database or the data key, and starting would create an empty
+// database and a new key, so startup stops with the error.
+func applyStagedRestore(dataDir string, now time.Time) error {
+	rb, err := backup.ApplyPending(dataDir, slog.Default(), now)
+	var ie *backup.InterruptedRestoreError
+	switch {
+	case errors.As(err, &ie):
+		return fmt.Errorf("refusing to start: %w; restore-journal.json in the restore-backup-* directory "+
+			"lists the moves to undo by hand (or restore the data directory from a copy), then start again", err)
+	case err != nil:
+		slog.Error("staged restore was not applied", "err", err)
+	case rb != "":
+		slog.Warn("configuration restored from backup; the replaced files are kept for a manual rollback", "dir", rb)
+	}
+	return nil
+}
+
 func run() error {
 	dataDir := env("CORVUS_DATA_DIR", "/data")
 	withGateway := envBool("CORVUS_GATEWAY", true)
-	// A restore confirmed in the console is applied now, before anything opens the data.
-	// On failure the previous state stays in place and startup continues with it.
-	if rb, err := backup.ApplyPending(dataDir, slog.Default(), time.Now()); err != nil {
-		slog.Error("staged restore was not applied", "err", err)
-	} else if rb != "" {
-		slog.Warn("configuration restored from backup; the replaced files are kept for a manual rollback", "dir", rb)
+	if err := applyStagedRestore(dataDir, time.Now()); err != nil {
+		return err
 	}
 	// The image runs as the unprivileged "corvus" user (H9); nginx master and workers
 	// share it. certs/ and secrets/ stay owner-only.
@@ -173,13 +249,13 @@ func run() error {
 		_ = os.Chmod(p, mode)
 	}
 
-	wrSecret, err := secret(filepath.Join(dataDir, "secrets", "waitroom_hmac"))
+	wrSecret, err := secret(filepath.Join(dataDir, "secrets", "waitroom_hmac"), true)
 	if err != nil {
 		return err
 	}
 	debugKey := ""
 	if envBool("CORVUS_DEBUG_ENDPOINTS", false) {
-		if debugKey, err = secret(filepath.Join(dataDir, "secrets", "debug_key")); err != nil {
+		if debugKey, err = secret(filepath.Join(dataDir, "secrets", "debug_key"), true); err != nil {
 			return err
 		}
 		slog.Warn("access queue debug endpoints (stats/reset) are ENABLED; key in secrets/debug_key")
@@ -239,7 +315,7 @@ func run() error {
 	// external Redis takes CORVUS_REDIS_USER/PASSWORD.
 	redisUser, redisPass := env("CORVUS_REDIS_USER", "corvus"), env("CORVUS_REDIS_PASSWORD", "")
 	if redisPass == "" {
-		if redisPass, err = secret(filepath.Join(dataDir, "secrets", "redis_password")); err != nil {
+		if redisPass, err = secret(filepath.Join(dataDir, "secrets", "redis_password"), true); err != nil {
 			return err
 		}
 	}
@@ -253,24 +329,20 @@ func run() error {
 		}
 	}
 
-	dataKeyB64, err := secret(filepath.Join(dataDir, "secrets", "data_key"))
+	dataKeyB64, err := secret(filepath.Join(dataDir, "secrets", "data_key"), false)
 	if err != nil {
 		return err
 	}
 	dataKey, err := base64.RawURLEncoding.DecodeString(dataKeyB64)
 	if err != nil || len(dataKey) != 32 {
-		return fmt.Errorf("invalid data key in secrets/data_key")
+		return fmt.Errorf("secrets/data_key is not a valid key (32 bytes, base64): restore it from a backup")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Access-log collector must listen before the gateway starts writing to it.
 	tc := traffic.New()
 	tc.MaskIPs = func() bool { n, _ := st.Network(context.Background()); return n.MaskIPs }
-	if err := tc.Listen(filepath.Join(dataDir, "run", "corvus-access.sock"), ctx.Done()); err != nil {
-		slog.Warn("traffic collector disabled", "err", err)
-	}
 
 	// Traffic history: statistics/events survive restarts; request logs are archived
 	// per day (compressed) with retention by age and total size. Restored before the
@@ -295,6 +367,11 @@ func run() error {
 				slog.Warn("traffic history: final save timed out")
 			}
 		}
+	}
+	// Access-log collector must listen before the gateway starts writing to it, and only
+	// once it is set up (Sink): Listen starts reading at once.
+	if err := tc.Listen(filepath.Join(dataDir, "run", "corvus-access.sock"), ctx.Done()); err != nil {
+		slog.Warn("traffic collector disabled", "err", err)
 	}
 
 	// Managed rule bundle: body signatures + virtual-patch templates (signed updates).
@@ -346,23 +423,22 @@ func run() error {
 		slog.Info("access list IP rules converted to security rules", "rules", n)
 	}
 
+	// Degraded mode: whatever goes wrong with the gateway, the control plane (PID 1) and
+	// its console keep running so the operator can fix it.
 	if err := dep.EnsureCurrent(ctx); err != nil {
-		return fmt.Errorf("initial deployment: %w", err)
+		slog.Error("DEGRADED: the configuration could not be deployed at startup; falling back to an earlier one", "err", err)
+		if _, ferr := dep.Fallback(ctx, "", "startup deployment failed"); ferr != nil {
+			slog.Error("DEGRADED: no usable gateway configuration; the gateway will not start until the settings are fixed in the console", "err", ferr)
+		}
 	}
 	var rd *gateway.Redis
 	if embeddedRedis {
 		rd = &gateway.Redis{Bin: env("CORVUS_REDIS_BIN", "/usr/bin/valkey-server"), Port: redisPort, ACLFile: aclPath,
 			Dir: filepath.Join(dataDir, "run", "redis"), MaxMemory: env("CORVUS_REDIS_MAXMEMORY", "256mb")}
-		if err := rd.Start(ctx); err != nil {
-			return fmt.Errorf("start embedded redis: %w", err)
-		}
+		startRedis(ctx, rd)
 	}
-	gatewayDone := make(<-chan error)
 	if or != nil {
-		if err := or.Start(); err != nil {
-			return fmt.Errorf("start gateway: %w", err)
-		}
-		gatewayDone = or.Done()
+		go or.Supervise(ctx, gatewayBootFailure(ctx, dep))
 	}
 
 	lv, err := live.New(net.JoinHostPort(redisHost, redisPort), redisUser, redisPass, redisScript)
@@ -428,13 +504,13 @@ func run() error {
 		ban.PushURL = "http://127.0.0.1:9180/bans"
 		ban.HitsURL = "http://127.0.0.1:9180/bad-behaviour"
 	}
-	go ban.Run(ctx)
-
 	// "Under attack" mode, automatic activations pushed to the gateway's shared memory.
 	ua := &underattack.Service{Store: st, Traffic: tc}
 	if withGateway {
 		ua.PushURL = "http://127.0.0.1:9180/under-attack"
+		ban.OnGatewayRestart = ua.Trigger // empty shared memory: push the activations at once
 	}
+	go ban.Run(ctx)
 	go ua.Run(ctx)
 
 	// Lists fed from a URL (e.g. Tor exit nodes, bad-bot User-Agents).
@@ -467,6 +543,7 @@ func run() error {
 		Traffic:     tc, ACME: acmeSvc, NPMImportDir: env("CORVUS_IMPORT_DIR", "/import"), DataKey: dataKey, MFA: auth.NewMFAChallenges(), GeoIP: geo, AutoBan: ban, UnderAttack: ua, History: hist, Rules: rulesSvc, Feeds: listFeeds}
 	if or != nil {
 		srv.Gateway = or.Status
+		srv.GatewayProblem = or.Problem
 	}
 	srv.Alerts = &alerts.Engine{Store: st, Key: dataKey, Src: alerts.Sources{
 		Traffic:     tc,
@@ -526,8 +603,6 @@ func run() error {
 		slog.Info("shutting down")
 	case err := <-errc:
 		runErr = fmt.Errorf("admin server: %w", err)
-	case err := <-gatewayDone:
-		runErr = fmt.Errorf("gateway exited unexpectedly: %v", err)
 	}
 	// Save traffic history first: the container runtime kills the process 10 s after the
 	// stop signal (Docker's default), and both a slow console request (admin server

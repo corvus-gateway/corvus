@@ -3,7 +3,7 @@ import { ArrowLeftRight, CheckCircle2, FileCode2, History, Rocket, RotateCcw, XC
 import { api, type DeploymentPage, type Version } from "../api";
 import { Pagination } from "../components/Pagination";
 import { useApp } from "../lib/app";
-import { ErrorBox, PageHeader, useSubmit } from "../components/common";
+import { ErrorBox, PageHeader, RefreshError, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Badge, Card, CodeBlock, EmptyState, Skeleton, type Tone } from "../components/ui/display";
 import { Input, Field } from "../components/ui/form";
@@ -65,6 +65,7 @@ export default function Deployments() {
     <>
       <PageHeader title={t("navDeploy")} description={t("deployDesc")} actions={can && <Button variant="primary" onClick={() => { act.setError(null); setDeploying(""); }}><Rocket className="h-4 w-4" />{t("deployNow")}</Button>} />
       <ErrorBox error={deploying === null ? act.error : null} className="mb-4" />
+      <RefreshError res={res} className="mb-4" />
       {res.loading ? <div className="space-y-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
         : res.error && !res.data ? <ErrorBox error={res.error} />
           : !versions.length && offset === 0 ? <Card><EmptyState icon={History} title={t("noDeployments")} description={t("noDeploymentsDesc")} /></Card> : (
@@ -105,7 +106,7 @@ export default function Deployments() {
       <Sheet open={!!files} onOpenChange={(o) => !o && setFiles(null)} width="max-w-4xl" title={files ? `${t("versionN", { n: files.v.id })} · ${t("generatedFiles")}` : ""} description={t("generatedFilesDesc")}>
         {files && (
           <div className="flex h-full flex-col">
-            <div role="tablist" aria-label="files" className="flex shrink-0 gap-1 overflow-x-auto border-b border-line px-4 pt-3">
+            <div role="tablist" aria-label={t("deployFiles")} className="flex shrink-0 gap-1 overflow-x-auto border-b border-line px-4 pt-3">
               {files.names.map((n) => (
                 <button key={n} role="tab" aria-selected={files.tab === n} onClick={() => setFiles({ ...files, tab: n })}
                   className={cn("-mb-px shrink-0 whitespace-nowrap rounded-t-md border-b-2 px-3 py-2 font-mono text-xs transition", files.tab === n ? "border-brand text-fg" : "border-transparent text-fg-subtle hover:text-fg")}>{n}</button>

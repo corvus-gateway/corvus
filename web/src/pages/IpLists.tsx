@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { AlertTriangle, ChevronDown, Eye, Link2, ListChecks, Pencil, Plus, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { ApiError, api, deployedVersion, type IpList, type ListKind } from "../api";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
-import { ErrorHint, useHintText } from "../components/ErrorHint";
+import { ErrorHint, useErrorToast, useHintText } from "../components/ErrorHint";
 import { Button } from "../components/ui/button";
 import { Badge, Callout, Card, ComingSoon, EmptyState, TableSkeleton } from "../components/ui/display";
 import { FormSection, IdField, Input, SearchInput, Segmented, Select, Textarea, fieldErr } from "../components/ui/form";
@@ -32,6 +32,7 @@ const REFRESH = [300, 900, 3600, 6 * 3600, 12 * 3600, 86400, 7 * 86400];
 export default function IpLists() {
   const { t, lang } = useI18n();
   const hintText = useHintText();
+  const toastError = useErrorToast();
   const { can } = useCan();
   const list = useResource<IpList[]>("/api/ip-lists", { poll: 30000 });
   const [q, setQ] = useState("");
@@ -68,7 +69,7 @@ export default function IpLists() {
       setEditing((e) => (e && e.id === l.id ? { ...e, orig: l, form: { ...e.form, text: (l.items ?? []).join("\n") } } : e));
       done();
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : t("requestFailed"));
+      toastError(e);
     } finally { setRefreshing(null); }
   };
 
@@ -245,6 +246,7 @@ function hostOf(u: string): string {
 /** Delete confirmation that turns a 409 (still referenced by rules) into a friendly message. */
 function DeleteIpList({ target, onClose, onDone }: { target: IpList | null; onClose: () => void; onDone: () => void }) {
   const { t } = useI18n();
+  const toastError = useErrorToast();
   const run = async () => {
     if (!target) return;
     try {
@@ -255,7 +257,7 @@ function DeleteIpList({ target, onClose, onDone }: { target: IpList | null; onCl
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) toast.error(t("ipListInUse", { name: target.name }), { description: t("ipListInUseDesc") });
       else if (e instanceof ApiError && e.status === 403) toast.error(t("forbidden"));
-      else toast.error(e instanceof ApiError ? e.message : t("requestFailed"));
+      else toastError(e);
     }
   };
   return (

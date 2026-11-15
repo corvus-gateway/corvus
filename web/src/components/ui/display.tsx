@@ -112,7 +112,7 @@ export function CodeBlock({ code, lines, className, maxHeight = "28rem", copy = 
           {done ? <Check className="h-3.5 w-3.5 text-ok" /> : <Copy className="h-3.5 w-3.5" />}
         </button>
       )}
-      <div className="overflow-auto" style={{ maxHeight }} tabIndex={0} role="region" aria-label="code">
+      <div className="overflow-auto" style={{ maxHeight }} tabIndex={0} role="region" aria-label={t("codeRegion")}>
         <pre className="m-0 min-w-max py-3 text-xs leading-5 text-fg">
           {rows.map((r, i) => (
             <div key={i} className="flex">

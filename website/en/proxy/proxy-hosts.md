@@ -74,12 +74,13 @@ without reading it, so Corvus sees the tunnel's address for every visitor. Most 
 the visitor's address in a [PROXY protocol](https://www.haproxy.org/download/2.9/doc/proxy-protocol.txt)
 header (v1 or v2) at the start of the connection. Corvus accepts that header on two extra ports:
 
-1. On the **Network** page, turn on **Accept PROXY protocol**. The ports default to **8080** (HTTP)
-   and **8443** (HTTPS); they can't be Corvus's own ports or a stream's port.
-2. Enter the address the tunnel connects from in **Trusted PROXY protocol sources** (in the same
-   section). The header is used only on connections from there, and the setting can't be turned on
-   with an empty list. This is a separate list: don't add the tunnel to **Trusted proxies**, which
-   are trusted for `X-Forwarded-For` (see below).
+1. On the **Network** page, in the **PROXY protocol** card, enter the address the tunnel connects
+   from in **Trusted PROXY protocol sources**. The header is used only on connections from there.
+   This is a separate list: don't add the tunnel to **Trusted proxies**, which are trusted for
+   `X-Forwarded-For` (see below). [Streams](streams.md#proxy-protocol) use the same list.
+2. In the same card, turn on **Accept PROXY protocol**. The ports default to **8080** (HTTP) and
+   **8443** (HTTPS); they can't be Corvus's own ports or a stream's port, and the switch can't be
+   turned on with an empty trusted list.
 3. Publish the ports in `docker-compose.yml`. When the tunnel runs on the same host, publish them on
    loopback only:
 

@@ -39,12 +39,6 @@ export function fmtMs(n: number | null | undefined): string {
   return Math.round(n) + " ms";
 }
 
-export function fmtPct(n: number | null | undefined, digits = 2): string {
-  if (n == null || Number.isNaN(n)) return "–";
-  // error_rate may be a ratio (0..1) or a percent; ratios are always <= 1.
-  return n.toFixed(digits) + "%";
-}
-
 export function fmtUptime(s: number): string {
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
   if (d) return `${d}d ${h}h`;

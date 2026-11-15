@@ -64,9 +64,10 @@ type Service struct {
 	Concurrency int
 
 	mu          sync.Mutex
-	tokens      map[string]string // HTTP-01 token → key authorization
-	running     map[int64]bool    // started orders, including those waiting for a slot
-	failures    map[int64]failure // failed orders and when to try again (in memory)
+	tokens      map[string]string    // HTTP-01 token → key authorization
+	running     map[int64]bool       // started orders, including those waiting for a slot
+	failures    map[int64]failure    // failed orders and when to try again (in memory)
+	late        map[int64]*lateOrder // timed-out orders still running in lego
 	slots       chan struct{}
 	deployTimer *time.Timer
 	burstStart  time.Time // first completion not yet deployed
@@ -99,6 +100,7 @@ func (s *Service) init() {
 		s.tokens = map[string]string{}
 		s.running = map[int64]bool{}
 		s.failures = map[int64]failure{}
+		s.late = map[int64]*lateOrder{}
 	}
 	if s.slots == nil {
 		n := s.Concurrency
@@ -271,7 +273,8 @@ func (s *Service) client(ctx context.Context, email string, staging bool, domain
 func (s *Service) Start(id int64) {
 	s.mu.Lock()
 	s.init()
-	if s.running[id] {
+	if s.running[id] || s.late[id] != nil {
+		// running or waiting, or a timed-out order still in lego (see abandon)
 		s.mu.Unlock()
 		return
 	}
@@ -286,9 +289,9 @@ func (s *Service) Start(id int64) {
 		}()
 		slots <- struct{}{}
 		defer func() { <-slots }()
-		// No overall deadline: lego does not honour the context during Obtain (DNS
-		// propagation can take long), and an expired context would then make the
-		// steps after a successful issuance fail and leave the certificate "pending".
+		// The context has no deadline: lego does not honour it during Obtain, and an
+		// expired context would make the steps after a successful issuance fail. The
+		// order is bounded by issueTimeout instead (see issue).
 		err := s.issue(context.Background(), id)
 		s.mu.Lock()
 		if err != nil {
@@ -300,8 +303,121 @@ func (s *Service) Start(id int64) {
 		} else {
 			delete(s.failures, id)
 		}
+		// after the failure is recorded, so a late success can clear it
+		if l := s.late[id]; l != nil {
+			go s.awaitLate(id, l)
+		}
 		s.mu.Unlock()
 	}()
+}
+
+// issueTimeout bounds one order (account, challenges, finalisation): longer than the
+// DNS propagation wait (10 min) plus lego's own timeouts, so only a hung order hits it.
+var issueTimeout = 20 * time.Minute
+
+// State writes are retried: the certificate is already on disk, and a write lost to a
+// short database hiccup would otherwise lead to a second, unnecessary order.
+var (
+	stateAttempts  = 3
+	stateRetryWait = time.Second
+)
+
+// updateState records certificate state (a variable so tests can make it fail).
+var updateState = func(ctx context.Context, st *store.Store, id int64, status, lastError string, domains []string, notAfter time.Time) error {
+	return st.UpdateCertificateState(ctx, id, status, lastError, domains, notAfter)
+}
+
+func (s *Service) recordValid(ctx context.Context, id int64, info *certs.Info) error {
+	var err error
+	for i := 0; i < stateAttempts; i++ {
+		if i > 0 {
+			time.Sleep(stateRetryWait << (i - 1))
+		}
+		if err = updateState(ctx, s.Store, id, "valid", "", info.Domains, info.NotAfter); err == nil {
+			return nil
+		}
+	}
+	return err
+}
+
+// diskCert returns the certificate on disk for id when it is newer than the recorded
+// one and covers the same names: an order whose result was written but not recorded
+// (database error, or a hung order that completed after its timeout).
+func (s *Service) diskCert(c *store.Certificate) *certs.Info {
+	if s.CertDir == nil {
+		return nil
+	}
+	dir := s.CertDir(c.ID)
+	chain, err1 := os.ReadFile(filepath.Join(dir, "fullchain.pem"))
+	key, err2 := os.ReadFile(filepath.Join(dir, "privkey.pem"))
+	if err1 != nil || err2 != nil {
+		return nil
+	}
+	info, err := certs.Parse(chain, key) // also rejects an expired certificate
+	if err != nil || !info.NotAfter.After(c.NotAfter.Add(time.Second)) || !sameNames(info.Domains, c.Domains) {
+		return nil
+	}
+	return info
+}
+
+func sameNames(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	set := map[string]bool{}
+	for _, d := range a {
+		set[strings.ToLower(d)] = true
+	}
+	for _, d := range b {
+		if !set[strings.ToLower(d)] {
+			return false
+		}
+	}
+	return true
+}
+
+// lateOrder is an order that hit issueTimeout while lego was still working on it.
+type lateOrder struct {
+	done <-chan obtained
+	cert *store.Certificate
+}
+
+// abandon records id's order as timed out but still running in lego. Start ignores the
+// certificate until that goroutine has returned, so two orders never write the same
+// files at once (and at most one hung goroutine exists per certificate); once Start
+// has recorded the failure it waits for the late result (awaitLate).
+func (s *Service) abandon(id int64, done <-chan obtained, c *store.Certificate) {
+	s.mu.Lock()
+	s.init()
+	s.late[id] = &lateOrder{done: done, cert: c}
+	s.mu.Unlock()
+	slog.Warn("ACME order timed out; its slot is freed", "certificate", id, "timeout", issueTimeout)
+}
+
+// awaitLate saves the result of a timed-out order once lego returns: a late success is
+// still a valid certificate, kept rather than ordered again.
+func (s *Service) awaitLate(id int64, l *lateOrder) {
+	r := <-l.done
+	if r.err == nil {
+		if err := s.save(context.Background(), l.cert, r.res); err == nil {
+			s.mu.Lock()
+			delete(s.failures, id)
+			s.mu.Unlock()
+			slog.Info("ACME order finished after its timeout; certificate kept", "certificate", id)
+		} else {
+			slog.Warn("ACME order finished after its timeout", "certificate", id, "err", redactError(err.Error(), r.cred))
+		}
+	}
+	s.mu.Lock()
+	delete(s.late, id)
+	s.mu.Unlock()
+}
+
+// obtained is the result of an order.
+type obtained struct {
+	res  *certificate.Resource
+	cred Credentials // DNS-01 secret in use, redacted from errors
+	err  error
 }
 
 // issued schedules the gateway redeploy after certificate id was written: one
@@ -355,6 +471,19 @@ func (s *Service) issue(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
+	// A certificate issued earlier but never recorded (the database write failed) is
+	// adopted instead of ordering a duplicate, which would spend CA rate limits.
+	if info := s.diskCert(c); info != nil {
+		if err := s.recordValid(ctx, id, info); err != nil {
+			return fmt.Errorf("recording the issued certificate: %w", err)
+		}
+		slog.Info("ACME certificate on disk recorded", "certificate", id, "not_after", info.NotAfter)
+		s.issued(id)
+		c.NotAfter, c.Status = info.NotAfter, "valid"
+		if info.NotAfter.Sub(time.Now()) >= s.renewWindow(id) {
+			return nil
+		}
+	}
 	renewal := c.Status == "valid"
 	var cred Credentials // DNS-01 secret in use, redacted from errors
 	fail := func(err error) error {
@@ -366,45 +495,95 @@ func (s *Service) issue(ctx context.Context, id int64) error {
 		_ = s.Store.SetCertificateStatus(ctx, id, status, msg)
 		return errors.New(msg)
 	}
+	// lego does not honour a context, so the order runs in its own goroutine and is
+	// abandoned after issueTimeout: the slot is freed and the order marked failed, and
+	// a late result is still saved (see abandon).
+	done := make(chan obtained, 1)
+	go func() { done <- s.obtain(ctx, c) }()
+	timer := time.NewTimer(issueTimeout)
+	defer timer.Stop()
+	var r obtained
+	select {
+	case r = <-done:
+	case <-timer.C:
+		err := fail(fmt.Errorf("issuance did not finish within %s", issueTimeout))
+		s.abandon(id, done, c) // after fail: a late success must not be overwritten
+		return err
+	}
+	cred = r.cred
+	if r.err != nil {
+		return fail(r.err)
+	}
+	if err := s.save(ctx, c, r.res); err != nil {
+		if errors.Is(err, errNotRecorded) {
+			return err // the files are written: the next attempt adopts them (see diskCert)
+		}
+		return fail(err)
+	}
+	return nil
+}
+
+// obtain orders the certificate (account, challenge provider, lego Obtain).
+func (s *Service) obtain(ctx context.Context, c *store.Certificate) obtained {
+	var r obtained
 	cl, _, err := s.client(ctx, c.ACME.Email, c.ACME.Staging, c.Domains)
 	if err != nil {
-		return fail(err)
+		r.err = err
+		return r
 	}
 	switch c.ACME.Challenge {
 	case "dns-01":
 		provider, dc, err := s.dnsCredentials(ctx, c)
 		if err != nil {
-			return fail(err)
+			r.err = err
+			return r
 		}
-		cred = dc
-		p, err := dnsProvider(provider, cred)
+		r.cred = dc
+		p, err := dnsProvider(provider, dc)
 		if err != nil {
-			return fail(err)
+			r.err = err
+			return r
 		}
 		if err := cl.Challenge.SetDNS01Provider(p); err != nil {
-			return fail(err)
+			r.err = err
+			return r
 		}
 	default:
 		if err := cl.Challenge.SetHTTP01Provider(s); err != nil {
-			return fail(err)
+			r.err = err
+			return r
 		}
 	}
 	res, err := cl.Certificate.Obtain(certificate.ObtainRequest{Domains: c.Domains, Bundle: true})
 	if err != nil {
-		return fail(fmt.Errorf("issuance failed: %w", err))
+		r.err = fmt.Errorf("issuance failed: %w", err)
+		return r
 	}
+	r.res = res
+	return r
+}
+
+// errNotRecorded: the certificate files were written but the database still has the
+// old state.
+var errNotRecorded = errors.New("certificate issued and written, but recording it failed")
+
+// save writes an issued certificate, records it and redeploys the gateway. The
+// redeploy happens even when recording fails (with retries): the files are in place.
+func (s *Service) save(ctx context.Context, c *store.Certificate, res *certificate.Resource) error {
 	info, err := certs.Parse(res.Certificate, res.PrivateKey)
 	if err != nil {
-		return fail(err)
-	}
-	if err := certs.Write(s.CertDir(id), res.Certificate, res.PrivateKey); err != nil {
-		return fail(err)
-	}
-	if err := s.Store.UpdateCertificateState(ctx, id, "valid", "", info.Domains, info.NotAfter); err != nil {
 		return err
 	}
-	slog.Info("ACME certificate issued", "certificate", id, "domains", info.Domains, "not_after", info.NotAfter)
-	s.issued(id)
+	if err := certs.Write(s.CertDir(c.ID), res.Certificate, res.PrivateKey); err != nil {
+		return err
+	}
+	err = s.recordValid(ctx, c.ID, info)
+	s.issued(c.ID)
+	if err != nil {
+		slog.Error("ACME certificate issued but not recorded; it is recorded on the next attempt", "certificate", c.ID, "err", err)
+		return fmt.Errorf("%w: %v", errNotRecorded, err)
+	}
+	slog.Info("ACME certificate issued", "certificate", c.ID, "domains", info.Domains, "not_after", info.NotAfter)
 	return nil
 }
 
