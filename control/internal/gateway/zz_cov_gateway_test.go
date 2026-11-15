@@ -265,7 +265,7 @@ func listen(t *testing.T) (net.Listener, string) {
 func TestCovRedisArgsAndLifecycle(t *testing.T) {
 	bin := t.TempDir()
 	work := filepath.Join(t.TempDir(), "redis-work")
-	_, port := listen(t)
+	port := fakeRedis(t, false)
 	// records its arguments and every start in its working directory
 	script := writeScript(t, bin, "valkey-server", `echo "$@" > args
 echo start >> starts
@@ -314,10 +314,10 @@ func TestCovRedisRestartsAfterCrash(t *testing.T) {
 	}
 	bin := t.TempDir()
 	work := t.TempDir()
-	_, port := listen(t)
-	// first run crashes at once, later runs stay up
+	port := fakeRedis(t, false)
+	// first run crashes after startup, later runs stay up
 	script := writeScript(t, bin, "valkey-server", `echo start >> starts
-if [ "$(wc -l < starts)" -lt 2 ]; then exit 1; fi
+if [ "$(wc -l < starts)" -lt 2 ]; then sleep 1; exit 1; fi
 trap 'exit 0' TERM
 while true; do sleep 0.02; done
 `)
@@ -344,8 +344,8 @@ while true; do sleep 0.02; done
 func TestCovRedisSupervisorStopsWithContext(t *testing.T) {
 	bin := t.TempDir()
 	work := t.TempDir()
-	_, port := listen(t)
-	script := writeScript(t, bin, "valkey-server", "exit 1\n")
+	port := fakeRedis(t, false)
+	script := writeScript(t, bin, "valkey-server", "sleep 1\nexit 1\n")
 	r := &Redis{Bin: script, Port: port, ACLFile: "a", Dir: work, MaxMemory: "1mb"}
 	ctx, cancel := context.WithCancel(context.Background())
 	if err := r.Start(ctx); err != nil {
@@ -362,6 +362,24 @@ func TestCovRedisSupervisorStopsWithContext(t *testing.T) {
 	r.mu.Unlock()
 	if !same {
 		t.Fatal("supervisor restarted redis after the context ended")
+	}
+}
+
+// Another Redis holds the port (host networking): the embedded server cannot bind and
+// exits, and Start fails with a hint instead of reporting the foreign server as ready.
+func TestCovRedisPortTakenByAnotherServer(t *testing.T) {
+	bin := t.TempDir()
+	work := t.TempDir()
+	port := fakeRedis(t, true)
+	script := writeScript(t, bin, "valkey-server", "echo 'Could not create server TCP listening socket' >&2\nexit 1\n")
+	r := &Redis{Bin: script, Port: port, ACLFile: "a", Dir: work, MaxMemory: "1mb"}
+	err := r.Start(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "already in use") || !strings.Contains(err.Error(), "CORVUS_REDIS_PORT") {
+		t.Fatalf("Start = %v", err)
+	}
+	// the server is stopped: nothing is restarted after the failed start
+	if err := r.spawn(); err == nil || !strings.Contains(err.Error(), "stopped") {
+		t.Fatalf("spawn after failed start = %v", err)
 	}
 }
 
@@ -382,7 +400,7 @@ func TestCovRedisStartErrors(t *testing.T) {
 
 func TestCovRedisStopKillsAfterTimeout(t *testing.T) {
 	bin := t.TempDir()
-	_, port := listen(t)
+	port := fakeRedis(t, false)
 	script := writeScript(t, bin, "valkey-server", "trap '' TERM\nwhile true; do sleep 0.02; done\n")
 	r := &Redis{Bin: script, Port: port, ACLFile: "a", Dir: t.TempDir(), MaxMemory: "1mb"}
 	ctx, cancel := context.WithCancel(context.Background())
