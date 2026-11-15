@@ -37,6 +37,10 @@ Corvus가 전달 대상에 접속하지 못합니다.
   `0.0.0.0`(또는 Docker 브리지)에서 수신해야 하고, 호스트 방화벽이 Docker 네트워크를 허용해야
   합니다. `127.0.0.1`에만 묶인 서비스는
   [호스트 네트워크](../getting-started/install.md#run-it-with-host-networking-optional)가 필요합니다.
+- 다른 서버의 서비스라면: IP 주소나 전체 DNS 이름을 쓰고(search 도메인이 필요한 짧은 이름은 안 됩니다),
+  그 서버의 방화벽에서 게이트웨이 서버를 허용하고, Docker 네트워크 대역이 사내망과 겹치지 않는지
+  확인하세요. [서비스가 다른 서버에 있어요](../getting-started/how-it-works.md#services-on-other-servers)를
+  참고하세요.
 - `upstream sent too big header`: 앱이 보내는 쿠키나 헤더가 너무 큽니다. 호스트의
   **고급 nginx 설정**에 `proxy_buffer_size 32k;`를 추가하세요.
 

@@ -37,6 +37,10 @@ Corvus can't reach the forward target.
   `0.0.0.0` (or the Docker bridge), not only `127.0.0.1`, and the host firewall must allow Docker
   networks. Services bound to `127.0.0.1` only need
   [host networking](../getting-started/install.md#run-it-with-host-networking-optional).
+- Service on another server: use its IP address or full DNS name (not a short name that needs a
+  search domain), allow the gateway server through that server's firewall, and check that the
+  Docker network's range does not overlap your network. See
+  [The services run on other servers](../getting-started/how-it-works.md#services-on-other-servers).
 - `upstream sent too big header`: very large cookies or headers from the app. Add
   `proxy_buffer_size 32k;` to the host's **Advanced nginx config**.
 
