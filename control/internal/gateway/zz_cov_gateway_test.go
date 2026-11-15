@@ -377,9 +377,12 @@ func TestCovRedisPortTakenByAnotherServer(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "already in use") || !strings.Contains(err.Error(), "CORVUS_REDIS_PORT") {
 		t.Fatalf("Start = %v", err)
 	}
-	// the server is stopped: nothing is restarted after the failed start
-	if err := r.spawn(); err == nil || !strings.Contains(err.Error(), "stopped") {
-		t.Fatalf("spawn after failed start = %v", err)
+	// nothing supervises the failed server, and a later Start tries again
+	if r.Supervised() {
+		t.Fatal("a failed start must not leave a supervisor")
+	}
+	if err := r.Start(context.Background()); err == nil || !strings.Contains(err.Error(), "already in use") {
+		t.Fatalf("second Start = %v", err)
 	}
 }
 
