@@ -20,7 +20,13 @@ func fakeRedis(t *testing.T, foreign bool) string {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { l.Close() })
-	go func() {
+	go serveFakeRedis(l, foreign)
+	_, port, _ := net.SplitHostPort(l.Addr().String())
+	return port
+}
+
+func serveFakeRedis(l net.Listener, foreign bool) {
+	func() {
 		for {
 			c, err := l.Accept()
 			if err != nil {
@@ -47,8 +53,6 @@ func fakeRedis(t *testing.T, foreign bool) string {
 			}(c)
 		}
 	}()
-	_, port, _ := net.SplitHostPort(l.Addr().String())
-	return port
 }
 
 func freePort(t *testing.T) string {

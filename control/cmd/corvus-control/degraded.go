@@ -2,13 +2,10 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log/slog"
-	"net"
 	"strings"
 	"time"
 
-	"corvus/control/internal/gateway"
 	"corvus/control/internal/store"
 )
 
@@ -54,43 +51,44 @@ func gatewayBootFailure(ctx context.Context, dep fallbackDeployer) func(failures
 	}
 }
 
+// redisStarter is the part of gateway.Redis that startRedis uses.
+type redisStarter interface {
+	Start(ctx context.Context) error
+	Supervised() bool
+}
+
+// redisRetryFirst and redisRetryMax bound the delay between attempts to start Redis.
+var redisRetryFirst, redisRetryMax = 5 * time.Second, 2 * time.Minute
+
 // startRedis starts the embedded Redis without making it a reason to stop: until it is
 // up, access queues apply their fail policy (open or closed) and the console reports
-// Redis as down. If the process could not even be started (its supervisor only runs once
-// it did), starting is retried with a growing delay.
-func startRedis(ctx context.Context, rd *gateway.Redis) {
+// Redis as down. A failed Start leaves nothing running (the process it started is
+// ended, whatever the error), and the supervisor that restarts Redis only runs once a
+// start succeeded, so starting is retried with a growing delay until then.
+func startRedis(ctx context.Context, rd redisStarter) {
 	err := rd.Start(ctx)
 	if err == nil {
 		return
 	}
 	slog.Error("embedded redis unavailable; access queues apply their fail policy until it is up", "err", err)
-	if redisSpawned(err) {
-		return // it runs but did not answer in time: its supervisor takes care of it
-	}
 	go func() {
-		backoff := 5 * time.Second
-		for {
+		backoff := redisRetryFirst
+		for !rd.Supervised() {
 			select {
 			case <-ctx.Done():
 				return
 			case <-time.After(backoff):
 			}
 			err := rd.Start(ctx)
-			if err == nil || redisSpawned(err) {
-				if err == nil {
-					slog.Info("embedded redis started after retrying")
-				}
+			if err == nil {
+				slog.Info("embedded redis started after retrying")
+				return
+			}
+			if ctx.Err() != nil {
 				return
 			}
 			slog.Error("embedded redis still unavailable", "err", err, "retry_in", backoff)
-			backoff = min(backoff*2, 2*time.Minute)
+			backoff = min(backoff*2, redisRetryMax)
 		}
 	}()
-}
-
-// redisSpawned reports whether a Redis.Start error came after the process was started
-// (waiting for it to accept connections), rather than from starting it.
-func redisSpawned(err error) bool {
-	var oe *net.OpError
-	return errors.As(err, &oe) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }

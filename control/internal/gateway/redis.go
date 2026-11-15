@@ -27,12 +27,13 @@ type Redis struct {
 	Dir       string // working directory (writable; nothing is persisted)
 	MaxMemory string // e.g. 256mb
 
-	mu      sync.Mutex
-	cmd     *exec.Cmd
-	stopped bool
-	exited  chan struct{}
-	started time.Time // start of the current process
-	exitErr error     // how the last process ended (set before exited is closed)
+	mu          sync.Mutex
+	cmd         *exec.Cmd
+	stopped     bool
+	supervising bool // the supervise goroutine runs (restarts the process when it exits)
+	exited      chan struct{}
+	started     time.Time // start of the current process
+	exitErr     error     // how the last process ended (set before exited is closed)
 }
 
 // redisHealthUser may only PING and needs no password (generated ACL file, see
@@ -48,6 +49,9 @@ const redisStableUptime = 5 * time.Minute
 // the port may have answered the PING.
 var redisSettle = 200 * time.Millisecond
 
+// redisReadyTimeout bounds how long Start waits for the server to answer.
+var redisReadyTimeout = 10 * time.Second
+
 func (r *Redis) args() []string {
 	return []string{
 		"--bind", "127.0.0.1", "--port", r.Port, "--protected-mode", "yes",
@@ -59,21 +63,42 @@ func (r *Redis) args() []string {
 }
 
 // Start launches the server, waits until it answers an authenticated PING and keeps it
-// running until Stop is called or ctx ends. It fails (and stops the server) when the
-// server exits during startup or another server holds the port.
+// running until Stop is called or ctx ends. It fails when the server exits during
+// startup, does not answer in time or another server holds the port; the process it
+// started is then ended and nothing supervises it, so Start may be called again.
+// Start does nothing while a supervised server runs.
 func (r *Redis) Start(ctx context.Context) error {
+	if r.Supervised() {
+		return nil
+	}
 	if err := os.MkdirAll(r.Dir, 0o700); err != nil {
 		return err
 	}
 	if err := r.spawn(); err != nil {
 		return err
 	}
-	if err := r.waitReady(ctx, 10*time.Second); err != nil {
-		r.Stop(2 * time.Second)
+	if err := r.waitReady(ctx, redisReadyTimeout); err != nil {
+		r.kill(2 * time.Second) // not Stop: a later Start must still be able to spawn
 		return err
 	}
+	r.mu.Lock()
+	if r.stopped { // Stop was called meanwhile
+		r.mu.Unlock()
+		r.kill(2 * time.Second)
+		return errors.New("redis stopped")
+	}
+	r.supervising = true
+	r.mu.Unlock()
 	go r.supervise(ctx)
 	return nil
+}
+
+// Supervised reports whether a server started by Start is kept running (its supervisor
+// runs and Stop was not called).
+func (r *Redis) Supervised() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.supervising && !r.stopped
 }
 
 func (r *Redis) addr() string { return net.JoinHostPort("127.0.0.1", r.Port) }
@@ -179,6 +204,11 @@ func nextRedisBackoff(cur, uptime time.Duration) time.Duration {
 }
 
 func (r *Redis) supervise(ctx context.Context) {
+	defer func() {
+		r.mu.Lock()
+		r.supervising = false
+		r.mu.Unlock()
+	}()
 	var backoff time.Duration
 	for {
 		r.mu.Lock()
@@ -211,20 +241,41 @@ func (r *Redis) supervise(ctx context.Context) {
 	}
 }
 
-// Stop terminates the server (SIGTERM, then SIGKILL after timeout).
+// Stop terminates the server (SIGTERM, then SIGKILL after timeout) for good: it is not
+// restarted afterwards.
 func (r *Redis) Stop(timeout time.Duration) {
 	r.mu.Lock()
 	r.stopped = true
+	r.mu.Unlock()
+	r.kill(timeout)
+}
+
+// kill ends the current process (SIGTERM, then SIGKILL after timeout) and waits until
+// it has exited, so its port is free for the next start.
+func (r *Redis) kill(timeout time.Duration) {
+	r.mu.Lock()
 	cmd, exited := r.cmd, r.exited
 	r.mu.Unlock()
-	if cmd == nil || cmd.Process == nil {
+	if cmd == nil || cmd.Process == nil || exited == nil {
 		return
 	}
-	_ = cmd.Process.Signal(syscall.SIGTERM)
+	select {
+	case <-exited:
+		return
+	default:
+	}
+	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		_ = cmd.Process.Kill() // e.g. Windows: no SIGTERM
+	}
+	select {
+	case <-exited:
+		return
+	case <-time.After(timeout):
+		_ = cmd.Process.Kill()
+	}
 	select {
 	case <-exited:
 	case <-time.After(timeout):
-		_ = cmd.Process.Kill()
 	}
 }
 

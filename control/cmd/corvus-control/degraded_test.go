@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"corvus/control/internal/store"
 )
@@ -100,11 +102,58 @@ func (s safeFallback) Fallback(ctx context.Context, skipLive bool, reason string
 	return &store.ConfigVersion{Message: "safe mode: default server only"}, nil
 }
 
-func TestRedisSpawned(t *testing.T) {
-	if !redisSpawned(&net.OpError{Op: "dial", Err: errors.New("refused")}) || !redisSpawned(context.Canceled) {
-		t.Fatal("waiting errors come after the process started")
+// fakeRedisStarter fails its first starts (with any error) and then succeeds.
+type fakeRedisStarter struct {
+	mu         sync.Mutex
+	fails      []error
+	starts     int
+	supervised bool
+}
+
+func (f *fakeRedisStarter) Start(context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.starts++
+	if len(f.fails) > 0 {
+		err := f.fails[0]
+		f.fails = f.fails[1:]
+		return err
 	}
-	if redisSpawned(&os.PathError{Op: "fork/exec", Path: "/usr/bin/valkey-server", Err: os.ErrNotExist}) {
-		t.Fatal("a missing binary means nothing runs")
+	f.supervised = true
+	return nil
+}
+
+func (f *fakeRedisStarter) Supervised() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.supervised
+}
+
+// Whatever made Start fail (the binary missing, or the process started and did not
+// answer in time: it was ended), starting is retried until Redis runs supervised.
+func TestStartRedisRetries(t *testing.T) {
+	oldFirst, oldMax := redisRetryFirst, redisRetryMax
+	redisRetryFirst, redisRetryMax = time.Millisecond, 5*time.Millisecond
+	t.Cleanup(func() { redisRetryFirst, redisRetryMax = oldFirst, oldMax })
+
+	f := &fakeRedisStarter{fails: []error{
+		&net.OpError{Op: "dial", Err: errors.New("connection refused")}, // not ready in time
+		&os.PathError{Op: "fork/exec", Path: "/usr/bin/valkey-server", Err: os.ErrNotExist},
+		context.DeadlineExceeded,
+	}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	startRedis(ctx, f)
+	deadline := time.Now().Add(5 * time.Second)
+	for !f.Supervised() {
+		if time.Now().After(deadline) {
+			t.Fatalf("redis not started after %d attempts", f.starts)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.starts != 4 {
+		t.Fatalf("starts = %d, want 4", f.starts)
 	}
 }
