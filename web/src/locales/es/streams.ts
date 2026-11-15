@@ -1,0 +1,28 @@
+import type { StreamKey } from "../streams.i18n";
+
+export const streamsStrings: Record<StreamKey, string> = {
+  navStreams: "Streams",
+  streamsDesc: "Reenvía puertos TCP/UDP a otro host (bases de datos, SSH, MQTT, servidores de juegos). Los cambios se despliegan en el gateway en cuanto guardas.",
+  addStream: "Añadir stream",
+  editStream: "Editar stream",
+  streamSheetDesc: "Elige el puerto y el protocolo de escucha, y el host y el puerto de destino.",
+  noStreams: "Aún no hay streams",
+  noStreamsDesc: "Añade un stream para reenviar un servicio TCP o UDP que no usa HTTP.",
+  searchStreams: "Buscar puertos o hosts",
+  incomingPort: "Puerto de entrada",
+  incomingPortHint: "El puerto en el que escucha el contenedor del gateway. En una red Docker bridge, publícalo también en los ports del compose (p. ej. \"5432:5432\").",
+  streamProtocol: "Protocolo",
+  streamProtocolHint: "TCP, UDP o ambos.",
+  secStreamSource: "Escucha",
+  secStreamForward: "Reenviar a",
+  streamTlsHint: "Si se establece, el TLS de las conexiones TCP termina en el gateway y se reenvía en texto plano. No se usa para UDP.",
+  streamTlsPending: "TCP permanece cerrado hasta que se emita el certificado.",
+  streamEnabledDesc: "Si está desactivado, este puerto no se abre.",
+  deleteStreamTitle: "Eliminar stream",
+  secStreamPP: "PROXY protocol",
+  streamPPBoth: "Solo se aplica a las conexiones TCP; UDP no cambia.",
+  streamPPIn: "Aceptar PROXY protocol",
+  streamPPInDesc: "Cada conexión debe empezar con una cabecera PROXY protocol (FRP, HAProxy, balanceadores). La IP del cliente de la cabecera solo se usa para las conexiones desde los orígenes de PROXY protocol de confianza de la página Red.",
+  streamPPOut: "Enviar PROXY protocol al backend",
+  streamPPOutDesc: "El backend recibe la IP del cliente en una cabecera (v1). El backend debe esperar el PROXY protocol; si no, las conexiones fallan.",
+};

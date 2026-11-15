@@ -1,0 +1,28 @@
+import type { StreamKey } from "../streams.i18n";
+
+export const streamsStrings: Record<StreamKey, string> = {
+  navStreams: "Flux",
+  streamsDesc: "Redirigez des ports TCP/UDP vers un autre hôte (bases de données, SSH, MQTT, serveurs de jeu). Les modifications sont déployées sur la passerelle dès l'enregistrement.",
+  addStream: "Ajouter un flux",
+  editStream: "Modifier le flux",
+  streamSheetDesc: "Choisissez le port et le protocole d'écoute, ainsi que l'hôte et le port de destination.",
+  noStreams: "Aucun flux",
+  noStreamsDesc: "Ajoutez un flux pour rediriger un service TCP ou UDP qui ne parle pas HTTP.",
+  searchStreams: "Rechercher des ports ou des hôtes",
+  incomingPort: "Port entrant",
+  incomingPortHint: "Le port écouté par le conteneur de la passerelle. Sur un réseau Docker bridge, publiez-le aussi dans les ports du compose (p. ex. \"5432:5432\").",
+  streamProtocol: "Protocole",
+  streamProtocolHint: "TCP, UDP ou les deux.",
+  secStreamSource: "Écoute",
+  secStreamForward: "Rediriger vers",
+  streamTlsHint: "Si défini, le TLS des connexions TCP est terminé par la passerelle puis transmis en clair. Non utilisé pour UDP.",
+  streamTlsPending: "TCP reste fermé jusqu'à l'émission du certificat.",
+  streamEnabledDesc: "Désactivé, ce port n'est pas ouvert.",
+  deleteStreamTitle: "Supprimer le flux",
+  secStreamPP: "PROXY protocol",
+  streamPPBoth: "S'applique uniquement aux connexions TCP ; UDP reste inchangé.",
+  streamPPIn: "Accepter le PROXY protocol",
+  streamPPInDesc: "Chaque connexion doit commencer par un en-tête PROXY protocol (FRP, HAProxy, répartiteurs de charge). L'IP client de l'en-tête n'est utilisée que pour les connexions venant des sources PROXY protocol de confiance de la page Réseau.",
+  streamPPOut: "Envoyer le PROXY protocol au backend",
+  streamPPOutDesc: "Le backend reçoit l'IP client dans un en-tête (v1). Le backend doit attendre le PROXY protocol, sinon les connexions échouent.",
+};

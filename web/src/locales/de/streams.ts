@@ -1,0 +1,28 @@
+import type { StreamKey } from "../streams.i18n";
+
+export const streamsStrings: Record<StreamKey, string> = {
+  navStreams: "Streams",
+  streamsDesc: "TCP/UDP-Ports an einen anderen Host weiterleiten (Datenbanken, SSH, MQTT, Spieleserver). Änderungen werden beim Speichern sofort auf dem Gateway bereitgestellt.",
+  addStream: "Stream hinzufügen",
+  editStream: "Stream bearbeiten",
+  streamSheetDesc: "Port und Protokoll für den Empfang sowie Zielhost und -port festlegen.",
+  noStreams: "Noch keine Streams",
+  noStreamsDesc: "Fügen Sie einen Stream hinzu, um einen TCP- oder UDP-Dienst ohne HTTP weiterzuleiten.",
+  searchStreams: "Ports oder Hosts suchen",
+  incomingPort: "Eingangsport",
+  incomingPortHint: "Der Port, auf dem der Gateway-Container lauscht. In einem Docker-Bridge-Netzwerk muss er zusätzlich unter ports im Compose veröffentlicht werden (z. B. \"5432:5432\").",
+  streamProtocol: "Protokoll",
+  streamProtocolHint: "TCP, UDP oder beides.",
+  secStreamSource: "Empfang",
+  secStreamForward: "Weiterleiten an",
+  streamTlsHint: "Wenn gesetzt, wird TLS für TCP-Verbindungen am Gateway terminiert und im Klartext weitergeleitet. Nicht für UDP.",
+  streamTlsPending: "TCP bleibt geschlossen, bis das Zertifikat ausgestellt ist.",
+  streamEnabledDesc: "Wenn aus, wird dieser Port nicht geöffnet.",
+  deleteStreamTitle: "Stream löschen",
+  secStreamPP: "PROXY protocol",
+  streamPPBoth: "Gilt nur für TCP-Verbindungen; UDP bleibt unverändert.",
+  streamPPIn: "PROXY protocol annehmen",
+  streamPPInDesc: "Jede Verbindung muss mit einem PROXY-protocol-Header beginnen (FRP, HAProxy, Load Balancer). Die Client-IP aus dem Header wird nur für Verbindungen von den vertrauenswürdigen PROXY-protocol-Quellen auf der Seite Netzwerk verwendet.",
+  streamPPOut: "PROXY protocol an das Backend senden",
+  streamPPOutDesc: "Das Backend erhält die Client-IP in einem Header (v1). Das Backend muss das PROXY protocol erwarten, sonst schlagen Verbindungen fehl.",
+};

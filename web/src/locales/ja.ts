@@ -1,25 +1,25 @@
-import { templatesStrings } from "./templates.i18n";
-import { retentionStrings } from "./retention.i18n";
-import { ssoStrings } from "./sso.i18n";
-import { hintsStrings } from "./hints.i18n";
-import { tokensStrings } from "./tokens.i18n";
-import { redirectsStrings } from "./redirects.i18n";
-import { streamsStrings } from "./streams.i18n";
-import { notesStrings } from "./notes.i18n";
-import { proxyProtocolStrings } from "./proxyprotocol.i18n";
-import { updateStrings } from "./update.i18n";
-import { headersStrings } from "./headers.i18n";
-import { locationsStrings } from "./locations.i18n";
-import { limitsStrings } from "./limits.i18n";
-import { certReplaceStrings } from "./certreplace.i18n";
-import { dnsCredsStrings } from "./dnscreds.i18n";
-import { listFeedsStrings } from "./listfeeds.i18n";
-import { bansStrings } from "./bans.i18n";
-import { backupStrings } from "./backup.i18n";
-import { pagesStrings } from "./pages.i18n";
-import { consoleHostStrings } from "./consolehost.i18n";
-import { challengeStrings } from "./challenge.i18n";
-import { underAttackStrings } from "./underattack.i18n";
+import { templatesStrings } from "./ja/templates";
+import { retentionStrings } from "./ja/retention";
+import { ssoStrings } from "./ja/sso";
+import { hintsStrings } from "./ja/hints";
+import { tokensStrings } from "./ja/tokens";
+import { redirectsStrings } from "./ja/redirects";
+import { streamsStrings } from "./ja/streams";
+import { notesStrings } from "./ja/notes";
+import { proxyProtocolStrings } from "./ja/proxyprotocol";
+import { updateStrings } from "./ja/update";
+import { headersStrings } from "./ja/headers";
+import { locationsStrings } from "./ja/locations";
+import { limitsStrings } from "./ja/limits";
+import { certReplaceStrings } from "./ja/certreplace";
+import { dnsCredsStrings } from "./ja/dnscreds";
+import { listFeedsStrings } from "./ja/listfeeds";
+import { bansStrings } from "./ja/bans";
+import { backupStrings } from "./ja/backup";
+import { pagesStrings } from "./ja/pages";
+import { consoleHostStrings } from "./ja/consolehost";
+import { challengeStrings } from "./ja/challenge";
+import { underAttackStrings } from "./ja/underattack";
 import type { ko } from "./ko";
 import type { RuleLabels } from "../lib/rules";
 import type { AuditLabels } from "../lib/audit";
@@ -314,28 +314,28 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   ipRulesMovedDesc: "このページでは Basic 認証ユーザーのみを管理します。既存のアクセスリストの IP ルールは、\"(converted from access list)\" という名前のセキュリティルールに変換されました。",
   basicAuthHostHint: "ブラウザのログインを求めます。IP の許可/拒否には", goSecurityRules: "セキュリティルールを使用 →",
   pagination: "ページネーション", pageSize: "表示件数", pageRange: "{total} 件中 {from}–{to} 件", pageNofM: "{n} / {m} ページ", prevPage: "前のページ", nextPage: "次のページ",
-  ...bansStrings.ja,
-  ...tokensStrings.ja,
-  ...redirectsStrings.ja,
-  ...streamsStrings.ja,
-  ...notesStrings.ja,
-  ...proxyProtocolStrings.ja,
-  ...updateStrings.ja,
-  ...headersStrings.ja,
-  ...locationsStrings.ja,
-  ...limitsStrings.ja,
-  ...certReplaceStrings.ja,
-  ...dnsCredsStrings.ja,
-  ...listFeedsStrings.ja,
-  ...ssoStrings.ja,
-  ...hintsStrings.ja,
-  ...retentionStrings.ja,
-  ...templatesStrings.ja,
-  ...backupStrings.ja,
-  ...pagesStrings.ja,
-  ...consoleHostStrings.ja,
-  ...challengeStrings.ja,
-  ...underAttackStrings.ja,
+  ...bansStrings,
+  ...tokensStrings,
+  ...redirectsStrings,
+  ...streamsStrings,
+  ...notesStrings,
+  ...proxyProtocolStrings,
+  ...updateStrings,
+  ...headersStrings,
+  ...locationsStrings,
+  ...limitsStrings,
+  ...certReplaceStrings,
+  ...dnsCredsStrings,
+  ...listFeedsStrings,
+  ...ssoStrings,
+  ...hintsStrings,
+  ...retentionStrings,
+  ...templatesStrings,
+  ...backupStrings,
+  ...pagesStrings,
+  ...consoleHostStrings,
+  ...challengeStrings,
+  ...underAttackStrings,
 };
 
 export const jaRuleLabels: RuleLabels | undefined = {

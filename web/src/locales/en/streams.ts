@@ -1,0 +1,28 @@
+import type { StreamKey } from "../streams.i18n";
+
+export const streamsStrings: Record<StreamKey, string> = {
+  navStreams: "Streams",
+  streamsDesc: "Forward TCP/UDP ports to another host (databases, SSH, MQTT, game servers). Changes are deployed to the gateway as soon as you save.",
+  addStream: "Add stream",
+  editStream: "Edit stream",
+  streamSheetDesc: "Choose the port and protocol to listen on and the host and port to forward to.",
+  noStreams: "No streams yet",
+  noStreamsDesc: "Add a stream to forward a TCP or UDP service that does not speak HTTP.",
+  searchStreams: "Search ports or hosts",
+  incomingPort: "Incoming port",
+  incomingPortHint: "The port the gateway container listens on. On a Docker bridge network, also publish it in compose ports (e.g. \"5432:5432\").",
+  streamProtocol: "Protocol",
+  streamProtocolHint: "TCP, UDP or both.",
+  secStreamSource: "Listen",
+  secStreamForward: "Forward to",
+  streamTlsHint: "When set, TLS on TCP connections is terminated by the gateway and forwarded in plain text. Not used for UDP.",
+  streamTlsPending: "TCP stays closed until the certificate is issued.",
+  streamEnabledDesc: "When off, this port is not opened.",
+  deleteStreamTitle: "Delete stream",
+  secStreamPP: "PROXY protocol",
+  streamPPBoth: "Applies to TCP connections only; UDP is unchanged.",
+  streamPPIn: "Accept PROXY protocol",
+  streamPPInDesc: "Every connection must start with a PROXY protocol header (FRP, HAProxy, load balancers). The client IP in the header is used only for connections from the Trusted PROXY protocol sources on the Network page.",
+  streamPPOut: "Send PROXY protocol to the backend",
+  streamPPOutDesc: "The backend receives the client IP in a header (v1). The backend must expect the PROXY protocol, otherwise connections fail.",
+};

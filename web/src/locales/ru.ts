@@ -1,25 +1,25 @@
-import { templatesStrings } from "./templates.i18n";
-import { retentionStrings } from "./retention.i18n";
-import { ssoStrings } from "./sso.i18n";
-import { hintsStrings } from "./hints.i18n";
-import { tokensStrings } from "./tokens.i18n";
-import { redirectsStrings } from "./redirects.i18n";
-import { streamsStrings } from "./streams.i18n";
-import { notesStrings } from "./notes.i18n";
-import { proxyProtocolStrings } from "./proxyprotocol.i18n";
-import { updateStrings } from "./update.i18n";
-import { headersStrings } from "./headers.i18n";
-import { locationsStrings } from "./locations.i18n";
-import { limitsStrings } from "./limits.i18n";
-import { certReplaceStrings } from "./certreplace.i18n";
-import { dnsCredsStrings } from "./dnscreds.i18n";
-import { listFeedsStrings } from "./listfeeds.i18n";
-import { bansStrings } from "./bans.i18n";
-import { backupStrings } from "./backup.i18n";
-import { pagesStrings } from "./pages.i18n";
-import { consoleHostStrings } from "./consolehost.i18n";
-import { challengeStrings } from "./challenge.i18n";
-import { underAttackStrings } from "./underattack.i18n";
+import { templatesStrings } from "./ru/templates";
+import { retentionStrings } from "./ru/retention";
+import { ssoStrings } from "./ru/sso";
+import { hintsStrings } from "./ru/hints";
+import { tokensStrings } from "./ru/tokens";
+import { redirectsStrings } from "./ru/redirects";
+import { streamsStrings } from "./ru/streams";
+import { notesStrings } from "./ru/notes";
+import { proxyProtocolStrings } from "./ru/proxyprotocol";
+import { updateStrings } from "./ru/update";
+import { headersStrings } from "./ru/headers";
+import { locationsStrings } from "./ru/locations";
+import { limitsStrings } from "./ru/limits";
+import { certReplaceStrings } from "./ru/certreplace";
+import { dnsCredsStrings } from "./ru/dnscreds";
+import { listFeedsStrings } from "./ru/listfeeds";
+import { bansStrings } from "./ru/bans";
+import { backupStrings } from "./ru/backup";
+import { pagesStrings } from "./ru/pages";
+import { consoleHostStrings } from "./ru/consolehost";
+import { challengeStrings } from "./ru/challenge";
+import { underAttackStrings } from "./ru/underattack";
 import type { ko } from "./ko";
 import type { RuleLabels } from "../lib/rules";
 import type { AuditLabels } from "../lib/audit";
@@ -313,28 +313,28 @@ export const ru: Partial<Record<keyof typeof ko, string>> = {
   ipRulesMovedDesc: "Теперь на этой странице управляются только пользователи Basic-аутентификации. Существующие IP-правила списков доступа преобразованы в правила безопасности с названием \"(converted from access list)\".",
   basicAuthHostHint: "Запрашивает вход через браузер. Для разрешения и запрета по IP", goSecurityRules: "используйте правила безопасности →",
   pagination: "Постраничная навигация", pageSize: "На странице", pageRange: "{from}–{to} из {total}", pageNofM: "Страница {n} из {m}", prevPage: "Предыдущая страница", nextPage: "Следующая страница",
-  ...bansStrings.ru,
-  ...tokensStrings.ru,
-  ...redirectsStrings.ru,
-  ...streamsStrings.ru,
-  ...notesStrings.ru,
-  ...proxyProtocolStrings.ru,
-  ...updateStrings.ru,
-  ...headersStrings.ru,
-  ...locationsStrings.ru,
-  ...limitsStrings.ru,
-  ...certReplaceStrings.ru,
-  ...dnsCredsStrings.ru,
-  ...listFeedsStrings.ru,
-  ...ssoStrings.ru,
-  ...hintsStrings.ru,
-  ...retentionStrings.ru,
-  ...templatesStrings.ru,
-  ...backupStrings.ru,
-  ...pagesStrings.ru,
-  ...consoleHostStrings.ru,
-  ...challengeStrings.ru,
-  ...underAttackStrings.ru,
+  ...bansStrings,
+  ...tokensStrings,
+  ...redirectsStrings,
+  ...streamsStrings,
+  ...notesStrings,
+  ...proxyProtocolStrings,
+  ...updateStrings,
+  ...headersStrings,
+  ...locationsStrings,
+  ...limitsStrings,
+  ...certReplaceStrings,
+  ...dnsCredsStrings,
+  ...listFeedsStrings,
+  ...ssoStrings,
+  ...hintsStrings,
+  ...retentionStrings,
+  ...templatesStrings,
+  ...backupStrings,
+  ...pagesStrings,
+  ...consoleHostStrings,
+  ...challengeStrings,
+  ...underAttackStrings,
 };
 
 export const ruRuleLabels: RuleLabels | undefined = {

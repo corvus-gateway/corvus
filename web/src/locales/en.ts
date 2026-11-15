@@ -1,25 +1,25 @@
-import { templatesStrings } from "./templates.i18n";
-import { retentionStrings } from "./retention.i18n";
-import { ssoStrings } from "./sso.i18n";
-import { hintsStrings } from "./hints.i18n";
-import { tokensStrings } from "./tokens.i18n";
-import { redirectsStrings } from "./redirects.i18n";
-import { streamsStrings } from "./streams.i18n";
-import { notesStrings } from "./notes.i18n";
-import { proxyProtocolStrings } from "./proxyprotocol.i18n";
-import { updateStrings } from "./update.i18n";
-import { headersStrings } from "./headers.i18n";
-import { locationsStrings } from "./locations.i18n";
-import { limitsStrings } from "./limits.i18n";
-import { certReplaceStrings } from "./certreplace.i18n";
-import { dnsCredsStrings } from "./dnscreds.i18n";
-import { listFeedsStrings } from "./listfeeds.i18n";
-import { bansStrings } from "./bans.i18n";
-import { backupStrings } from "./backup.i18n";
-import { pagesStrings } from "./pages.i18n";
-import { consoleHostStrings } from "./consolehost.i18n";
-import { challengeStrings } from "./challenge.i18n";
-import { underAttackStrings } from "./underattack.i18n";
+import { templatesStrings } from "./en/templates";
+import { retentionStrings } from "./en/retention";
+import { ssoStrings } from "./en/sso";
+import { hintsStrings } from "./en/hints";
+import { tokensStrings } from "./en/tokens";
+import { redirectsStrings } from "./en/redirects";
+import { streamsStrings } from "./en/streams";
+import { notesStrings } from "./en/notes";
+import { proxyProtocolStrings } from "./en/proxyprotocol";
+import { updateStrings } from "./en/update";
+import { headersStrings } from "./en/headers";
+import { locationsStrings } from "./en/locations";
+import { limitsStrings } from "./en/limits";
+import { certReplaceStrings } from "./en/certreplace";
+import { dnsCredsStrings } from "./en/dnscreds";
+import { listFeedsStrings } from "./en/listfeeds";
+import { bansStrings } from "./en/bans";
+import { backupStrings } from "./en/backup";
+import { pagesStrings } from "./en/pages";
+import { consoleHostStrings } from "./en/consolehost";
+import { challengeStrings } from "./en/challenge";
+import { underAttackStrings } from "./en/underattack";
 import { enSecurity } from "./security.en";
 import { enUsers } from "./users.en";
 import type { ko } from "./ko";
@@ -213,26 +213,26 @@ export const en: Record<keyof typeof ko, string> = {
   ...enAlerts,
   ...enUsers,
   ...enSecurity,
-  ...bansStrings.en,
-  ...tokensStrings.en,
-  ...redirectsStrings.en,
-  ...streamsStrings.en,
-  ...notesStrings.en,
-  ...proxyProtocolStrings.en,
-  ...updateStrings.en,
-  ...headersStrings.en,
-  ...locationsStrings.en,
-  ...limitsStrings.en,
-  ...certReplaceStrings.en,
-  ...dnsCredsStrings.en,
-  ...listFeedsStrings.en,
-  ...ssoStrings.en,
-  ...hintsStrings.en,
-  ...retentionStrings.en,
-  ...templatesStrings.en,
-  ...backupStrings.en,
-  ...pagesStrings.en,
-  ...consoleHostStrings.en,
-  ...challengeStrings.en,
-  ...underAttackStrings.en,
+  ...bansStrings,
+  ...tokensStrings,
+  ...redirectsStrings,
+  ...streamsStrings,
+  ...notesStrings,
+  ...proxyProtocolStrings,
+  ...updateStrings,
+  ...headersStrings,
+  ...locationsStrings,
+  ...limitsStrings,
+  ...certReplaceStrings,
+  ...dnsCredsStrings,
+  ...listFeedsStrings,
+  ...ssoStrings,
+  ...hintsStrings,
+  ...retentionStrings,
+  ...templatesStrings,
+  ...backupStrings,
+  ...pagesStrings,
+  ...consoleHostStrings,
+  ...challengeStrings,
+  ...underAttackStrings,
 };

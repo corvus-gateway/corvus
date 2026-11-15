@@ -1,25 +1,25 @@
-import { templatesStrings } from "./templates.i18n";
-import { retentionStrings } from "./retention.i18n";
-import { ssoStrings } from "./sso.i18n";
-import { hintsStrings } from "./hints.i18n";
-import { tokensStrings } from "./tokens.i18n";
-import { redirectsStrings } from "./redirects.i18n";
-import { streamsStrings } from "./streams.i18n";
-import { notesStrings } from "./notes.i18n";
-import { proxyProtocolStrings } from "./proxyprotocol.i18n";
-import { updateStrings } from "./update.i18n";
-import { headersStrings } from "./headers.i18n";
-import { locationsStrings } from "./locations.i18n";
-import { limitsStrings } from "./limits.i18n";
-import { certReplaceStrings } from "./certreplace.i18n";
-import { dnsCredsStrings } from "./dnscreds.i18n";
-import { listFeedsStrings } from "./listfeeds.i18n";
-import { bansStrings } from "./bans.i18n";
-import { backupStrings } from "./backup.i18n";
-import { pagesStrings } from "./pages.i18n";
-import { consoleHostStrings } from "./consolehost.i18n";
-import { challengeStrings } from "./challenge.i18n";
-import { underAttackStrings } from "./underattack.i18n";
+import { templatesStrings } from "./es/templates";
+import { retentionStrings } from "./es/retention";
+import { ssoStrings } from "./es/sso";
+import { hintsStrings } from "./es/hints";
+import { tokensStrings } from "./es/tokens";
+import { redirectsStrings } from "./es/redirects";
+import { streamsStrings } from "./es/streams";
+import { notesStrings } from "./es/notes";
+import { proxyProtocolStrings } from "./es/proxyprotocol";
+import { updateStrings } from "./es/update";
+import { headersStrings } from "./es/headers";
+import { locationsStrings } from "./es/locations";
+import { limitsStrings } from "./es/limits";
+import { certReplaceStrings } from "./es/certreplace";
+import { dnsCredsStrings } from "./es/dnscreds";
+import { listFeedsStrings } from "./es/listfeeds";
+import { bansStrings } from "./es/bans";
+import { backupStrings } from "./es/backup";
+import { pagesStrings } from "./es/pages";
+import { consoleHostStrings } from "./es/consolehost";
+import { challengeStrings } from "./es/challenge";
+import { underAttackStrings } from "./es/underattack";
 import type { ko } from "./ko";
 import type { RuleLabels } from "../lib/rules";
 import type { AuditLabels } from "../lib/audit";
@@ -313,28 +313,28 @@ export const es: Partial<Record<keyof typeof ko, string>> = {
   ipRulesMovedDesc: "Esta página ahora solo gestiona los usuarios de autenticación Basic. Las reglas de IP existentes de las listas de acceso se convirtieron en reglas de seguridad con el nombre «(convertida desde lista de acceso)».",
   basicAuthHostHint: "Solicita un inicio de sesión en el navegador. Para permitir/denegar por IP,", goSecurityRules: "use Reglas de seguridad →",
   pagination: "Paginación", pageSize: "Por página", pageRange: "{from}–{to} de {total}", pageNofM: "Página {n} de {m}", prevPage: "Página anterior", nextPage: "Página siguiente",
-  ...bansStrings.es,
-  ...tokensStrings.es,
-  ...redirectsStrings.es,
-  ...streamsStrings.es,
-  ...notesStrings.es,
-  ...proxyProtocolStrings.es,
-  ...updateStrings.es,
-  ...headersStrings.es,
-  ...locationsStrings.es,
-  ...limitsStrings.es,
-  ...certReplaceStrings.es,
-  ...dnsCredsStrings.es,
-  ...listFeedsStrings.es,
-  ...ssoStrings.es,
-  ...hintsStrings.es,
-  ...retentionStrings.es,
-  ...templatesStrings.es,
-  ...backupStrings.es,
-  ...pagesStrings.es,
-  ...consoleHostStrings.es,
-  ...challengeStrings.es,
-  ...underAttackStrings.es,
+  ...bansStrings,
+  ...tokensStrings,
+  ...redirectsStrings,
+  ...streamsStrings,
+  ...notesStrings,
+  ...proxyProtocolStrings,
+  ...updateStrings,
+  ...headersStrings,
+  ...locationsStrings,
+  ...limitsStrings,
+  ...certReplaceStrings,
+  ...dnsCredsStrings,
+  ...listFeedsStrings,
+  ...ssoStrings,
+  ...hintsStrings,
+  ...retentionStrings,
+  ...templatesStrings,
+  ...backupStrings,
+  ...pagesStrings,
+  ...consoleHostStrings,
+  ...challengeStrings,
+  ...underAttackStrings,
 };
 
 export const esRuleLabels: RuleLabels | undefined = {
