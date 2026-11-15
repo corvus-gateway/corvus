@@ -184,7 +184,7 @@ function RulesTab({ list, lists, hosts, geo, onEdit, onEvents }: {
   };
 
   const toggle = async (r: SecurityRule, enabled: boolean) => {
-    const x = await row.run(() => api.put(`/api/security-rules/${r.id}`, bodyOf({ ...pick(r), enabled }, r.expression?.groups ?? [])), { success: t("savedDeployed") });
+    const x = await row.run(() => api.patch(`/api/security-rules/${r.id}`, { enabled }), { success: t("savedDeployed") });
     if (x !== undefined) done();
   };
   const remove = async () => {

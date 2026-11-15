@@ -121,8 +121,7 @@ export default function ProxyHosts() {
   const [disabling, setDisabling] = useState<ProxyHost | null>(null);
   const toggle = async (h: ProxyHost, enabled: boolean) => {
     if (!enabled && servesConsole(h.domains) && disabling?.id !== h.id) { setDisabling(h); return; }
-    const body = { ...toForm(h), enabled };
-    const r = await rowAction.run(() => api.put(`/api/proxy-hosts/${h.id}`, body), { success: enabled ? t("hostEnabled") : t("hostDisabled") });
+    const r = await rowAction.run(() => api.patch(`/api/proxy-hosts/${h.id}`, { enabled }), { success: enabled ? t("hostEnabled") : t("hostDisabled") });
     if (r !== undefined) { hosts.reload(); window.dispatchEvent(new Event("corvus:refresh")); }
   };
 

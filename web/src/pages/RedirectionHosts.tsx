@@ -92,7 +92,7 @@ export default function RedirectionHosts() {
   };
 
   const toggle = async (h: RedirectionHost, enabled: boolean) => {
-    const r = await rowAction.run(() => api.put(`/api/redirection-hosts/${h.id}`, { ...toForm(h), enabled }), { success: enabled ? t("hostEnabled") : t("hostDisabled") });
+    const r = await rowAction.run(() => api.patch(`/api/redirection-hosts/${h.id}`, { enabled }), { success: enabled ? t("hostEnabled") : t("hostDisabled") });
     if (r !== undefined) { hosts.reload(); window.dispatchEvent(new Event("corvus:refresh")); }
   };
 

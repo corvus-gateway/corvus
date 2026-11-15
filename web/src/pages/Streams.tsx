@@ -62,7 +62,7 @@ export default function Streams() {
   };
 
   const toggle = async (s: Stream, enabled: boolean) => {
-    const r = await rowAction.run(() => api.put(`/api/streams/${s.id}`, { ...toForm(s), enabled }), { success: enabled ? t("hostEnabled") : t("hostDisabled") });
+    const r = await rowAction.run(() => api.patch(`/api/streams/${s.id}`, { enabled }), { success: enabled ? t("hostEnabled") : t("hostDisabled") });
     if (r !== undefined) { streams.reload(); window.dispatchEvent(new Event("corvus:refresh")); }
   };
 
