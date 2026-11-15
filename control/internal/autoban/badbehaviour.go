@@ -67,7 +67,8 @@ func (h Hit) Reason() string {
 	return fmt.Sprintf("bad behaviour: %s on %s in %ds", counts, host, h.WindowS)
 }
 
-// Pull fetches the gateway's pending bad-behaviour bans.
+// Pull fetches the gateway's pending bad-behaviour bans (and notes the gateway's
+// epoch, see noteEpoch).
 func (s *Service) Pull(ctx context.Context) ([]Hit, error) {
 	if s.HitsURL == "" {
 		return nil, nil
@@ -85,11 +86,13 @@ func (s *Service) Pull(ctx context.Context) ([]Hit, error) {
 		return nil, fmt.Errorf("gateway answered %d", resp.StatusCode)
 	}
 	var out struct {
-		Hits []Hit `json:"hits"`
+		Hits  []Hit  `json:"hits"`
+		Epoch string `json:"epoch"` // changes when the gateway's shared memory is new
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(nil, resp.Body, 8<<20)).Decode(&out); err != nil {
 		return nil, err
 	}
+	s.noteEpoch(out.Epoch)
 	return out.Hits, nil
 }
 

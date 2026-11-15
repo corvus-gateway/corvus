@@ -567,9 +567,15 @@ function _M.challenge_verify(host_id)
   return send_challenge(rule, ret)
 end
 
--- Status-port handler: replace the ban list. Body: {"ips": {"<ip>": <expires unix | 0>}}.
--- Entries are written with a fresh generation tag first, then stale ones are removed, so
--- a ban never lapses while the list is being replaced.
+-- Status-port handler: replace the ban list. Body:
+--   {"ips": {"<ip>": <expires unix | 0>}, "removed": ["<ip>", ...], "ack": {...}, "bb": {...}}
+-- "ips" is the full list. Each entry holds its expiry ("0" = permanent) and is only
+-- written when it changed, then stale entries are removed, so a ban never lapses while
+-- the list is being replaced. With "removed" (the entries dropped since corvus-control's
+-- previous push) only those are deleted; without it the whole store is swept
+-- (get_keys locks the dict every request reads, so corvus-control asks for a sweep
+-- only every few minutes and after a gateway restart). Gateway-local bad-behaviour
+-- bans corvus-control has not recorded yet (pending record in corvus_bb_q) are kept.
 function _M.set_bans()
   ngx.req.read_body()
   local data = ngx.req.get_body_data()
@@ -596,28 +602,42 @@ function _M.set_bans()
         q:incr("cfg_v", 1, 0)
       end
     end
-    -- gateway bans corvus-control has processed: drop their pending records
+    -- gateway bans corvus-control has processed: drop their pending records (and the
+    -- local ban unless corvus-control keeps it: it is in "ips" then)
     if type(cfg.ack) == "table" then
       for ip, id in pairs(cfg.ack) do
-        local key = "p:" .. tostring(ip)
+        ip = tostring(ip)
+        local key = "p:" .. ip
         local h = cjson.decode(q:get(key) or "")
-        if type(h) == "table" and h.id == id then q:delete(key) end
+        if type(h) == "table" and h.id == id then
+          q:delete(key)
+          if cfg.ips[ip] == nil then d:delete(ip) end
+        end
       end
     end
   end
-  local gen = tostring(now) .. "-" .. tostring(math.random(1, 1000000000))
+  local function pending(k) return q and q:get("p:" .. k) end
   local n = 0
   for ip, exp in pairs(cfg.ips) do
     exp = tonumber(exp) or 0
     local ttl = exp > 0 and (exp - now) or 0
     if exp == 0 or ttl > 0 then
-      local ok = d:set(ip, gen, ttl)
-      if ok then n = n + 1 end
+      local v = exp == 0 and "0" or string.format("%d", exp)
+      -- unchanged entries are not rewritten (a write locks the dict longer than a read)
+      if d:get(ip) == v or d:set(ip, v, ttl) then n = n + 1 end
+    elseif not pending(ip) then
+      d:delete(ip)  -- already over
     end
   end
-  for _, k in ipairs(d:get_keys(0)) do
-    -- keep gateway-local bad-behaviour bans corvus-control has not recorded yet
-    if d:get(k) ~= gen and not (q and q:get("p:" .. k)) then d:delete(k) end
+  if type(cfg.removed) == "table" then
+    for _, k in ipairs(cfg.removed) do
+      k = tostring(k)
+      if cfg.ips[k] == nil and not pending(k) then d:delete(k) end
+    end
+  else
+    for _, k in ipairs(d:get_keys(0)) do
+      if cfg.ips[k] == nil and not pending(k) then d:delete(k) end
+    end
   end
   ngx.say(n)
 end
@@ -764,11 +784,20 @@ function _M.log(host_id, room)
     " (", n, " responses in ", cfg.window, "s)")
 end
 
--- Status-port handler: pending gateway bans, {"hits": [<record>, ...]}.
+-- Status-port handler: pending gateway bans, {"hits": [<record>, ...], "epoch": "<id>"}.
+-- The epoch is created with the shared memory: when it changes, the gateway restarted
+-- with empty stores and corvus-control pushes its full lists again.
 function _M.bad_behaviour_hits()
   local q = ngx.shared.corvus_bb_q
   local out = {}
+  local epoch = ""
   if q then
+    epoch = q:get("epoch")
+    if not epoch then
+      local pid = ngx.worker and ngx.worker.pid and ngx.worker.pid() or 0
+      q:add("epoch", string.format("%.3f-%d", ngx.now(), pid))
+      epoch = q:get("epoch") or ""
+    end
     for _, k in ipairs(q:get_keys(0)) do
       if sub(k, 1, 2) == "p:" then
         local v = q:get(k)
@@ -776,7 +805,7 @@ function _M.bad_behaviour_hits()
       end
     end
   end
-  ngx.say('{"hits":[', table.concat(out, ","), ']}')
+  ngx.say('{"hits":[', table.concat(out, ","), '],"epoch":', cjson.encode(epoch), '}')
 end
 
 -- Exposed for tests.

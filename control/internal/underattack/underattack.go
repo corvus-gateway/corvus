@@ -90,6 +90,22 @@ type Service struct {
 	st      persisted
 	pending []Transition
 	trigger chan struct{}
+
+	// push state (see sync)
+	tracker  autoban.PushTracker
+	pushMu   sync.Mutex
+	lastHash string    // payload hash (without "now") of the last successful push
+	lastPush time.Time // last successful push
+	forced   bool      // push in the next round even when unchanged (Trigger)
+}
+
+// maxPushAge is the longest an unchanged set goes without being pushed, so a restarted
+// gateway (empty shared memory) is back in sync within it.
+const maxPushAge = time.Minute
+
+// SyncStatus reports how the active hosts reach the gateway (last success, last error).
+func (s *Service) SyncStatus() autoban.PushStatus {
+	return s.tracker.Status()
 }
 
 func (s *Service) load(ctx context.Context) {
@@ -295,30 +311,54 @@ func (s *Service) Payload(ctx context.Context, now time.Time) map[string]any {
 		"exempt": autoban.EncodeNets(append([]string{"127.0.0.0/8", "::1/128"}, ex...))}
 }
 
-// Push sends the active hosts to the gateway.
+// Push sends the active hosts to the gateway now, changed or not.
 func (s *Service) Push(ctx context.Context, now time.Time) error {
+	_, err := s.sync(ctx, now, true)
+	return err
+}
+
+// sync pushes the active hosts when they changed since the last successful push, after
+// Trigger and at least every maxPushAge; otherwise (unless always) it does nothing.
+// Reports whether a push was made.
+func (s *Service) sync(ctx context.Context, now time.Time, always bool) (bool, error) {
 	if s.PushURL == "" {
-		return nil
+		return false, nil
 	}
-	body, _ := json.Marshal(s.Payload(ctx, now))
+	p := s.Payload(ctx, now)
+	delete(p, "now")
+	hash := autoban.PayloadHash(p)
+	s.pushMu.Lock()
+	due := always || s.forced || hash != s.lastHash || now.Sub(s.lastPush) >= maxPushAge
+	s.forced = false
+	s.pushMu.Unlock()
+	if !due {
+		return false, nil
+	}
+	p["now"] = now.Unix()
+	body, _ := json.Marshal(p)
+	err := s.send(ctx, body)
+	hosts, _ := p["hosts"].(map[string]int64)
+	s.tracker.Record(now, len(body), len(hosts), err)
+	s.pushMu.Lock()
+	defer s.pushMu.Unlock()
+	if err != nil {
+		s.lastHash = "" // retried next round
+		return true, err
+	}
+	s.lastHash, s.lastPush = hash, now
+	return true, nil
+}
+
+func (s *Service) send(ctx context.Context, body []byte) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, s.PushURL, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
 	c := s.Client
 	if c == nil {
 		c = &http.Client{Timeout: 3 * time.Second}
 	}
-	resp, err := c.Do(req)
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("gateway answered %d", resp.StatusCode)
-	}
-	return nil
+	return autoban.PutJSON(req, c)
 }
 
 // Trigger evaluates and pushes soon (after host changes or a manual deactivation).
@@ -329,14 +369,18 @@ func (s *Service) Trigger() {
 	}
 	ch := s.trigger
 	s.mu.Unlock()
+	s.pushMu.Lock()
+	s.forced = true
+	s.pushMu.Unlock()
 	select {
 	case ch <- struct{}{}:
 	default:
 	}
 }
 
-// Run evaluates and pushes every 10 seconds (and on Trigger) until ctx is done. The
-// push is a full replacement, so a restarted gateway is back in sync within a round.
+// Run evaluates every 10 seconds (and on Trigger) until ctx is done and pushes the
+// active hosts when they changed, and at least every maxPushAge. The push is a full
+// replacement, so a restarted gateway is back in sync within maxPushAge.
 func (s *Service) Run(ctx context.Context) {
 	s.Trigger()
 	s.mu.Lock()
@@ -353,8 +397,6 @@ func (s *Service) Run(ctx context.Context) {
 		}
 		now := time.Now()
 		s.Evaluate(ctx, now)
-		if err := s.Push(ctx, now); err != nil {
-			slog.Debug("under attack push failed", "err", err)
-		}
+		_, _ = s.sync(ctx, now, false) // failures are logged by the tracker
 	}
 }

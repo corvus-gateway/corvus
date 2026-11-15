@@ -91,8 +91,18 @@ end
 function _M.record()
   if not PATH then return end
   if not started then
-    started = true
-    ngx.timer.every(INTERVAL, tick)
+    -- retried with the next request when the timer cannot be created (e.g. too many
+    -- pending timers), so a quiet worker still flushes once it works
+    local ok, err = ngx.timer.every(INTERVAL, tick)
+    if ok then
+      started = true
+    else
+      local now = ngx.now()
+      if now - warned > 60 then
+        warned = now
+        ngx.log(ngx.ERR, "corvus access log: flush timer not started: ", err)
+      end
+    end
   end
   local var = ngx.var
   local line = "c1\t" .. (var.corvus_log_fields or "") .. "\t" .. esc(var.uri, MAX_URI)
