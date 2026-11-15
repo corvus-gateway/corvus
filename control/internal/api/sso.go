@@ -514,7 +514,12 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		}
 		if !keep {
 			err := s.Store.KeepingAdmin(ctx, func(tx *store.Store) error {
-				return tx.UpdateUser(ctx, u.ID, u.Name, role, false)
+				if err := tx.UpdateUser(ctx, u.ID, u.Name, role, false); err != nil {
+					return err
+				}
+				// the old role's sessions end, as on an admin role change (same
+				// transaction: the new role never applies while they survive)
+				return tx.DeleteUserSessions(ctx, u.ID)
 			})
 			switch {
 			case errors.Is(err, store.ErrLastAdmin):
@@ -523,7 +528,6 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 				fail(w, err)
 				return
 			default:
-				_ = s.Store.DeleteUserSessions(ctx, u.ID) // the old role's sessions end, as on an admin role change
 				detail["role_changed"] = map[string]string{"before": u.Role, "after": role}
 				u.Role = role
 			}
