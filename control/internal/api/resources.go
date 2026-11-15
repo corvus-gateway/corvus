@@ -68,6 +68,10 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 		gw["running"] = running
 		if running {
 			gw["uptime_s"] = int64(time.Since(since).Seconds())
+		} else if s.GatewayProblem != nil {
+			if p := s.GatewayProblem(); p != "" {
+				gw["error"] = p // e.g. "bind() to 0.0.0.0:8443 failed (98: Address already in use)"
+			}
 		}
 	}
 	writeJSON(w, 200, map[string]any{

@@ -99,8 +99,63 @@ func (d *Deployer) CurrentConf() string {
 	return filepath.ToSlash(filepath.Join(d.currentLink(), "nginx.conf"))
 }
 
-// Apply runs mutate (may be nil) and deploys the result atomically.
+// deployTimeout bounds a whole deployment (render, openresty -t of up to 30 s, the
+// reload check of up to 15 s) once it no longer follows the caller's context.
+const deployTimeout = 3 * time.Minute
+
+// detach keeps a deployment going when its caller goes away (a console request whose
+// client disconnects): once the gateway may have switched, the database must record
+// it. Cancelling halfway would roll back the transaction after the gateway took the
+// new configuration, record a killed `openresty -t` as a failed version, and let the
+// next deployment reuse the rolled-back id (and directory) that is live.
+func detach(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), deployTimeout)
+}
+
+// liveDir returns the version directory name the "current" symlink points to ("" if none).
+func (d *Deployer) liveDir() string {
+	target, err := os.Readlink(d.currentLink())
+	if err != nil {
+		return ""
+	}
+	return filepath.Base(target)
+}
+
+// removeVersionDir deletes a version directory unless the gateway is using it.
+func (d *Deployer) removeVersionDir(name string) {
+	if name == "" || name == d.liveDir() {
+		return
+	}
+	_ = os.RemoveAll(filepath.Join(d.versionsDir(), name))
+}
+
+// newVersion inserts v and names its directory. An id whose directory is live (a
+// deployment whose transaction was rolled back after the gateway switched to it) is
+// skipped instead of being overwritten.
+func (d *Deployer) newVersion(ctx context.Context, tx *store.Store, v *store.ConfigVersion) error {
+	live := d.liveDir()
+	for i := 0; i < 3; i++ {
+		v.ID = 0
+		if err := tx.CreateVersion(ctx, v); err != nil {
+			return err
+		}
+		v.Dir = fmt.Sprintf("v%06d", v.ID)
+		if v.Dir != live {
+			return tx.SetVersionDir(ctx, v.ID, v.Dir)
+		}
+		slog.Warn("version id reused: its directory is serving traffic, skipping it", "dir", v.Dir)
+		if err := tx.DeleteVersion(ctx, v.ID); err != nil {
+			return err
+		}
+	}
+	return fmt.Errorf("version directory %s is in use by the gateway", live)
+}
+
+// Apply runs mutate (may be nil) and deploys the result atomically. It runs to the end
+// even if ctx is cancelled (see detach).
 func (d *Deployer) Apply(ctx context.Context, by *int64, message string, mutate func(tx *store.Store) error) (*store.ConfigVersion, error) {
+	ctx, cancel := detach(ctx)
+	defer cancel()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if err := os.MkdirAll(d.versionsDir(), 0o755); err != nil {
@@ -123,27 +178,23 @@ func (d *Deployer) Apply(ctx context.Context, by *int64, message string, mutate 
 			}
 		}
 		v := &store.ConfigVersion{CreatedBy: by, Message: message, ConfigRev: rev}
-		if err := tx.CreateVersion(ctx, v); err != nil {
-			return err
-		}
-		v.Dir = fmt.Sprintf("v%06d", v.ID)
-		if err := tx.SetVersionDir(ctx, v.ID, v.Dir); err != nil {
+		if err := d.newVersion(ctx, tx, v); err != nil {
 			return err
 		}
 		dir := filepath.Join(d.versionsDir(), v.Dir)
-		_ = os.RemoveAll(dir) // a rolled-back attempt may have left the same id behind
+		d.removeVersionDir(v.Dir) // a rolled-back attempt may have left the same id behind
 		if err := d.Compiler.Render(ctx, tx, dir); err != nil {
-			_ = os.RemoveAll(dir)
+			d.removeVersionDir(v.Dir)
 			return err
 		}
 		out, err := d.Runner.Test(ctx, filepath.ToSlash(filepath.Join(dir, "nginx.conf")))
 		if err != nil {
-			_ = os.RemoveAll(dir)
+			d.removeVersionDir(v.Dir)
 			testErr = &TestError{Output: out}
 			return testErr
 		}
 		if err := d.activate(v.Dir); err != nil {
-			_ = os.RemoveAll(dir)
+			d.removeVersionDir(v.Dir)
 			return err
 		}
 		if err := tx.FinishVersion(ctx, v.ID, true, out); err != nil {
@@ -175,7 +226,14 @@ func (d *Deployer) Apply(ctx context.Context, by *int64, message string, mutate 
 
 // Rollback re-activates the generated configuration of an earlier version.
 // The database is not changed, so the next Apply renders the current settings again.
+// Like Apply it runs to the end even if ctx is cancelled.
 func (d *Deployer) Rollback(ctx context.Context, by *int64, targetID int64) (*store.ConfigVersion, error) {
+	return d.rollback(ctx, by, targetID, fmt.Sprintf("rollback to #%d", targetID))
+}
+
+func (d *Deployer) rollback(ctx context.Context, by *int64, targetID int64, msg string) (*store.ConfigVersion, error) {
+	ctx, cancel := detach(ctx)
+	defer cancel()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	target, err := d.Store.VersionByID(ctx, targetID)
@@ -196,7 +254,6 @@ func (d *Deployer) Rollback(ctx context.Context, by *int64, targetID int64) (*st
 	if err != nil {
 		return nil, &TestError{Output: out}
 	}
-	msg := fmt.Sprintf("rollback to #%d", targetID)
 	if err := d.activate(target.Dir); err != nil {
 		// activate pointed the link back to the version still serving
 		return nil, d.notAccepted(ctx, err, store.ConfigVersion{CreatedBy: by, Message: msg, RollbackOf: &targetID, ConfigRev: target.ConfigRev})
@@ -254,6 +311,99 @@ func (d *Deployer) EnsureCurrent(ctx context.Context) error {
 		return d.swapLink(v.Dir)
 	}
 	return nil
+}
+
+// Fallback makes an earlier configuration current when the active one cannot be used:
+// EnsureCurrent failed at startup (for example a restored backup whose settings are
+// rejected), or the gateway exits right after starting with it (skipLive: a port that
+// is taken, which `openresty -t` does not notice). It re-activates the newest earlier
+// version whose files still pass the test, recorded as a rollback, and otherwise the
+// safe configuration (SafeMode). The stored settings are not changed, so the console
+// shows them as not deployed until the operator fixes and saves them.
+func (d *Deployer) Fallback(ctx context.Context, skipLive bool, reason string) (*store.ConfigVersion, error) {
+	ctx, cancel := detach(ctx)
+	defer cancel()
+	skip := ""
+	if skipLive {
+		skip = d.liveDir()
+	}
+	versions, err := d.Store.ListVersions(ctx, 100, 0)
+	if err != nil {
+		return nil, err
+	}
+	tried := map[string]bool{skip: true}
+	for _, v := range versions {
+		if v.Status == "failed" || v.Dir == "" || tried[v.Dir] {
+			continue
+		}
+		tried[v.Dir] = true
+		target := v.ID
+		if v.RollbackOf != nil {
+			target = *v.RollbackOf
+		}
+		fv, err := d.rollback(ctx, nil, target, fmt.Sprintf("fallback to #%d (%s)", target, reason))
+		if err == nil {
+			slog.Warn("fell back to an earlier configuration", "version", fv.ID, "of", target, "reason", reason)
+			return fv, nil
+		}
+		slog.Warn("earlier configuration not usable", "version", target, "err", err)
+	}
+	return d.SafeMode(ctx, reason)
+}
+
+// SafeMode deploys the configuration of an empty installation (the default server
+// only, no hosts or streams), recorded as a version that does not match the stored
+// settings. It is the last resort that lets the gateway start after everything else
+// was rejected; the console stays reachable to fix the settings.
+func (d *Deployer) SafeMode(ctx context.Context, reason string) (*store.ConfigVersion, error) {
+	ctx, cancel := detach(ctx)
+	defer cancel()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if err := os.MkdirAll(d.versionsDir(), 0o755); err != nil {
+		return nil, err
+	}
+	tmp, err := os.MkdirTemp(d.Dir, "safe-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tmp)
+	empty, err := store.Open(filepath.Join(tmp, "empty.db"))
+	if err != nil {
+		return nil, err
+	}
+	defer empty.Close()
+
+	// ConfigRev -1 never matches the stored settings: they show as not deployed.
+	v := &store.ConfigVersion{Message: "safe mode: default server only (" + reason + ")", ConfigRev: -1}
+	if err := d.newVersion(ctx, d.Store, v); err != nil {
+		return nil, err
+	}
+	fail := func(out string, err error) (*store.ConfigVersion, error) {
+		d.removeVersionDir(v.Dir)
+		if out == "" {
+			out = err.Error()
+		}
+		_ = d.Store.FinishVersion(ctx, v.ID, false, out)
+		return nil, err
+	}
+	dir := filepath.Join(d.versionsDir(), v.Dir)
+	if err := d.Compiler.Render(ctx, empty, dir); err != nil {
+		return fail("", err)
+	}
+	out, err := d.Runner.Test(ctx, filepath.ToSlash(filepath.Join(dir, "nginx.conf")))
+	if err != nil {
+		return fail(out, &TestError{VersionID: v.ID, Output: out})
+	}
+	if err := d.activate(v.Dir); err != nil {
+		return fail("", err)
+	}
+	if err := d.Store.FinishVersion(ctx, v.ID, true, out); err != nil {
+		return nil, err
+	}
+	v.Status, v.TestOutput = "active", out
+	slog.Warn("SAFE MODE: the gateway runs the default server only; fix the settings in the console and save", "version", v.ID, "reason", reason)
+	return v, nil
 }
 
 // waitActiveTimeout bounds the wait for the gateway to report a reloaded version. Apply
@@ -320,8 +470,15 @@ func (d *Deployer) prune(ctx context.Context) {
 	}
 	for _, e := range entries {
 		if e.IsDir() && strings.HasPrefix(e.Name(), "v") && !inUse[e.Name()] {
-			_ = os.RemoveAll(filepath.Join(d.versionsDir(), e.Name()))
+			d.removeVersionDir(e.Name())
 		}
+	}
+	// History rows: as many deployed versions as there are directories (older ones
+	// cannot be rolled back to anyway) and as many failed attempts.
+	if n, err := d.Store.PruneVersions(ctx, keep, keep); err != nil {
+		slog.Warn("pruning configuration version history", "err", err)
+	} else if n > 0 {
+		slog.Info("pruned configuration version history", "rows", n)
 	}
 }
 
