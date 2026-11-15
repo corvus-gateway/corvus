@@ -46,6 +46,10 @@ type Server struct {
 	Updates      *update.Checker // nil when update checks are off
 	Traffic      *traffic.Collector
 	Gateway      func() (running bool, since time.Time) // nil when running without a gateway
+
+	// GatewayProblem says why the gateway is down ("" while it runs); may be nil.
+	GatewayProblem func() string
+
 	ACME         ACMEService
 	NPMImportDir string
 	DataKey      []byte // AES-256 key for secrets stored in the database
