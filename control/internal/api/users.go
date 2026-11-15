@@ -136,34 +136,48 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	revoke := role != u.Role || (disabled && !u.Disabled)
+	revoke := role != u.Role || (disabled && !u.Disabled) || in.Password != ""
+	hash := ""
 	if in.Password != "" {
-		hash, err := auth.HashPassword(in.Password)
-		if err != nil {
+		if hash, err = auth.HashPassword(in.Password); err != nil {
 			fail(w, validate.Errors{{Field: "password", Code: "weak", Message: err.Error()}})
 			return
 		}
-		if err := s.Store.UpdatePassword(ctx, id, hash); err != nil {
-			fail(w, err)
-			return
-		}
-		revoke = true
-		var detail any
-		// an administrator resets someone's password when the account may be in the
-		// wrong hands: the API tokens it created end too, like its sessions
-		if n, err := s.Store.DeleteUserAPITokens(ctx, id); err == nil && n > 0 {
-			detail = map[string]any{"tokens_revoked": n}
-		}
-		s.audit(r, "user.password_reset", u.Email, detail)
 	}
+	// One transaction: a failure anywhere (e.g. the last administrator check) leaves the
+	// password, the API tokens and the sessions as they were, and a change never
+	// succeeds while sessions of the old role or password survive.
+	var tokensRevoked int64
 	if err := s.Store.KeepingAdmin(ctx, func(tx *store.Store) error {
-		return tx.UpdateUser(ctx, id, name, role, disabled)
+		if hash != "" {
+			if err := tx.UpdatePassword(ctx, id, hash); err != nil {
+				return err
+			}
+			// an administrator resets someone's password when the account may be in
+			// the wrong hands: the API tokens it created end too, like its sessions
+			n, err := tx.DeleteUserAPITokens(ctx, id)
+			if err != nil {
+				return err
+			}
+			tokensRevoked = n
+		}
+		if err := tx.UpdateUser(ctx, id, name, role, disabled); err != nil {
+			return err
+		}
+		if revoke {
+			return tx.DeleteUserSessions(ctx, id) // new role / disabled / new password take effect immediately
+		}
+		return nil
 	}); err != nil {
 		fail(w, lastAdminErr(err))
 		return
 	}
-	if revoke {
-		_ = s.Store.DeleteUserSessions(ctx, id) // new role / disabled / new password take effect immediately
+	if hash != "" {
+		var detail any
+		if tokensRevoked > 0 {
+			detail = map[string]any{"tokens_revoked": tokensRevoked}
+		}
+		s.audit(r, "user.password_reset", u.Email, detail)
 	}
 	s.audit(r, "user.update", u.Email, map[string]any{"role": map[string]string{"before": u.Role, "after": role}, "disabled": disabled})
 	nu, _ := s.Store.UserByID(ctx, id)
@@ -211,11 +225,16 @@ func (s *Server) resetUserMFA(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	if err := s.Store.SetMFA(r.Context(), id, false, nil); err != nil {
+	// together: the reset must not report success while the user's sessions survive
+	if err := s.Store.WithTx(r.Context(), func(tx *store.Store) error {
+		if err := tx.SetMFA(r.Context(), id, false, nil); err != nil {
+			return err
+		}
+		return tx.DeleteUserSessions(r.Context(), id)
+	}); err != nil {
 		fail(w, err)
 		return
 	}
-	_ = s.Store.DeleteUserSessions(r.Context(), id)
 	s.audit(r, "user.mfa_reset", u.Email, nil)
 	writeJSON(w, 200, map[string]string{"status": "ok"})
 }

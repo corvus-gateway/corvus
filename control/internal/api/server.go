@@ -594,15 +594,26 @@ func (s *Server) handlePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	if err := s.Store.UpdatePassword(ctx, u.ID, hash); err != nil {
+	// One transaction: the new password never takes effect while the other sessions or
+	// the API tokens survive (sign out everywhere else; tokens the user created end too).
+	var revoked int64
+	if err := s.Store.WithTx(ctx, func(tx *store.Store) error {
+		if err := tx.UpdatePassword(ctx, u.ID, hash); err != nil {
+			return err
+		}
+		if err := tx.DeleteUserSessions(ctx, u.ID); err != nil {
+			return err
+		}
+		n, err := tx.DeleteUserAPITokens(ctx, u.ID)
+		revoked = n
+		return err
+	}); err != nil {
 		fail(w, err)
 		return
 	}
-	_ = s.Store.DeleteUserSessions(ctx, u.ID) // sign out everywhere else
 	var detail any
-	// API tokens the user created end too, like the other sessions
-	if n, err := s.Store.DeleteUserAPITokens(ctx, u.ID); err == nil && n > 0 {
-		detail = map[string]any{"tokens_revoked": n}
+	if revoked > 0 {
+		detail = map[string]any{"tokens_revoked": revoked}
 	}
 	if err := s.setSession(w, r, u); err != nil {
 		fail(w, err)

@@ -364,32 +364,158 @@ func (s *Service) flush(ctx context.Context, now time.Time) {
 
 var logName = regexp.MustCompile(`^access-(\d{4}-\d{2}-\d{2})\.jsonl(\.gz)?$`)
 
-func (s *Service) writeLogs(ctx context.Context) {
-	var f *os.File
-	var w *bufio.Writer
-	day := ""
-	open := func(now time.Time) {
-		d := now.UTC().Format("2006-01-02")
-		if d == day && f != nil {
-			return
-		}
-		if f != nil {
-			w.Flush()
-			f.Close()
-			prev := f.Name()
-			go compress(prev)
-		}
-		var err error
-		f, err = os.OpenFile(filepath.Join(s.logDir(), "access-"+d+".jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o640)
-		if err != nil {
-			slog.Warn("request log", "err", err)
-			f = nil
-			return
-		}
-		w = bufio.NewWriterSize(f, 256<<10)
-		day = d
-		s.openLog.Store(f.Name())
+// logFile is what the request log writes to (an *os.File; replaced in tests).
+type logFile interface {
+	io.Writer
+	Sync() error
+	Close() error
+	Name() string
+}
+
+// openLogFile opens (appends to) a day file. A variable so tests can make it fail.
+var openLogFile = func(path string) (logFile, error) {
+	return os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o640)
+}
+
+// dayLog appends request lines to the file of the current UTC day.
+//
+// A write error (full disk, I/O error) leaves a bufio.Writer failed for good, so after
+// one the writer and file are discarded and reopened (at most every logRetry) instead
+// of silently losing the rest of the day. The lines lost with the failed buffer and
+// every line that cannot be written count as dropped; warnings are rate-limited.
+type dayLog struct {
+	dir     string
+	dropped *atomic.Int64
+	openLog *atomic.Value
+	rotated func(prev string) // called with the finished day file (to compress it)
+
+	f        logFile
+	w        *bufio.Writer
+	day      string
+	pending  int64     // lines buffered since the last successful flush
+	retryAt  time.Time // after a failure: do not reopen before this
+	broken   bool      // the last file ended in a failed write (may end mid-line)
+	lastWarn time.Time
+}
+
+const logRetry = 5 * time.Second
+
+func (d *dayLog) warn(now time.Time, msg string, err error) {
+	if !d.lastWarn.IsZero() && now.Sub(d.lastWarn) < time.Minute {
+		return
 	}
+	d.lastWarn = now
+	slog.Warn(msg, "err", err, "dropped_lines", d.dropped.Load())
+}
+
+// fail discards the failed writer: the buffered lines are lost and count as dropped
+// (an upper bound: bufio may already have written some of them).
+func (d *dayLog) fail(now time.Time, err error) {
+	d.dropped.Add(d.pending)
+	d.pending = 0
+	if d.f != nil {
+		d.f.Close()
+	}
+	d.f, d.w = nil, nil
+	d.broken = true
+	d.retryAt = now.Add(logRetry)
+	d.warn(now, "request log write failed; lines are dropped until it recovers", err)
+}
+
+// open makes sure the file of now's day is open. False when it cannot be.
+func (d *dayLog) open(now time.Time) bool {
+	day := now.UTC().Format("2006-01-02")
+	if d.f != nil && day == d.day {
+		return true
+	}
+	if d.f != nil { // midnight: finish the previous day
+		prev := d.f.Name()
+		d.close(now)
+		if d.rotated != nil {
+			d.rotated(prev)
+		}
+	}
+	if now.Before(d.retryAt) {
+		return false
+	}
+	path := filepath.Join(d.dir, "access-"+day+".jsonl")
+	f, err := openLogFile(path)
+	if err != nil {
+		d.retryAt = now.Add(logRetry)
+		d.warn(now, "request log", err)
+		return false
+	}
+	d.f, d.w, d.day, d.pending = f, bufio.NewWriterSize(f, 256<<10), day, 0
+	if d.broken {
+		// the failed write may have left half a line: start on a fresh line
+		if st, err := os.Stat(path); err == nil && st.Size() > 0 && !endsWithNewline(path, st.Size()) {
+			d.w.WriteByte('\n')
+		}
+		d.broken = false
+	}
+	if d.openLog != nil {
+		d.openLog.Store(f.Name())
+	}
+	return true
+}
+
+func endsWithNewline(path string, size int64) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return true
+	}
+	defer f.Close()
+	b := make([]byte, 1)
+	if _, err := f.ReadAt(b, size-1); err != nil {
+		return true
+	}
+	return b[0] == '\n'
+}
+
+// write appends one line.
+func (d *dayLog) write(now time.Time, line []byte) {
+	if !d.open(now) {
+		d.dropped.Add(1)
+		return
+	}
+	_, err := d.w.Write(line)
+	if err == nil {
+		err = d.w.WriteByte('\n')
+	}
+	if err != nil {
+		d.dropped.Add(1)
+		d.fail(now, err)
+		return
+	}
+	d.pending++
+}
+
+// flush writes the buffered lines to the file.
+func (d *dayLog) flush(now time.Time) {
+	if d.f == nil {
+		return
+	}
+	if err := d.w.Flush(); err != nil {
+		d.fail(now, err)
+		return
+	}
+	d.pending = 0
+}
+
+// close flushes and closes the current file.
+func (d *dayLog) close(now time.Time) {
+	d.flush(now)
+	if d.f == nil {
+		return
+	}
+	if err := d.f.Close(); err != nil {
+		d.warn(now, "request log close", err)
+	}
+	d.f, d.w = nil, nil
+}
+
+func (s *Service) writeLogs(ctx context.Context) {
+	d := &dayLog{dir: s.logDir(), dropped: &s.dropped, openLog: &s.openLog, rotated: func(prev string) { go compress(prev) }}
 	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()
 	for {
@@ -398,32 +524,19 @@ func (s *Service) writeLogs(ctx context.Context) {
 			for drained := false; !drained; {
 				select {
 				case line := <-s.lines:
-					open(time.Now())
-					if f != nil {
-						w.Write(line)
-						w.WriteByte('\n')
-					}
+					d.write(time.Now(), line)
 				default:
 					drained = true
 				}
 			}
-			if f != nil {
-				w.Flush()
-				f.Close()
-			}
+			d.close(time.Now())
 			return
 		case line := <-s.lines:
-			open(time.Now())
-			if f != nil {
-				w.Write(line)
-				w.WriteByte('\n')
-			}
+			d.write(time.Now(), line)
 		case now := <-tick.C:
-			if f != nil {
-				w.Flush()
-				if now.UTC().Format("2006-01-02") != day {
-					open(now) // rotate at midnight even when idle
-				}
+			d.flush(now)
+			if d.f != nil && now.UTC().Format("2006-01-02") != d.day {
+				d.open(now) // rotate at midnight even when idle
 			}
 		}
 	}
@@ -433,36 +546,55 @@ func (s *Service) writeLogs(ctx context.Context) {
 // retention change may pick the same file, and two writers of one .gz.tmp corrupt it.
 var compressMu sync.Mutex
 
-// compress gzips a finished day file and removes the original.
+// createTmp creates the temporary .gz file. A variable so tests can make it fail.
+var createTmp = func(path string) (logFile, error) {
+	return os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o640)
+}
+
+// compress gzips a finished day file and removes the original. The original is only
+// removed once the .gz is completely written, synced and renamed into place: on any
+// error (e.g. a full disk) the partial .gz.tmp is removed and the original kept, so a
+// later cleanup compresses it again.
 func compress(path string) {
 	compressMu.Lock()
 	defer compressMu.Unlock()
 	if _, err := os.Stat(path); err != nil {
 		return // already compressed by an earlier call
 	}
-	in, err := os.Open(path)
-	if err != nil {
+	if err := compressFile(path); err != nil {
+		os.Remove(path + ".gz.tmp")
+		slog.Warn("request log compression failed; the uncompressed file is kept", "file", filepath.Base(path), "err", err)
 		return
 	}
-	out, err := os.OpenFile(path+".gz.tmp", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o640)
+	os.Remove(path)
+}
+
+func compressFile(path string) error {
+	in, err := os.Open(path)
 	if err != nil {
-		in.Close()
-		return
+		return err
+	}
+	defer in.Close()
+	out, err := createTmp(path + ".gz.tmp")
+	if err != nil {
+		return err
 	}
 	zw, _ := gzip.NewWriterLevel(out, gzip.BestCompression)
 	_, err = io.Copy(zw, in)
-	in.Close() // close before removing (required on Windows)
+	if cerr := zw.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = out.Sync()
+	}
+	if cerr := out.Close(); err == nil {
+		err = cerr
+	}
+	in.Close() // close before the original is removed (required on Windows)
 	if err != nil {
-		zw.Close()
-		out.Close()
-		os.Remove(path + ".gz.tmp")
-		return
+		return err
 	}
-	zw.Close()
-	out.Close()
-	if os.Rename(path+".gz.tmp", path+".gz") == nil {
-		os.Remove(path)
-	}
+	return os.Rename(path+".gz.tmp", path+".gz")
 }
 
 // Archives lists log files, newest first.
