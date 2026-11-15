@@ -201,3 +201,43 @@ func TestPush(t *testing.T) {
 		t.Fatalf("expired activation pushed: %+v", p)
 	}
 }
+
+func TestSyncSkipsUnchanged(t *testing.T) {
+	ctx := context.Background()
+	st := openStore(t, filepath.Join(t.TempDir(), "corvus.db"))
+	addHost(t, st, "shop.example.com", "auto", store.UnderAttackConfig{})
+	pushes, status := 0, 200
+	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		pushes++
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte("no under-attack store\n"))
+	}))
+	defer gw.Close()
+	s := &Service{Store: st, Traffic: fakeTraffic{}, PushURL: gw.URL}
+	t0 := time.Unix(1_800_000_000, 0)
+	if ok, err := s.sync(ctx, t0, false); !ok || err != nil || pushes != 1 {
+		t.Fatalf("first sync: %v %v %d", ok, err, pushes)
+	}
+	// unchanged: not pushed again until maxPushAge
+	if ok, _ := s.sync(ctx, t0.Add(10*time.Second), false); ok || pushes != 1 {
+		t.Fatal("unchanged set pushed")
+	}
+	if ok, _ := s.sync(ctx, t0.Add(maxPushAge), false); !ok || pushes != 2 {
+		t.Fatal("not pushed after maxPushAge")
+	}
+	s.Trigger()
+	if ok, _ := s.sync(ctx, t0.Add(maxPushAge+time.Second), false); !ok || pushes != 3 {
+		t.Fatal("Trigger did not force a push")
+	}
+	// a failed push is retried every round and reported
+	status = 503
+	s.Trigger()
+	for i := 0; i < 2; i++ {
+		if _, err := s.sync(ctx, t0.Add(maxPushAge+2*time.Second), false); err == nil || err.Error() != "gateway answered 503: no under-attack store" {
+			t.Fatalf("err = %v", err)
+		}
+	}
+	if st := s.SyncStatus(); st.ConsecutiveFailures != 2 || st.LastSuccess == nil {
+		t.Fatalf("status: %+v", st)
+	}
+}

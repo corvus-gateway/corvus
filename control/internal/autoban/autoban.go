@@ -144,6 +144,25 @@ type Service struct {
 	mu      sync.Mutex
 	trigger chan struct{}
 	acks    map[string]string // processed gateway hits (ip → hit id), confirmed with the next push
+
+	// push state (see sync): what the gateway holds after the last successful push
+	tracker  PushTracker
+	lastKeys map[string]int64 // ban list of the last successful push; nil = unknown
+	lastHash string           // payload hash (without "now") of the last successful push
+	lastFull time.Time        // last successful push with a full sweep on the gateway
+	forced   bool             // push in the next round even when unchanged (Trigger)
+	resync   bool             // next push makes the gateway sweep its whole store
+	epoch    string           // gateway shared-memory epoch (changes when it restarts)
+}
+
+// FullSyncEvery is the longest time between pushes that make the gateway sweep its
+// whole ban store (and so the longest an unchanged list goes without being pushed).
+// In between only changes are pushed.
+const FullSyncEvery = 5 * time.Minute
+
+// SyncStatus reports how the ban list reaches the gateway (last success, last error).
+func (s *Service) SyncStatus() PushStatus {
+	return s.tracker.Status()
 }
 
 // Trigger re-evaluates and pushes soon (after manual changes).
@@ -152,6 +171,7 @@ func (s *Service) Trigger() {
 	if s.trigger == nil {
 		s.trigger = make(chan struct{}, 1)
 	}
+	s.forced = true
 	ch := s.trigger
 	s.mu.Unlock()
 	select {
@@ -182,9 +202,7 @@ func (s *Service) Run(ctx context.Context) {
 			s.RecordHits(ctx, now, hits)
 		}
 		s.Evaluate(ctx, now)
-		if err := s.Push(ctx, now); err != nil {
-			slog.Debug("ban push failed", "err", err)
-		}
+		_, _ = s.sync(ctx, now, false) // failures are logged by the tracker
 		if now.Sub(lastPrune) > time.Hour {
 			_ = s.Store.PruneBans(ctx, now.Add(-maxDuration))
 			lastPrune = now
@@ -269,57 +287,120 @@ func (s *Service) Evaluate(ctx context.Context, now time.Time) []string {
 	return banned
 }
 
-// Push sends the full active ban list to the gateway:
+// banPayload is the body of PUT /bans:
 //
 //	{"ips": {"<ip>": <expires unix or 0>}, "now": <unix>,
-//	 "bb": <bad-behaviour configuration>, "ack": {"<ip>": "<hit id>"}}
+//	 "bb": <bad-behaviour configuration>, "ack": {"<ip>": "<hit id>"},
+//	 "removed": ["<ip>", ...]}
 //
+// "ips" is always the full list. With "removed" (the entries of the previous push that
+// are gone) the gateway deletes just those; without it, it sweeps its whole store.
+type banPayload struct {
+	IPs     map[string]int64  `json:"ips"`
+	Now     int64             `json:"now,omitempty"`
+	BB      map[string]any    `json:"bb"`
+	Ack     map[string]string `json:"ack"`
+	Removed *[]string         `json:"removed,omitempty"`
+}
+
+// Push sends the active ban list to the gateway now, changed or not.
 // Gateway-local bad-behaviour bans that are not acknowledged yet survive the push.
 func (s *Service) Push(ctx context.Context, now time.Time) error {
+	_, err := s.sync(ctx, now, true)
+	return err
+}
+
+// sync pushes the ban list when it changed since the last successful push, after
+// Trigger, after the gateway restarted and at least every FullSyncEvery; otherwise
+// (unless always) it does nothing. Unchanged lists are not pushed every round: each
+// push writes the list into the gateway's shared memory, which every request reads.
+// Reports whether a push was made.
+func (s *Service) sync(ctx context.Context, now time.Time, always bool) (bool, error) {
 	if s.PushURL == "" {
-		return nil
+		return false, nil
 	}
 	list, err := s.Store.ActiveBans(ctx, now)
 	if err != nil {
-		return err
+		return false, err
 	}
-	ips := map[string]int64{}
+	p := banPayload{IPs: map[string]int64{}, BB: gatewayConfig(Load(ctx, s.Store))}
 	for _, b := range list {
 		var exp int64
 		if b.ExpiresAt != nil {
 			exp = b.ExpiresAt.Unix()
 		}
-		ips[GatewayKey(b.IP)] = exp
+		p.IPs[GatewayKey(b.IP)] = exp
 	}
 	s.mu.Lock()
-	acks := s.acks
+	p.Ack = make(map[string]string, len(s.acks))
+	for ip, id := range s.acks {
+		p.Ack[ip] = id
+	}
+	hash := PayloadHash(p)
+	full := s.lastKeys == nil || s.resync || now.Sub(s.lastFull) >= FullSyncEvery
+	due := always || s.forced || full || hash != s.lastHash
+	if due && !full {
+		removed := []string{}
+		for ip := range s.lastKeys {
+			if _, ok := p.IPs[ip]; !ok {
+				removed = append(removed, ip)
+			}
+		}
+		sort.Strings(removed)
+		p.Removed = &removed
+	}
+	s.forced = false
 	s.mu.Unlock()
-	if acks == nil {
-		acks = map[string]string{}
+	if !due {
+		return false, nil
 	}
-	body, _ := json.Marshal(map[string]any{"ips": ips, "now": now.Unix(), "bb": gatewayConfig(Load(ctx, s.Store)), "ack": acks})
-	c := s.client()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, s.PushURL, bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := c.Do(req)
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("gateway answered %d", resp.StatusCode)
-	}
+	p.Now = now.Unix()
+	body, _ := json.Marshal(p)
+	err = s.send(ctx, body, len(p.IPs))
+	s.tracker.Record(now, len(body), len(p.IPs), err)
 	s.mu.Lock()
-	for ip, id := range acks {
+	defer s.mu.Unlock()
+	if err != nil {
+		// the gateway may hold part of it (e.g. timed out after applying): sweep next time
+		s.resync = true
+		return true, err
+	}
+	s.lastKeys, s.lastHash = p.IPs, hash
+	if full {
+		s.lastFull, s.resync = now, false
+	}
+	for ip, id := range p.Ack {
 		if s.acks[ip] == id {
 			delete(s.acks, ip)
 		}
 	}
-	s.mu.Unlock()
-	return nil
+	return true, nil
+}
+
+func (s *Service) send(ctx context.Context, body []byte, entries int) error {
+	if len(body) > MaxPushBytes {
+		return fmt.Errorf("ban list too large for the gateway: %d bans take %d bytes, the limit is %d bytes", entries, len(body), MaxPushBytes)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, s.PushURL, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	return PutJSON(req, s.client())
+}
+
+// noteEpoch remembers the gateway's shared-memory epoch (reported with the pending
+// bad-behaviour bans). When it changes, the gateway restarted with an empty ban store
+// and the next round pushes the full list.
+func (s *Service) noteEpoch(epoch string) {
+	if epoch == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.epoch != "" && s.epoch != epoch {
+		s.resync = true
+	}
+	s.epoch = epoch
 }
 
 func (s *Service) client() *http.Client {
