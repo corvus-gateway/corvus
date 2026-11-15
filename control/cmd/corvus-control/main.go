@@ -427,7 +427,7 @@ func run() error {
 	// its console keep running so the operator can fix it.
 	if err := dep.EnsureCurrent(ctx); err != nil {
 		slog.Error("DEGRADED: the configuration could not be deployed at startup; falling back to an earlier one", "err", err)
-		if _, ferr := dep.Fallback(ctx, false, "startup deployment failed"); ferr != nil {
+		if _, ferr := dep.Fallback(ctx, "", "startup deployment failed"); ferr != nil {
 			slog.Error("DEGRADED: no usable gateway configuration; the gateway will not start until the settings are fixed in the console", "err", ferr)
 		}
 	}

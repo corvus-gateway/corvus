@@ -228,14 +228,24 @@ func (d *Deployer) Apply(ctx context.Context, by *int64, message string, mutate 
 // The database is not changed, so the next Apply renders the current settings again.
 // Like Apply it runs to the end even if ctx is cancelled.
 func (d *Deployer) Rollback(ctx context.Context, by *int64, targetID int64) (*store.ConfigVersion, error) {
-	return d.rollback(ctx, by, targetID, fmt.Sprintf("rollback to #%d", targetID))
+	return d.rollback(ctx, by, targetID, fmt.Sprintf("rollback to #%d", targetID), false, "")
 }
 
-func (d *Deployer) rollback(ctx context.Context, by *int64, targetID int64, msg string) (*store.ConfigVersion, error) {
+// ErrLiveChanged: the configuration the gateway failed with is no longer the live one (a
+// deployment from the console meanwhile), so an automatic fallback is abandoned.
+var ErrLiveChanged = errors.New("the active configuration changed meanwhile; automatic fallback abandoned")
+
+// rollback re-activates targetID. automatic marks it as made by the control plane (see
+// store.ConfigVersion.Automatic). With expectLive set it fails with ErrLiveChanged
+// unless that version directory is still live.
+func (d *Deployer) rollback(ctx context.Context, by *int64, targetID int64, msg string, automatic bool, expectLive string) (*store.ConfigVersion, error) {
 	ctx, cancel := detach(ctx)
 	defer cancel()
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if expectLive != "" && d.liveDir() != expectLive {
+		return nil, ErrLiveChanged
+	}
 	target, err := d.Store.VersionByID(ctx, targetID)
 	if err != nil {
 		return nil, err
@@ -256,9 +266,9 @@ func (d *Deployer) rollback(ctx context.Context, by *int64, targetID int64, msg 
 	}
 	if err := d.activate(target.Dir); err != nil {
 		// activate pointed the link back to the version still serving
-		return nil, d.notAccepted(ctx, err, store.ConfigVersion{CreatedBy: by, Message: msg, RollbackOf: &targetID, ConfigRev: target.ConfigRev})
+		return nil, d.notAccepted(ctx, err, store.ConfigVersion{CreatedBy: by, Message: msg, RollbackOf: &targetID, ConfigRev: target.ConfigRev, Automatic: automatic})
 	}
-	v := &store.ConfigVersion{CreatedBy: by, Message: msg, RollbackOf: &targetID, Dir: target.Dir, ConfigRev: target.ConfigRev}
+	v := &store.ConfigVersion{CreatedBy: by, Message: msg, RollbackOf: &targetID, Dir: target.Dir, ConfigRev: target.ConfigRev, Automatic: automatic}
 	if err := d.Store.CreateVersion(ctx, v); err != nil {
 		return nil, err
 	}
@@ -272,7 +282,11 @@ func (d *Deployer) rollback(ctx context.Context, by *int64, targetID int64, msg 
 // EnsureCurrent prepares the "current" symlink at startup, before the gateway starts.
 //   - no active version            → initial deployment
 //   - active version is a rollback → keep it (the operator chose that configuration)
-//   - otherwise                    → re-render from the database so configuration
+//   - active version is automatic  → (a fallback or safe mode after the stored settings
+//     could not be used) deploy the stored settings again: what made them fail (a port
+//     held by another program) may be gone. If they are rejected the automatic version
+//     stays; if the gateway does not start with them it falls back again.
+//   - otherwise                   → re-render from the database so configuration
 //     templates always match this binary (upgrades); fall back to the existing
 //     version if the fresh render is rejected.
 func (d *Deployer) EnsureCurrent(ctx context.Context) error {
@@ -288,7 +302,7 @@ func (d *Deployer) EnsureCurrent(ctx context.Context) error {
 	if statErr == nil {
 		_, statErr = os.Stat(filepath.Join(vdir, "nginx.conf"))
 	}
-	if statErr == nil && v.RollbackOf != nil {
+	if statErr == nil && v.RollbackOf != nil && !v.Automatic {
 		slog.Info("keeping rolled-back configuration", "version", v.ID)
 		d.mu.Lock()
 		defer d.mu.Unlock()
@@ -296,12 +310,17 @@ func (d *Deployer) EnsureCurrent(ctx context.Context) error {
 	}
 	// Nothing changed since the active version was rendered (same settings, same
 	// templates): keep it. Restarting does not create versions (and prune old ones).
-	if statErr == nil && d.rendersSame(ctx, v.Dir) {
+	if statErr == nil && !v.Automatic && d.rendersSame(ctx, v.Dir) {
 		d.mu.Lock()
 		defer d.mu.Unlock()
 		return d.swapLink(v.Dir)
 	}
-	if _, err := d.Apply(ctx, nil, "startup re-render", nil); err != nil {
+	msg := "startup re-render"
+	if v.Automatic {
+		slog.Info("an automatic fallback is active: trying the stored settings again", "version", v.ID)
+		msg = "startup: stored settings tried again after an automatic fallback"
+	}
+	if _, err := d.Apply(ctx, nil, msg, nil); err != nil {
 		if statErr != nil {
 			return err
 		}
@@ -315,25 +334,27 @@ func (d *Deployer) EnsureCurrent(ctx context.Context) error {
 
 // Fallback makes an earlier configuration current when the active one cannot be used:
 // EnsureCurrent failed at startup (for example a restored backup whose settings are
-// rejected), or the gateway exits right after starting with it (skipLive: a port that
-// is taken, which `openresty -t` does not notice). It re-activates the newest earlier
-// version whose files still pass the test, recorded as a rollback, and otherwise the
-// safe configuration (SafeMode). The stored settings are not changed, so the console
-// shows them as not deployed until the operator fixes and saves them.
-func (d *Deployer) Fallback(ctx context.Context, skipLive bool, reason string) (*store.ConfigVersion, error) {
+// rejected), or the gateway exits right after starting with it (failed: the version
+// directory it failed with, for example because a port is taken, which `openresty -t`
+// does not notice). It re-activates the newest earlier version whose files still pass
+// the test, recorded as an automatic rollback, and otherwise the safe configuration
+// (SafeMode); safe-mode versions are no candidates. The stored settings are not
+// changed, so the console shows them as not deployed until the operator fixes and
+// saves them, and the next start tries them again (EnsureCurrent).
+//
+// With failed set, the fallback is abandoned (ErrLiveChanged) once another version
+// directory is live: an operator deployed meanwhile, and that deployment wins.
+func (d *Deployer) Fallback(ctx context.Context, failed string, reason string) (*store.ConfigVersion, error) {
 	ctx, cancel := detach(ctx)
 	defer cancel()
-	skip := ""
-	if skipLive {
-		skip = d.liveDir()
-	}
 	versions, err := d.Store.ListVersions(ctx, 100, 0)
 	if err != nil {
 		return nil, err
 	}
-	tried := map[string]bool{skip: true}
+	tried := map[string]bool{failed: true}
 	for _, v := range versions {
-		if v.Status == "failed" || v.Dir == "" || tried[v.Dir] {
+		// ConfigRev < 0: safe mode, or a rollback to it (not an earlier configuration)
+		if v.Status == "failed" || v.Dir == "" || IsSafeMode(&v) || tried[v.Dir] {
 			continue
 		}
 		tried[v.Dir] = true
@@ -341,25 +362,37 @@ func (d *Deployer) Fallback(ctx context.Context, skipLive bool, reason string) (
 		if v.RollbackOf != nil {
 			target = *v.RollbackOf
 		}
-		fv, err := d.rollback(ctx, nil, target, fmt.Sprintf("fallback to #%d (%s)", target, reason))
+		fv, err := d.rollback(ctx, nil, target, fmt.Sprintf("fallback to #%d (%s)", target, reason), true, failed)
 		if err == nil {
 			slog.Warn("fell back to an earlier configuration", "version", fv.ID, "of", target, "reason", reason)
 			return fv, nil
 		}
+		if errors.Is(err, ErrLiveChanged) {
+			return nil, err
+		}
 		slog.Warn("earlier configuration not usable", "version", target, "err", err)
 	}
-	return d.SafeMode(ctx, reason)
+	return d.SafeMode(ctx, failed, reason)
 }
+
+// IsSafeMode reports whether v is a safe-mode version, or a rollback to one: its
+// configuration revision never matches the stored settings (see SafeMode).
+func IsSafeMode(v *store.ConfigVersion) bool { return v != nil && v.ConfigRev < 0 }
 
 // SafeMode deploys the configuration of an empty installation (the default server
 // only, no hosts or streams), recorded as a version that does not match the stored
 // settings. It is the last resort that lets the gateway start after everything else
-// was rejected; the console stays reachable to fix the settings.
-func (d *Deployer) SafeMode(ctx context.Context, reason string) (*store.ConfigVersion, error) {
+// was rejected; the console stays reachable to fix the settings. It is automatic (tried
+// again at the next start, see EnsureCurrent) and, like Fallback, abandoned with
+// ErrLiveChanged when failed is set and another version directory is live.
+func (d *Deployer) SafeMode(ctx context.Context, failed string, reason string) (*store.ConfigVersion, error) {
 	ctx, cancel := detach(ctx)
 	defer cancel()
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if failed != "" && d.liveDir() != failed {
+		return nil, ErrLiveChanged
+	}
 	if err := os.MkdirAll(d.versionsDir(), 0o755); err != nil {
 		return nil, err
 	}
@@ -375,7 +408,7 @@ func (d *Deployer) SafeMode(ctx context.Context, reason string) (*store.ConfigVe
 	defer empty.Close()
 
 	// ConfigRev -1 never matches the stored settings: they show as not deployed.
-	v := &store.ConfigVersion{Message: "safe mode: default server only (" + reason + ")", ConfigRev: -1}
+	v := &store.ConfigVersion{Message: "safe mode: default server only (" + reason + ")", ConfigRev: -1, Automatic: true}
 	if err := d.newVersion(ctx, d.Store, v); err != nil {
 		return nil, err
 	}

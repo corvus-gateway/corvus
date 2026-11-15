@@ -29,16 +29,25 @@ fi
 trap 'exit 0' QUIT
 while true; do sleep 0.02; done
 `)
-	o := &OpenResty{Bin: bin, CurrentConf: "x"}
+	// started through the "current" symlink: the callback learns the version directory
+	if err := os.MkdirAll(filepath.Join(dir, "versions", "v000007"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("versions", "v000007"), filepath.Join(dir, "current")); err != nil {
+		t.Fatal(err)
+	}
+	o := &OpenResty{Bin: bin, CurrentConf: filepath.Join(dir, "current", "nginx.conf")}
 	var mu sync.Mutex
 	var calls []int
+	var versions []string
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	stopped := make(chan struct{})
 	go func() {
-		o.Supervise(ctx, func(n int) bool {
+		o.Supervise(ctx, func(n int, version string) bool {
 			mu.Lock()
 			calls = append(calls, n)
+			versions = append(versions, version)
 			mu.Unlock()
 			return n < 3 // "switched the configuration": retry at once
 		})
@@ -48,6 +57,9 @@ while true; do sleep 0.02; done
 	mu.Lock()
 	if calls[0] != 1 || calls[1] != 2 || calls[2] != 3 {
 		t.Fatalf("consecutive failures = %v", calls)
+	}
+	if versions[0] != "v000007" {
+		t.Fatalf("failed with version %q, want v000007", versions[0])
 	}
 	mu.Unlock()
 	if running, _ := o.Status(); running {
@@ -96,7 +108,7 @@ func TestSuperviseStartError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	called := false
 	done := make(chan struct{})
-	go func() { o.Supervise(ctx, func(int) bool { called = true; return false }); close(done) }()
+	go func() { o.Supervise(ctx, func(int, string) bool { called = true; return false }); close(done) }()
 	waitFor(t, func() bool { return strings.Contains(o.Problem(), "cannot start the gateway") })
 	cancel()
 	<-done

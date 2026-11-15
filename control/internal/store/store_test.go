@@ -130,8 +130,16 @@ func TestStoreRoundTrip(t *testing.T) {
 	if err := s.FinishVersion(ctx, v.ID, true, "ok"); err != nil {
 		t.Fatal(err)
 	}
-	if a, err := s.ActiveVersion(ctx); err != nil || a.ID != v.ID {
-		t.Fatalf("active: %v", err)
+	if a, err := s.ActiveVersion(ctx); err != nil || a.ID != v.ID || a.Automatic {
+		t.Fatalf("active: %+v %v", a, err)
+	}
+	// automatic versions (fallbacks, safe mode) are marked
+	av := &ConfigVersion{Message: "fallback", ConfigRev: rev, RollbackOf: &v.ID, Dir: "v000001", Automatic: true}
+	if err := s.CreateVersion(ctx, av); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.VersionByID(ctx, av.ID); err != nil || !got.Automatic {
+		t.Fatalf("automatic version: %+v %v", got, err)
 	}
 	if err := s.Audit(ctx, &u.ID, "x.y", "t", map[string]int{"a": 1}, "1.2.3.4"); err != nil {
 		t.Fatal(err)

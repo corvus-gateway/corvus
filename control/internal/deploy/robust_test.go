@@ -178,20 +178,20 @@ func TestFallbackAndSafeMode(t *testing.T) {
 	if err := d.EnsureCurrent(ctx); err == nil {
 		t.Fatal("EnsureCurrent must fail: rejected settings, no files of the active version")
 	}
-	fv, err := d.Fallback(ctx, false, "startup deployment failed")
+	fv, err := d.Fallback(ctx, "", "startup deployment failed")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fv.RollbackOf == nil || *fv.RollbackOf != v1.ID || d.liveDir() != v1.Dir || !strings.Contains(fv.Message, "fallback to #") {
+	if fv.RollbackOf == nil || *fv.RollbackOf != v1.ID || d.liveDir() != v1.Dir || !strings.Contains(fv.Message, "fallback to #") || !fv.Automatic {
 		t.Fatalf("fallback %+v, live %s", fv, d.liveDir())
 	}
 
 	// the gateway did not start with v1 either: nothing earlier is left → safe mode
-	sv, err := d.Fallback(ctx, true, "boot failure")
+	sv, err := d.Fallback(ctx, d.liveDir(), "boot failure")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(sv.Message, "safe mode") || d.liveDir() != sv.Dir {
+	if !strings.HasPrefix(sv.Message, "safe mode") || d.liveDir() != sv.Dir || !IsSafeMode(sv) || !sv.Automatic {
 		t.Fatalf("safe mode %+v, live %s", sv, d.liveDir())
 	}
 	if _, err := os.Stat(filepath.Join(d.Dir, "current", "nginx.conf")); err != nil {

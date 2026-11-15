@@ -167,6 +167,10 @@ fix it; Corvus does not restart the container in a loop.
   **Deployments**. If that fails too, it starts a **safe configuration** with only the default
   server; the header then shows undeployed changes. Fix the cause (free the port, change the
   stream, remove the faulty advanced snippet) and save or redeploy to return to your configuration.
+- Such automatic fallbacks are not kept across restarts: the next start of Corvus tries your stored
+  settings again, and falls back again if the gateway still cannot start with them. A rollback
+  you chose yourself in **Deployments** is kept. Deploying while the gateway is stopped always
+  wins over a fallback that is in progress.
 - The most common cause is a port that another program on the server took while Corvus was
   stopped — often a stream port. `docker compose logs corvus` shows the full error.
 

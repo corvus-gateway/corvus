@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"corvus/control/internal/deploy"
 	"corvus/control/internal/store"
 )
 
@@ -61,16 +62,25 @@ func TestSecret(t *testing.T) {
 	}
 }
 
-type fakeFallback struct{ calls []string }
-
-func (f *fakeFallback) Fallback(_ context.Context, skipLive bool, _ string) (*store.ConfigVersion, error) {
-	f.calls = append(f.calls, fmt.Sprintf("fallback(%v)", skipLive))
-	return &store.ConfigVersion{Message: "fallback to #1"}, nil
+type fakeFallback struct {
+	calls []string
+	err   error
 }
 
-func (f *fakeFallback) SafeMode(context.Context, string) (*store.ConfigVersion, error) {
-	f.calls = append(f.calls, "safe")
-	return &store.ConfigVersion{Message: "safe mode: default server only"}, nil
+func (f *fakeFallback) Fallback(_ context.Context, failed string, _ string) (*store.ConfigVersion, error) {
+	f.calls = append(f.calls, fmt.Sprintf("fallback(%s)", failed))
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &store.ConfigVersion{Message: "fallback to #1", ConfigRev: 7, Automatic: true}, nil
+}
+
+func (f *fakeFallback) SafeMode(_ context.Context, failed string, _ string) (*store.ConfigVersion, error) {
+	f.calls = append(f.calls, fmt.Sprintf("safe(%s)", failed))
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &store.ConfigVersion{Message: "safe mode: default server only", ConfigRev: -1, Automatic: true}, nil
 }
 
 func TestGatewayBootFailure(t *testing.T) {
@@ -78,28 +88,39 @@ func TestGatewayBootFailure(t *testing.T) {
 	policy := gatewayBootFailure(context.Background(), f)
 	var switched []bool
 	for n := 1; n <= 6; n++ {
-		switched = append(switched, policy(n))
+		switched = append(switched, policy(n, fmt.Sprintf("v%06d", n)))
 	}
-	if fmt.Sprint(switched) != "[false false true true false false]" || strings.Join(f.calls, ",") != "fallback(true),safe" {
+	if fmt.Sprint(switched) != "[false false true true false false]" || strings.Join(f.calls, ",") != "fallback(v000003),safe(v000004)" {
 		t.Fatalf("switched %v, calls %v", switched, f.calls)
 	}
 
-	// the fallback already ended in safe mode: no second safe-mode version
+	// the fallback already ended in safe mode (recognised by its revision, not its
+	// message): no second safe-mode version
 	f = &fakeFallback{}
 	policy = gatewayBootFailure(context.Background(), safeFallback{f})
 	for n := 1; n <= 5; n++ {
-		policy(n)
+		policy(n, "v000001")
 	}
-	if strings.Join(f.calls, ",") != "fallback(true)" {
+	if strings.Join(f.calls, ",") != "fallback(v000001)" {
 		t.Fatalf("calls %v", f.calls)
+	}
+
+	// an operator deployed meanwhile: the fallback is abandoned, nothing switched
+	f = &fakeFallback{err: fmt.Errorf("wrapped: %w", deploy.ErrLiveChanged)}
+	policy = gatewayBootFailure(context.Background(), f)
+	for n := 1; n <= 3; n++ {
+		if policy(n, "v000001") {
+			t.Fatalf("switched at %d although the live configuration changed", n)
+		}
 	}
 }
 
+// safeFallback: no earlier configuration was usable, Fallback ended in safe mode.
 type safeFallback struct{ *fakeFallback }
 
-func (s safeFallback) Fallback(ctx context.Context, skipLive bool, reason string) (*store.ConfigVersion, error) {
-	_, _ = s.fakeFallback.Fallback(ctx, skipLive, reason)
-	return &store.ConfigVersion{Message: "safe mode: default server only"}, nil
+func (s safeFallback) Fallback(ctx context.Context, failed string, reason string) (*store.ConfigVersion, error) {
+	_, _ = s.fakeFallback.Fallback(ctx, failed, reason)
+	return &store.ConfigVersion{Message: "fallback ended in: safe mode", ConfigRev: -1, Automatic: true}, nil
 }
 
 // fakeRedisStarter fails its first starts (with any error) and then succeeds.

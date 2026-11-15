@@ -836,6 +836,9 @@ type ConfigVersion struct {
 	RollbackOf *int64    `json:"rollback_of"`
 	Dir        string    `json:"dir"`
 	ConfigRev  int64     `json:"config_rev"`
+	// Automatic: made by the control plane, not an operator (a fallback to an earlier
+	// configuration or safe mode after the active one could not be used).
+	Automatic bool `json:"automatic"`
 }
 
 func (s *Store) CreateVersion(ctx context.Context, v *ConfigVersion) error {
@@ -843,8 +846,8 @@ func (s *Store) CreateVersion(ctx context.Context, v *ConfigVersion) error {
 	if v.Status == "" {
 		v.Status = "pending"
 	}
-	res, err := s.q.ExecContext(ctx, `INSERT INTO config_versions(created_at, created_by, status, message, test_output, rollback_of, dir, config_rev) VALUES (?,?,?,?,?,?,?,?)`,
-		v.CreatedAt, v.CreatedBy, v.Status, v.Message, v.TestOutput, v.RollbackOf, v.Dir, v.ConfigRev)
+	res, err := s.q.ExecContext(ctx, `INSERT INTO config_versions(created_at, created_by, status, message, test_output, rollback_of, dir, config_rev, automatic) VALUES (?,?,?,?,?,?,?,?,?)`,
+		v.CreatedAt, v.CreatedBy, v.Status, v.Message, v.TestOutput, v.RollbackOf, v.Dir, v.ConfigRev, b2i(v.Automatic))
 	if err != nil {
 		return err
 	}
@@ -872,12 +875,13 @@ func (s *Store) FinishVersion(ctx context.Context, id int64, ok bool, output str
 	})
 }
 
-const verCols = `v.id, v.created_at, v.created_by, COALESCE(u.email, ''), v.status, v.message, v.test_output, v.rollback_of, v.dir, v.config_rev`
+const verCols = `v.id, v.created_at, v.created_by, COALESCE(u.email, ''), v.status, v.message, v.test_output, v.rollback_of, v.dir, v.config_rev, v.automatic`
 
 func scanVersion(row interface{ Scan(...any) error }) (*ConfigVersion, error) {
 	var v ConfigVersion
 	var by, rb sql.NullInt64
-	if err := row.Scan(&v.ID, &v.CreatedAt, &by, &v.Email, &v.Status, &v.Message, &v.TestOutput, &rb, &v.Dir, &v.ConfigRev); err != nil {
+	var auto int
+	if err := row.Scan(&v.ID, &v.CreatedAt, &by, &v.Email, &v.Status, &v.Message, &v.TestOutput, &rb, &v.Dir, &v.ConfigRev, &auto); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -889,6 +893,7 @@ func scanVersion(row interface{ Scan(...any) error }) (*ConfigVersion, error) {
 	if rb.Valid {
 		v.RollbackOf = &rb.Int64
 	}
+	v.Automatic = auto == 1
 	return &v, nil
 }
 

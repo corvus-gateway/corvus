@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -39,6 +40,7 @@ type OpenResty struct {
 	exitErr    error
 	running    bool
 	started    time.Time
+	version    string    // version directory "current" pointed to at the last start
 	errs       *errLog   // recent serious lines of the gateway's stderr
 	reloadAt   time.Time // when the last reload was requested
 	supervised bool      // Supervise restarts the gateway when it exits
@@ -110,6 +112,7 @@ func (o *OpenResty) Start() error {
 	}
 	o.cmd = cmd
 	o.started = time.Now()
+	o.version = confVersion(o.CurrentConf)
 	o.running = true
 	done, exited := make(chan error, 1), make(chan struct{})
 	o.done, o.exited = done, exited
@@ -123,6 +126,16 @@ func (o *OpenResty) Start() error {
 	}()
 	slog.Info("gateway started", "pid", cmd.Process.Pid, "conf", o.CurrentConf)
 	return nil
+}
+
+// confVersion returns the version directory the symlinked directory of conf points to
+// ("" when it is not a symlink).
+func confVersion(conf string) string {
+	target, err := os.Readlink(filepath.Dir(filepath.FromSlash(conf)))
+	if err != nil {
+		return ""
+	}
+	return filepath.Base(target)
 }
 
 // Restart policy of Supervise (variables for tests).
@@ -140,9 +153,10 @@ var (
 // is deployed meanwhile (Reload). The control plane and its console keep running.
 //
 // onBootFailure (may be nil) is called with the number of consecutive early exits (the
-// process started, then exited within stableAfter); it returns true when it switched
-// the configuration, which is then tried at once.
-func (o *OpenResty) Supervise(ctx context.Context, onBootFailure func(failures int) bool) {
+// process started, then exited within stableAfter) and the version directory the
+// process was started with ("" if unknown); it returns true when it switched the
+// configuration, which is then tried at once.
+func (o *OpenResty) Supervise(ctx context.Context, onBootFailure func(failures int, version string) bool) {
 	o.mu.Lock()
 	o.supervised = true
 	if o.kick == nil {
@@ -152,20 +166,17 @@ func (o *OpenResty) Supervise(ctx context.Context, onBootFailure func(failures i
 	o.mu.Unlock()
 	backoff, failures := minBackoff, 0
 	for {
-		select { // a pending restart request is served by this start
-		case <-kick:
-		default:
-		}
 		if ctx.Err() != nil || o.isStopping() {
 			return
 		}
-		var reason string
+		var reason, version string
 		early := false
 		if err := o.Start(); err != nil {
 			reason = "cannot start the gateway: " + err.Error()
 		} else {
 			o.mu.Lock()
 			exited, started := o.exited, o.started
+			version = o.version
 			o.mu.Unlock()
 			select {
 			case <-ctx.Done():
@@ -190,7 +201,13 @@ func (o *OpenResty) Supervise(ctx context.Context, onBootFailure func(failures i
 		o.problem = reason
 		o.mu.Unlock()
 		slog.Error("GATEWAY DOWN: the admin console stays available; retrying", "reason", reason, "failed_starts", failures, "retry_in", backoff)
-		if early && onBootFailure != nil && onBootFailure(failures) {
+		if early && onBootFailure != nil && onBootFailure(failures, version) {
+			// The switch reloaded (kicked) the stopped gateway: that request is served by
+			// the next start. A deployment after this point kicks again and resets the count.
+			select {
+			case <-kick:
+			default:
+			}
 			continue
 		}
 		select {

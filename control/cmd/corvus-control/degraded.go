@@ -2,17 +2,18 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
-	"strings"
 	"time"
 
+	"corvus/control/internal/deploy"
 	"corvus/control/internal/store"
 )
 
 // fallbackDeployer is the part of deploy.Deployer the boot-failure policy uses.
 type fallbackDeployer interface {
-	Fallback(ctx context.Context, skipLive bool, reason string) (*store.ConfigVersion, error)
-	SafeMode(ctx context.Context, reason string) (*store.ConfigVersion, error)
+	Fallback(ctx context.Context, failed string, reason string) (*store.ConfigVersion, error)
+	SafeMode(ctx context.Context, failed string, reason string) (*store.ConfigVersion, error)
 }
 
 // gatewayBootFailure is the gateway supervisor's policy for a gateway that exits right
@@ -21,14 +22,17 @@ type fallbackDeployer interface {
 //   - 1st and 2nd failure: retry the same configuration (a port held briefly, e.g. by a
 //     container that starts at the same time, gets two more tries);
 //   - 3rd: fall back to the newest earlier configuration that passes the test, recorded
-//     as a rollback (Fallback, which ends in safe mode when none is left);
+//     as an automatic rollback (Fallback, which ends in safe mode when none is left);
 //   - 4th: safe mode (default server only), unless the fallback already was;
 //   - later: keep retrying with backoff; the console stays available to fix the settings.
 //
-// A configuration deployed from the console meanwhile starts the count again.
-func gatewayBootFailure(ctx context.Context, dep fallbackDeployer) func(failures int) bool {
+// version is the version directory the gateway failed with: when another one is live by
+// the time the policy acts (a deployment from the console), the switch is abandoned
+// (deploy.ErrLiveChanged) and that deployment starts the count again. Automatic
+// fallbacks are not kept across restarts: the next start tries the stored settings.
+func gatewayBootFailure(ctx context.Context, dep fallbackDeployer) func(failures int, version string) bool {
 	safe := false
-	return func(failures int) bool {
+	return func(failures int, version string) bool {
 		var v *store.ConfigVersion
 		var err error
 		switch {
@@ -36,17 +40,21 @@ func gatewayBootFailure(ctx context.Context, dep fallbackDeployer) func(failures
 			safe = false
 			return false
 		case failures == 3:
-			v, err = dep.Fallback(ctx, true, "the gateway did not start with the active configuration")
+			v, err = dep.Fallback(ctx, version, "the gateway did not start with the active configuration")
 		case failures == 4 && !safe:
-			v, err = dep.SafeMode(ctx, "the gateway did not start with an earlier configuration either")
+			v, err = dep.SafeMode(ctx, version, "the gateway did not start with an earlier configuration either")
 		default:
+			return false
+		}
+		if errors.Is(err, deploy.ErrLiveChanged) {
+			slog.Info("gateway fallback abandoned: a new configuration was deployed meanwhile")
 			return false
 		}
 		if err != nil {
 			slog.Error("gateway fallback failed", "err", err)
 			return false
 		}
-		safe = strings.HasPrefix(v.Message, "safe mode")
+		safe = deploy.IsSafeMode(v)
 		return true
 	}
 }
