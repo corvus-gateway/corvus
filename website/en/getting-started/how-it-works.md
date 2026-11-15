@@ -116,6 +116,63 @@ site is now served through Corvus. See [Your first proxy host](first-host.md) fo
 - **Wrong links or mixed content**: set the app's site address to `https://example.com` (for
   WordPress: *Settings → General*).
 
+## The services run on other servers { #services-on-other-servers }
+
+Corvus does not have to run next to your services. A common setup is one gateway server that
+receives the traffic from the internet, with the actual services on other servers in the private
+network:
+
+```text
+Internet ──► :80 / :443  gateway server (Corvus)  ──►  10.0.0.21:8080   (web server)
+                                                  ──►  10.0.0.22:3000   (app server)
+                                                  ──►  nas.corp.example:5001 (NAS, HTTPS)
+```
+
+Enter the other server's address as the **Forward host**: a private IP address such as
+`10.0.0.21` or `192.168.1.20`, or a DNS name. Private addresses are allowed. A service that uses
+HTTPS with a self-signed certificate works too: choose the `https` scheme; Corvus does not check
+the backend's certificate.
+
+**DNS names.** Corvus looks names up through DNS at request time (and again every 30 seconds, so a
+changed address is picked up). Two things work differently from typing the name on the server:
+
+- **Use the full name** (`app01.corp.example`), not a short one (`app01`). Corvus does not append
+  the search domains of `/etc/resolv.conf`, so a short name that only works through a search domain
+  answers *502 Bad Gateway*.
+- **Names only in the gateway server's `/etc/hosts`** are not visible inside the container. Add
+  them to the Corvus service in `docker-compose.yml`; Corvus uses those addresses:
+
+    ```yaml
+        extra_hosts:
+          - 'app01.corp.example:10.0.0.21'
+    ```
+
+**Docker networks that overlap your network.** Docker picks private address ranges for its own
+networks (for example `172.18.0.0/16` or `192.168.16.0/20`). If such a range is also used in your
+private network, Corvus cannot reach the servers in it: those hosts answer *502* while others work.
+Check with `docker network inspect <network> | grep Subnet` and give the Corvus network a range
+that is free in your network:
+
+```yaml
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+```
+
+To keep Docker away from your ranges for all new networks, set `default-address-pools` in
+`/etc/docker/daemon.json`.
+
+**On the service servers:**
+
+- Requests arrive from the **gateway server's address**. The visitor's address is in
+  `X-Forwarded-For` and `X-Real-IP`. Add the gateway server's address to the app's trusted proxies
+  (for example `trusted_proxies` in Nextcloud, `set_real_ip_from` in nginx) so it logs and limits
+  the real visitor.
+- Let only the gateway server connect to the service ports (firewall). Otherwise anyone in the
+  network can bypass Corvus and its protections.
+
 ## Next
 
 - [Install](install.md)
