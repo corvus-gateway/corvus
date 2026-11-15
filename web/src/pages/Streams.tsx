@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
-import { ArrowRight, Cable, Lock, Pencil, Plus, Trash2 } from "lucide-react";
-import { api, type Certificate, type Stream } from "../api";
+import { Link } from "react-router-dom";
+import { AlertTriangle, ArrowRight, Cable, Lock, Pencil, Plus, Trash2 } from "lucide-react";
+import { api, type Certificate, type NetworkSettings, type Stream } from "../api";
+import { ppTrustedError } from "../components/ErrorHint";
 import { NoteLine, NotesSection, notesMatch } from "../components/NotesField";
 import { ErrorBox, PageHeader, RefreshError, Toolbar, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
-import { Badge, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
+import { Badge, Callout, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
 import { Field, FormSection, IdField, Input, NumberInput, Segmented, Select, SearchInput, Switch, SwitchRow, fieldErr } from "../components/ui/form";
 import { ConfirmDialog, RowMenu, Sheet, SheetCancel, useDirty } from "../components/ui/overlay";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
@@ -53,6 +55,11 @@ export default function Streams() {
   const setProto = (p: Proto) => set({ tcp_forwarding: p !== "udp", udp_forwarding: p !== "tcp", ...(p === "udp" ? { certificate_id: null, proxy_protocol_in: false, proxy_protocol_out: false } : {}) });
   const incomplete = !f || !Number.isFinite(f.incoming_port) || !Number.isFinite(f.forward_port) || !f.forward_host.trim();
   const pending = !!f?.certificate_id && cert(f.certificate_id)?.status === "pending";
+  // Accepting the PROXY protocol needs the trusted sources on the Network page.
+  const net = useResource<NetworkSettings>(editing ? "/api/settings/network" : null);
+  const noTrusted = !!net.data?.proxy_protocol && !net.data.proxy_protocol.trusted?.length;
+  const ppErrIn = ppTrustedError(t, error, "proxy_protocol_in");
+  const ppErr = ppErrIn ?? fieldErr(error, "proxy_protocol_out");
 
   const save = async () => {
     if (!editing) return;
@@ -171,8 +178,15 @@ export default function Streams() {
                 <SwitchRow label={t("streamPPIn")} description={t("streamPPInDesc")} checked={!!f.proxy_protocol_in} onChange={(v) => set({ proxy_protocol_in: v })} />
                 <SwitchRow label={t("streamPPOut")} description={t("streamPPOutDesc")} checked={!!f.proxy_protocol_out} onChange={(v) => set({ proxy_protocol_out: v })} />
               </div>
-              {(fieldErr(error, "proxy_protocol_in") || fieldErr(error, "proxy_protocol_out")) && (
-                <p role="alert" className="text-xs text-danger">{fieldErr(error, "proxy_protocol_in") || fieldErr(error, "proxy_protocol_out")}</p>
+              {ppErr ? (
+                <p role="alert" className="text-xs text-danger">{ppErr}{ppErrIn && <> <Link to="/network#proxy-protocol" className="whitespace-nowrap underline-offset-2 hover:underline">{t("streamPPOpenNetwork")} →</Link></>}</p>
+              ) : f.proxy_protocol_in && noTrusted ? (
+                <Callout tone="warn" icon={AlertTriangle}>
+                  {t("streamPPNoTrusted")}{" "}
+                  <Link to="/network#proxy-protocol" className="whitespace-nowrap text-brand underline-offset-2 hover:underline">{t("streamPPOpenNetwork")} →</Link>
+                </Callout>
+              ) : f.proxy_protocol_in && (
+                <Link to="/network#proxy-protocol" className="inline-block text-xs text-brand underline-offset-2 hover:underline">{t("streamPPOpenNetwork")} →</Link>
               )}
             </FormSection>
           )}

@@ -71,6 +71,17 @@ export function errorText(t: TFn, e: unknown): string {
   return FIXED[m] ? t(FIXED[m]) : m;
 }
 
+/** A trusted PROXY protocol sources error (network settings, or a stream that accepts the
+ *  PROXY protocol) in the console language when it is a known one. */
+export function ppTrustedError(t: TFn, error: unknown, field = "proxy_protocol.trusted"): string | undefined {
+  if (!(error instanceof ApiError)) return undefined;
+  const f = error.fields.find((x) => x.field === field);
+  if (!f) return undefined;
+  if (f.code === "trusted_required") return t("streamPPNoTrusted");
+  if (f.code === "required") return f.message.startsWith("stream #") ? t("ppTrustedUsedByStream") : t("ppTrustedRequired");
+  return f.message;
+}
+
 /** Shows a failure as a toast: translated message, the hint sentence and a "How to fix" link. */
 export function useErrorToast() {
   const { t, lang } = useI18n();

@@ -193,6 +193,8 @@ export interface ProxyProtocolSettings { enabled: boolean; http_port: number; ht
 
 export interface NetworkSettings {
   trusted_proxies: string[]; real_ip_header: string; real_ip_headers?: string[]; mask_ips?: boolean;
+  /** Addresses allowed to reach the admin console (empty = any). */
+  admin_allow?: string[];
   proxy_protocol?: ProxyProtocolSettings;
   cloudflare?: { ipv4: number; ipv6: number; updated_at?: string; source?: "builtin" | "remote" };
 }

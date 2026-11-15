@@ -50,10 +50,11 @@ UDP만 쓰는 스트림에서는 보이지 않고, **TCP + UDP**에서는 TCP �
 | **PROXY protocol 받기** | 이 포트의 모든 연결은 터널이나 로드 밸런서(FRP, HAProxy, 클라우드 로드 밸런서)가 보낸 PROXY protocol 헤더(v1 또는 v2)로 시작해야 합니다. **신뢰할 PROXY protocol 출처**에서 온 연결이면 헤더의 방문자 주소를 사용합니다 |
 | **백엔드에 PROXY protocol 보내기** | Corvus가 방문자 주소를 PROXY protocol(v1) 헤더로 서비스에 보냅니다. 서비스가 이 헤더를 기대하도록 설정되어 있어야 하며, 아니면 연결이 실패합니다 |
 
-**받기**를 켜려면 **네트워크** 페이지의 **신뢰할 PROXY protocol 출처**에 주소가 하나 이상 있어야
-합니다([HTTP/HTTPS PROXY protocol 포트](proxy-hosts.md#behind-a-tcp-tunnel-or-load-balancer-proxy-protocol)와
-같은 목록이며, 어떤 주소를 넣을지는 그곳을 참고하세요). 네트워크 페이지의 **PROXY protocol 받기**
-스위치는 필요 없습니다. 그 스위치는 HTTP/HTTPS 포트만 추가합니다. PROXY protocol을 받는 스트림이
+**받기**를 켜려면 **네트워크** 페이지 **PROXY protocol** 카드의 **신뢰할 PROXY protocol 출처**에 주소가
+하나 이상 있어야 합니다([HTTP/HTTPS PROXY protocol 포트](proxy-hosts.md#behind-a-tcp-tunnel-or-load-balancer-proxy-protocol)와
+같은 목록이며, 어떤 주소를 넣을지는 그곳을 참고하세요). 목록이 비어 있으면 스트림 양식에 경고와 함께
+그 카드로 가는 링크가 표시됩니다. 카드의 **PROXY protocol 받기** 스위치는 필요 없습니다. 그 스위치는
+HTTP/HTTPS 포트만 추가합니다. PROXY protocol을 받는 스트림이
 있는 동안에는 신뢰 목록을 비울 수 없습니다. 다른 주소에서 온 연결도 헤더를 보내야 하지만 자기 주소를
 그대로 씁니다. PROXY protocol을 받는 포트는 헤더 없는 연결을 거부하므로, 직접 접속하는 클라이언트용으로는
 스트림(포트)을 따로 두세요.
