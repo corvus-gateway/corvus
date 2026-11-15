@@ -179,14 +179,14 @@ export default function Streams() {
                 <SwitchRow label={t("streamPPOut")} description={t("streamPPOutDesc")} checked={!!f.proxy_protocol_out} onChange={(v) => set({ proxy_protocol_out: v })} />
               </div>
               {ppErr ? (
-                <p role="alert" className="text-xs text-danger">{ppErr}{ppErrIn && <> <Link to="/network#proxy-protocol" className="whitespace-nowrap underline-offset-2 hover:underline">{t("streamPPOpenNetwork")} →</Link></>}</p>
+                <p role="alert" className="text-xs text-danger">{ppErr}{ppErrIn && <> <Link to="/network#proxy-protocol" target="_blank" rel="noopener" className="whitespace-nowrap underline-offset-2 hover:underline">{t("streamPPOpenNetwork")} →</Link></>}</p>
               ) : f.proxy_protocol_in && noTrusted ? (
                 <Callout tone="warn" icon={AlertTriangle}>
                   {t("streamPPNoTrusted")}{" "}
-                  <Link to="/network#proxy-protocol" className="whitespace-nowrap text-brand underline-offset-2 hover:underline">{t("streamPPOpenNetwork")} →</Link>
+                  <Link to="/network#proxy-protocol" target="_blank" rel="noopener" className="whitespace-nowrap text-brand underline-offset-2 hover:underline">{t("streamPPOpenNetwork")} →</Link>
                 </Callout>
               ) : f.proxy_protocol_in && (
-                <Link to="/network#proxy-protocol" className="inline-block text-xs text-brand underline-offset-2 hover:underline">{t("streamPPOpenNetwork")} →</Link>
+                <Link to="/network#proxy-protocol" target="_blank" rel="noopener" className="inline-block text-xs text-brand underline-offset-2 hover:underline">{t("streamPPOpenNetwork")} →</Link>
               )}
             </FormSection>
           )}

@@ -194,9 +194,10 @@ export function Shell() {
   );
 }
 
-function MastPill({ tone, children }: { tone: "ok" | "warn" | "danger" | "neutral"; children: ReactNode }) {
+function MastPill({ tone, title, children }: { tone: "ok" | "warn" | "danger" | "neutral"; title?: string; children: ReactNode }) {
   const dot = { ok: "bg-[#87bb62]", warn: "bg-[#f6be00]", danger: "bg-[#ff7468]", neutral: "bg-[#8a8d90]" }[tone];
-  return <span className="inline-flex h-6 items-center gap-1.5 whitespace-nowrap border border-[#52565a] px-2 text-xs text-[#d2d2d2]"><span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", dot)} />{children}</span>;
+  // a reason (e.g. why the gateway stopped) is shown on hover and on keyboard focus
+  return <span title={title} tabIndex={title ? 0 : undefined} className="inline-flex h-6 items-center gap-1.5 whitespace-nowrap border border-[#52565a] px-2 text-xs text-[#d2d2d2] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[#d2d2d2]"><span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", dot)} />{children}{title && <span className="sr-only">: {title}</span>}</span>;
 }
 
 function StatusPills() {
@@ -207,11 +208,11 @@ function StatusPills() {
   return (<>
     {/* Narrow screens: only problems, in short form. */}
     <div className="flex items-center gap-1.5 md:hidden" role="group" aria-label={t("statusPillsLabel")}>
-      {gw && !gw.running && <MastPill tone="danger"><span className="sr-only">{t("gateway")} · </span>{t("stopped")}</MastPill>}
+      {gw && !gw.running && <MastPill tone="danger" title={gw.error}><span className="sr-only">{t("gateway")} · </span>{t("stopped")}</MastPill>}
       {!overview.redis && <MastPill tone="warn"><span className="sr-only">{t("cacheDb")} · </span>{t("disconnected")}</MastPill>}
     </div>
     <div className="hidden items-center gap-1.5 md:flex" role="group" aria-label={t("statusPillsLabel")}>
-      {gw && <MastPill tone={gw.running ? "ok" : "danger"}>{t("gateway")} · {gw.running ? t("running") : t("stopped")}</MastPill>}
+      {gw && <MastPill tone={gw.running ? "ok" : "danger"} title={gw.running ? undefined : gw.error}>{t("gateway")} · {gw.running ? t("running") : t("stopped")}</MastPill>}
       <MastPill tone={overview.redis ? "ok" : "warn"}>{t("cacheDb")} · {overview.redis ? t("connected") : t("disconnected")}</MastPill>
       <MastPill tone={overview.active_version ? (overview.dirty ? "warn" : "neutral") : "neutral"}>
         {overview.active_version ? t("appliedVersion", { n: overview.active_version.id }) : t("noVersion")}

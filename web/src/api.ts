@@ -175,7 +175,8 @@ export interface TrafficSummary {
 export interface Overview {
   proxy_hosts: number; proxy_hosts_enabled: number; waitrooms: number; certificates: number;
   active_version: Version | null; dirty: boolean; redis: boolean; rooms: LiveStats[]; version: string;
-  gateway?: { running: boolean; uptime_s?: number };
+  /** error: why the gateway is down (set only while it is not running). */
+  gateway?: { running: boolean; uptime_s?: number; error?: string };
   traffic?: TrafficSummary | null;
   certificates_expiring?: number;
   /** A newer Corvus release (checked on GitHub by the server), or null. */

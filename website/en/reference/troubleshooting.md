@@ -154,6 +154,22 @@ on the server or by another container with host networking. Free the port or cho
 `hosts/<id>.conf`. A host's **Advanced nginx config** contains something nginx does not accept. The
 number in the file name is the host's ID; fix or remove the snippet on that host.
 
+## The gateway is stopped { #gateway-stopped }
+
+The header shows **Gateway · stopped** (hover or focus it for the reason, e.g.
+`bind() to 0.0.0.0:8443 failed (98: Address already in use)`). The console keeps running so you can
+fix it; Corvus does not restart the container in a loop.
+
+- Corvus retries starting the gateway with increasing pauses (5 seconds up to 2 minutes) and logs
+  `GATEWAY DOWN` with the reason. Saving any change retries immediately.
+- If the gateway stops again within 30 seconds of starting three times in a row, Corvus switches to
+  the **most recent earlier configuration** that passes the test and records it as a rollback in
+  **Deployments**. If that fails too, it starts a **safe configuration** with only the default
+  server; the header then shows undeployed changes. Fix the cause (free the port, change the
+  stream, remove the faulty advanced snippet) and save or redeploy to return to your configuration.
+- The most common cause is a port that another program on the server took while Corvus was
+  stopped — often a stream port. `docker compose logs corvus` shows the full error.
+
 ## Outbound connections fail { #outbound-errors }
 
 List feeds, the country database, managed rules updates, alert channels, Cloudflare ranges, SSO
