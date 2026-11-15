@@ -16,7 +16,7 @@ export function fieldErr(error: unknown, ...fields: string[]): string | undefine
 const FieldCtx = createContext<{ invalid: boolean; describedBy?: string } | null>(null);
 function useFieldAria(invalid?: boolean) {
   const c = useContext(FieldCtx);
-  return { "aria-invalid": (invalid ?? c?.invalid) || undefined, "aria-describedby": c?.describedBy };
+  return { "aria-invalid": (invalid || c?.invalid) || undefined, "aria-describedby": c?.describedBy };
 }
 
 const control =
