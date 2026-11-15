@@ -176,6 +176,9 @@ export const Menu = {
   ),
 };
 
+/** Classes for a focusable tooltip trigger (`<span tabIndex={0}>` around a badge whose details are in the tooltip). */
+export const tipTrigger = "rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand";
+
 export function Tip({ label, children, side = "top" }: { label: ReactNode; children: ReactNode; side?: "top" | "right" | "bottom" | "left" }) {
   return (
     <Tooltip.Root delayDuration={250}>

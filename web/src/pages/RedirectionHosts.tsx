@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, ArrowRight, Copy, ExternalLink, Loader2, Lock, Pencil, Plus, ShieldAlert, Signpost, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight, Copy, ExternalLink, Lock, Pencil, Plus, ShieldAlert, Signpost, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { api, type Certificate, type RedirectionHost, type RedirectScheme } from "../api";
-import { NoteLine, NotesSection, notesMatch } from "../components/NotesField";
+import { api, type RedirectionHost, type RedirectScheme } from "../api";
+import { NoteLine, NotesSection } from "../components/NotesField";
+import { MoreDomains, SortTh, SslBadge, useCertificates, useHostList } from "../components/hosts";
+import { Pagination } from "../components/Pagination";
 import { ErrorBox, PageHeader, RefreshError, Toolbar, useSubmit } from "../components/common";
 import { Button } from "../components/ui/button";
 import { Badge, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
 import { Field, FormSection, IdField, Input, Segmented, Select, SearchInput, Switch, SwitchRow, TagInput, Textarea, fieldErr } from "../components/ui/form";
-import { ConfirmDialog, RowMenu, Sheet, SheetCancel, Tip, useDirty } from "../components/ui/overlay";
+import { ConfirmDialog, RowMenu, Sheet, SheetCancel, useDirty } from "../components/ui/overlay";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
 import { useResource } from "../hooks/useResource";
 import { useCan } from "../lib/rbac";
@@ -15,7 +17,7 @@ import { useI18n, type Key } from "../i18n";
 import { useDnsProviders } from "../hooks/useDnsProviders";
 import { DnsFields, dnsRequest, newDnsChoice, type DnsChoice } from "../components/DnsFields";
 import { useApp } from "../lib/app";
-import { cn, relTime } from "../lib/utils";
+import { cn, fmtDateTime, relTime } from "../lib/utils";
 
 interface CertReq { email: string; dns: boolean; dnsc: DnsChoice; staging: boolean; agree: boolean }
 
@@ -45,9 +47,7 @@ export default function RedirectionHosts() {
   const { t, lang } = useI18n();
   const { can, isAdmin } = useCan();
   const hosts = useResource<RedirectionHost[]>("/api/redirection-hosts", { poll: 15000 });
-  const [certPoll, setCertPoll] = useState(0);
-  const certs = useResource<Certificate[]>("/api/certificates", { poll: certPoll });
-  useEffect(() => { setCertPoll(certs.data?.some((c) => c.status === "pending") ? 3000 : 0); }, [certs.data]);
+  const { certs, byId: certById } = useCertificates();
   const providers = useDnsProviders();
   const { user } = useApp();
 
@@ -58,13 +58,10 @@ export default function RedirectionHosts() {
   const { busy, error, setError, run } = useSubmit();
   const rowAction = useSubmit({ toastAll: true });
 
-  const certName = (id: number | null) => certs.data?.find((c) => c.id === id)?.name;
+  const certName = (id: number | null) => (id == null ? undefined : certById.get(id)?.name);
 
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return hosts.data ?? [];
-    return (hosts.data ?? []).filter((h) => h.domains.some((d) => d.toLowerCase().includes(s)) || h.forward_domain.toLowerCase().includes(s) || notesMatch(h.notes, s));
-  }, [hosts.data, q]);
+  const list = useHostList(hosts.data, q, (h) => `${h.domains.join(" ")} ${h.forward_domain} ${h.notes ?? ""}`);
+  const filtered = list.rows;
 
   const open = (h?: RedirectionHost) => { setError(null); setEditing({ id: h?.id ?? null, form: h ? toForm(h) : { ...blank }, req: null }); };
   const newReq = (): CertReq => ({ email: user.email, dns: false, dnsc: newDnsChoice(providers[0]), staging: false, agree: false });
@@ -119,11 +116,12 @@ export default function RedirectionHosts() {
           ) : (
             <Table>
               <THead><tr>
-                <Th>{t("domains")}</Th><Th className="hidden md:table-cell">{t("redirectTo")}</Th><Th className="hidden sm:table-cell">{t("sslCol")}</Th><Th className="hidden lg:table-cell">{t("protection")}</Th>
+                <SortTh label={t("domains")} k="domain" sort={list.sort} onSort={list.toggle} /><Th className="hidden md:table-cell">{t("redirectTo")}</Th><Th className="hidden sm:table-cell">{t("sslCol")}</Th><Th className="hidden lg:table-cell">{t("protection")}</Th>
+                <SortTh label={t("lastUpdated")} k="updated" sort={list.sort} onSort={list.toggle} className="hidden xl:table-cell" />
                 <Th>{t("status")}</Th><Th className="w-12"><span className="sr-only">{t("actions")}</span></Th>
               </tr></THead>
               <tbody>
-                {filtered.map((h) => {
+                {list.shown.map((h) => {
                   const cn_ = certName(h.certificate_id);
                   return (
                     <Tr key={h.id}>
@@ -132,24 +130,25 @@ export default function RedirectionHosts() {
                           <a href={`${h.certificate_id ? "https" : "http"}://${h.domains[0]?.replace(/^\*\./, "")}`} target="_blank" rel="noreferrer noopener" className="group inline-flex items-center gap-1.5 font-medium text-fg hover:text-brand">
                             {h.domains[0]}<ExternalLink className="h-3 w-3 opacity-0 transition group-hover:opacity-70" aria-hidden />
                           </a>
-                          {h.domains.length > 1 && <Tip label={h.domains.slice(1).join(", ")}><span><Badge>+{h.domains.length - 1}</Badge></span></Tip>}
+                          <MoreDomains domains={h.domains} />
                         </div>
                         <div className="mt-0.5 flex items-center gap-2 text-xs text-fg-subtle">
                           {cn_ ? <span className="inline-flex items-center gap-1"><Lock className="h-3 w-3 text-ok" aria-hidden />{cn_}</span> : <span>{t("noTls")}</span>}
-                          <span className="hidden sm:inline">· {relTime(h.updated_at, lang)}</span>
+                          <span className="hidden sm:inline xl:hidden">· {relTime(h.updated_at, lang)}</span>
                         </div>
                         <NoteLine notes={h.notes} />
                       </Td>
                       <Td className="hidden md:table-cell">
                         <Mono className="inline-flex items-center gap-1.5 text-fg-muted"><Badge>{h.http_code}</Badge><ArrowRight className="h-3 w-3 text-fg-subtle" aria-hidden />{target(h)}</Mono>
                       </Td>
-                      <Td className="hidden sm:table-cell"><SslBadge cert={certs.data?.find((c) => c.id === h.certificate_id)} /></Td>
+                      <Td className="hidden sm:table-cell"><SslBadge cert={h.certificate_id == null ? undefined : certById.get(h.certificate_id)} /></Td>
                       <Td className="hidden lg:table-cell">
                         <div className="flex flex-wrap items-center gap-1.5">
                           {h.ssl_forced && <Badge tone="ok" icon={Lock}>HTTPS</Badge>}
                           {h.block_exploits && <Badge tone="warn" icon={ShieldAlert}>{t("exploitShort")}</Badge>}
                         </div>
                       </Td>
+                      <Td className="hidden whitespace-nowrap text-xs text-fg-muted xl:table-cell"><time dateTime={h.updated_at} title={fmtDateTime(h.updated_at, lang)}>{relTime(h.updated_at, lang)}</time></Td>
                       <Td>
                         <div className="flex items-center gap-2">
                           <Switch checked={h.enabled} onCheckedChange={(v) => toggle(h, v)} label={`${h.domains[0]} ${t("enabled")}`} disabled={rowAction.busy || !can} />
@@ -169,6 +168,7 @@ export default function RedirectionHosts() {
               </tbody>
             </Table>
           )}
+        {list.pager && <Pagination {...list.pager} className="border-t border-line px-4 py-2.5" />}
       </Card>
 
       <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(null)} onSubmit={save} dirty={dirty} error={error} width="max-w-[38rem]"
@@ -260,13 +260,4 @@ export default function RedirectionHosts() {
       </ConfirmDialog>
     </>
   );
-}
-
-function SslBadge({ cert }: { cert?: Certificate }) {
-  const { t } = useI18n();
-  if (!cert) return <span className="text-xs text-fg-subtle">{t("sslNone")}</span>;
-  const label = cert.kind === "acme" ? t("sslLetsEncrypt") : t("sslCustom");
-  if (cert.status === "pending") return <Badge tone="info" icon={Loader2} className="[&_svg]:animate-spin">{label} · {t("certStatusPending")}</Badge>;
-  if (cert.status === "error") return <Tip label={cert.last_error || t("certError")}><span><Badge tone="danger" icon={AlertCircle}>{label} · {t("certError")}</Badge></span></Tip>;
-  return <Badge tone="ok" icon={Lock}>{label}</Badge>;
 }

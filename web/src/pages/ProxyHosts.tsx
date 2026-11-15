@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, AlertTriangle, Loader2, ArrowRight, Copy, Globe, Lock, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2, Users, Zap, Gauge, KeyRound, ExternalLink, UserPlus, X, Siren, ShieldOff } from "lucide-react";
+import { useMemo, useState } from "react";
+import { AlertTriangle, ArrowRight, Copy, Globe, Lock, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2, Users, Zap, Gauge, KeyRound, ExternalLink, UserPlus, X, Siren, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
-import { api, type AccessList, type Certificate, type ClientIPMode, type ProxyHost, type RateLimit, type SecurityHeaders, type UnderAttackStatus, type Waitroom } from "../api";
+import { api, type AccessList, type ClientIPMode, type ProxyHost, type RateLimit, type SecurityHeaders, type UnderAttackStatus, type Waitroom } from "../api";
 import { UnderAttackFields, uaConfig, UA_DEFAULTS } from "../components/UnderAttackFields";
 import { LocationsFields } from "../components/LocationsFields";
-import { NoteLine, NotesSection, notesMatch } from "../components/NotesField";
+import { NoteLine, NotesSection } from "../components/NotesField";
+import { MoreDomains, SortTh, SslBadge, useCertificates, useHostList } from "../components/hosts";
+import { Pagination } from "../components/Pagination";
 import { ErrorBox, PageHeader, RefreshError, Toolbar, useSubmit } from "../components/common";
 import { Button, IconButton } from "../components/ui/button";
 import { Badge, Callout, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
 import { Field, FormSection, IdField, Input, NumberInput, Segmented, Select, SearchInput, Switch, SwitchRow, TagInput, Textarea, fieldErr } from "../components/ui/form";
-import { ConfirmDialog, RowMenu, Sheet, SheetCancel, Tip, useDirty } from "../components/ui/overlay";
+import { ConfirmDialog, RowMenu, Sheet, SheetCancel, Tip, tipTrigger, useDirty } from "../components/ui/overlay";
 import { servesConsole } from "../locales/consolehost.i18n";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
 import { useResource } from "../hooks/useResource";
@@ -18,7 +20,7 @@ import { useI18n } from "../i18n";
 import { useDnsProviders } from "../hooks/useDnsProviders";
 import { DnsFields, dnsRequest, newDnsChoice, type DnsChoice } from "../components/DnsFields";
 import { useApp } from "../lib/app";
-import { cn, relTime } from "../lib/utils";
+import { cn, fmtDateTime, relTime } from "../lib/utils";
 
 interface AuthUser { username: string; password: string; existing?: boolean }
 interface BasicAuthForm { enabled: boolean; users: AuthUser[] }
@@ -49,16 +51,15 @@ export default function ProxyHosts() {
   const { t, lang } = useI18n();
   const { can, isAdmin } = useCan();
   const hosts = useResource<ProxyHost[]>("/api/proxy-hosts", { poll: 15000 });
-  const [certPoll, setCertPoll] = useState(0);
-  const certs = useResource<Certificate[]>("/api/certificates", { poll: certPoll });
-  useEffect(() => { setCertPoll(certs.data?.some((c) => c.status === "pending") ? 3000 : 0); }, [certs.data]);
+  const { certs, byId: certById } = useCertificates();
   const providers = useDnsProviders();
   const { user } = useApp();
   const rooms = useResource<Waitroom[]>("/api/waitrooms");
   const limits = useResource<RateLimit[]>("/api/rate-limits");
   const lists = useResource<AccessList[]>("/api/access-lists");
   const ua = useResource<UnderAttackStatus[]>("/api/under-attack", { poll: 10000 });
-  const uaOf = (id: number | null | undefined) => ua.data?.find((s) => s.host_id === id);
+  const uaById = useMemo(() => new Map((ua.data ?? []).map((s) => [s.host_id, s])), [ua.data]);
+  const uaOf = (id: number | null | undefined) => (id == null ? undefined : uaById.get(id));
 
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<{ id: number | null; form: Form; req: CertReq | null; auth: BasicAuthForm } | null>(null);
@@ -67,9 +68,11 @@ export default function ProxyHosts() {
   const { busy, error, setError, run } = useSubmit();
   const rowAction = useSubmit({ toastAll: true });
 
-  const certName = (id: number | null) => certs.data?.find((c) => c.id === id)?.name;
-  const roomName = (id: number | null) => rooms.data?.find((r) => r.id === id)?.name;
-  const limitName = (id?: number | null) => limits.data?.find((r) => r.id === id)?.name;
+  const roomById = useMemo(() => new Map((rooms.data ?? []).map((r) => [r.id, r])), [rooms.data]);
+  const limitById = useMemo(() => new Map((limits.data ?? []).map((r) => [r.id, r])), [limits.data]);
+  const certName = (id: number | null) => (id == null ? undefined : certById.get(id)?.name);
+  const roomName = (id: number | null) => (id == null ? undefined : roomById.get(id)?.name);
+  const limitName = (id?: number | null) => (id == null ? undefined : limitById.get(id)?.name);
 
   // Fields introduced after the base API are hidden when the backend does not return them.
   const sample = hosts.data?.[0];
@@ -84,11 +87,8 @@ export default function ProxyHosts() {
   const showLimits = !limits.missing && has("rate_limit_id");
   const showLists = !lists.missing && has("access_list_id");
 
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return hosts.data ?? [];
-    return (hosts.data ?? []).filter((h) => h.domains.some((d) => d.toLowerCase().includes(s)) || `${h.forward_host}:${h.forward_port}`.includes(s) || notesMatch(h.notes, s));
-  }, [hosts.data, q]);
+  const list = useHostList(hosts.data, q, (h) => `${h.domains.join(" ")} ${h.forward_scheme}://${h.forward_host}:${h.forward_port} ${h.notes ?? ""}`);
+  const filtered = list.rows;
 
   const open = (h?: ProxyHost) => { setError(null); setEditing({ id: h?.id ?? null, form: h ? toForm(h) : { ...blank }, req: null, auth: authFrom(h) }); };
   const newReq = (): CertReq => ({ email: user.email, dns: false, dnsc: newDnsChoice(providers[0]), staging: false, agree: false });
@@ -163,11 +163,12 @@ export default function ProxyHosts() {
           ) : (
             <Table>
               <THead><tr>
-                <Th>{t("domains")}</Th><Th className="hidden md:table-cell">{t("forwardTo")}</Th><Th className="hidden sm:table-cell">{t("sslCol")}</Th><Th className="hidden lg:table-cell">{t("protection")}</Th>
+                <SortTh label={t("domains")} k="domain" sort={list.sort} onSort={list.toggle} /><Th className="hidden md:table-cell">{t("forwardTo")}</Th><Th className="hidden sm:table-cell">{t("sslCol")}</Th><Th className="hidden lg:table-cell">{t("protection")}</Th>
+                <SortTh label={t("lastUpdated")} k="updated" sort={list.sort} onSort={list.toggle} className="hidden xl:table-cell" />
                 <Th>{t("status")}</Th><Th className="w-12"><span className="sr-only">{t("actions")}</span></Th>
               </tr></THead>
               <tbody>
-                {filtered.map((h) => {
+                {list.shown.map((h) => {
                   const cn_ = certName(h.certificate_id);
                   const uaSt = uaOf(h.id);
                   return (
@@ -177,26 +178,26 @@ export default function ProxyHosts() {
                           <a href={`${h.certificate_id ? "https" : "http"}://${h.domains[0]?.replace(/^\*\./, "")}`} target="_blank" rel="noreferrer noopener" className="group inline-flex items-center gap-1.5 font-medium text-fg hover:text-brand">
                             {h.domains[0]}<ExternalLink className="h-3 w-3 opacity-0 transition group-hover:opacity-70" aria-hidden />
                           </a>
-                          {h.domains.length > 1 && <Tip label={h.domains.slice(1).join(", ")}><span><Badge>+{h.domains.length - 1}</Badge></span></Tip>}
-                          {uaSt?.active && <Tip label={uaSt.reason || t("uaOn")}><span><Badge tone="danger" icon={Siren}>{t("uaBadge")}</Badge></span></Tip>}
-                          {servesConsole(h.domains) && <Tip label={t("consoleHostTitle")}><span><Badge tone="info">{t("consoleHostBadge")}</Badge></span></Tip>}
+                          <MoreDomains domains={h.domains} />
+                          {uaSt?.active && <Tip label={uaSt.reason || t("uaOn")}><span tabIndex={0} className={tipTrigger}><Badge tone="danger" icon={Siren}>{t("uaBadge")}</Badge></span></Tip>}
+                          {servesConsole(h.domains) && <Tip label={t("consoleHostTitle")}><span tabIndex={0} className={tipTrigger}><Badge tone="info">{t("consoleHostBadge")}</Badge></span></Tip>}
                         </div>
                         <div className="mt-0.5 flex items-center gap-2 text-xs text-fg-subtle">
                           {cn_ ? <span className="inline-flex items-center gap-1"><Lock className="h-3 w-3 text-ok" aria-hidden />{cn_}</span> : <span>{t("noTls")}</span>}
-                          <span className="hidden sm:inline">· {relTime(h.updated_at, lang)}</span>
+                          <span className="hidden sm:inline xl:hidden">· {relTime(h.updated_at, lang)}</span>
                         </div>
                         <NoteLine notes={h.notes} />
                       </Td>
                       <Td className="hidden md:table-cell">
                         <Mono className="inline-flex items-center gap-1.5 text-fg-muted"><ArrowRight className="h-3 w-3 text-fg-subtle" aria-hidden />{h.forward_scheme}://{h.forward_host}:{h.forward_port}</Mono>
                       </Td>
-                      <Td className="hidden sm:table-cell"><SslBadge cert={certs.data?.find((c) => c.id === h.certificate_id)} /></Td>
+                      <Td className="hidden sm:table-cell"><SslBadge cert={h.certificate_id == null ? undefined : certById.get(h.certificate_id)} /></Td>
                       <Td className="hidden lg:table-cell">
                         <div className="flex flex-wrap items-center gap-1.5">
                           {h.ssl_forced && <Badge tone="ok" icon={Lock}>HTTPS</Badge>}
                           {h.websocket && <Badge icon={Zap}>WS</Badge>}
                           {h.waitroom_id != null && <Badge tone="brand" icon={Users}>{roomName(h.waitroom_id) ?? t("navRooms")}</Badge>}
-                          {h.rate_limit_id != null && <Badge tone="info" icon={Gauge}>{limitName(h.rate_limit_id) ?? "Rate limit"}</Badge>}
+                          {h.rate_limit_id != null && <Badge tone="info" icon={Gauge}>{limitName(h.rate_limit_id) ?? t("rateLimitShort")}</Badge>}
                           {(h.basic_auth_users?.length ?? 0) > 0 && <Badge tone="info" icon={KeyRound}>{t("basicAuthBadge")}</Badge>}
                           {h.block_exploits && <Badge tone="warn" icon={ShieldAlert}>{t("exploitShort")}</Badge>}
                           {h.under_attack === "auto" && !uaSt?.active && <Badge icon={Siren}>{t("uaAutoArmed")}</Badge>}
@@ -204,6 +205,7 @@ export default function ProxyHosts() {
                           {h.client_ip && h.client_ip !== "direct" && <Badge>{h.client_ip === "cloudflare" ? "Cloudflare" : t("trustedProxiesShort")}</Badge>}
                         </div>
                       </Td>
+                      <Td className="hidden whitespace-nowrap text-xs text-fg-muted xl:table-cell"><time dateTime={h.updated_at} title={fmtDateTime(h.updated_at, lang)}>{relTime(h.updated_at, lang)}</time></Td>
                       <Td>
                         <div className="flex items-center gap-2">
                           <Switch checked={h.enabled} onCheckedChange={(v) => toggle(h, v)} label={`${h.domains[0]} ${t("enabled")}`} disabled={rowAction.busy || !can} />
@@ -224,6 +226,7 @@ export default function ProxyHosts() {
               </tbody>
             </Table>
           )}
+        {list.pager && <Pagination {...list.pager} className="border-t border-line px-4 py-2.5" />}
       </Card>
 
       <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(null)} onSubmit={save} dirty={dirty} error={error} width="max-w-[38rem]"
@@ -419,13 +422,4 @@ export default function ProxyHosts() {
       </ConfirmDialog>
     </>
   );
-}
-
-function SslBadge({ cert }: { cert?: Certificate }) {
-  const { t } = useI18n();
-  if (!cert) return <span className="text-xs text-fg-subtle">{t("sslNone")}</span>;
-  const label = cert.kind === "acme" ? t("sslLetsEncrypt") : t("sslCustom");
-  if (cert.status === "pending") return <Badge tone="info" icon={Loader2} className="[&_svg]:animate-spin">{label} · {t("certStatusPending")}</Badge>;
-  if (cert.status === "error") return <Tip label={cert.last_error || t("certError")}><span><Badge tone="danger" icon={AlertCircle}>{label} · {t("certError")}</Badge></span></Tip>;
-  return <Badge tone="ok" icon={Lock}>{label}</Badge>;
 }
