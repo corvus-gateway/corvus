@@ -27,7 +27,8 @@
 #   <4 CPUs:  no pinning (numbers are then only a rough indication)
 #
 # Ports used on the host (must be free): 80, 443, 9443, 9180, 9181 (Corvus), 6390 (embedded
-# Valkey, CORVUS_REDIS_PORT), 18080 (nginx baseline), 18081 (backend).
+# Valkey, CORVUS_REDIS_PORT), 18080 (nginx baseline), 18081 (backend), 81 (Nginx Proxy Manager
+# admin API; NPM also uses 80 and 443 after Corvus has stopped).
 #
 # Every network call and wrk run is bounded by a timeout. A scenario that fails or times out is
 # recorded as skipped (with the reason) and the next one runs. The script removes its
@@ -39,10 +40,12 @@ DURATION=${DURATION:-20s}
 WARMUP=${WARMUP:-5s}
 CONNECTIONS=${CONNECTIONS:-64}
 OUT_DIR=${OUT_DIR:-./bench-out}
-ALL_SCENARIOS="nginx-baseline corvus-default corvus-protected corvus-https-keepalive corvus-https-newconn corvus-queue corvus-challenge-pass"
+ALL_SCENARIOS="nginx-baseline corvus-default corvus-protected corvus-https-keepalive corvus-https-newconn corvus-queue corvus-challenge-pass npm-default npm-block-exploits"
 SCENARIOS=${SCENARIOS:-$ALL_SCENARIOS}
 # nginx 1.28 (stable), multi-arch index digest
 NGINX_IMAGE=nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+# Nginx Proxy Manager 2.17.0, multi-arch index digest
+NPM_IMAGE=jc21/nginx-proxy-manager:2.17.0@sha256:91277490a919c792aa73b8d291af1ca84d32be74df988e543137976515763534
 
 BACKEND_PORT=18081
 BASELINE_PORT=18080
@@ -52,12 +55,17 @@ H_PLAIN=bench-plain.test
 H_PROT=bench-protected.test
 H_QUEUE=bench-queue.test
 H_CHAL=bench-challenge.test
+H_NPM=bench-npm.test
+H_NPMX=bench-npm-exploits.test
 HOSTS_MARK="# corvus-bench"
 
 C_BACKEND=corvus-bench-backend
 C_BASELINE=corvus-bench-nginx
 C_CORVUS=corvus-bench-corvus
 VOL=corvus-bench-data
+C_NPM=corvus-bench-npm
+VOL_NPM=corvus-bench-npm-data
+VOL_NPM_LE=corvus-bench-npm-le
 
 log() { echo "[bench] $(date -u +%H:%M:%S) $*" >&2; }
 # Inside a scenario (a subshell) die ends only that scenario; the reason is kept for the report.
@@ -83,8 +91,8 @@ ADDED_HOSTS=""
 
 cleanup() {
   log "cleanup"
-  timeout 60 docker rm -f "$C_BACKEND" "$C_BASELINE" "$C_CORVUS" >/dev/null 2>&1 || true
-  timeout 30 docker volume rm "$VOL" >/dev/null 2>&1 || true
+  timeout 60 docker rm -f "$C_BACKEND" "$C_BASELINE" "$C_CORVUS" "$C_NPM" >/dev/null 2>&1 || true
+  timeout 30 docker volume rm "$VOL" "$VOL_NPM" "$VOL_NPM_LE" >/dev/null 2>&1 || true
   if [ -n "$ADDED_HOSTS" ]; then
     if [ "$(id -u)" = 0 ]; then sed -i "/$HOSTS_MARK\$/d" /etc/hosts; else sudo -n sed -i "/$HOSTS_MARK\$/d" /etc/hosts || true; fi
   fi
@@ -125,11 +133,11 @@ log "nproc=$NPROC cpu=\"$CPU_MODEL\" wrk=${WRK_CPUS:-any} (threads $WRK_THREADS)
 # ---------------------------------------------------------------- preflight
 
 log "preflight: ports, /etc/hosts, images"
-for p in 80 443 9443 9180 9181 $REDIS_PORT $BASELINE_PORT $BACKEND_PORT; do
+for p in 80 81 443 9443 9180 9181 $REDIS_PORT $BASELINE_PORT $BACKEND_PORT; do
   if ss -Hltn "sport = :$p" | grep -q .; then die "port $p is in use"; fi
 done
 
-for h in $H_PLAIN $H_PROT $H_QUEUE $H_CHAL; do
+for h in $H_PLAIN $H_PROT $H_QUEUE $H_CHAL $H_NPM $H_NPMX; do
   if [ "$(getent ahostsv4 "$h" | awk 'NR==1 {print $1}')" != "127.0.0.1" ]; then
     line="127.0.0.1 $h $HOSTS_MARK"
     if [ "$(id -u)" = 0 ]; then echo "$line" >> /etc/hosts
@@ -477,19 +485,22 @@ s_https_newconn() {
 
 s_queue() {
   log "corvus-queue: creating the access queue and host"
-  local wr qj r adm
+  local wr qj r adm ua
   wr=$(create /api/waitrooms '{"name":"bench-queue","capacity":1000000,"active_ttl":7200,"refresh":3600,"max_new_per_ip":0}' "d['waitroom']['id']")
   create /api/proxy-hosts "$(host_body $H_QUEUE ",\"waitroom_id\":$wr,\"waitroom_path\":\"/\"")" "d['proxy_host']['id']" >/dev/null
   qj="$WORK/qjar"
+  # Queue cookies are bound to the browser (User-Agent), so curl and wrk must send the
+  # same one: wrk sends none by default, and curl's cookie would then get 429 (cookie check).
+  ua="User-Agent: corvus-bench"
   # 1st request: signed queue cookie (cookie check, no Redis); 2nd: enters the queue → admitted
   log "corvus-queue: obtaining an admission cookie"
-  for _ in $(seq 1 60); do [ "$(code -c "$qj" -b "$qj" "http://$H_QUEUE/")" = 429 ] && break; sleep 1; done
-  r=$("${CURL[@]}" -D - -o /dev/null -c "$qj" -b "$qj" "http://$H_QUEUE/" | tr -d '\r' || true)
+  for _ in $(seq 1 60); do [ "$(code -H "$ua" -c "$qj" -b "$qj" "http://$H_QUEUE/")" = 429 ] && break; sleep 1; done
+  r=$("${CURL[@]}" -H "$ua" -D - -o /dev/null -c "$qj" -b "$qj" "http://$H_QUEUE/" | tr -d '\r' || true)
   adm=$(echo "$r" | sed -n 's/^[Ss]et-[Cc]ookie: \(corvus_a_bench_queue=[^;]*\).*/\1/p' | head -1)
   [ -n "$adm" ] || die "no admission cookie (response: $(echo "$r" | head -1))"
-  [ "$(code -H "Cookie: $adm" "http://$H_QUEUE/")" = 200 ] || die "admission cookie not accepted"
+  [ "$(code -H "$ua" -H "Cookie: $adm" "http://$H_QUEUE/")" = 200 ] || die "admission cookie not accepted"
   run_wrk corvus-queue "$C_CORVUS" "access queue (capacity 1M), admitted session cookie (signed-token fast path; Redis heartbeat at most hourly)" \
-    -H "Cookie: $adm" "http://$H_QUEUE/"
+    -H "$ua" -H "Cookie: $adm" "http://$H_QUEUE/"
 }
 
 s_challenge() {
@@ -540,6 +551,87 @@ if [ -n "$need_corvus" ]; then
   fi
 fi
 
+# ---------------------------------------------------------------- Nginx Proxy Manager
+
+# The same backend behind Nginx Proxy Manager with its defaults, set up through its API as a
+# user would in the UI. NPM proxies with proxy_pass to a variable (no keep-alive upstream pool)
+# and writes a per-host access log file.
+timeout 60 docker rm -f "$C_CORVUS" >/dev/null 2>&1 || true
+NPM_VERSION=""; NPM_WORKERS=""
+npm_api() { "${CURL[@]}" -H 'Content-Type: application/json' "$@"; }
+s_npm_setup() {
+  timeout 300 docker pull -q "$NPM_IMAGE" >/dev/null || die "cannot pull $NPM_IMAGE"
+  log "npm: starting $NPM_IMAGE on CPUs ${GW_CPUS:-any}"
+  timeout 60 docker run -d --name "$C_NPM" --network host $(cpuset "$GW_CPUS") \
+    -v "$VOL_NPM:/data" -v "$VOL_NPM_LE:/etc/letsencrypt" "$NPM_IMAGE" >/dev/null || die "cannot start NPM"
+  local st="" pw tok r h
+  for _ in $(seq 1 90); do
+    st=$("${CURL[@]}" --max-time 3 http://127.0.0.1:81/api/ 2>/dev/null || true)
+    case "$st" in *'"status":"OK"'*) break;; esac
+    sleep 2
+  done
+  case "$st" in
+    *'"status":"OK"'*) ;;
+    *) timeout 10 docker logs "$C_NPM" 2>&1 | tail -20 >&2 || true; die "NPM API not ready";;
+  esac
+  echo "$st" | js "'%d.%d.%d' % (d['version']['major'], d['version']['minor'], d['version']['revision'])" > "$WORK/npm_version"
+  pw="Bench-$(openssl rand -hex 12)"
+  # NPM 2.17 has no default account: the first user is created without authentication
+  r=$(npm_api -X POST http://127.0.0.1:81/api/users -d "$(python3 -c 'import json,sys; print(json.dumps({"name":"Bench","nickname":"bench","email":"bench@corvus.test","roles":["admin"],"is_disabled":False,"auth":{"type":"password","secret":sys.argv[1]}}))' "$pw")") || die "NPM: create user"
+  echo "$r" | js "d['id']" >/dev/null || die "NPM: create user failed: $(echo "$r" | head -c 300)"
+  tok=$(npm_api -X POST http://127.0.0.1:81/api/tokens -d "$(python3 -c 'import json,sys; print(json.dumps({"identity":"bench@corvus.test","secret":sys.argv[1]}))' "$pw")" | js "d['token']") || die "NPM: login failed"
+  for h in "$H_NPM false" "$H_NPMX true"; do
+    set -- $h
+    r=$(npm_api -X POST http://127.0.0.1:81/api/nginx/proxy-hosts -H "Authorization: Bearer $tok" -d "$(python3 -c '
+import json, sys
+print(json.dumps({"domain_names": [sys.argv[1]], "forward_scheme": "http", "forward_host": "127.0.0.1",
+  "forward_port": int(sys.argv[2]), "access_list_id": 0, "certificate_id": 0, "ssl_forced": False,
+  "caching_enabled": False, "block_exploits": sys.argv[3] == "true", "allow_websocket_upgrade": False,
+  "http2_support": False, "hsts_enabled": False, "hsts_subdomains": False, "meta": {},
+  "advanced_config": "", "locations": []}))' "$1" "$BACKEND_PORT" "$2")") || die "NPM: create host $1"
+    echo "$r" | js "d['id']" >/dev/null || die "NPM: create host $1 failed: $(echo "$r" | head -c 300)"
+    wait_200 "http://$1/" || die "NPM host $1 not reachable"
+  done
+  # NPM's "worker_processes auto" counts the machine's CPUs, not the container's cpuset, and would
+  # run more workers than the pinned CPUs. Match the workers to the gateway CPUs, as Corvus and the
+  # nginx baseline do, so the comparison is about the configuration and not about oversubscription.
+  if [ -n "$GW_CPUS" ]; then
+    timeout 30 docker exec "$C_NPM" sh -c "sed -i 's/^worker_processes .*/worker_processes $GW_VCPUS;/' /etc/nginx/nginx.conf && nginx -t -q && nginx -s reload" \
+      || die "NPM: cannot set worker_processes"
+    sleep 3
+    wait_200 "http://$H_NPM/" || die "NPM not reachable after the reload"
+  fi
+  timeout 10 docker top "$C_NPM" | grep -c "nginx: worker process$" > "$WORK/npm_workers" || true
+  touch "$WORK/npm_ready"
+}
+s_npm_default() {
+  run_wrk npm-default "$C_NPM" "Nginx Proxy Manager $NPM_VERSION, proxy host with defaults (per-host access log, no upstream keep-alive), workers matched to the gateway CPUs" "http://$H_NPM/"
+}
+s_npm_exploits() {
+  run_wrk npm-block-exploits "$C_NPM" "Nginx Proxy Manager $NPM_VERSION, \"Block Common Exploits\" on" "http://$H_NPMX/"
+}
+NPM_SCENARIOS="npm-default npm-block-exploits"
+need_npm=""
+for s in $NPM_SCENARIOS; do want "$s" && need_npm=1; done
+if [ -n "$need_npm" ]; then
+  log "=== npm setup"
+  rm -f "$WORK/reason"
+  set +e
+  ( set -e; s_npm_setup )
+  set -e
+  NPM_VERSION=$(cat "$WORK/npm_version" 2>/dev/null || true)
+  NPM_WORKERS=$(cat "$WORK/npm_workers" 2>/dev/null || true)
+  if [ -e "$WORK/npm_ready" ]; then
+    log "Nginx Proxy Manager $NPM_VERSION ($NPM_WORKERS nginx workers)"
+    scenario npm-default s_npm_default
+    scenario npm-block-exploits s_npm_exploits
+  else
+    reason="NPM setup failed: $(cat "$WORK/reason" 2>/dev/null || echo unknown)"
+    for s in $NPM_SCENARIOS; do want "$s" && skip "$s" "$reason"; done
+  fi
+  timeout 60 docker rm -f "$C_NPM" >/dev/null 2>&1 || true
+fi
+
 # ---------------------------------------------------------------- report
 
 log "writing the report"
@@ -553,7 +645,7 @@ out = sys.argv[2]
 gw_vcpus = $GW_VCPUS
 env = {
     "corvus_image": "$CORVUS_IMAGE", "corvus_version": "$CORVUS_VERSION", "commit": "$COMMIT",
-    "nginx_image": "$NGINX_IMAGE", "wrk": "$WRK_VERSION",
+    "nginx_image": "$NGINX_IMAGE", "npm_image": "$NPM_IMAGE", "npm_version": "$NPM_VERSION", "npm_nginx_workers": "$NPM_WORKERS", "wrk": "$WRK_VERSION",
     "kernel": "$KERNEL", "nproc": $NPROC, "cpu_model": "$CPU_MODEL",
     "cpus": {"wrk": "${WRK_CPUS:-any}", "backend": "${BACKEND_CPUS:-any}", "gateway": "${GW_CPUS:-any}"},
     "gateway_vcpus": gw_vcpus, "wrk_threads": $WRK_THREADS, "connections": $CONNECTIONS,

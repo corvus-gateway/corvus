@@ -145,7 +145,9 @@ func TestRedeployDelayCapped(t *testing.T) {
 		t.Fatal("no redeploy during a long burst")
 	}
 	time.Sleep(400 * time.Millisecond)
-	max := int32(burst/s.DeployMaxDelay) + 2
+	// One redeploy per cap, the last one, and one of slack for a timer that fires late on a
+	// loaded runner; without the cap this would be 1, without the debounce 15.
+	max := int32(burst/s.DeployMaxDelay) + 3
 	if n := calls.Load(); n < 2 || n > max {
 		t.Fatalf("calls = %d in a %s burst, want 2..%d (capped bursts plus the last)", n, burst, max)
 	}

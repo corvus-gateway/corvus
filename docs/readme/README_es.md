@@ -178,18 +178,22 @@ keep-alive, `GET /` con una respuesta de 3 bytes.
 
 | Escenario | req/s | p50 | p99 | Memoria |
 |---|---:|---:|---:|---:|
-| nginx 1.28 como proxy inverso (referencia) | 97,227 | 0.63 ms | 1.16 ms | 17 MB |
-| Corvus, host predeterminado | 75,473 | 0.79 ms | 1.83 ms | 72 MB |
-| Corvus, 30 reglas + lista de 1,000 CIDR + bloqueo de exploits + cabeceras + límite de tasa | 54,585 | 1.12 ms | 2.29 ms | 77 MB |
-| Corvus, HTTPS (ECDSA P-256), keep-alive | 59,697 | 1.00 ms | 2.18 ms | 80 MB |
-| Corvus, HTTPS, nuevo handshake TLS en cada solicitud | 4,348 handshakes/s | 5.88 ms | 11.62 ms | 88 MB |
-| Corvus, cola de acceso (visitantes admitidos) | 57,954 | 1.05 ms | 2.22 ms | 84 MB |
-| Corvus, regla de desafío (visitantes con pase) | 62,901 | 0.96 ms | 1.94 ms | 88 MB |
+| nginx 1.28 como proxy inverso (referencia) | 107,688 | 0.58 ms | 1.04 ms | 18 MB |
+| Corvus, host predeterminado | 79,370 | 0.76 ms | 1.98 ms | 77 MB |
+| Corvus, 30 reglas + lista de 1,000 CIDR + bloqueo de exploits + cabeceras + límite de tasa | 55,304 | 1.09 ms | 2.93 ms | 81 MB |
+| Corvus, HTTPS (ECDSA P-256), keep-alive | 63,506 | 0.95 ms | 2.19 ms | 85 MB |
+| Corvus, HTTPS, nuevo handshake TLS en cada solicitud | 4,847 handshakes/s | 5.32 ms | 10.35 ms | 93 MB |
+| Corvus, cola de acceso (visitantes admitidos) | 56,695 | 1.09 ms | 2.17 ms | 90 MB |
+| Corvus, regla de desafío (visitantes con pase) | 59,174 | 1.03 ms | 2.39 ms | 89 MB |
+| Nginx Proxy Manager 2.17, host predeterminado | 14,364 | 2.53 ms | 93.82 ms | 132 MB |
+| Nginx Proxy Manager 2.17, Block Common Exploits activado | 14,384 | 2.41 ms | 83.40 ms | 134 MB |
+
+Nginx Proxy Manager 2.17, medido en la misma ejecución con las mismas 2 vCPU (también con 2 workers), abre una conexión nueva con el backend en cada petición en lugar de reutilizar un pool keep-alive. Corvus atiende unas 5,5 veces más peticiones con la configuración predeterminada y unas 3,9 veces más con todas las protecciones, con menor latencia y menos memoria.
 
 En la ruta básica de la solicitud, Corvus alcanza alrededor de tres cuartas partes del rendimiento de nginx
 sin más (pools de conexiones keep-alive al upstream, registro de acceso agrupado por worker); el conjunto
 completo de protección — 30 reglas con una lista de 1,000 CIDR, bloqueo de exploits, cabeceras de seguridad y
-límite de tasa — cuesta alrededor de un 28 % adicional. **Advertencia:** se trata de un
+límite de tasa — cuesta alrededor de un 30 % adicional. **Advertencia:** se trata de un
 runner de CI compartido, con el generador de carga en la misma máquina y respuestas diminutas; las cifras son
 conservadoras y sirven para comparar escenarios y versiones, no como garantía de capacidad. La memoria incluye
 el plano de control y el Valkey integrado.

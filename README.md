@@ -177,17 +177,21 @@ runner (4 vCPU AMD EPYC 9V45): Corvus pinned to **2 vCPU**, wrk and the backend 
 
 | Scenario | req/s | p50 | p99 | Memory |
 |---|---:|---:|---:|---:|
-| nginx 1.28 reverse proxy (baseline) | 97,227 | 0.63 ms | 1.16 ms | 17 MB |
-| Corvus, default host | 75,473 | 0.79 ms | 1.83 ms | 72 MB |
-| Corvus, 30 rules + 1,000-CIDR list + exploit blocking + headers + rate limit | 54,585 | 1.12 ms | 2.29 ms | 77 MB |
-| Corvus, HTTPS (ECDSA P-256), keep-alive | 59,697 | 1.00 ms | 2.18 ms | 80 MB |
-| Corvus, HTTPS, new TLS handshake per request | 4,348 handshakes/s | 5.88 ms | 11.62 ms | 88 MB |
-| Corvus, access queue (admitted visitors) | 57,954 | 1.05 ms | 2.22 ms | 84 MB |
-| Corvus, challenge rule (visitors with a pass) | 62,901 | 0.96 ms | 1.94 ms | 88 MB |
+| nginx 1.28 reverse proxy (baseline) | 107,688 | 0.58 ms | 1.04 ms | 18 MB |
+| Corvus, default host | 79,370 | 0.76 ms | 1.98 ms | 77 MB |
+| Corvus, 30 rules + 1,000-CIDR list + exploit blocking + headers + rate limit | 55,304 | 1.09 ms | 2.93 ms | 81 MB |
+| Corvus, HTTPS (ECDSA P-256), keep-alive | 63,506 | 0.95 ms | 2.19 ms | 85 MB |
+| Corvus, HTTPS, new TLS handshake per request | 4,847 handshakes/s | 5.32 ms | 10.35 ms | 93 MB |
+| Corvus, access queue (admitted visitors) | 56,695 | 1.09 ms | 2.17 ms | 90 MB |
+| Corvus, challenge rule (visitors with a pass) | 59,174 | 1.03 ms | 2.39 ms | 89 MB |
+| Nginx Proxy Manager 2.17, default host | 14,364 | 2.53 ms | 93.82 ms | 132 MB |
+| Nginx Proxy Manager 2.17, Block Common Exploits on | 14,384 | 2.41 ms | 83.40 ms | 134 MB |
+
+Nginx Proxy Manager 2.17, measured in the same run on the same 2 vCPU (its workers set to 2 as well), opens a new connection to the backend for every request instead of reusing a keep-alive pool. Corvus serves about 5.5 times as many requests with default settings, and about 3.9 times with the full protection set, at lower latency and with less memory.
 
 On the base request path Corvus reaches about three quarters of plain nginx's throughput
 (keep-alive upstream pools, access log batched per worker); the full protection set — 30 rules
-with a 1,000-CIDR list, exploit blocking, security headers and a rate limit — costs about 28 %
+with a 1,000-CIDR list, exploit blocking, security headers and a rate limit — costs about 30 %
 on top of that. **Caveat:** a shared CI runner with the load generator on the same machine
 and tiny responses — the numbers are conservative and meant for comparing scenarios and
 versions, not as capacity guarantees. Memory includes the control plane and embedded Valkey.
