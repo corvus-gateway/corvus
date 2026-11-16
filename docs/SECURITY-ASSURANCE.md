@@ -82,7 +82,8 @@ replaced without a new release. Certificates of outbound TLS connections are alw
 
 - **Tests:** Go unit, API and fuzz tests (statement coverage of the control plane kept at 80% or
   more by CI) and Lua unit tests run on every pull request; an
-  integration suite (`deploy/dev/itest.sh`) exercises a real gateway, and every release image is
+  integration suite (`deploy/dev/itest.sh`) exercises a real gateway built from each pull request,
+  an upgrade test starts it on data created by the latest release, and every release image is
   smoke-tested in CI before it is published. Bug fixes come with a test that fails without the fix.
 - **Static analysis:** `go vet`, `gofmt`, CodeQL code scanning, TypeScript strict mode.
 - **Dependencies and image:** `govulncheck`, `npm audit`, Trivy (image and configuration).

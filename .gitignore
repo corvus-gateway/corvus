@@ -38,3 +38,4 @@ control/internal/webui/dist/*
 !/docs/ARCHITECTURE.md
 !/docs/SECURITY-ASSURANCE.md
 /site/
+/deploy/dev/import/

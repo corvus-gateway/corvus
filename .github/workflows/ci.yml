@@ -55,3 +55,29 @@ jobs:
           for f in gateway/lua/corvus/*.lua gateway/redis/*.lua gateway/test/*.lua; do luajit -bl "$f" > /dev/null || exit 1; done
       - name: Lua unit tests (pure helpers)
         run: for f in gateway/test/*_test.lua; do luajit "$f" || exit 1; done
+
+  # The image built from this source: integration checks against the dev stack
+  # (deploy/dev/itest.sh), then an upgrade from the latest release on the same data volume.
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build the image
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/Dockerfile
+          load: true
+          tags: corvus/gateway:ci
+          cache-from: type=gha,scope=ci-integration
+          cache-to: type=gha,scope=ci-integration,mode=max
+      - name: Integration checks (dev stack, deploy/dev/itest.sh)
+        run: deploy/dev/ci-itest.sh
+        env: { CORVUS_IMAGE: "corvus/gateway:ci" }
+      - name: Upgrade from the latest release (same data volume)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: deploy/dev/upgrade-test.sh "ghcr.io/${GITHUB_REPOSITORY_OWNER}/gateway:latest" corvus/gateway:ci
