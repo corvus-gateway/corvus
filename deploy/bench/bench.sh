@@ -588,11 +588,20 @@ print(json.dumps({"domain_names": [sys.argv[1]], "forward_scheme": "http", "forw
     echo "$r" | js "d['id']" >/dev/null || die "NPM: create host $1 failed: $(echo "$r" | head -c 300)"
     wait_200 "http://$1/" || die "NPM host $1 not reachable"
   done
-  timeout 10 docker top "$C_NPM" | grep -c "nginx: worker" > "$WORK/npm_workers" || true
+  # NPM's "worker_processes auto" counts the machine's CPUs, not the container's cpuset, and would
+  # run more workers than the pinned CPUs. Match the workers to the gateway CPUs, as Corvus and the
+  # nginx baseline do, so the comparison is about the configuration and not about oversubscription.
+  if [ -n "$GW_CPUS" ]; then
+    timeout 30 docker exec "$C_NPM" sh -c "sed -i 's/^worker_processes .*/worker_processes $GW_VCPUS;/' /etc/nginx/nginx.conf && nginx -t -q && nginx -s reload" \
+      || die "NPM: cannot set worker_processes"
+    sleep 3
+    wait_200 "http://$H_NPM/" || die "NPM not reachable after the reload"
+  fi
+  timeout 10 docker top "$C_NPM" | grep -c "nginx: worker process$" > "$WORK/npm_workers" || true
   touch "$WORK/npm_ready"
 }
 s_npm_default() {
-  run_wrk npm-default "$C_NPM" "Nginx Proxy Manager $NPM_VERSION, proxy host with defaults (per-host access log, no upstream keep-alive)" "http://$H_NPM/"
+  run_wrk npm-default "$C_NPM" "Nginx Proxy Manager $NPM_VERSION, proxy host with defaults (per-host access log, no upstream keep-alive), workers matched to the gateway CPUs" "http://$H_NPM/"
 }
 s_npm_exploits() {
   run_wrk npm-block-exploits "$C_NPM" "Nginx Proxy Manager $NPM_VERSION, \"Block Common Exploits\" on" "http://$H_NPMX/"
