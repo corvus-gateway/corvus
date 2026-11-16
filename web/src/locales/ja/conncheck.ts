@@ -18,7 +18,7 @@ export const connCheckStrings: Record<ConnCheckKey, string> = {
   ccOtherTitle: "接続に失敗しました",
   ccOtherHint: "下のメッセージとゲートウェイのログを確認してください。",
   ueBadge: "アップストリームエラー",
-  ueTip: "{ago}にアップストリームへの接続に失敗: {reason}",
+  ueTip: "アップストリームへの接続に失敗（{ago}）: {reason}",
   ueTipAction: "ホストを編集し、「接続を確認」で原因を調べてください。",
-  ueSheetTitle: "{ago}、訪問者にエラーページが表示されました",
+  ueSheetTitle: "訪問者にエラーページが表示されました（{ago}）",
 };

@@ -18,7 +18,7 @@ export const connCheckStrings: Record<ConnCheckKey, string> = {
   ccOtherTitle: "Verbindung fehlgeschlagen",
   ccOtherHint: "Siehe die Meldung unten und das Gateway-Protokoll.",
   ueBadge: "Upstream-Fehler",
-  ueTip: "Upstream {ago} nicht erreicht: {reason}",
+  ueTip: "Upstream nicht erreicht ({ago}): {reason}",
   ueTipAction: "Bearbeiten Sie den Host und finden Sie die Ursache mit „Verbindung prüfen“.",
-  ueSheetTitle: "Besucher erhielten {ago} eine Fehlerseite",
+  ueSheetTitle: "Besucher erhielten eine Fehlerseite ({ago})",
 };

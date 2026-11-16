@@ -66,6 +66,8 @@ The result is either *reached* with the address and time, or the reason with a h
 Custom locations have the same button. Operators and administrators can use it, up to 20 checks a
 minute per user.
 
+![Check connection and an upstream error in the proxy host form](../img/proxy-host-check.png){ .shot .panel }
+
 #### Upstream errors in the list
 
 When the gateway could not reach a host's service, for example after the service was stopped, the

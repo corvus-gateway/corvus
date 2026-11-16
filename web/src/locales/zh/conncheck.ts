@@ -18,7 +18,7 @@ export const connCheckStrings: Record<ConnCheckKey, string> = {
   ccOtherTitle: "连接失败",
   ccOtherHint: "请查看下方消息和网关日志。",
   ueBadge: "上游错误",
-  ueTip: "{ago}连接上游失败：{reason}",
+  ueTip: "连接上游失败（{ago}）：{reason}",
   ueTipAction: "编辑该主机并使用“检查连接”查找原因。",
-  ueSheetTitle: "访客在{ago}看到了错误页面",
+  ueSheetTitle: "访客看到了错误页面（{ago}）",
 };

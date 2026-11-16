@@ -18,7 +18,7 @@ export const connCheckStrings: Record<ConnCheckKey, string> = {
   ccOtherTitle: "Connection failed",
   ccOtherHint: "See the message below and the gateway log.",
   ueBadge: "Upstream error",
-  ueTip: "Upstream failed {ago}: {reason}",
+  ueTip: "Upstream failed ({ago}): {reason}",
   ueTipAction: "Edit the host and use Check connection to find the cause.",
-  ueSheetTitle: "Visitors got an error page {ago}",
+  ueSheetTitle: "Visitors got an error page ({ago})",
 };

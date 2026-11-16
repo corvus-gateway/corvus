@@ -60,6 +60,9 @@ const shots = [
   { name: "dashboard", path: "/", whole: true },
   { name: "proxy-hosts", path: "/proxy-hosts" },
   { name: "proxy-host-form", path: "/proxy-hosts", act: `await __edit("shop.example.com");`, dialog: true },
+  // needs a host app.example.com whose forward target refuses connections and a recent 502
+  { name: "proxy-host-check", path: "/proxy-hosts", act: `await __edit("app.example.com");
+    __qa("[role=dialog] button").find(b => /^(Check connection|연결 확인)$/.test(b.textContent.trim())).click(); await __sleep(2500);`, dialog: true },
   { name: "proxy-host-locations", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^(Custom locations|사용자 지정 위치)$/);`, dialog: true },
   { name: "proxy-host-tls", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^TLS$/);`, dialog: true },
   { name: "proxy-host-protection", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^(Protection|보호)$/);`, dialog: true },

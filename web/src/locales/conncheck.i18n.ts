@@ -18,9 +18,9 @@ export const koConnCheck = {
   ccOtherTitle: "연결 실패",
   ccOtherHint: "아래 메시지와 게이트웨이 로그를 확인하세요.",
   ueBadge: "업스트림 오류",
-  ueTip: "{ago} 업스트림 연결 실패: {reason}",
+  ueTip: "업스트림 연결 실패 ({ago}): {reason}",
   ueTipAction: "호스트를 편집해 ‘연결 확인’으로 원인을 찾아보세요.",
-  ueSheetTitle: "{ago} 방문자에게 오류 페이지가 표시되었습니다",
+  ueSheetTitle: "방문자에게 오류 페이지가 표시되었습니다 ({ago})",
 };
 
 export type ConnCheckKey = keyof typeof koConnCheck;

@@ -56,6 +56,7 @@ Go-Steuerungsebene, React-Konsole), die ein **bestehendes NPM-Setup importieren*
 **Proxy & TLS**
 - Proxy-Hosts mit Wildcards, WebSocket, HTTP/2, erzwungenem HTTPS und benutzerdefinierten Nginx-Snippets
 - Notizen zu Hosts und Streams, damit klar bleibt, wofür jeder da ist (durchsuchbar)
+- Verbindung prüfen: das Ziel eines Hosts vor dem Speichern vom Gateway aus testen (DNS, Port, Firewall, TLS), und in der Host-Liste sehen, warum Besucher 502/504 erhielten
 - Eigene Locations: Pfade (z. B. `/api`) an einen eigenen Upstream weiterleiten, mit dem Schutz des Hosts
 - Weiterleitungs-Hosts: Domains auf eine andere Domain umleiten (301/302/303/307/308, optional mit Beibehaltung des Pfads), mit demselben TLS und Schutz
 - Kostenlose Let's-Encrypt-Zertifikate (HTTP-01 oder DNS-01 über Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap, mit gespeicherten, wiederverwendbaren Anbieter-Zugangsdaten) mit automatischer Erneuerung oder eigene Zertifikate per Upload (bei Erneuerung direkt ersetzbar)

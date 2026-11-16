@@ -18,7 +18,7 @@ export const connCheckStrings: Record<ConnCheckKey, string> = {
   ccOtherTitle: "Не удалось подключиться",
   ccOtherHint: "См. сообщение ниже и журнал шлюза.",
   ueBadge: "Ошибка апстрима",
-  ueTip: "Сбой подключения к апстриму {ago}: {reason}",
+  ueTip: "Сбой подключения к апстриму ({ago}): {reason}",
   ueTipAction: "Откройте хост и нажмите «Проверить соединение», чтобы найти причину.",
-  ueSheetTitle: "Посетители получили страницу ошибки {ago}",
+  ueSheetTitle: "Посетители получили страницу ошибки ({ago})",
 };

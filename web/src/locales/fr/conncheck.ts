@@ -18,7 +18,7 @@ export const connCheckStrings: Record<ConnCheckKey, string> = {
   ccOtherTitle: "Échec de la connexion",
   ccOtherHint: "Consultez le message ci-dessous et le journal de la passerelle.",
   ueBadge: "Erreur d’upstream",
-  ueTip: "Échec vers l’upstream {ago} : {reason}",
+  ueTip: "Échec vers l’upstream ({ago}) : {reason}",
   ueTipAction: "Modifiez l’hôte et utilisez « Tester la connexion » pour trouver la cause.",
-  ueSheetTitle: "Les visiteurs ont reçu une page d’erreur {ago}",
+  ueSheetTitle: "Les visiteurs ont reçu une page d’erreur ({ago})",
 };
