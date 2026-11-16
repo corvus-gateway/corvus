@@ -7,6 +7,7 @@ import { tokensStrings } from "./fr/tokens";
 import { redirectsStrings } from "./fr/redirects";
 import { streamsStrings } from "./fr/streams";
 import { notesStrings } from "./fr/notes";
+import { connCheckStrings } from "./fr/conncheck";
 import { proxyProtocolStrings } from "./fr/proxyprotocol";
 import { updateStrings } from "./fr/update";
 import { headersStrings } from "./fr/headers";
@@ -319,6 +320,7 @@ export const fr: Partial<Record<keyof typeof ko, string>> = {
   ...redirectsStrings,
   ...streamsStrings,
   ...notesStrings,
+  ...connCheckStrings,
   ...proxyProtocolStrings,
   ...updateStrings,
   ...headersStrings,

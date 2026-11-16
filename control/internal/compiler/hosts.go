@@ -73,6 +73,20 @@ func upstreamAddr(host string, hosts map[string]string, hostGW string) string {
 	return host
 }
 
+// ForwardAddr returns the address the gateway uses for a forward host, with the same
+// mapping as the rendered configuration (static hosts, loopback → Docker host).
+func (c *Compiler) ForwardAddr(host string) string {
+	var static map[string]string
+	if c.Hosts != nil {
+		static = c.Hosts()
+	}
+	hostGW := ""
+	if c.HostGateway != nil {
+		hostGW = c.HostGateway()
+	}
+	return upstreamAddr(host, static, hostGW)
+}
+
 // isIP reports whether an upstream address (IPv6 bracketed) is an IP literal.
 func isIP(addr string) bool {
 	return net.ParseIP(strings.TrimSuffix(strings.TrimPrefix(addr, "["), "]")) != nil

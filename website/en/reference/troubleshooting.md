@@ -30,7 +30,10 @@ the audit log. It works while Corvus is running, with SQLite and PostgreSQL.
 
 ## 502 Bad Gateway
 
-Corvus can't reach the forward target.
+Corvus can't reach the forward target. The proxy host list marks such hosts with **Upstream
+error**; hover it for the reason. In the host's form, **Check connection** tries the target the way
+the gateway does and suggests the fix (see
+[Check connection](../proxy/proxy-hosts.md#check-connection)).
 
 - Container name as target: Corvus must share a Docker network with it.
 - `127.0.0.1` / `localhost` as target means the **Docker host**. The service must listen on

@@ -7,6 +7,7 @@ import { tokensStrings } from "./ja/tokens";
 import { redirectsStrings } from "./ja/redirects";
 import { streamsStrings } from "./ja/streams";
 import { notesStrings } from "./ja/notes";
+import { connCheckStrings } from "./ja/conncheck";
 import { proxyProtocolStrings } from "./ja/proxyprotocol";
 import { updateStrings } from "./ja/update";
 import { headersStrings } from "./ja/headers";
@@ -320,6 +321,7 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   ...redirectsStrings,
   ...streamsStrings,
   ...notesStrings,
+  ...connCheckStrings,
   ...proxyProtocolStrings,
   ...updateStrings,
   ...headersStrings,

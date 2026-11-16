@@ -20,6 +20,7 @@ import (
 	"corvus/control/internal/auth"
 	"corvus/control/internal/autoban"
 	"corvus/control/internal/compiler"
+	"corvus/control/internal/conncheck"
 	"corvus/control/internal/deploy"
 	"corvus/control/internal/gateway"
 	"corvus/control/internal/hints"
@@ -49,6 +50,11 @@ type Server struct {
 
 	// GatewayProblem says why the gateway is down ("" while it runs); may be nil.
 	GatewayProblem func() string
+	// UpstreamFailures returns the latest upstream failure per server block from the
+	// gateway log (why a host answers 502/504); nil without a gateway.
+	UpstreamFailures func() []gateway.UpstreamFailure
+	// ConnCheck checks forward targets ("Check connection"); nil = the gateway's resolver.
+	ConnCheck *conncheck.Checker
 
 	ACME         ACMEService
 	NPMImportDir string
@@ -63,7 +69,8 @@ type Server struct {
 	Rules        RulesService
 	Feeds        ListFeeds // URL-fed lists (nil = unavailable)
 	allow        allowCache
-	ssoRT        ssoRuntime // OIDC sign-in flows + provider cache (sso.go)
+	connLimit    *auth.Limiter // connection checks per user
+	ssoRT        ssoRuntime    // OIDC sign-in flows + provider cache (sso.go)
 }
 
 type ctxKey struct{}
@@ -83,6 +90,9 @@ func userID(r *http.Request) *int64 {
 // Handler builds the full HTTP handler (API + embedded UI).
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	if s.connLimit == nil {
+		s.connLimit = auth.NewLimiter(connCheckPerMinute, time.Minute)
+	}
 	pub := func(pattern string, h http.HandlerFunc) { mux.Handle(pattern, h) }
 	priv := func(pattern string, h http.HandlerFunc) { mux.Handle(pattern, s.requireAuth(h)) }           // any signed-in user
 	op := func(pattern string, h http.HandlerFunc) { mux.Handle(pattern, s.requireRole("operator", h)) } // change configuration
@@ -110,6 +120,8 @@ func (s *Server) Handler() http.Handler {
 	op("PATCH /api/proxy-hosts/{id}", s.patchProxyHost)
 	op("DELETE /api/proxy-hosts/{id}", s.deleteProxyHost)
 	op("POST /api/proxy-hosts/{id}/under-attack/deactivate", s.deactivateUnderAttack)
+	op("POST /api/proxy-hosts/check", s.checkConnection) // conncheck.go
+	priv("GET /api/upstream-errors", s.listUpstreamErrors)
 	priv("GET /api/under-attack", s.listUnderAttack)
 
 	priv("GET /api/redirection-hosts", s.listRedirectionHosts)

@@ -162,6 +162,10 @@ networks:
 앞으로 만들 모든 Docker 네트워크가 사내 대역을 피하게 하려면 `/etc/docker/daemon.json`에
 `default-address-pools`를 설정합니다.
 
+**저장하기 전에 확인하기.** 프록시 호스트 화면의 **연결 확인**은 게이트웨이에서 같은 방식으로
+이름을 찾아 대상에 접속해 보고, 위 문제 중 어느 것에 걸렸는지 알려 줍니다.
+[연결 확인](../proxy/proxy-hosts.md#check-connection)을 참고하세요.
+
 **서비스 서버에서 할 일:**
 
 - 요청은 **게이트웨이 서버의 주소**에서 들어옵니다. 방문자의 주소는 `X-Forwarded-For`와 `X-Real-IP`에

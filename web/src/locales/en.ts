@@ -7,6 +7,7 @@ import { tokensStrings } from "./en/tokens";
 import { redirectsStrings } from "./en/redirects";
 import { streamsStrings } from "./en/streams";
 import { notesStrings } from "./en/notes";
+import { connCheckStrings } from "./en/conncheck";
 import { proxyProtocolStrings } from "./en/proxyprotocol";
 import { updateStrings } from "./en/update";
 import { headersStrings } from "./en/headers";
@@ -219,6 +220,7 @@ export const en: Record<keyof typeof ko, string> = {
   ...redirectsStrings,
   ...streamsStrings,
   ...notesStrings,
+  ...connCheckStrings,
   ...proxyProtocolStrings,
   ...updateStrings,
   ...headersStrings,

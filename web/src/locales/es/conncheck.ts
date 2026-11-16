@@ -1,0 +1,24 @@
+import type { ConnCheckKey } from "../conncheck.i18n";
+
+export const connCheckStrings: Record<ConnCheckKey, string> = {
+  ccButton: "Comprobar conexión",
+  ccChecking: "Comprobando…",
+  ccOk: "La pasarela llegó a {addr} en {ms} ms",
+  ccMapped: "Para este host, la pasarela se conecta a {target}.",
+  ccDnsTitle: "El nombre no se resuelve",
+  ccDnsHint: "La pasarela busca los hosts de destino por su nombre DNS completo, sin dominios de búsqueda. Escriba el nombre completo (por ejemplo nas.home.lan) o la dirección IP, o añada el nombre a extra_hosts en docker-compose.yml.",
+  ccRefusedTitle: "Conexión rechazada",
+  ccRefusedHint: "La dirección responde, pero nada acepta conexiones en este puerto. Compruebe el puerto, que el servicio esté en marcha y que escuche en 0.0.0.0 y no solo en 127.0.0.1. Un cortafuegos también puede estar rechazando la conexión.",
+  ccTimeoutTitle: "Sin respuesta (tiempo agotado)",
+  ccTimeoutHint: "Nada respondió en 5 segundos. Normalmente un cortafuegos del servidor de destino descarta las conexiones del servidor de la pasarela: permítalo allí. También puede que la dirección sea incorrecta o que el servidor esté apagado.",
+  ccUnreachableTitle: "Red inaccesible",
+  ccUnreachableHint: "La pasarela no tiene ruta hacia esta dirección. Compruebe la dirección IP. Si está en un rango de redes de Docker (por ejemplo 172.17–172.31.x.x), una subred de Docker se solapa con su LAN: cambie la subred de la red de Docker.",
+  ccTlsTitle: "Falló el protocolo de enlace TLS",
+  ccTlsHint: "El puerto acepta conexiones pero no habla HTTPS. Cambie el esquema a http o indique el puerto HTTPS del servicio.",
+  ccOtherTitle: "Falló la conexión",
+  ccOtherHint: "Consulte el mensaje de abajo y el registro de la pasarela.",
+  ueBadge: "Error de upstream",
+  ueTip: "Fallo al conectar con el upstream ({ago}): {reason}",
+  ueTipAction: "Edite el host y use «Comprobar conexión» para encontrar la causa.",
+  ueSheetTitle: "Los visitantes recibieron una página de error ({ago})",
+};

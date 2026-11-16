@@ -123,6 +123,19 @@ export interface UnderAttackStatus {
   host_id: number; host: string; mode: "on" | "auto"; active: boolean; since?: string; until?: string; reason?: string;
 }
 
+/** Why a forward target can't be reached: "Check connection" and the gateway log. */
+export type ConnFailKind = "dns" | "refused" | "timeout" | "unreachable" | "tls" | "other";
+
+/** POST /api/proxy-hosts/check: the forward target tried the way the gateway reaches it. */
+export interface ConnCheckResult {
+  ok: boolean; kind?: ConnFailKind; message?: string; target: string; address?: string; time_ms: number;
+}
+
+/** GET /api/upstream-errors: a proxy host's latest failure to reach its upstream (last 15 minutes). */
+export interface UpstreamError {
+  host_id: number; at: string; kind: ConnFailKind; upstream?: string; message: string;
+}
+
 /** Security header preset of a proxy host (gateway/lua/corvus/headers.lua). */
 export type SecurityHeaders = "off" | "basic" | "strict";
 

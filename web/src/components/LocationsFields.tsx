@@ -4,6 +4,7 @@ import { useI18n } from "../i18n";
 import { cn } from "../lib/utils";
 import { Button, IconButton } from "./ui/button";
 import { IdField, Input, NumberInput, Select, Textarea, fieldErr } from "./ui/form";
+import { ConnCheck } from "./ConnCheck";
 
 const blankLocation: ProxyLocation = { path: "", forward_scheme: "http", forward_host: "", forward_port: 80, forward_path: "", advanced_config: "" };
 
@@ -54,6 +55,7 @@ export function LocationsFields({ value, onChange, error, isAdmin }: {
                   {(id) => <NumberInput id={id} min={1} max={65535} value={l.forward_port} onChange={(v) => setAt(i, { forward_port: v })} />}
                 </IdField>
               </div>
+              <ConnCheck scheme={l.forward_scheme} host={l.forward_host} port={l.forward_port} />
               <IdField label={t("locForwardPath")} hint={t("locForwardPathHint")} error={err(i, "forward_path")}>
                 {(id) => <Input id={id} className="font-mono" value={l.forward_path} onChange={(e) => setAt(i, { forward_path: e.target.value })} placeholder="/v2/" invalid={!!err(i, "forward_path")} />}
               </IdField>

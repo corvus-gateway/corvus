@@ -164,6 +164,10 @@ networks:
 To keep Docker away from your ranges for all new networks, set `default-address-pools` in
 `/etc/docker/daemon.json`.
 
+**Check it before you save.** **Check connection** in the proxy host form tries the target from the
+gateway with the same name lookup and reports which of the problems above it hit. See
+[Check connection](../proxy/proxy-hosts.md#check-connection).
+
 **On the service servers:**
 
 - Requests arrive from the **gateway server's address**. The visitor's address is in
