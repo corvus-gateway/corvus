@@ -27,7 +27,8 @@
 #   <4 CPUs:  no pinning (numbers are then only a rough indication)
 #
 # Ports used on the host (must be free): 80, 443, 9443, 9180, 9181 (Corvus), 6390 (embedded
-# Valkey, CORVUS_REDIS_PORT), 18080 (nginx baseline), 18081 (backend).
+# Valkey, CORVUS_REDIS_PORT), 18080 (nginx baseline), 18081 (backend), 81 (Nginx Proxy Manager
+# admin API; NPM also uses 80 and 443 after Corvus has stopped).
 #
 # Every network call and wrk run is bounded by a timeout. A scenario that fails or times out is
 # recorded as skipped (with the reason) and the next one runs. The script removes its

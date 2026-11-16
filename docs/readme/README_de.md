@@ -179,18 +179,22 @@ Gemessen mit dem [Benchmark-Workflow](../benchmark.md) auf einem von GitHub geho
 
 | Szenario | req/s | p50 | p99 | Speicher |
 |---|---:|---:|---:|---:|
-| nginx 1.28 als Reverse Proxy (Vergleichswert) | 97,227 | 0.63 ms | 1.16 ms | 17 MB |
-| Corvus, Standard-Host | 75,473 | 0.79 ms | 1.83 ms | 72 MB |
-| Corvus, 30 Regeln + Liste mit 1,000 CIDRs + Exploit-Blockierung + Header + Ratenbegrenzung | 54,585 | 1.12 ms | 2.29 ms | 77 MB |
-| Corvus, HTTPS (ECDSA P-256), Keep-Alive | 59,697 | 1.00 ms | 2.18 ms | 80 MB |
-| Corvus, HTTPS, neuer TLS-Handshake pro Anfrage | 4,348 handshakes/s | 5.88 ms | 11.62 ms | 88 MB |
-| Corvus, Zugriffswarteschlange (eingelassene Besucher) | 57,954 | 1.05 ms | 2.22 ms | 84 MB |
-| Corvus, Challenge-Regel (Besucher mit Pass) | 62,901 | 0.96 ms | 1.94 ms | 88 MB |
+| nginx 1.28 als Reverse Proxy (Vergleichswert) | 107,688 | 0.58 ms | 1.04 ms | 18 MB |
+| Corvus, Standard-Host | 79,370 | 0.76 ms | 1.98 ms | 77 MB |
+| Corvus, 30 Regeln + Liste mit 1,000 CIDRs + Exploit-Blockierung + Header + Ratenbegrenzung | 55,304 | 1.09 ms | 2.93 ms | 81 MB |
+| Corvus, HTTPS (ECDSA P-256), Keep-Alive | 63,506 | 0.95 ms | 2.19 ms | 85 MB |
+| Corvus, HTTPS, neuer TLS-Handshake pro Anfrage | 4,847 handshakes/s | 5.32 ms | 10.35 ms | 93 MB |
+| Corvus, Zugriffswarteschlange (eingelassene Besucher) | 56,695 | 1.09 ms | 2.17 ms | 90 MB |
+| Corvus, Challenge-Regel (Besucher mit Pass) | 59,174 | 1.03 ms | 2.39 ms | 89 MB |
+| Nginx Proxy Manager 2.17, Standard-Host | 14,364 | 2.53 ms | 93.82 ms | 132 MB |
+| Nginx Proxy Manager 2.17, Block Common Exploits an | 14,384 | 2.41 ms | 83.40 ms | 134 MB |
+
+Nginx Proxy Manager 2.17, im selben Lauf auf denselben 2 vCPU gemessen (Worker-Zahl ebenfalls 2), öffnet für jede Anfrage eine neue Verbindung zum Backend, statt einen Keep-alive-Pool zu nutzen. Corvus bedient mit Standardeinstellungen etwa 5,5-mal und mit allen Schutzfunktionen etwa 3,9-mal so viele Anfragen, bei geringerer Latenz und weniger Speicher.
 
 Auf dem grundlegenden Anfragepfad erreicht Corvus etwa drei Viertel des Durchsatzes von reinem nginx
 (Keep-Alive-Pools zum Upstream, Access-Log pro Worker gebündelt); der vollständige Schutz — 30 Regeln mit
 einer Liste von 1,000 CIDRs, Exploit-Blockierung, Sicherheits-Header und Ratenbegrenzung — kostet zusätzlich
-etwa 28 %. **Einschränkung:** ein geteilter CI-Runner, auf dem auch der
+etwa 30 %. **Einschränkung:** ein geteilter CI-Runner, auf dem auch der
 Lastgenerator läuft, und winzige Antworten — die Zahlen sind konservativ und zum Vergleich von Szenarien und
 Versionen gedacht, nicht als Kapazitätsgarantie. Der Speicher umfasst die Steuerungsebene und das eingebettete
 Valkey.

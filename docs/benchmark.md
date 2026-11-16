@@ -40,6 +40,8 @@ number of gateway CPUs.
 | `corvus-https-newconn` | The same with `Connection: close`: one full TLS handshake per request (wrk does not resume sessions), so req/s = handshakes/s |
 | `corvus-queue` | A host behind an access queue (capacity 1,000,000) with requests carrying a valid admission cookie obtained once through the normal flow; `refresh` is set to 1 h, so the run measures the signed-token fast path, not the Redis heartbeat |
 | `corvus-challenge-pass` | A host with a cookie-mode challenge rule on every path; requests carry a valid pass cookie obtained once through `/__corvus/challenge/verify` |
+| `npm-default` | [Nginx Proxy Manager](https://nginxproxymanager.com/) 2.17 (pinned by digest), set up through its API with one proxy host and default settings (per-host access log); its `worker_processes` is set to the number of gateway CPUs |
+| `npm-block-exploits` | The same with "Block Common Exploits" on |
 
 A scenario that cannot be prepared is reported as skipped with the reason.
 
@@ -73,24 +75,26 @@ docker build -f deploy/Dockerfile -t corvus:bench .
 CORVUS_IMAGE=corvus:bench DURATION=20s CONNECTIONS=64 deploy/bench/bench.sh
 ```
 
-Ports 80, 443, 9443, 9180, 9181, 6390, 18080 and 18081 must be free. `SCENARIOS="corvus-default
+Ports 80, 81, 443, 9443, 9180, 9181, 6390, 18080 and 18081 must be free. `SCENARIOS="corvus-default
 corvus-protected"` runs a subset.
 
 ## Latest results
 
-GitHub-hosted `ubuntu-24.04` runner (4 vCPU AMD EPYC 9V45, kernel 7.0 Azure), commit `dc6e1df`,
-64 connections, 20 s per scenario after a 5 s warm-up, `GET /` with a 3-byte response. wrk on
-CPU 0, backend on CPU 1, gateway on CPUs 2-3 (2 vCPU, 2 workers each).
+GitHub-hosted `ubuntu-24.04` runner (4 vCPU AMD EPYC 9V45, kernel 7.0 Azure), commit `e3442cb`
+(Corvus 1.5.0 code), 64 connections, 20 s per scenario after a 5 s warm-up, `GET /` with a 3-byte
+response. wrk on CPU 0, backend on CPU 1, gateway on CPUs 2-3 (2 vCPU, 2 workers each).
 
 | Scenario | req/s | req/s per gateway vCPU | p50 | p90 | p99 | CPU % (mean) | Peak MB | vs nginx | Errors |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| nginx-baseline | 97,227 | 48,613 | 0.63 ms | 0.75 ms | 1.16 ms | 199 | 17 | 100 % | 0 |
-| corvus-default | 75,473 | 37,736 | 0.79 ms | 1.03 ms | 1.83 ms | 204 | 72 | 78 % | 0 |
-| corvus-protected | 54,585 | 27,293 | 1.12 ms | 1.41 ms | 2.29 ms | 207 | 77 | 56 % | 0 |
-| corvus-https-keepalive | 59,697 | 29,848 | 1.00 ms | 1.34 ms | 2.18 ms | 205 | 80 | 61 % | 0 |
-| corvus-https-newconn | 4,348 (handshakes/s) | 2,174 | 5.88 ms | 9.68 ms | 11.62 ms | 168 | 88 | 4 % | 0 |
-| corvus-queue | 57,954 | 28,977 | 1.05 ms | 1.33 ms | 2.22 ms | 206 | 84 | 60 % | 0 |
-| corvus-challenge-pass | 62,901 | 31,450 | 0.96 ms | 1.23 ms | 1.94 ms | 206 | 88 | 65 % | 0 |
+| nginx-baseline | 107,688 | 53,844 | 0.58 ms | 0.66 ms | 1.04 ms | 200 | 18 | 100 % | 0 |
+| corvus-default | 79,370 | 39,685 | 0.76 ms | 0.99 ms | 1.98 ms | 204 | 77 | 74 % | 0 |
+| corvus-protected | 55,304 | 27,652 | 1.09 ms | 1.42 ms | 2.93 ms | 203 | 81 | 51 % | 0 |
+| corvus-https-keepalive | 63,506 | 31,753 | 0.95 ms | 1.25 ms | 2.19 ms | 204 | 85 | 59 % | 0 |
+| corvus-https-newconn | 4,847 (handshakes/s) | 2,424 | 5.32 ms | 8.68 ms | 10.35 ms | 169 | 93 | 4 % | 0 |
+| corvus-queue | 56,695 | 28,347 | 1.09 ms | 1.35 ms | 2.17 ms | 206 | 90 | 53 % | 0 |
+| corvus-challenge-pass | 59,174 | 29,587 | 1.03 ms | 1.36 ms | 2.39 ms | 207 | 89 | 55 % | 0 |
+| npm-default | 14,364 | 7,182 | 2.53 ms | 45.64 ms | 93.82 ms | 197 | 132 | 13 % | 0 |
+| npm-block-exploits | 14,384 | 7,192 | 2.41 ms | 43.88 ms | 83.40 ms | 199 | 134 | 13 % | 0 |
 
 CPU by process (Corvus scenarios): OpenResty ≈ 190 %, corvus-control ≈ 7–9 % (access-log
 ingestion; 1 % in the handshake scenario). The gateway CPUs are saturated in every scenario, so
@@ -98,15 +102,21 @@ req/s is the throughput limit of 2 vCPU.
 
 Observations:
 
-- The base request path reaches 78 % of the nginx baseline (17–18 % before
+- The base request path reaches 74 % of the nginx baseline (17–18 % before
   [#47](https://github.com/corvus-gateway/corvus/issues/47)). The remaining gap is mostly the two
   Lua phases per request: in ablation runs with both handlers emptied, Corvus matches the baseline.
 - The full protection set (30 rules with a 1,000-CIDR list, exploit blocking, security headers,
-  rate limit) costs about 28 % against `corvus-default`, most of it the rule evaluation; the
-  access queue fast path and a challenge pass cost 17–23 %, TLS on keep-alive connections 21 %.
+  rate limit) costs about 30 % against `corvus-default`, most of it the rule evaluation; the
+  access queue fast path and a challenge pass cost 25–29 %, TLS on keep-alive connections 20 %.
+- Nginx Proxy Manager 2.17 reaches 13 % of the baseline with or without "Block Common Exploits":
+  it proxies with `proxy_pass` to a variable, so every request opens a new connection to the
+  backend (no keep-alive pool) and the throughput stalls in bursts (p90 ≈ 45 ms). This matches
+  what Corvus itself measured before its keep-alive pool (18 %, see below). Its workers are set to
+  the 2 gateway CPUs like the other gateways; with its default `worker_processes auto` it starts
+  one worker per CPU of the machine, not of the container.
 - The percentages depend on the runner: on slower runners (e.g. AMD EPYC 7763) the same build
   reaches 56–64 % of the baseline for `corvus-default` and 40–44 % for `corvus-protected`.
-- Full TLS handshakes (ECDSA P-256, TLS 1.3) run at about 2,200 per vCPU per second; wrk does not
+- Full TLS handshakes (ECDSA P-256, TLS 1.3) run at about 2,400 per vCPU per second; wrk does not
   resume sessions, so this is the worst case (the gateway supports resumption through its shared
   session cache).
 
