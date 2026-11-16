@@ -340,6 +340,18 @@ func (o *OpenResty) WaitActive(ctx context.Context, name string, timeout time.Du
 	}
 }
 
+// UpstreamFailures returns the latest upstream failure of each server block seen in the
+// gateway's log since corvus-control started (why a host answers 502/504).
+func (o *OpenResty) UpstreamFailures() []UpstreamFailure {
+	o.mu.Lock()
+	errs := o.errs
+	o.mu.Unlock()
+	if errs == nil {
+		return nil
+	}
+	return errs.upstreamFailures()
+}
+
 // reloadErrors returns the gateway's serious log lines since the last reload request.
 func (o *OpenResty) reloadErrors() []string {
 	o.mu.Lock()

@@ -7,6 +7,7 @@ import { tokensStrings } from "./zh/tokens";
 import { redirectsStrings } from "./zh/redirects";
 import { streamsStrings } from "./zh/streams";
 import { notesStrings } from "./zh/notes";
+import { connCheckStrings } from "./zh/conncheck";
 import { proxyProtocolStrings } from "./zh/proxyprotocol";
 import { updateStrings } from "./zh/update";
 import { headersStrings } from "./zh/headers";
@@ -320,6 +321,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   ...redirectsStrings,
   ...streamsStrings,
   ...notesStrings,
+  ...connCheckStrings,
   ...proxyProtocolStrings,
   ...updateStrings,
   ...headersStrings,

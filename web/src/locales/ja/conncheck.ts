@@ -1,0 +1,24 @@
+import type { ConnCheckKey } from "../conncheck.i18n";
+
+export const connCheckStrings: Record<ConnCheckKey, string> = {
+  ccButton: "接続を確認",
+  ccChecking: "確認中…",
+  ccOk: "ゲートウェイは {addr} に接続しました（{ms} ms）",
+  ccMapped: "このホストでは、ゲートウェイは {target} に接続します。",
+  ccDnsTitle: "名前を解決できません",
+  ccDnsHint: "ゲートウェイは転送先ホストを検索ドメインなしの完全な DNS 名で問い合わせます。nas.home.lan のような完全な名前か IP アドレスを入力するか、docker-compose.yml の extra_hosts に名前を追加してください。",
+  ccRefusedTitle: "接続が拒否されました",
+  ccRefusedHint: "アドレスには届きますが、このポートで接続を受け付けるサービスがありません。ポート番号、サービスが動作しているか、127.0.0.1 だけでなく 0.0.0.0 で待ち受けているかを確認してください。ファイアウォールが接続を拒否している場合もあります。",
+  ccTimeoutTitle: "応答なし（タイムアウト）",
+  ccTimeoutHint: "5 秒以内に応答がありませんでした。多くの場合、転送先サーバーのファイアウォールがゲートウェイサーバーからの接続を破棄しています。そのサーバーでゲートウェイサーバーを許可してください。アドレスの誤りやサーバーの停止も考えられます。",
+  ccUnreachableTitle: "ネットワークに到達できません",
+  ccUnreachableHint: "ゲートウェイからこのアドレスへの経路がありません。IP アドレスを確認してください。Docker ネットワークの範囲（172.17〜172.31.x.x など）にある場合は、Docker のサブネットが LAN と重なっています。Docker ネットワークのサブネットを変更してください。",
+  ccTlsTitle: "TLS ハンドシェイクに失敗しました",
+  ccTlsHint: "ポートは接続を受け付けますが、HTTPS で応答しません。スキームを http にするか、サービスの HTTPS ポートを入力してください。",
+  ccOtherTitle: "接続に失敗しました",
+  ccOtherHint: "下のメッセージとゲートウェイのログを確認してください。",
+  ueBadge: "アップストリームエラー",
+  ueTip: "{ago}にアップストリームへの接続に失敗: {reason}",
+  ueTipAction: "ホストを編集し、「接続を確認」で原因を調べてください。",
+  ueSheetTitle: "{ago}、訪問者にエラーページが表示されました",
+};

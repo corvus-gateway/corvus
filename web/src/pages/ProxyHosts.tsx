@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight, Copy, Globe, Lock, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2, Users, Zap, Gauge, KeyRound, ExternalLink, UserPlus, X, Siren, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
-import { api, type AccessList, type ClientIPMode, type ProxyHost, type RateLimit, type SecurityHeaders, type UnderAttackStatus, type Waitroom } from "../api";
+import { api, type AccessList, type ClientIPMode, type ProxyHost, type RateLimit, type SecurityHeaders, type UnderAttackStatus, type UpstreamError, type Waitroom } from "../api";
+import { ConnCheck, UpstreamBadge, UpstreamCallout } from "../components/ConnCheck";
 import { UnderAttackFields, uaConfig, UA_DEFAULTS } from "../components/UnderAttackFields";
 import { LocationsFields } from "../components/LocationsFields";
 import { NoteLine, NotesSection } from "../components/NotesField";
@@ -60,6 +61,9 @@ export default function ProxyHosts() {
   const ua = useResource<UnderAttackStatus[]>("/api/under-attack", { poll: 10000 });
   const uaById = useMemo(() => new Map((ua.data ?? []).map((s) => [s.host_id, s])), [ua.data]);
   const uaOf = (id: number | null | undefined) => (id == null ? undefined : uaById.get(id));
+  // latest upstream failure per host (gateway log, last 15 minutes)
+  const upErrs = useResource<UpstreamError[]>("/api/upstream-errors", { poll: 15000 });
+  const upErrById = useMemo(() => new Map((upErrs.data ?? []).map((e) => [e.host_id, e])), [upErrs.data]);
 
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<{ id: number | null; form: Form; req: CertReq | null; auth: BasicAuthForm } | null>(null);
@@ -180,6 +184,7 @@ export default function ProxyHosts() {
                           </a>
                           <MoreDomains domains={h.domains} />
                           {uaSt?.active && <Tip label={uaSt.reason || t("uaOn")}><span tabIndex={0} className={tipTrigger}><Badge tone="danger" icon={Siren}>{t("uaBadge")}</Badge></span></Tip>}
+                          {upErrById.has(h.id) && <UpstreamBadge err={upErrById.get(h.id)!} />}
                           {servesConsole(h.domains) && <Tip label={t("consoleHostTitle")}><span tabIndex={0} className={tipTrigger}><Badge tone="info">{t("consoleHostBadge")}</Badge></span></Tip>}
                         </div>
                         <div className="mt-0.5 flex items-center gap-2 text-xs text-fg-subtle">
@@ -250,6 +255,8 @@ export default function ProxyHosts() {
               <IdField label={t("forwardHost")} required error={fieldErr(error, "forward_host")}>{(id) => <Input id={id} className="font-mono" value={f.forward_host} onChange={(e) => set({ forward_host: e.target.value })} placeholder="app / 10.0.0.12" invalid={!!fieldErr(error, "forward_host")} />}</IdField>
               <IdField label={t("forwardPort")} required error={fieldErr(error, "forward_port")}>{(id) => <NumberInput id={id} min={1} max={65535} value={f.forward_port} onChange={(v) => set({ forward_port: v })} />}</IdField>
             </div>
+            {can && <ConnCheck scheme={f.forward_scheme} host={f.forward_host} port={f.forward_port} />}
+            {editing?.id != null && upErrById.has(editing.id) && <UpstreamCallout err={upErrById.get(editing.id)!} />}
             <SwitchRow label={t("websocket")} description={t("websocketDesc")} checked={f.websocket} onChange={(v) => set({ websocket: v })} />
           </FormSection>
 

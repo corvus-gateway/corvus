@@ -48,3 +48,18 @@ func TestHostGateway(t *testing.T) {
 		t.Fatalf("host networking: got %q", gw)
 	}
 }
+
+// ForwardAddr maps a forward host like the rendered configuration.
+func TestForwardAddr(t *testing.T) {
+	c := &Compiler{}
+	if got := c.ForwardAddr("app"); got != "app" {
+		t.Errorf("no mapping: %q", got)
+	}
+	c.Hosts = func() map[string]string { return map[string]string{"nas.extra": "10.0.0.9", "self": "127.0.0.1"} }
+	c.HostGateway = func() string { return "172.17.0.1" }
+	for in, want := range map[string]string{"NAS.extra": "10.0.0.9", "localhost": "172.17.0.1", "self": "172.17.0.1", "app": "app", "10.0.0.5": "10.0.0.5"} {
+		if got := c.ForwardAddr(in); got != want {
+			t.Errorf("ForwardAddr(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

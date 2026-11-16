@@ -41,6 +41,39 @@ server-sent events (SSE) stay open.
 To reach services that listen only on the host's `127.0.0.1`, run Corvus with
 [host networking](../getting-started/install.md#run-it-with-host-networking-optional).
 
+#### Check connection
+
+**Check connection** under the host and port tries the target the way the gateway reaches it,
+before you save:
+
+- the forward host is mapped like in the gateway configuration (`127.0.0.1`/`localhost` → the
+  Docker host, names from `extra_hosts`/`/etc/hosts` → their address);
+- names are looked up with the gateway's DNS resolver as **full names, without search domains**, so
+  a short name such as `nas` fails here exactly as it would for visitors;
+- a TCP connection is opened (5 second limit), and for **https** a TLS handshake is made with the
+  forward host as SNI. Certificates are not verified, as the gateway does not verify them either.
+
+The result is either *reached* with the address and time, or the reason with a hint:
+
+| Result | Usual fix |
+|---|---|
+| Name does not resolve | Use the full DNS name (`nas.home.lan`) or the IP address, or add the name to `extra_hosts` |
+| Connection refused | Check the port and that the service runs and listens on `0.0.0.0`, not only `127.0.0.1` |
+| No answer (timed out) | Allow the gateway server in the target server's firewall; check the address |
+| Network unreachable | Check the address; a Docker network may [overlap your network](../getting-started/how-it-works.md#services-on-other-servers) |
+| TLS handshake failed | The port speaks plain HTTP: use the `http` scheme or the service's HTTPS port |
+
+Custom locations have the same button. Operators and administrators can use it, up to 20 checks a
+minute per user.
+
+#### Upstream errors in the list
+
+When the gateway could not reach a host's service, for example after the service was stopped, the
+list shows **Upstream error** next to the domain. Hover it for the reason (as above), the address
+the gateway tried and when it happened; the host's form shows the same with nginx's message. The
+warning disappears 15 minutes after the last failed request, or as soon as you save the host. It
+comes from the gateway's error log, so it shows what visitors actually got (502 or 504).
+
 ### Custom locations
 
 Send paths such as `/api` to another service. See [Custom locations](locations.md).

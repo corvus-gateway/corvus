@@ -544,6 +544,7 @@ func run() error {
 	if or != nil {
 		srv.Gateway = or.Status
 		srv.GatewayProblem = or.Problem
+		srv.UpstreamFailures = or.UpstreamFailures
 	}
 	srv.Alerts = &alerts.Engine{Store: st, Key: dataKey, Src: alerts.Sources{
 		Traffic:     tc,
