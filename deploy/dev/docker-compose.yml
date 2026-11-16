@@ -15,7 +15,7 @@ services:
     build:
       context: ../..
       dockerfile: deploy/Dockerfile.prebuilt
-    image: corvus/gateway:dev
+    image: ${CORVUS_IMAGE:-corvus/gateway:dev}   # CI: the image built from the pull request
     user: "10001:10001"   # hardened: no root entrypoint step (cap_drop ALL)
     ports:
       - "8081:80"

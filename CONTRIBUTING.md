@@ -75,6 +75,13 @@ CORVUS_GATEWAY=0 CORVUS_ADMIN_TLS=0 CORVUS_DATA_DIR=./tmp bin/corvus-control   #
 
 Full image: `docker build -f deploy/Dockerfile -t corvus .` (compiles OpenResty, takes a while).
 `deploy/dev/` contains a test stack (Pebble ACME CA, demo backend) and the integration suite
-`deploy/dev/itest.sh`.
+`deploy/dev/itest.sh`. CI runs it on every pull request against the image built from it, then an
+upgrade test from the latest release; both run locally the same way:
+
+```sh
+docker build -f deploy/Dockerfile -t corvus/gateway:ci .
+CORVUS_IMAGE=corvus/gateway:ci deploy/dev/ci-itest.sh
+deploy/dev/upgrade-test.sh ghcr.io/corvus-gateway/gateway:latest corvus/gateway:ci
+```
 
 The HTTP API used by the console is described in [docs/API.md](docs/API.md).

@@ -12,12 +12,20 @@ J=$(mktemp)
 EMAIL=$(sed -n 1p "${CORVUS_ADMIN_FILE:?}")
 PASS=$(sed -n 2p "$CORVUS_ADMIN_FILE")
 PY=${PYTHON:-python3}
+# curl --resolve needs an address, not a name (CORVUS_HOST may be "localhost").
+HIP=$($PY -c 'import socket,sys; print(socket.gethostbyname(sys.argv[1]))' "$H")
+# Scratch files. Under Git Bash on Windows, curl and python are native programs that do
+# not understand /tmp, so they get the Windows form of the path (cygpath -m).
+T=$(mktemp -d)
+TN=$T; command -v cygpath >/dev/null 2>&1 && TN=$(cygpath -m "$T")
 pass=0; failn=0
 ok()   { pass=$((pass+1)); echo "  PASS  $*"; }
 bad()  { failn=$((failn+1)); echo "  FAIL  $*"; }
 chk()  { if [ "$1" = "$2" ]; then ok "$3 ($1)"; else bad "$3 (got $1, want $2)"; fi; }
 c()    { curl -sk -b "$J" -c "$J" -H 'X-Corvus-Request: 1' -H 'Content-Type: application/json' "$@"; }
 code() { curl -sk -o /dev/null -w '%{http_code}' "$@"; }
+# Checks on a response body read all of it (grep without -q): grep -q stops at the first
+# match, and with pipefail curl's failed write (SIGPIPE) would then decide the result.
 js()   { $PY -c "import sys,json; d=json.load(sys.stdin); print($1)"; }
 
 echo "[login]"
@@ -54,13 +62,14 @@ codes=$(for i in $(seq 1 15); do code "$G/dry-$i"; echo; done | sort | uniq -c |
 case "$codes" in *429*) bad "dry run still blocks: $codes";; *) ok "dry run never blocks: $codes";; esac
 
 echo "[exploit blocking]"
+# --path-as-is: newer curl versions resolve dot segments (also %2e) before sending.
 chk "$(code "$G/.env")" 200 "/.env passes when blocking is off (detect only)"
 chk "$(put_host ",\"block_exploits\":true")" 200 "enable block exploits"
 chk "$(code "$G/.env")" 403 "/.env blocked"
 chk "$(code "$G/?q=1%20union%20select%201")" 403 "SQL injection pattern blocked"
 chk "$(code "$G/normal/page?q=hello")" 200 "normal request allowed"
-chk "$(code "$G/a/b/.%2e/x")" 403 "encoded traversal (.%2e/) blocked"
-chk "$(code "$G/a/.%2e/.%2e/etc/x")" 400 "traversal above the root rejected by nginx"
+chk "$(code --path-as-is "$G/a/b/.%2e/x")" 403 "encoded traversal (.%2e/) blocked"
+chk "$(code --path-as-is "$G/a/.%2e/.%2e/etc/x")" 400 "traversal above the root rejected by nginx"
 chk "$(code "$G/a?f=%252e%252e%252fetc")" 403 "double-encoded traversal blocked"
 chk "$(code "$G/vendor/%70hpunit/src/Util/PHP/eval-stdin.php")" 403 "encoded scanner path (decoded check) blocked"
 chk "$(code "$G/index.php?%ADd+allow_url_include%3d1+%ADd+auto_prepend_file%3dphp%3a%2f%2finput")" 403 "PHP-CGI argument injection (CVE-2024-4577) blocked"
@@ -68,7 +77,7 @@ chk "$(code "$G/index.php?p=admin&a=%3C%3Fphp+system(1)%3B")" 403 "PHP code in q
 chk "$(code "$G/?page_id=1&pagename=..%2f..%2fpearcmd")" 403 "pearcmd LFI chain blocked"
 chk "$(code "$G/@fs/app/config.json?import&raw??")" 403 "Vite /@fs/ blocked"
 chk "$(code "$G/search?q=%EA%B5%AD%EC%96%B4")" 200 "Korean query (%AD bytes) not a false positive"
-curl -s -H 'X-Middleware-Subrequest: middleware:middleware:middleware' "$G/echo" | grep -qi 'x-middleware-subrequest' && bad "X-Middleware-Subrequest forwarded" || ok "X-Middleware-Subrequest stripped (CVE-2025-29927)"
+curl -s -H 'X-Middleware-Subrequest: middleware:middleware:middleware' "$G/echo" | grep -i 'x-middleware-subrequest' >/dev/null && bad "X-Middleware-Subrequest forwarded" || ok "X-Middleware-Subrequest stripped (CVE-2025-29927)"
 
 echo "[client IP]"
 chk "$(put_host ",\"client_ip\":\"cloudflare\"")" 200 "client_ip=cloudflare"
@@ -116,7 +125,7 @@ cond() { echo "{\"name\":\"$1\",\"action\":\"$2\"$3,\"expression\":{\"groups\":[
 chk "$(put_host ",\"block_exploits\":true")" 200 "host with attack-pattern blocking"
 B1=$(rule "$(cond itest-block-path block '' '{"field":"http.path","operator":"starts_with","value":["/itest-blocked"]}')")
 chk "$(code "$G/itest-blocked/x")" 403 "block: path starts_with"
-curl -s "$G/itest-blocked/x" | grep -q "Request ID" && ok "block page with request ID" || bad "block page"
+curl -s "$G/itest-blocked/x" | grep "Request ID" >/dev/null && ok "block page with request ID" || bad "block page"
 chk "$(code "$G/itest-open")" 200 "unmatched request passes"
 c -o /dev/null -X PUT $A/api/security-rules/$B1 -d "$(cond itest-block-path block ',"status_code":410' '{"field":"http.path","operator":"starts_with","value":["/itest-blocked"]}')"
 chk "$(code "$G/itest-blocked/x")" 410 "custom block status"
@@ -192,12 +201,12 @@ chk "$(post -F 'PHP_SESSION_UPLOAD_PROGRESS=x' -F 'f=@/dev/null' "$G/upload.php"
 chk "$(post -H 'Content-Type: application/json' -H 'Content-Encoding: gzip' --data-binary 'xxxx' "$G/api")" 403 "compressed request body refused in block mode"
 chk "$(post -H 'Content-Type: application/json' --data-binary '{"handle":{"__class":"GuzzleHttp\\Psr7\\FnStream"}}' "$G/api")" 403 "Craft CMS __class / gadget class blocked"
 chk "$(post -H 'Content-Type: application/json' --data-binary '{"name":"hello","items":[1,2],"note":"한글 본문 constructor 테스트"}' "$G/api")" 200 "normal JSON passes (no false positive)"
-printf '{"__proto__":1}' > /tmp/corvus-itest-file.json
-chk "$(post -F 'title=report' -F 'file=@/tmp/corvus-itest-file.json' "$G/upload")" 200 "uploaded file contents are not inspected"
+printf '{"__proto__":1}' > "$T/file.json"
+chk "$(post -F 'title=report' -F "file=@$TN/file.json" "$G/upload")" 200 "uploaded file contents are not inspected"
 chk "$(curl -s -o /dev/null -w '%{http_code}' "$G/plain-get")" 200 "requests without a body are unaffected"
 chk "$(put_host ',"body_inspection":"block","body_max_kb":16')" 200 "body limit 16 KiB"
-{ printf '{"pad":"'; head -c 40000 /dev/zero | tr '\0' 'a'; printf '","__proto__":{}}'; } > /tmp/corvus-itest-big.json
-chk "$(post -H 'Content-Type: application/json' --data-binary @/tmp/corvus-itest-big.json "$G/api")" 200 "body above the limit is passed (not inspected)"
+{ printf '{"pad":"'; head -c 40000 /dev/zero | tr '\0' 'a'; printf '","__proto__":{}}'; } > "$T/big.json"
+chk "$(post -H 'Content-Type: application/json' --data-binary "@$TN/big.json" "$G/api")" 200 "body above the limit is passed (not inspected)"
 chk "$(put_host ',"body_inspection":"log"')" 200 "body inspection: log only"
 chk "$(post -H 'Content-Type: application/json' --data-binary '{"x":{"__proto__":{}}}' "$G/api-log")" 200 "log mode does not block"
 BR=$(c -X POST $A/api/security-rules -d '{"name":"itest-body-rule","action":"block","expression":{"groups":[[{"field":"http.body","operator":"contains","value":["evil-marker"],"ci":true}]]}}' | js "d['rule']['id']")
@@ -213,7 +222,7 @@ chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/bans -d '{"ip":"10.0.0.0/
 BID=$(c -X POST $A/api/bans -d "{\"ip\":\"$ip\",\"duration_s\":600,\"reason\":\"itest\"}" | js "d['id']")
 sleep 2
 chk "$(code "$G/ban-check")" 403 "manually banned IP refused by the gateway"
-curl -s "$G/ban-check" | grep -q "Request ID" && ok "ban uses the block page" || bad "ban page"
+curl -s "$G/ban-check" | grep "Request ID" >/dev/null && ok "ban uses the block page" || bad "ban page"
 chk "$(c -o /dev/null -w '%{http_code}' -X DELETE $A/api/bans/$BID)" 200 "unban"
 sleep 2
 chk "$(code "$G/ban-check")" 200 "unbanned IP allowed again"
@@ -277,7 +286,7 @@ SC=$(echo "$V" | grep -i '^set-cookie: __corvus_ch=')
 case "$SC" in *HttpOnly*SameSite=Lax*) ok "pass cookie is HttpOnly, SameSite=Lax";; *) bad "pass cookie flags: $SC";; esac
 chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$CJ" "$G/itest-ch-cookie/page?x=1")" 200 "cookie challenge: request with the pass reaches the backend"
 chk "$(curl -s -o /dev/null -w '%{http_code}' -b "$CJ" "$G/itest-ch-cookie/blocked")" 403 "block rules still apply with a pass"
-curl -s -b "$CJ" "$G/itest-ch-cookie/blocked" | grep -q 'name="t"' && bad "block rule answered with a challenge" || ok "blocked with the block page"
+curl -s -b "$CJ" "$G/itest-ch-cookie/blocked" | grep 'name="t"' >/dev/null && bad "block rule answered with a challenge" || ok "blocked with the block page"
 chk "$(code "$G/itest-ch-cookie/page")" 403 "without the cookie: challenged again"
 V=$(verify "$CJ" "$TOK" "" "//evil.example/x")
 echo "$V" | grep -i '^location:' | grep -qi 'evil' && bad "open redirect: $(echo "$V" | grep -i '^location')" || ok "network-path return target replaced by /"
@@ -330,7 +339,7 @@ chk "$(echo "$TOK" | cut -d. -f3)" 0 "under attack: challenge token names virtua
 chk "$(code "$G/")" 403 "under attack: site root challenged too"
 chk "$(code "$G/itest-ua-allowed/x")" 200 "under attack: requests an allow rule matched are not challenged"
 chk "$(code "$G/itest-ua-blocked/x")" 403 "under attack: block rule still answers"
-curl -s "$G/itest-ua-blocked/x" | grep -q 'name="t"' && bad "block rule answered with a challenge" || ok "under attack: block rules come first (block page)"
+curl -s "$G/itest-ua-blocked/x" | grep 'name="t"' >/dev/null && bad "block rule answered with a challenge" || ok "under attack: block rules come first (block page)"
 A1=$(curl -s -D - -o /dev/null "$G/.well-known/acme-challenge/itest-ua" | tr -d '\r')
 chk "$(echo "$A1" | status)" 404 "under attack: ACME path reaches the ACME responder"
 echo "$A1" | grep -qi '^x-corvus-challenge:' && bad "ACME path challenged" || ok "under attack: ACME path not challenged"
@@ -486,7 +495,7 @@ chk "$st" valid "certificate issued in the background"
 # the redeploy follows the issuance shortly (bursts are combined into one redeploy)
 rc=0; for i in $(seq 1 20); do rc=$(code -H 'Host: inline1.corvus.test' "$G/x"); [ "$rc" = 301 ] && break; sleep 2; done
 chk "$rc" 301 "HTTPS redirect activated after issuance"
-chk "$(curl -sk -o /dev/null -w '%{http_code}' --resolve inline1.corvus.test:8443:$H https://inline1.corvus.test:8443/)" 200 "HTTPS with issued certificate"
+chk "$(curl -sk -o /dev/null -w '%{http_code}' --resolve inline1.corvus.test:8443:$HIP https://inline1.corvus.test:8443/)" 200 "HTTPS with issued certificate"
 chk "$(c $A/api/certificates | js "[x['auto_renew'] for x in d if x['id']==$CID][0]")" True "auto renew enabled"
 CREQ=$($PY -c 'import json; print(json.dumps({"email":"ops@corvus.test","dns_challenge":True,"dns_provider":"cloudflare","dns_credentials":"# Cloudflare API token" + chr(10) + "dns_cloudflare_api_token=invalid-test-token"}))')
 R=$(c -X POST $A/api/proxy-hosts -d "$(body dns2.corvus.test "$CREQ")")
@@ -579,8 +588,8 @@ LH=$(c -X POST $A/api/proxy-hosts -d '{"domains":["loc.corvus.test"],"forward_ho
 sleep 2
 lget() { curl -s -H 'Host: loc.corvus.test' "$G$1"; }
 lcode() { curl -s -o /dev/null -w '%{http_code}' -H 'Host: loc.corvus.test' "$@"; }
-lget '/loc-path/x?a=1' | grep -q '^GET /path/x?a=1 HTTP/1.1' && ok "location forwards with its forward path (/loc-path/x -> /path/x)" || bad "forward path not applied: $(lget '/loc-path/x?a=1' | grep '^GET ')"
-lget /keep/y | grep -q '^GET /keep/y HTTP/1.1' && ok "location without forward path keeps the URI" || bad "location URI changed: $(lget /keep/y | grep '^GET ')"
+lget '/loc-path/x?a=1' | grep '^GET /path/x?a=1 HTTP/1.1' >/dev/null && ok "location forwards with its forward path (/loc-path/x -> /path/x)" || bad "forward path not applied: $(lget '/loc-path/x?a=1' | grep '^GET ')"
+lget /keep/y | grep '^GET /keep/y HTTP/1.1' >/dev/null && ok "location without forward path keeps the URI" || bad "location URI changed: $(lget /keep/y | grep '^GET ')"
 chk "$(lcode "$G/other")" 502 "other paths still go to the host's forward target"
 chk "$(lcode "$G/loc-path/.env")" 403 "host protections apply inside a location (exploit blocking)"
 chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$LH -d '{"domains":["loc.corvus.test"],"forward_host":"demo","forward_port":1,"basic_auth":{"enabled":true,"users":[{"username":"locu","password":"loc-pass-123"}]}}')" 200 "enable password protection (locations kept when omitted)"
@@ -644,11 +653,11 @@ LIMJ='{"domains":["limits.corvus.test"],"forward_scheme":"http","forward_host":"
 LH=$(c -X POST $A/api/proxy-hosts -d "$LIMJ}" | js "d.get('id') or d.get('proxy_host',{}).get('id')")
 chk "$(c $A/api/proxy-hosts/$LH | js "(d.get('max_upload_mb'),d.get('upstream_timeout_s'),d.get('gzip'))")" "(1, 30, True)" "host stores upload size, timeout and gzip (default on)"
 sleep 2
-UP=$(mktemp)
+UP=$T/upload.bin
 head -c 2097152 /dev/zero > "$UP"
-chk "$(code -H 'Host: limits.corvus.test' -H 'Content-Type: application/octet-stream' --data-binary @"$UP" "$G/upload")" 413 "2 MB upload to a 1 MB host: 413"
+chk "$(code -H 'Host: limits.corvus.test' -H 'Content-Type: application/octet-stream' --data-binary "@$TN/upload.bin" "$G/upload")" 413 "2 MB upload to a 1 MB host: 413"
 head -c 524288 /dev/zero > "$UP"
-chk "$(code -H 'Host: limits.corvus.test' -H 'Content-Type: application/octet-stream' --data-binary @"$UP" "$G/upload")" 200 "512 KB upload accepted"
+chk "$(code -H 'Host: limits.corvus.test' -H 'Content-Type: application/octet-stream' --data-binary "@$TN/upload.bin" "$G/upload")" 200 "512 KB upload accepted"
 rm -f "$UP"
 # whoami echoes the request headers as text/plain: a padded header makes the answer > 1 KB.
 PAD=$(head -c 3000 /dev/zero | tr '\0' a)
@@ -659,7 +668,7 @@ sleep 2
 chk "$(ce)" "" "gzip off: response not compressed"
 c -o /dev/null -X DELETE $A/api/proxy-hosts/$LH
 echo "[certificate replace]"
-CT=$(mktemp -d)
+mkdir -p "$T/certs"; CT=$TN/certs
 for n in 1 2; do
   san="DNS:replace.corvus.test"; [ $n = 2 ] && san="$san,DNS:www.replace.corvus.test"
   MSYS2_ARG_CONV_EXCL="/CN" openssl req -x509 -newkey rsa:2048 -nodes -days 30 -set_serial $((1000+n)) -subj /CN=replace.corvus.test \
@@ -694,7 +703,7 @@ chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/import/npm/preview -d '{"
 R=$(c -X POST $A/api/import/npm/apply -d '{}')
 chk "$(echo "$R" | js "sorted((k,v) for k,v in d['imported'].items() if k not in ('security_rules','redirection_hosts','streams'))")" "[('access_lists', 1), ('certificates', 2), ('proxy_hosts', 3)]" "import applied"
 chk "$(code -H 'Host: npm-shop.corvus.test' "$G/")" 301 "imported host forces HTTPS"
-chk "$(curl -sk -o /dev/null -w '%{http_code}' --resolve npm-shop.corvus.test:8443:$H https://npm-shop.corvus.test:8443/)" 200 "imported certificate serves HTTPS"
+chk "$(curl -sk -o /dev/null -w '%{http_code}' --resolve npm-shop.corvus.test:8443:$HIP https://npm-shop.corvus.test:8443/)" 200 "imported certificate serves HTTPS"
 chk "$(code -H 'Host: npm-custom.corvus.test' -u alice:alice-secret-1 "$G/")" 200 "imported access list password works"
 chk "$(c -X POST $A/api/import/npm/apply -d '{}' | js "len(d['skipped'])>=3")" True "re-import skips conflicting hosts"
 
@@ -702,5 +711,5 @@ cleanup
 c -o /dev/null -X PUT $A/api/settings/autoban -d "$AUTOBAN"
 echo
 echo "integration: $pass passed, $failn failed"
-rm -f "$J"
+rm -rf "$J" "$T"
 [ "$failn" = 0 ]
