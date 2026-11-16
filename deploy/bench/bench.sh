@@ -484,19 +484,22 @@ s_https_newconn() {
 
 s_queue() {
   log "corvus-queue: creating the access queue and host"
-  local wr qj r adm
+  local wr qj r adm ua
   wr=$(create /api/waitrooms '{"name":"bench-queue","capacity":1000000,"active_ttl":7200,"refresh":3600,"max_new_per_ip":0}' "d['waitroom']['id']")
   create /api/proxy-hosts "$(host_body $H_QUEUE ",\"waitroom_id\":$wr,\"waitroom_path\":\"/\"")" "d['proxy_host']['id']" >/dev/null
   qj="$WORK/qjar"
+  # Queue cookies are bound to the browser (User-Agent), so curl and wrk must send the
+  # same one: wrk sends none by default, and curl's cookie would then get 429 (cookie check).
+  ua="User-Agent: corvus-bench"
   # 1st request: signed queue cookie (cookie check, no Redis); 2nd: enters the queue → admitted
   log "corvus-queue: obtaining an admission cookie"
-  for _ in $(seq 1 60); do [ "$(code -c "$qj" -b "$qj" "http://$H_QUEUE/")" = 429 ] && break; sleep 1; done
-  r=$("${CURL[@]}" -D - -o /dev/null -c "$qj" -b "$qj" "http://$H_QUEUE/" | tr -d '\r' || true)
+  for _ in $(seq 1 60); do [ "$(code -H "$ua" -c "$qj" -b "$qj" "http://$H_QUEUE/")" = 429 ] && break; sleep 1; done
+  r=$("${CURL[@]}" -H "$ua" -D - -o /dev/null -c "$qj" -b "$qj" "http://$H_QUEUE/" | tr -d '\r' || true)
   adm=$(echo "$r" | sed -n 's/^[Ss]et-[Cc]ookie: \(corvus_a_bench_queue=[^;]*\).*/\1/p' | head -1)
   [ -n "$adm" ] || die "no admission cookie (response: $(echo "$r" | head -1))"
-  [ "$(code -H "Cookie: $adm" "http://$H_QUEUE/")" = 200 ] || die "admission cookie not accepted"
+  [ "$(code -H "$ua" -H "Cookie: $adm" "http://$H_QUEUE/")" = 200 ] || die "admission cookie not accepted"
   run_wrk corvus-queue "$C_CORVUS" "access queue (capacity 1M), admitted session cookie (signed-token fast path; Redis heartbeat at most hourly)" \
-    -H "Cookie: $adm" "http://$H_QUEUE/"
+    -H "$ua" -H "Cookie: $adm" "http://$H_QUEUE/"
 }
 
 s_challenge() {
