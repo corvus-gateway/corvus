@@ -5,11 +5,11 @@
 # OpenSSL 3.5.9, PCRE2 10.49, zlib 1.3.2 on Alpine 3.24 — the official image links an older
 # OpenSSL. Unused nginx modules (HTTP/3, mp4, flv, dav, mail, ssi …) are not compiled in.
 
-FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS openresty
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS openresty
 COPY deploy/openresty/build.sh /build.sh
 RUN JOBS="$(nproc)" sh /build.sh
 
-FROM node:26-alpine@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216 AS web
+FROM node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
@@ -25,7 +25,7 @@ COPY --from=web /out/dist/ control/internal/webui/dist/
 ARG VERSION=dev
 RUN CGO_ENABLED=0 GOAMD64=v1 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/corvus-control ./control/cmd/corvus-control
 
-FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
 # Latest Alpine security updates + minimal runtime (OpenSSL/PCRE2/zlib are linked statically).
 RUN apk upgrade --no-cache && apk add --no-cache libgcc ca-certificates tzdata su-exec setpriv valkey
 COPY --from=openresty /usr/local/openresty /usr/local/openresty
