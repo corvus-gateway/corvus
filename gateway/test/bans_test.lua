@@ -57,6 +57,15 @@ ngx.req = { read_body = function() end, get_body_data = function() return body e
 ngx.say = function(...) out = table.concat({ ... }) end
 ngx.now = function() return ngx.time() + 0.25 end
 
+-- the per-start status key (CORVUS_STATUS_KEY) and the header corvus-control sends
+local STATUS_KEY = "k3y-0123456789abcdef"
+local real_getenv = os.getenv
+os.getenv = function(k)
+  if k == "CORVUS_STATUS_KEY" then return STATUS_KEY end
+  return real_getenv(k)
+end
+ngx.var.http_x_corvus_status_key = STATUS_KEY
+
 local rules = require("corvus.rules")
 
 local now = 1800000000
@@ -158,5 +167,30 @@ ngx.shared = { corvus_bans = dict(), corvus_bb_q = dict() } -- restarted gateway
 rules.bad_behaviour_hits()
 eq(out, '{"hits":[],"epoch":"' .. out:match('"epoch":"([^"]+)"') .. '"}', "empty list")
 eq(out:match('"epoch":"([^"]+)"') ~= epoch, true, "new shared memory, new epoch")
+
+-- Internal endpoints require the per-start key, so they are not reachable through a
+-- proxied target pointing at the status port.
+local function denied(what, header, key)
+  ngx.var.http_x_corvus_status_key, STATUS_KEY = header, key
+  local before = bans.sets
+  ngx.shared = { corvus_bans = bans, corvus_bb_q = q, corvus_ua = dict() }
+  for name, call in pairs({
+    bans = function() return push({ ips = { ["198.51.100.1"] = 0 } }) end,
+    hits = function() out, ngx.status = nil, 200; rules.bad_behaviour_hits(); return out end,
+    ua = function() out, ngx.status = nil, 200; body = "ua"; JSON.ua = { hosts = {} }; rules.set_under_attack(); return out end,
+  }) do
+    eq(call(), "forbidden", what .. ": " .. name)
+    eq(ngx.status, 403, what .. ": " .. name .. " status")
+  end
+  eq(bans.sets, before, what .. ": nothing changed")
+end
+denied("no header", nil, "k3y-0123456789abcdef")
+denied("wrong key", "k3y-0123456789abcdeX", "k3y-0123456789abcdef")
+denied("shorter key", "k3y", "k3y-0123456789abcdef")
+denied("empty key in env, empty header", "", "")
+denied("no key in env", "anything", nil)
+ngx.var.http_x_corvus_status_key, STATUS_KEY = "k3y-0123456789abcdef", "k3y-0123456789abcdef"
+eq(push({ ips = {} }), "0", "right key accepted")
+eq(ngx.status, 200, "right key status")
 
 T.done("bans_test")

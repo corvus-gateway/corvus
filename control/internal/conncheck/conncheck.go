@@ -9,10 +9,12 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -32,13 +34,19 @@ const DefaultTimeout = 5 * time.Second
 
 // Result of a check.
 type Result struct {
-	OK      bool   `json:"ok"`
-	Kind    string `json:"kind,omitempty"`    // failure kind (see the Kind constants)
-	Message string `json:"message,omitempty"` // the underlying error
-	Target  string `json:"target"`            // forward host as the gateway uses it (after mapping)
-	Address string `json:"address,omitempty"` // address connected to (or tried)
-	TimeMS  int64  `json:"time_ms"`
+	OK        bool     `json:"ok"`
+	Kind      string   `json:"kind,omitempty"`      // failure kind (see the Kind constants)
+	Message   string   `json:"message,omitempty"`   // the underlying error
+	Target    string   `json:"target"`              // forward host as the gateway uses it (after mapping)
+	Address   string   `json:"address,omitempty"`   // address connected to (or the first one that failed)
+	Addresses []string `json:"addresses,omitempty"` // all addresses tried, when the name has several
+	TimeMS    int64    `json:"time_ms"`
+	// Refused: why the check was not made (Checker.Refuse); not sent to the console.
+	Refused string `json:"-"`
 }
+
+// MaxAddresses bounds how many resolved addresses of a name are tried.
+const MaxAddresses = 8
 
 // Checker checks forward targets. The zero value resolves with the system resolver;
 // set Resolver to the gateway's.
@@ -46,6 +54,10 @@ type Checker struct {
 	Resolver string // nginx "resolver" value, e.g. "127.0.0.11" or "[fd00::1]:53 1.1.1.1"
 	IPv6     bool   // the resolver may return IPv6 addresses (resolver ... ipv6=on)
 	Timeout  time.Duration
+
+	// Refuse (optional) says why a resolved address may not be tried ("" = allowed): a
+	// name that resolves to one of Corvus's own loopback services is not probed either.
+	Refuse func(ip string, port int) string
 
 	// Lookup and Dial replace DNS and TCP (tests); nil = real ones.
 	Lookup func(ctx context.Context, network, host string) ([]net.IP, error)
@@ -120,21 +132,84 @@ func (c *Checker) Check(ctx context.Context, scheme, host string, port int) Resu
 		return res
 	}
 
-	ip := net.ParseIP(name)
-	if ip == nil {
-		ips, err := c.lookup(ctx, name)
-		if err != nil {
+	var ips []net.IP
+	if ip := net.ParseIP(name); ip != nil {
+		ips = []net.IP{ip}
+	} else {
+		var err error
+		if ips, err = c.lookup(ctx, name); err != nil {
 			return done(KindDNS, dnsError(name, err))
 		}
 		if len(ips) == 0 {
 			return done(KindDNS, errors.New(name+": no address"))
 		}
-		ip = ips[0]
+		// nginx resolves the name when it loads the configuration and round-robins
+		// over all its addresses: each of them has to work
+		if len(ips) > MaxAddresses {
+			ips = ips[:MaxAddresses]
+		}
+		if c.Refuse != nil {
+			for _, ip := range ips {
+				if why := c.Refuse(ip.String(), port); why != "" {
+					res.Refused = why
+					return done(KindOther, errors.New(why))
+				}
+			}
+		}
 	}
-	res.Address = net.JoinHostPort(ip.String(), strconv.Itoa(port))
-	conn, err := c.dial(ctx, res.Address)
+	addrs := make([]string, len(ips))
+	for i, ip := range ips {
+		addrs[i] = net.JoinHostPort(ip.String(), strconv.Itoa(port))
+	}
+	if len(addrs) > 1 {
+		res.Addresses = addrs
+	}
+	// all addresses at once, within the same deadline
+	type outcome struct {
+		kind string
+		err  error
+	}
+	outs := make([]outcome, len(addrs))
+	var wg sync.WaitGroup
+	for i, a := range addrs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			k, err := c.try(ctx, scheme, name, a)
+			outs[i] = outcome{k, err}
+		}()
+	}
+	wg.Wait()
+	var failed []string
+	for i, o := range outs {
+		if o.err == nil {
+			continue
+		}
+		if len(failed) == 0 {
+			res.Address, res.Kind = addrs[i], o.kind
+		}
+		if len(addrs) > 1 {
+			failed = append(failed, addrs[i]+": "+o.err.Error())
+		} else {
+			failed = append(failed, o.err.Error())
+		}
+	}
+	if len(failed) > 0 {
+		msg := strings.Join(failed, "; ")
+		if len(addrs) > 1 {
+			msg = fmt.Sprintf("%d of %d addresses failed: %s", len(failed), len(addrs), msg)
+		}
+		return done(res.Kind, errors.New(msg))
+	}
+	res.Address = addrs[0]
+	return done("", nil)
+}
+
+// try connects to one address and, for https, makes the TLS handshake.
+func (c *Checker) try(ctx context.Context, scheme, name, addr string) (string, error) {
+	conn, err := c.dial(ctx, addr)
 	if err != nil {
-		return done(dialKind(ctx, err), err)
+		return dialKind(ctx, err), err
 	}
 	defer conn.Close()
 	if scheme == "https" {
@@ -145,12 +220,13 @@ func (c *Checker) Check(ctx context.Context, scheme, host string, port int) Resu
 		tc := tls.Client(conn, cfg)
 		if err := tc.HandshakeContext(ctx); err != nil {
 			if ctx.Err() != nil {
-				return done(KindTimeout, errors.New("TLS handshake timed out"))
+				// the port accepts connections but does not answer a TLS client hello
+				return KindTLS, errors.New("TCP connected, but no TLS response")
 			}
-			return done(KindTLS, err)
+			return KindTLS, err
 		}
 	}
-	return done("", nil)
+	return "", nil
 }
 
 // dnsError shortens a resolver error to what matters.

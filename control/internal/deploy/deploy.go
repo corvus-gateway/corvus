@@ -506,6 +506,7 @@ func (d *Deployer) prune(ctx context.Context) {
 			d.removeVersionDir(e.Name())
 		}
 	}
+	d.pruneCerts(ctx)
 	// History rows: as many deployed versions as there are directories (older ones
 	// cannot be rolled back to anyway) and as many failed attempts.
 	if n, err := d.Store.PruneVersions(ctx, keep, keep); err != nil {
@@ -513,6 +514,92 @@ func (d *Deployer) prune(ctx context.Context) {
 	} else if n > 0 {
 		slog.Info("pruned configuration version history", "rows", n)
 	}
+}
+
+// certGrace: certificate directories changed this recently are never removed (files of a
+// certificate whose transaction has not committed yet, an issuance in progress).
+const certGrace = 10 * time.Minute
+
+// pruneCerts removes the files (including the private key) of deleted certificates:
+// <DataDir>/certs/<id> directories whose id is no longer in the database and that no
+// retained version directory refers to (rollback targets keep theirs). Called under
+// d.mu after the version directories were pruned; on any doubt nothing is removed.
+func (d *Deployer) pruneCerts(ctx context.Context) {
+	if d.Compiler == nil || d.Compiler.P.DataDir == "" {
+		return
+	}
+	certsDir := filepath.Join(filepath.FromSlash(d.Compiler.P.DataDir), "certs")
+	entries, err := os.ReadDir(certsDir)
+	if err != nil {
+		return
+	}
+	var candidates []string
+	for _, e := range entries {
+		if e.IsDir() && certIDName.MatchString(e.Name()) {
+			candidates = append(candidates, e.Name())
+		}
+	}
+	if len(candidates) == 0 {
+		return
+	}
+	list, err := d.Store.ListCertificates(ctx)
+	if err != nil {
+		return
+	}
+	keep := map[string]bool{}
+	for _, c := range list {
+		keep[fmt.Sprint(c.ID)] = true
+	}
+	refs, err := d.certRefs()
+	if err != nil {
+		slog.Warn("certificate cleanup skipped", "err", err)
+		return
+	}
+	for _, name := range candidates {
+		if keep[name] || refs[name] {
+			continue
+		}
+		dir := filepath.Join(certsDir, name)
+		if fi, err := os.Stat(dir); err != nil || time.Since(fi.ModTime()) < certGrace {
+			continue
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			slog.Warn("removing files of a deleted certificate", "dir", dir, "err", err)
+		} else {
+			slog.Info("removed files of a deleted certificate", "certificate", name)
+		}
+	}
+}
+
+// certIDName matches certificate directories named by id (not "default").
+var certIDName = regexp.MustCompile(`^[0-9]{1,19}$`)
+
+// certRefs returns the certificate ids referred to (<DataDir>/certs/<id>/...) by the
+// files of all version directories.
+func (d *Deployer) certRefs() (map[string]bool, error) {
+	prefix := strings.TrimSuffix(filepath.ToSlash(d.Compiler.P.DataDir), "/") + "/certs/"
+	re := regexp.MustCompile(regexp.QuoteMeta(prefix) + `([0-9]{1,19})/`)
+	refs := map[string]bool{}
+	err := filepath.WalkDir(d.versionsDir(), func(p string, e fs.DirEntry, err error) error {
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		if e.IsDir() || !e.Type().IsRegular() {
+			return nil
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		for _, m := range re.FindAllSubmatch(bytes.ReplaceAll(data, []byte(`\`), []byte(`/`)), -1) {
+			refs[string(m[1])] = true
+		}
+		return nil
+	})
+	return refs, err
 }
 
 // Dirty reports whether stored settings changed since the active version was rendered.

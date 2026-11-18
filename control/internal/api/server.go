@@ -70,6 +70,7 @@ type Server struct {
 	Feeds        ListFeeds // URL-fed lists (nil = unavailable)
 	allow        allowCache
 	connLimit    *auth.Limiter // connection checks per user
+	connSem      chan struct{} // connection checks running at once (all users)
 	ssoRT        ssoRuntime    // OIDC sign-in flows + provider cache (sso.go)
 }
 
@@ -92,6 +93,9 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	if s.connLimit == nil {
 		s.connLimit = auth.NewLimiter(connCheckPerMinute, time.Minute)
+	}
+	if s.connSem == nil {
+		s.connSem = make(chan struct{}, connCheckConcurrent)
 	}
 	pub := func(pattern string, h http.HandlerFunc) { mux.Handle(pattern, h) }
 	priv := func(pattern string, h http.HandlerFunc) { mux.Handle(pattern, s.requireAuth(h)) }           // any signed-in user

@@ -2,6 +2,8 @@ package auth
 
 import (
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -32,6 +34,29 @@ func TestLimiter(t *testing.T) {
 	l.Reset("ip")
 	if b, _ := l.Blocked("ip"); b {
 		t.Fatal("still blocked after reset")
+	}
+}
+
+// Allow checks and records in one step: concurrent callers get exactly Max attempts.
+func TestLimiterAllowConcurrent(t *testing.T) {
+	l := NewLimiter(7, time.Minute)
+	var wg sync.WaitGroup
+	var allowed atomic.Int32
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if l.Allow("user:1") {
+				allowed.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if allowed.Load() != 7 {
+		t.Fatalf("allowed %d, want 7", allowed.Load())
+	}
+	if b, _ := l.Blocked("user:1"); !b || l.Allow("user:1") || !l.Allow("user:2") {
+		t.Fatal("Allow/Blocked disagree")
 	}
 }
 

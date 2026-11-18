@@ -13,6 +13,11 @@ import (
 	"time"
 )
 
+// StatusKeyHeader carries the per-start key (CORVUS_STATUS_KEY) the gateway requires
+// on its internal status endpoints (/bans, /bad-behaviour, /under-attack), so they are
+// not reachable through a proxied target that points at the loopback status port.
+const StatusKeyHeader = "X-Corvus-Status-Key"
+
 // MaxPushBytes is the largest body the gateway accepts on its status port for /bans
 // (client_max_body_size in nginx.conf). An IPv4 entry takes about 25 bytes of JSON, so
 // this holds roughly 300,000 bans.

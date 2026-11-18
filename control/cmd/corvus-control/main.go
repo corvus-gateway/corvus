@@ -397,8 +397,12 @@ func run() error {
 	// Per-start key with which the gateway marks requests it proxies to the console;
 	// the console trusts X-Forwarded-For from local peers only with it (api.ConsoleProxies).
 	consoleKey := ""
+	// Per-start key the gateway requires on its internal status endpoints (/bans,
+	// /bad-behaviour, /under-attack), so they are not reachable through a proxied target.
+	statusKey := ""
 	if withGateway {
 		consoleKey = auth.RandomToken(32)
+		statusKey = auth.RandomToken(32)
 	}
 	dep := &deploy.Deployer{Store: st, Compiler: comp, Dir: filepath.Join(dataDir, "nginx"), Keep: 20}
 	if withGateway {
@@ -408,6 +412,7 @@ func run() error {
 			StatusURL:   "http://127.0.0.1:9180/version",
 			Env: []string{
 				"CORVUS_WR_SECRET=" + wrSecret, "CORVUS_DEBUG_KEY=" + debugKey, "CORVUS_CONSOLE_KEY=" + consoleKey,
+				"CORVUS_STATUS_KEY=" + statusKey,
 				"CORVUS_REDIS_HOST=" + redisHost, "CORVUS_REDIS_PORT=" + redisPort, "CORVUS_REDIS_SCRIPT=" + redisScript,
 				"CORVUS_REDIS_USER=" + redisUser, "CORVUS_REDIS_PASSWORD=" + redisPass,
 			},
@@ -503,11 +508,13 @@ func run() error {
 	if withGateway {
 		ban.PushURL = "http://127.0.0.1:9180/bans"
 		ban.HitsURL = "http://127.0.0.1:9180/bad-behaviour"
+		ban.StatusKey = statusKey
 	}
 	// "Under attack" mode, automatic activations pushed to the gateway's shared memory.
 	ua := &underattack.Service{Store: st, Traffic: tc}
 	if withGateway {
 		ua.PushURL = "http://127.0.0.1:9180/under-attack"
+		ua.StatusKey = statusKey
 		ban.OnGatewayRestart = ua.Trigger // empty shared memory: push the activations at once
 	}
 	go ban.Run(ctx)

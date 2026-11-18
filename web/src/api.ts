@@ -128,7 +128,7 @@ export type ConnFailKind = "dns" | "refused" | "timeout" | "unreachable" | "tls"
 
 /** POST /api/proxy-hosts/check: the forward target tried the way the gateway reaches it. */
 export interface ConnCheckResult {
-  ok: boolean; kind?: ConnFailKind; message?: string; target: string; address?: string; time_ms: number;
+  ok: boolean; kind?: ConnFailKind; message?: string; target: string; address?: string; addresses?: string[]; time_ms: number;
 }
 
 /** GET /api/upstream-errors: a proxy host's latest failure to reach its upstream (last 15 minutes). */

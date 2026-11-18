@@ -15,6 +15,9 @@ import (
 // editing, too few to scan a network through the console.
 const connCheckPerMinute = 20
 
+// connCheckConcurrent bounds the checks running at once, for all users together.
+const connCheckConcurrent = 4
+
 // upstreamErrorWindow: how long the console shows a host's last upstream failure.
 const upstreamErrorWindow = 15 * time.Minute
 
@@ -42,27 +45,43 @@ func (s *Server) checkConnection(w http.ResponseWriter, r *http.Request) {
 	if u := userFrom(r); u != nil {
 		key = "conncheck:user:" + strconv.FormatInt(u.ID, 10)
 	}
-	if blocked, _ := s.connLimit.Blocked(key); blocked {
+	if !s.connLimit.Allow(key) {
 		writeErr(w, http.StatusTooManyRequests, "rate_limited", "too many connection checks, try again in a minute")
 		return
 	}
-	s.connLimit.Fail(key)
 
 	addr := l.ForwardHost
 	if s.Deployer != nil && s.Deployer.Compiler != nil {
 		addr = s.Deployer.Compiler.ForwardAddr(l.ForwardHost)
 	}
 	// Corvus's own loopback services are refused when saving, so they aren't probed either.
-	if why := s.Paths.InternalTarget(addr, l.ForwardPort); why != "" {
+	internal := func(why string) {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": "validation", "message": why,
 			"fields": validate.Errors{{Field: "forward_host", Code: "internal", Message: why}}})
+	}
+	if why := s.Paths.InternalTarget(addr, l.ForwardPort); why != "" {
+		internal(why)
 		return
 	}
-	c := s.ConnCheck
-	if c == nil {
-		c = &conncheck.Checker{Resolver: s.Paths.Resolver, IPv6: s.Paths.ResolverIPv6}
+	select {
+	case s.connSem <- struct{}{}:
+		defer func() { <-s.connSem }()
+	default:
+		writeErr(w, http.StatusTooManyRequests, "rate_limited", "too many connection checks running, try again in a moment")
+		return
 	}
-	writeJSON(w, http.StatusOK, c.Check(r.Context(), l.ForwardScheme, addr, l.ForwardPort))
+	c := conncheck.Checker{Resolver: s.Paths.Resolver, IPv6: s.Paths.ResolverIPv6}
+	if s.ConnCheck != nil {
+		c = *s.ConnCheck
+	}
+	// ... nor through a name that resolves to loopback
+	c.Refuse = func(ip string, port int) string { return s.Paths.InternalTarget(ip, port) }
+	res := c.Check(r.Context(), l.ForwardScheme, addr, l.ForwardPort)
+	if res.Refused != "" {
+		internal(res.Refused)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 // upstreamError is a proxy host's latest failure to reach its upstream (gateway log).

@@ -9,8 +9,8 @@ import { ConnCheck } from "./ConnCheck";
 const blankLocation: ProxyLocation = { path: "", forward_scheme: "http", forward_host: "", forward_port: 80, forward_path: "", advanced_config: "" };
 
 /** Custom locations of a proxy host: a small collapsed section (open when the host has any). */
-export function LocationsFields({ value, onChange, error, isAdmin }: {
-  value: ProxyLocation[]; onChange: (v: ProxyLocation[]) => void; error: unknown; isAdmin: boolean;
+export function LocationsFields({ value, onChange, error, isAdmin, can }: {
+  value: ProxyLocation[]; onChange: (v: ProxyLocation[]) => void; error: unknown; isAdmin: boolean; can: boolean;
 }) {
   const { t } = useI18n();
   const setAt = (i: number, p: Partial<ProxyLocation>) => onChange(value.map((l, j) => (j === i ? { ...l, ...p } : l)));
@@ -55,7 +55,7 @@ export function LocationsFields({ value, onChange, error, isAdmin }: {
                   {(id) => <NumberInput id={id} min={1} max={65535} value={l.forward_port} onChange={(v) => setAt(i, { forward_port: v })} />}
                 </IdField>
               </div>
-              <ConnCheck scheme={l.forward_scheme} host={l.forward_host} port={l.forward_port} />
+              {can && <ConnCheck scheme={l.forward_scheme} host={l.forward_host} port={l.forward_port} />}
               <IdField label={t("locForwardPath")} hint={t("locForwardPathHint")} error={err(i, "forward_path")}>
                 {(id) => <Input id={id} className="font-mono" value={l.forward_path} onChange={(e) => setAt(i, { forward_path: e.target.value })} placeholder="/v2/" invalid={!!err(i, "forward_path")} />}
               </IdField>

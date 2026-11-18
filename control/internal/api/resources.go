@@ -702,8 +702,8 @@ func (s *Server) deleteCertificate(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	// The files stay on disk because older config versions (rollback targets) may
-	// still reference them. TODO: remove once no retained version uses them.
+	// The files stay on disk while older config versions (rollback targets) may still
+	// reference them; the deployer removes them once none does (Deployer.pruneCerts).
 	s.audit(r, "certificate.delete", fmt.Sprintf("certificate:%d", id), c)
 	writeJSON(w, 200, map[string]string{"status": "ok"})
 }

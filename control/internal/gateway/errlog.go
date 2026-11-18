@@ -20,6 +20,7 @@ type errLog struct {
 
 	mu      sync.Mutex
 	partial []byte
+	skip    bool // discard up to the next newline (the rest of a truncated line)
 	lines   []errLine
 	fails   map[string]UpstreamFailure // by server name
 }
@@ -39,6 +40,14 @@ func (l *errLog) Write(p []byte) (int, error) {
 	defer l.mu.Unlock()
 	now := time.Now()
 	buf := append(l.partial, p...)
+	if l.skip { // the rest of a runaway line kept truncated before
+		i := bytes.IndexByte(buf, '\n')
+		if i < 0 {
+			l.partial = nil
+			return n, err
+		}
+		buf, l.skip = buf[i+1:], false
+	}
 	for {
 		i := bytes.IndexByte(buf, '\n')
 		if i < 0 {
@@ -47,9 +56,9 @@ func (l *errLog) Write(p []byte) (int, error) {
 		l.keep(now, string(buf[:i]))
 		buf = buf[i+1:]
 	}
-	if len(buf) > 4096 { // a runaway line: keep the start, drop the rest
+	if len(buf) > 4096 { // a runaway line: keep the start, drop the rest up to its end
 		l.keep(now, string(buf[:4096]))
-		buf = nil
+		buf, l.skip = nil, true
 	}
 	l.partial = append([]byte(nil), buf...)
 	return n, err
@@ -144,26 +153,51 @@ func field(line, key, end string) (string, bool) {
 	return v, true
 }
 
-// parseUpstreamFailure recognises an [error] line about reaching an upstream. Lines
-// without server and upstream (rate limiting, denied requests, Lua errors) and failures
-// on the client side ("while sending to client", "client prematurely closed") are not
-// upstream failures.
+// upstreamMessage reports whether the message part of an [error] line (before
+// ", client: ") is nginx's own report of a failure on the way to an upstream.
+func upstreamMessage(msg string) bool {
+	m := strings.ToLower(msg)
+	if strings.ContainsAny(m, `"'`) || strings.Contains(m, "lua") || strings.Contains(m, "to client") ||
+		strings.Contains(m, "client prematurely closed") || strings.Contains(m, "client closed") {
+		return false
+	}
+	i := strings.LastIndex(m, " while ")
+	if i < 0 {
+		return false
+	}
+	action := m[i+len(" while "):]
+	if !strings.HasSuffix(action, "upstream") {
+		return false
+	}
+	for _, r := range action {
+		if r != ' ' && (r < 'a' || r > 'z') {
+			return false
+		}
+	}
+	return true
+}
+
+// parseUpstreamFailure recognises an [error] line about reaching an upstream:
+//
+//	<msg> while <action> upstream, client: ..., server: ..., request: "...", upstream: "...", host: "..."[, referrer: "..."]
+//
+// Request, host and referrer (and, in some messages, a user name) are the visitor's
+// text, so only nginx's own parts decide: the message before ", client: " has to end in
+// an upstream action ("while connecting to upstream", "while SSL handshaking to
+// upstream", "while reading response header from upstream", ...) and contain no quoted
+// or Lua text, and the upstream field is read only before the host and referrer fields.
+// Rate limiting, denied requests, Lua errors and failures on the client side ("while
+// sending to client", "client prematurely closed") are not upstream failures.
 func parseUpstreamFailure(line string) (UpstreamFailure, bool) {
 	var f UpstreamFailure
 	_, rest, ok := strings.Cut(line, " [error] ")
-	if !ok || strings.Contains(rest, "to client") || strings.Contains(rest, "client prematurely closed") ||
-		strings.Contains(rest, "client closed") {
-		return f, false
-	}
-	up, ok := field(rest, `, upstream: "`, `"`)
 	if !ok {
 		return f, false
 	}
-	if f.Server, ok = field(rest, ", server: ", ", "); !ok || f.Server == "" {
+	msg, fields, ok := strings.Cut(rest, ", client: ")
+	if !ok {
 		return f, false
 	}
-	f.Server = strings.ToLower(f.Server)
-	msg, _, _ := strings.Cut(rest, ", client: ")
 	if _, m, ok := strings.Cut(msg, ": "); ok { // "10#10: "
 		msg = m
 	}
@@ -172,6 +206,25 @@ func parseUpstreamFailure(line string) (UpstreamFailure, bool) {
 			msg = m
 		}
 	}
+	if !upstreamMessage(msg) {
+		return f, false
+	}
+	if f.Server, ok = field(fields, ", server: ", ", "); !ok || f.Server == "" {
+		return f, false
+	}
+	f.Server = strings.ToLower(f.Server)
+	// the visitor's host and referrer come after the upstream field
+	head := fields
+	for _, k := range []string{`, host: "`, `, referrer: "`} {
+		if i := strings.Index(head, k); i >= 0 {
+			head = head[:i]
+		}
+	}
+	i := strings.LastIndex(head, `, upstream: "`)
+	if i < 0 {
+		return f, false
+	}
+	up, _, _ := strings.Cut(head[i+len(`, upstream: "`):], `"`)
 	if len(msg) > 300 {
 		msg = msg[:300]
 	}

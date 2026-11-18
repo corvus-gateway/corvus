@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -189,7 +191,93 @@ func TestCheckHTTPS(t *testing.T) {
 	}
 }
 
-// https to a port that accepts but never answers the handshake: timeout, not TLS.
+// A name with several addresses: nginx round-robins over all of them, so each is tried;
+// one failing address fails the check and is named.
+func TestCheckAllAddresses(t *testing.T) {
+	_, open := listenPort(t)
+	addrs := map[string][]net.IP{
+		"two.":  {net.ParseIP("127.0.0.1"), net.ParseIP("127.0.0.2")},
+		"half.": {net.ParseIP("127.0.0.1"), net.ParseIP("192.0.2.9")},
+		"many.": nil,
+	}
+	for i := 0; i < 12; i++ {
+		addrs["many."] = append(addrs["many."], net.ParseIP(fmt.Sprintf("127.0.0.%d", i+1)))
+	}
+	var mu sync.Mutex
+	dialed := map[string]bool{}
+	c := &Checker{
+		Timeout: 300 * time.Millisecond,
+		Lookup: func(_ context.Context, _, host string) ([]net.IP, error) {
+			return addrs[host], nil
+		},
+		Dial: func(ctx context.Context, _, addr string) (net.Conn, error) {
+			mu.Lock()
+			dialed[addr] = true
+			mu.Unlock()
+			if strings.HasPrefix(addr, "192.0.2.9:") { // blackhole
+				<-ctx.Done()
+				return nil, &net.OpError{Op: "dial", Net: "tcp", Err: ctx.Err()}
+			}
+			var d net.Dialer
+			return d.DialContext(ctx, "tcp", "127.0.0.1:"+strconv.Itoa(open)) // all reach the listener
+		},
+	}
+	p := strconv.Itoa(open)
+	r := c.Check(context.Background(), "http", "two", open)
+	if !r.OK || r.Address != "127.0.0.1:"+p || len(r.Addresses) != 2 || r.Addresses[1] != "127.0.0.2:"+p {
+		t.Fatalf("two addresses: %+v", r)
+	}
+	r = c.Check(context.Background(), "http", "half", open)
+	if r.OK || r.Kind != KindTimeout || r.Address != "192.0.2.9:"+p || len(r.Addresses) != 2 ||
+		!strings.Contains(r.Message, "1 of 2 addresses failed: 192.0.2.9:"+p) || strings.Contains(r.Message, "127.0.0.1:") {
+		t.Fatalf("one failing: %+v", r)
+	}
+	dialed = map[string]bool{}
+	r = c.Check(context.Background(), "http", "many", open)
+	if !r.OK || len(r.Addresses) != MaxAddresses || len(dialed) != MaxAddresses {
+		t.Fatalf("capped: %+v, dialed %d", r, len(dialed))
+	}
+	// a single address keeps the plain message and no list
+	c.Dial = nil
+	c.Lookup = func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("127.0.0.1")}, nil
+	}
+	ln, refused := listenPort(t)
+	ln.Close()
+	r = c.Check(context.Background(), "http", "one", refused)
+	if r.OK || r.Kind != KindRefused || r.Addresses != nil || strings.Contains(r.Message, "addresses failed") {
+		t.Fatalf("single: %+v", r)
+	}
+}
+
+// Refuse applies to every resolved address of a name: nothing is dialed.
+func TestCheckRefuse(t *testing.T) {
+	var dialed atomic.Bool
+	c := &Checker{
+		Lookup: func(context.Context, string, string) ([]net.IP, error) {
+			return []net.IP{net.ParseIP("10.0.0.1"), net.ParseIP("127.0.0.1")}, nil
+		},
+		Dial: func(context.Context, string, string) (net.Conn, error) {
+			dialed.Store(true)
+			return nil, errors.New("dialed")
+		},
+		Refuse: func(ip string, port int) string {
+			if ip == "127.0.0.1" && port == 9180 {
+				return "internal"
+			}
+			return ""
+		},
+	}
+	if r := c.Check(context.Background(), "http", "sneaky.example", 9180); r.OK || r.Refused != "internal" || dialed.Load() {
+		t.Fatalf("refused: %+v (dialed %v)", r, dialed.Load())
+	}
+	if r := c.Check(context.Background(), "http", "sneaky.example", 80); r.Refused != "" || !dialed.Load() {
+		t.Fatalf("other port: %+v", r)
+	}
+}
+
+// https to a port that accepts but never answers the handshake: TCP works, so it is a
+// TLS failure (not a firewall timeout).
 func TestCheckHTTPSTimeout(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -205,7 +293,7 @@ func TestCheckHTTPSTimeout(t *testing.T) {
 	}()
 	c := &Checker{Timeout: 100 * time.Millisecond}
 	r := c.Check(context.Background(), "https", "127.0.0.1", ln.Addr().(*net.TCPAddr).Port)
-	if r.OK || r.Kind != KindTimeout {
+	if r.OK || r.Kind != KindTLS || r.Message != "TCP connected, but no TLS response" {
 		t.Fatalf("got %+v", r)
 	}
 	select {
