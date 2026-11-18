@@ -186,10 +186,18 @@ http {
     # this per-request syslog output serves the other servers (unknown hosts, redirections).
     # Tab-separated, every value JSON-escaped (no raw tabs or newlines); parsed without
     # reflection by corvus-control (control/internal/traffic/parse.go: keep the field order).
+    # Traffic sources without secrets: of the Referer only its origin (scheme://host[:port],
+    # no userinfo, path, query or fragment) and of the query string only the three UTM
+    # values are logged. corvus-control lowercases and bounds them (traffic/source.go).
+    map $http_referer $corvus_ref {
+        default "";
+        "~*^([a-z][a-z0-9+.-]{0,31})://(?:[^/?#@]*@)?([a-z0-9._:\[\]-]{1,200})(?:[/?#]|$)" "$1://$2";
+    }
     log_format corvus_log escape=json
         'c1\t$msec\t$corvus_host\t$request_method\t$status\t$body_bytes_sent\t$request_time\t'
         '$remote_addr\t$corvus_wr\t$corvus_exploit\t$limit_req_status\t$corvus_rule\t$corvus_cc\t'
-        '$corvus_body\t$corvus_ban\t$uri\t$http_user_agent';
+        '$corvus_body\t$corvus_ban\t$uri\t$http_user_agent\t'
+        '$corvus_ref\t$arg_utm_source\t$arg_utm_medium\t$arg_utm_campaign';
     # The same fields up to $corvus_ban, composed in C for the Lua access log (one variable
     # read instead of fourteen). None of them can contain a tab or newline: method and
     # address are validated by nginx, the others are set by Corvus.

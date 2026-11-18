@@ -13,4 +13,6 @@ export const retentionStrings: Record<K, string> = {
   droppedLines: "{n} líneas de registro descartadas porque el disco no daba abasto",
   archives: "Archivos de registro de solicitudes", noArchives: "No hay archivos de registro", noArchivesDesc: "Con el registro de solicitudes activado, aquí aparece un archivo por día.",
   fileName: "Archivo", fileSize: "Tamaño", fileModified: "Modificado", retentionSaved: "Configuración de retención guardada",
+  logModeAllHint: "«Todas las solicitudes» equivale a los registros de acceso por host de Nginx Proxy Manager y es necesario para las estadísticas de visitantes (origen del tráfico, campañas UTM).",
+  referrer: "Origen (referente)", combinedHint: "Descargar en formato combined de nginx (para analizadores de registros como GoAccess)",
 };

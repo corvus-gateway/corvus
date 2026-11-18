@@ -13,4 +13,6 @@ export const retentionStrings: Record<K, string> = {
   droppedLines: "{n} lignes de journal perdues car le disque ne suivait pas",
   archives: "Fichiers du journal des requêtes", noArchives: "Aucun fichier journal", noArchivesDesc: "Lorsque le journal des requêtes est activé, un fichier par jour apparaît ici.",
   fileName: "Fichier", fileSize: "Taille", fileModified: "Modifié", retentionSaved: "Paramètres de conservation enregistrés",
+  logModeAllHint: "« Toutes les requêtes » correspond aux journaux d'accès par hôte de Nginx Proxy Manager et est nécessaire pour les statistiques de visite (provenance, campagnes UTM).",
+  referrer: "Provenance (référent)", combinedHint: "Télécharger au format combined de nginx (pour les analyseurs de journaux comme GoAccess)",
 };

@@ -35,6 +35,11 @@ type Record struct {
 	CC string  `json:"cc"` // client country used by rules ($corvus_cc)
 	BD string  `json:"bd"` // body inspection "<signature>:<log|block>" ($corvus_body)
 	BN string  `json:"bn"` // "1" when the client address is banned ($corvus_ban)
+	// Traffic sources (source.go), absent from records before 1.6.0
+	RF string `json:"rf,omitempty"` // referrer origin: scheme://host[:port] only
+	US string `json:"us,omitempty"` // utm_source
+	UM string `json:"um,omitempty"` // utm_medium
+	UC string `json:"uc,omitempty"` // utm_campaign
 }
 
 const (
@@ -194,6 +199,20 @@ type LogLine struct {
 	WR     string  `json:"wr,omitempty"`
 	UA     string  `json:"ua,omitempty"`
 	Rule   string  `json:"rule,omitempty"`
+	Ref    string  `json:"ref,omitempty"` // referrer origin
+	UTMSrc string  `json:"utm_source,omitempty"`
+	UTMMed string  `json:"utm_medium,omitempty"`
+	UTMCmp string  `json:"utm_campaign,omitempty"`
+}
+
+// Line returns the record as shown in the request log.
+func (r *Record) Line() LogLine {
+	l := LogLine{TS: r.T, Host: r.H, Method: r.M, Path: r.U, Status: r.S, RTms: math.Round(r.RT*10000) / 10, Bytes: r.B, IP: r.IP,
+		WR: r.WR, UA: r.UA, Rule: r.X, Ref: r.RF, UTMSrc: r.US, UTMMed: r.UM, UTMCmp: r.UC}
+	if l.WR == "-" {
+		l.WR = ""
+	}
+	return l
 }
 
 // Event is an aggregated notable occurrence (merged per kind/host/path/ip per minute).
@@ -384,6 +403,10 @@ func (c *Collector) Add(r *Record) {
 	if len(r.UA) > 300 {
 		r.UA = r.UA[:300]
 	}
+	if r.RF != "" {
+		r.RF = ReferrerOrigin(r.RF)
+	}
+	r.US, r.UM, r.UC = UTMValue(r.US), UTMValue(r.UM), UTMValue(r.UC)
 	ts := int64(r.T)
 	blocked, kinds := classify(r)
 
@@ -458,10 +481,7 @@ func (c *Collector) Add(r *Record) {
 	}
 
 	// recent log ring
-	line := LogLine{TS: r.T, Host: r.H, Method: r.M, Path: r.U, Status: r.S, RTms: math.Round(r.RT*10000) / 10, Bytes: r.B, IP: r.IP, WR: r.WR, UA: r.UA, Rule: r.X}
-	if r.WR == "-" {
-		line.WR = ""
-	}
+	line := r.Line()
 	if len(c.logs) < logCap {
 		c.logs = append(c.logs, line)
 	} else {
@@ -783,7 +803,7 @@ func (c *Collector) TopPaths(rangeName, host string, limit int, now time.Time) [
 type LogQuery struct {
 	Host   string
 	Status string // "2xx".."5xx" or an exact code
-	Q      string // substring of path or IP
+	Q      string // substring of path, IP, referrer origin or a UTM value
 	Limit  int
 }
 
@@ -809,7 +829,7 @@ func (c *Collector) Logs(q LogQuery) []LogLine {
 		if q.Status != "" && !statusMatch(l.Status, q.Status) {
 			continue
 		}
-		if q.Q != "" && !strings.Contains(l.Path, q.Q) && !strings.Contains(l.IP, q.Q) {
+		if q.Q != "" && !l.matches(q.Q) {
 			continue
 		}
 		if mask {
@@ -818,6 +838,11 @@ func (c *Collector) Logs(q LogQuery) []LogLine {
 		out = append(out, l)
 	}
 	return out
+}
+
+func (l *LogLine) matches(q string) bool {
+	return strings.Contains(l.Path, q) || strings.Contains(l.IP, q) || strings.Contains(l.Ref, q) ||
+		strings.Contains(l.UTMSrc, q) || strings.Contains(l.UTMMed, q) || strings.Contains(l.UTMCmp, q)
 }
 
 func statusMatch(code int, f string) bool {

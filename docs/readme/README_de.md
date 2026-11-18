@@ -87,6 +87,7 @@ Go-Steuerungsebene, React-Konsole), die ein **bestehendes NPM-Setup importieren*
 **Monitoring & Alarme**
 - Live-Anfragen/s, Statuscodes, p50/p95/p99-Latenz, Aufschlüsselung nach Host und Pfad
 - Suche im Request-Log und CSV/JSON-Export, Sicherheitsereignisse, persistente Historie mit Aufbewahrung und Log-Rotation
+- Traffic-Herkunft im Request-Log ohne preisgegebene Geheimnisse (nur Referrer-Origin und UTM-Werte) und Export im nginx-Format „combined“ für Besucherstatistiken mit GoAccess
 - Alarme an Slack, Mattermost, Discord, Teams, Telegram oder signierte Webhooks
 - Prometheus-`/metrics`
 

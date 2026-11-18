@@ -202,9 +202,10 @@ function Logs({ qs, poll, initialQ = "" }: { qs: string; poll: number; initialQ?
   const res = useResource<{ items: LogLine[] }>(`/api/traffic/logs?${query}`, { poll });
   const exp = useSubmit();
 
-  const doExport = async (format: "csv" | "json") => {
+  const doExport = async (format: "csv" | "json" | "combined") => {
     const text = await exp.run(() => getText(`/api/traffic/logs?${filters}&limit=1000&format=${format}`), { deployed: false });
-    if (text != null) download(`corvus-traffic-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.${format}`, text, format === "csv" ? "text/csv" : "application/json");
+    const [ext, type] = format === "csv" ? ["csv", "text/csv"] : format === "json" ? ["json", "application/json"] : ["log", "text/plain"];
+    if (text != null) download(`corvus-traffic-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.${ext}`, text, type);
   };
   const items = res.data?.items ?? [];
 
@@ -218,6 +219,7 @@ function Logs({ qs, poll, initialQ = "" }: { qs: string; poll: number; initialQ?
           <span className="text-xs text-fg-subtle num">{t("nItems", { n: items.length })}</span>
           <Button size="sm" loading={exp.busy} onClick={() => doExport("csv")}><Download className="h-3.5 w-3.5" />CSV</Button>
           <Button size="sm" loading={exp.busy} onClick={() => doExport("json")}><Download className="h-3.5 w-3.5" />JSON</Button>
+          <Button size="sm" loading={exp.busy} onClick={() => doExport("combined")} title={t("combinedHint")}><Download className="h-3.5 w-3.5" />Combined</Button>
         </div>
       </Toolbar>
       <RefreshError res={res} className="m-3" />
@@ -251,6 +253,10 @@ function Logs({ qs, poll, initialQ = "" }: { qs: string; poll: number; initialQ?
                       {l.wr && <LogField label={t("waitroom")}>{l.wr}</LogField>}
                       {l.rule && <LogField label={t("rule")}>{l.rule}</LogField>}
                       <LogField label="User-Agent">{l.ua || "–"}</LogField>
+                      <LogField label={t("referrer")}>{l.ref || "–"}</LogField>
+                      {l.utm_source && <LogField label="utm_source">{l.utm_source}</LogField>}
+                      {l.utm_medium && <LogField label="utm_medium">{l.utm_medium}</LogField>}
+                      {l.utm_campaign && <LogField label="utm_campaign">{l.utm_campaign}</LogField>}
                     </dl>
                   </td>
                 </tr>

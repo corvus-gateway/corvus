@@ -463,12 +463,23 @@ func (s *Server) trafficLogs(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 		w.Header().Set("Content-Disposition", `attachment; filename="corvus-logs-`+stamp+`.csv"`)
 		cw := csv.NewWriter(w)
-		_ = cw.Write([]string{"time", "host", "method", "path", "status", "rt_ms", "bytes", "ip", "waitroom", "rule", "user_agent"})
+		_ = cw.Write([]string{"time", "host", "method", "path", "status", "rt_ms", "bytes", "ip", "waitroom", "rule", "user_agent",
+			"referrer", "utm_source", "utm_medium", "utm_campaign"})
 		for _, l := range items {
-			_ = cw.Write([]string{time.UnixMilli(int64(l.TS * 1000)).UTC().Format(time.RFC3339Nano), l.Host, l.Method, csvSafe(l.Path),
-				strconv.Itoa(l.Status), strconv.FormatFloat(l.RTms, 'f', 1, 64), strconv.FormatInt(l.Bytes, 10), l.IP, l.WR, l.Rule, csvSafe(l.UA)})
+			_ = cw.Write([]string{traffic.TimeOf(l.TS).UTC().Format(time.RFC3339Nano), l.Host, l.Method, csvSafe(l.Path),
+				strconv.Itoa(l.Status), strconv.FormatFloat(l.RTms, 'f', 1, 64), strconv.FormatInt(l.Bytes, 10), l.IP, l.WR, l.Rule, csvSafe(l.UA),
+				csvSafe(l.Ref), csvSafe(l.UTMSrc), csvSafe(l.UTMMed), csvSafe(l.UTMCmp)})
 		}
 		cw.Flush()
+	case "combined":
+		// nginx "combined" format for log analysers (GoAccess etc.), oldest first
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="corvus-logs-`+stamp+`.log"`)
+		var b []byte
+		for i := len(items) - 1; i >= 0; i-- {
+			b = traffic.AppendCombined(b, &items[i])
+		}
+		_, _ = w.Write(b)
 	case "json":
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", `attachment; filename="corvus-logs-`+stamp+`.json"`)

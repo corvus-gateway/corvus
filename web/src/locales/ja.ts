@@ -180,7 +180,7 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   // traffic
   trafficDesc: "リクエスト、エラー、レイテンシをリアルタイムで監視し、ログを検索・エクスポートできます。", allHosts: "すべてのホスト", live: "ライブ", tabOverview: "概要", tabLogs: "リクエストログ", tabEvents: "イベント",
   queuedRequests: "待機", queuedHint: "アクセスキューに新たに並んだ訪問者", egress: "送信量", requestsByStatus: "ステータス別リクエスト", latency: "応答レイテンシ", latencyDesc: "パーセンタイル",
-  byHost: "ホスト別", topPaths: "上位パス", searchLogs: "パスまたは IP を検索", allStatus: "すべてのステータス", noLogs: "表示するログがありません", noLogsDesc: "フィルターを変更するか、期間を広げてください。",
+  byHost: "ホスト別", topPaths: "上位パス", searchLogs: "パス・IP・流入元・UTM を検索", allStatus: "すべてのステータス", noLogs: "表示するログがありません", noLogsDesc: "フィルターを変更するか、期間を広げてください。",
   responseTime: "応答時間", eventType: "イベントタイプ", allEvents: "すべてのイベント", noEvents: "イベントがありません", noEventsDesc: "ブロック、エラー、待機の発生が時系列で表示されます。",
   evRateLimited: "レート制限", evBlockedExploit: "エクスプロイトパスをブロック", evServerError: "サーバーエラー（5xx）", evWaitroomQueue: "アクセスキューで待機列が発生", evWaitroomFail: "アクセスキューの障害時ポリシーを適用",
   // deployments

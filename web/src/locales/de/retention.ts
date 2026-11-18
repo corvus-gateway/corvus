@@ -13,4 +13,6 @@ export const retentionStrings: Record<K, string> = {
   droppedLines: "{n} Protokollzeilen verworfen, weil die Festplatte nicht nachkam",
   archives: "Anfrageprotokoll-Dateien", noArchives: "Keine Protokolldateien", noArchivesDesc: "Bei aktiviertem Anfrageprotokoll erscheint hier eine Datei pro Tag.",
   fileName: "Datei", fileSize: "Größe", fileModified: "Geändert", retentionSaved: "Aufbewahrungseinstellungen gespeichert",
+  logModeAllHint: "„Alle Anfragen“ entspricht den Zugriffsprotokollen pro Host in Nginx Proxy Manager und wird für Besucherstatistiken (Herkunft, UTM-Kampagnen) benötigt.",
+  referrer: "Herkunft (Referrer)", combinedHint: "Im nginx-Format „combined“ herunterladen (für Log-Analyse-Tools wie GoAccess)",
 };

@@ -50,7 +50,7 @@ export default function Retention() {
               {res.error && !res.data ? <ErrorBox error={res.error} /> : !s ? <TableSkeleton cols={3} rows={3} /> : (
                 <>
                   <Callout tone="info">{t("retentionHow")}</Callout>
-                  <Field label={t("logMode")} hint={t("logModeDesc")} error={fieldErr(save.error, "retention")}>
+                  <Field label={t("logMode")} hint={<>{t("logModeDesc")} {t("logModeAllHint")}</>} error={fieldErr(save.error, "retention")}>
                     <Segmented label={t("logMode")} value={s.log_mode} onChange={(v) => setS({ ...s, log_mode: v as Settings["log_mode"] })}
                       options={[{ value: "off", label: t("logModeOff") }, { value: "notable", label: t("logModeNotable") }, { value: "all", label: t("logModeAll") }]} />
                   </Field>
@@ -92,7 +92,10 @@ export default function Retention() {
                     <Td className="font-mono text-xs">{f.name}</Td>
                     <Td className="num">{fmtBytes(f.bytes)}</Td>
                     <Td className="hidden text-fg-muted sm:table-cell">{fmtDateTime(f.modified, lang)}</Td>
-                    <Td className="text-right"><a className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-brand hover:underline" href={`/api/traffic/archives/${encodeURIComponent(f.name)}`} download><Download className="h-3.5 w-3.5" />{t("download")}</a></Td>
+                    <Td className="text-right"><div className="flex items-center justify-end gap-3">
+                      <a className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-brand hover:underline" href={`/api/traffic/archives/${encodeURIComponent(f.name)}`} download><Download className="h-3.5 w-3.5" />{t("download")}</a>
+                      <a className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-brand hover:underline" href={`/api/traffic/archives/${encodeURIComponent(f.name)}?format=combined`} download title={t("combinedHint")}><Download className="h-3.5 w-3.5" />Combined</a>
+                    </div></Td>
                   </Tr>
                 ))}
               </tbody>

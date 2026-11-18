@@ -13,4 +13,6 @@ export const retentionStrings: Record<K, string> = {
   droppedLines: "因磁盘写入跟不上而丢弃 {n} 行日志",
   archives: "请求日志文件", noArchives: "暂无日志文件", noArchivesDesc: "开启请求日志后，每天的日志文件会显示在这里。",
   fileName: "文件", fileSize: "大小", fileModified: "修改时间", retentionSaved: "保留设置已保存",
+  logModeAllHint: "“全部请求”相当于 Nginx Proxy Manager 的按主机访问日志，访客统计（来源、UTM 活动）需要此选项。",
+  referrer: "来源（Referrer）", combinedHint: "以 nginx combined 格式下载（适用于 GoAccess 等日志分析工具）",
 };

@@ -91,15 +91,17 @@ func TestParseDatagram(t *testing.T) {
 // gateway/test/accesslog_test.lua; "|" stands for a tab).
 func TestParseLuaRecord(t *testing.T) {
 	msg := strings.ReplaceAll(`c1|1762243516.123|shop.example.com|GET|403|1234|0.012|203.0.113.9|queue|`+
-		`sqli|REJECTED_DRY_RUN|7:block|KR|sig:log|1|/a\"b\\c\td|Mozilla/5.0 \u0001 ünïcode`+"\n"+
-		`c1|1762243516.123|h|GET|200|0|0|1.1.1.1|-|||||||/|`+"\n", "|", "\t")
+		`sqli|REJECTED_DRY_RUN|7:block|KR|sig:log|1|/a\"b\\c\td|Mozilla/5.0 \u0001 ünïcode||||`+"\n"+
+		`c1|1762243516.123|h|GET|200|0|0|1.1.1.1|-|||||||/|||||`+"\n"+
+		`c1|1|h|GET|200|0|0|1.1.1.1|-|||||||/p|UA|https://www.google.com|ig||fall\"x\t`+"\n", "|", "\t")
 	want := []Record{
 		{T: 1762243516.123, H: "shop.example.com", M: "GET", U: "/a\"b\\c\td", S: 403, B: 1234, RT: 0.012, IP: "203.0.113.9",
 			WR: "queue", X: "sqli", RL: "REJECTED_DRY_RUN", R: "7:block", CC: "KR", BD: "sig:log", BN: "1", UA: "Mozilla/5.0 \x01 ünïcode"},
 		{T: 1762243516.123, H: "h", M: "GET", U: "/", S: 200, IP: "1.1.1.1", WR: "-"},
+		{T: 1, H: "h", M: "GET", U: "/p", S: 200, IP: "1.1.1.1", WR: "-", UA: "UA", RF: "https://www.google.com", US: "ig", UC: "fall\"x\t"},
 	}
 	var got []Record
-	if bad := parseDatagram([]byte(msg), func(r *Record) { got = append(got, *r) }); bad != 0 || len(got) != 2 {
+	if bad := parseDatagram([]byte(msg), func(r *Record) { got = append(got, *r) }); bad != 0 || len(got) != len(want) {
 		t.Fatalf("%d records, %d bad", len(got), bad)
 	}
 	for i := range want {

@@ -117,6 +117,11 @@ Imported items are deployed right away.
   (see [Streams](../proxy/streams.md)).
 - **Uploads:** imported proxy hosts get a 2000 MB **Max upload size**, like NPM, unless their
   advanced configuration sets `client_max_body_size` itself.
+- **Access logs:** NPM writes an access log for every proxy host. In Corvus this is the request log
+  with **Data retention → Request log → All requests** (the default, *Notable requests*, keeps only
+  errors, blocks and security events). For statistics, export it in nginx's combined format for
+  GoAccess (see [Visitor statistics](../operations/traffic.md#visitor-statistics)). NPM's old log
+  files are not imported.
 - **Going back:** `docker compose down` in Corvus, then `docker compose up -d` in NPM.
 
 ## NPM terms in Corvus
@@ -130,4 +135,5 @@ Imported items are deployed right away.
 | SSL Certificates | **Certificates** |
 | Access Lists | Imported with their users and IP rules and attached to the same hosts. For new hosts use **Password protection** in the proxy host form, and [security rules](../security/rules.md) for IP restrictions |
 | Advanced (custom Nginx configuration) | **Advanced → Advanced nginx config** |
+| Access logs (`/data/logs/proxy-host-*_access.log`) | [Request log](../operations/traffic.md#request-logs) with **Data retention → Request log → All requests**; export as **Combined** for GoAccess |
 | Settings → Default Site | [Unknown hosts](../operations/pages.md#unknown-hosts) under **Block & error pages**: 404 and Congratulations become **Not found page (404)**, No Response (444) and Redirect are imported; a custom HTML page is not |

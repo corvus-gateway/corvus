@@ -87,6 +87,7 @@ OpenResty, plano de control en Go, consola en React) que puede **importar una co
 **Monitorización y alertas**
 - Solicitudes/s en vivo, códigos de estado, latencia p50/p95/p99, desglose por host y por ruta
 - Búsqueda en el registro de solicitudes y exportación a CSV/JSON, eventos de seguridad, historial persistente con retención y rotación de registros
+- Origen del tráfico en el registro de solicitudes sin filtrar secretos (solo el origen del referente y los valores UTM) y exportación en formato combined de nginx para estadísticas de visitantes con GoAccess
 - Alertas a Slack, Mattermost, Discord, Teams, Telegram o webhooks firmados
 - `/metrics` de Prometheus
 

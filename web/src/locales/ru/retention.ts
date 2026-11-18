@@ -13,4 +13,6 @@ export const retentionStrings: Record<K, string> = {
   droppedLines: "Строк журнала пропущено из-за медленного диска: {n}",
   archives: "Файлы журнала запросов", noArchives: "Файлов журнала нет", noArchivesDesc: "Если журнал запросов включён, здесь появляется файл за каждый день.",
   fileName: "Файл", fileSize: "Размер", fileModified: "Изменён", retentionSaved: "Настройки хранения сохранены",
+  logModeAllHint: "«Все запросы» соответствует журналам доступа по хостам в Nginx Proxy Manager и нужен для статистики посетителей (источники трафика, UTM-кампании).",
+  referrer: "Источник (реферер)", combinedHint: "Скачать в формате nginx combined (для анализаторов журналов, например GoAccess)",
 };

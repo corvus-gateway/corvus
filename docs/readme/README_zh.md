@@ -77,6 +77,7 @@ Corvus 不是 Nginx Proxy Manager 的分支。它是全新的实现（OpenResty 
 **监控与告警**
 - 实时请求数/秒、状态码、p50/p95/p99 延迟，以及按主机和路径的细分
 - 请求日志搜索与 CSV/JSON 导出、安全事件、带保留期限的持久化历史记录和日志轮转
+- 在请求日志中记录流量来源且不泄露机密（仅 Referrer 来源和 UTM 值），并可导出 nginx combined 格式，用 GoAccess 生成访客统计
 - 告警可发送至 Slack、Mattermost、Discord、Teams、Telegram 或带签名的 webhook
 - Prometheus `/metrics`
 

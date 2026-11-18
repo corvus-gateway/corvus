@@ -12,6 +12,8 @@ export const koRetention = {
   droppedLines: "디스크 기록이 밀려 저장하지 못한 로그 {n}줄",
   archives: "요청 로그 파일", noArchives: "저장된 로그 파일이 없습니다", noArchivesDesc: "요청 로그 저장을 켜면 날짜별 파일이 여기에 표시됩니다.",
   fileName: "파일", fileSize: "크기", fileModified: "수정 시각", retentionSaved: "보관 설정을 저장했습니다",
+  logModeAllHint: "'모든 요청'은 Nginx Proxy Manager의 호스트별 액세스 로그에 해당하며, 방문자 통계(유입 출처·UTM 집계)에 필요합니다.",
+  referrer: "유입 출처", combinedHint: "nginx combined 형식으로 내려받기 (GoAccess 등 로그 분석 도구용)",
 } as const;
 
 export type K = keyof typeof koRetention;
