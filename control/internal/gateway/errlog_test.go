@@ -2,8 +2,12 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -59,6 +63,66 @@ func TestErrLogBounds(t *testing.T) {
 	_, _ = l.Write([]byte("[crit] " + strings.Repeat("a", 6000)))
 	if l.partial != nil && len(l.partial) != 0 {
 		t.Fatalf("runaway line kept in the buffer: %d bytes", len(l.partial))
+	}
+}
+
+// The rest of a truncated runaway line, arriving in later writes, is not taken for new
+// lines; the line after it is.
+func TestErrLogRunawayTail(t *testing.T) {
+	l := newErrLog(&bytes.Buffer{})
+	start := time.Now()
+	_, _ = l.Write([]byte("x [crit] head " + strings.Repeat("a", 5000)))
+	_, _ = l.Write([]byte(strings.Repeat("b", 3000)))
+	_, _ = l.Write([]byte("bbb [emerg] tail of the same line\nnext [alert] line\n"))
+	got := l.since(start)
+	if len(got) != 2 || !strings.HasPrefix(got[0], "x [crit] head") || got[1] != "next [alert] line" {
+		t.Fatalf("lines: %q", got)
+	}
+	// and a forged upstream failure in the tail is ignored too
+	_, _ = l.Write([]byte("y " + strings.Repeat("c", 5000)))
+	_, _ = l.Write([]byte("\n" + lnRefused + "\n"))
+	if fs := l.upstreamFailures(); len(fs) != 1 || fs[0].Server != "a.test" {
+		t.Fatalf("after a runaway line: %+v", fs)
+	}
+	l2 := newErrLog(&bytes.Buffer{})
+	_, _ = l2.Write([]byte("z " + strings.Repeat("d", 5000)))
+	_, _ = l2.Write([]byte(lnRefused + "\n")) // the visitor-controlled end of the long line
+	if fs := l2.upstreamFailures(); len(fs) != 0 {
+		t.Fatalf("tail parsed as a line: %+v", fs)
+	}
+}
+
+// Once the gateway serves a new configuration, failures of the previous one are dropped.
+func TestWaitActiveClearsUpstreamFailures(t *testing.T) {
+	serving := "v000001"
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		_, _ = w.Write([]byte(serving))
+	}))
+	defer srv.Close()
+	o := &OpenResty{StatusURL: srv.URL, running: true, errs: newErrLog(&bytes.Buffer{})}
+	_, _ = o.errs.Write([]byte(lnRefused + "\n"))
+	// not (yet) serving the new version: kept
+	if err := o.WaitActive(context.Background(), "v000002", 100*time.Millisecond); err == nil {
+		t.Fatal("v000002 is not serving")
+	}
+	if len(o.UpstreamFailures()) != 1 {
+		t.Fatal("failure dropped while the previous configuration still serves")
+	}
+	mu.Lock()
+	serving = "v000002"
+	mu.Unlock()
+	if err := o.WaitActive(context.Background(), "v000002", time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if fs := o.UpstreamFailures(); len(fs) != 0 {
+		t.Fatalf("failures of the previous configuration: %+v", fs)
+	}
+	_, _ = o.errs.Write([]byte(lnDNS + "\n"))
+	if len(o.UpstreamFailures()) != 1 {
+		t.Fatal("new failures are kept")
 	}
 }
 

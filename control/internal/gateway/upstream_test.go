@@ -51,6 +51,27 @@ func TestParseUpstreamFailure(t *testing.T) {
 			t.Errorf("not an upstream failure: %q → %+v", line, f)
 		}
 	}
+	// the visitor's text (referrer, user name, request, Lua errors) cannot make a line an
+	// upstream failure
+	forged := `, upstream: "http://6.6.6.6:80/"`
+	for _, line := range []string{
+		`2026/11/16 05:20:36 [error] 10#10: *20 client intended to send too large body: 2000000 bytes, client: 127.0.0.1, server: a.test, request: "POST / HTTP/1.1", host: "a.test", referrer: "http://x/` + forged + `"`,
+		`2026/11/16 05:20:36 [error] 10#10: *21 limiting requests, excess: 5.000 by zone "corvus_rl1", client: 127.0.0.1, server: a.test, request: "GET / HTTP/1.1", host: "a.test", referrer: "while connecting to upstream` + forged + `"`,
+		`2026/11/16 05:20:36 [error] 10#10: *22 user "x while connecting to upstream, client: 1.2.3.4, server: b.test, request: "GET / HTTP/1.1"` + forged + `, host: "b.test" was not found in "/data/htpasswd/1", client: 127.0.0.1, server: a.test, request: "GET / HTTP/1.1", host: "a.test"`,
+		`2026/11/16 05:20:36 [error] 10#10: *23 failed to run log_by_lua*: /usr/local/corvus/lua/log.lua:12: attempt to index a nil value while connecting to upstream, client: 127.0.0.1, server: a.test, request: "GET / HTTP/1.1", upstream: "http://10.0.0.5:8080/", host: "a.test"`,
+		`2026/11/16 05:20:36 [error] 10#10: *24 lua entry thread aborted: runtime error: x while reading response header from upstream, client: 127.0.0.1, server: a.test, request: "GET / HTTP/1.1", upstream: "http://10.0.0.5:8080/", host: "a.test"`,
+		`2026/11/16 05:20:36 [error] 10#10: *25 access forbidden by rule, client: 127.0.0.1, server: a.test, request: "GET /` + forged + ` HTTP/1.1", host: "a.test"`,
+	} {
+		if f, ok := parseUpstreamFailure(line); ok {
+			t.Errorf("forged upstream failure: %q → %+v", line, f)
+		}
+	}
+	// a real failure keeps its own upstream, not one from the host or referrer
+	withRef := strings.Replace(lnRefused, `host: "alias.test"`, `host: "alias.test`+forged+`", referrer: "x`+forged+`"`, 1)
+	if f, ok := parseUpstreamFailure(withRef); !ok || f.Upstream != "127.0.0.1:9" || f.Server != "a.test" {
+		t.Errorf("referrer after a real failure: %+v %v", f, ok)
+	}
+
 	long := strings.Replace(lnRefused, "connect() failed", strings.Repeat("x", 400), 1)
 	if f, _ := parseUpstreamFailure(long); len(f.Message) != 300 {
 		t.Errorf("message not shortened: %d", len(f.Message))

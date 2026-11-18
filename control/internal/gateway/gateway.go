@@ -323,6 +323,7 @@ func (o *OpenResty) WaitActive(ctx context.Context, name string, timeout time.Du
 			resp.Body.Close()
 			serving = strings.TrimSpace(string(b))
 			if serving == name {
+				o.clearUpstreamFailures() // they were made with the previous configuration
 				return nil
 			}
 		}
@@ -350,6 +351,20 @@ func (o *OpenResty) UpstreamFailures() []UpstreamFailure {
 		return nil
 	}
 	return errs.upstreamFailures()
+}
+
+// clearUpstreamFailures forgets the kept upstream failures: a new configuration serves,
+// so a failure of the previous one (perhaps just fixed) is not shown any more. A
+// target that still fails is reported again with the next request.
+func (o *OpenResty) clearUpstreamFailures() {
+	o.mu.Lock()
+	errs := o.errs
+	o.mu.Unlock()
+	if errs != nil {
+		errs.mu.Lock()
+		errs.fails = nil
+		errs.mu.Unlock()
+	}
 }
 
 // reloadErrors returns the gateway's serious log lines since the last reload request.
