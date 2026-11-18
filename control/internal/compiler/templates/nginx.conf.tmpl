@@ -17,6 +17,7 @@ env CORVUS_WR_SECRET;
 env CORVUS_WR_SECRET_PREV;
 env CORVUS_DEBUG_KEY;
 env CORVUS_CONSOLE_KEY;
+env CORVUS_STATUS_KEY;
 env CORVUS_REDIS_HOST;
 env CORVUS_REDIS_PORT;
 env CORVUS_REDIS_SCRIPT;
@@ -205,7 +206,10 @@ http {
     }
 
     # Internal status endpoint (loopback only): corvus-control polls it after a reload
-    # to confirm the new configuration version is actually serving.
+    # to confirm the new configuration version is actually serving. /version and
+    # /healthz are read-only and stay open (the container health check uses /healthz);
+    # the internal endpoints below require the per-start key (CORVUS_STATUS_KEY, header
+    # X-Corvus-Status-Key) so they are not reachable through a proxied target.
     server {
         listen 127.0.0.1:{{.P.StatusPort}};
         access_log off;

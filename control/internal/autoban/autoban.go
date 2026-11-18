@@ -139,7 +139,9 @@ type Service struct {
 	Traffic *traffic.Collector
 	PushURL string // gateway status endpoint, e.g. http://127.0.0.1:9180/bans
 	HitsURL string // pending bad-behaviour bans, e.g. http://127.0.0.1:9180/bad-behaviour
-	Client  *http.Client
+	// StatusKey is sent with every request to the gateway (StatusKeyHeader).
+	StatusKey string
+	Client    *http.Client
 	// OnGatewayRestart (may be nil) is called when the gateway's shared-memory epoch
 	// changes (it restarted with empty shared memory), so other services that push to it
 	// (under attack mode) can push at once.
@@ -389,6 +391,7 @@ func (s *Service) send(ctx context.Context, body []byte, entries int) error {
 	if err != nil {
 		return err
 	}
+	req.Header.Set(StatusKeyHeader, s.StatusKey)
 	return PutJSON(req, s.client())
 }
 

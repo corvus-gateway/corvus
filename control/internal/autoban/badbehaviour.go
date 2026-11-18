@@ -77,6 +77,7 @@ func (s *Service) Pull(ctx context.Context) ([]Hit, error) {
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set(StatusKeyHeader, s.StatusKey)
 	resp, err := s.client().Do(req)
 	if err != nil {
 		return nil, err

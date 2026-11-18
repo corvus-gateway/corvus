@@ -83,7 +83,9 @@ type Service struct {
 	Store   *store.Store
 	Traffic Sampler
 	PushURL string // gateway status endpoint, e.g. http://127.0.0.1:9180/under-attack
-	Client  *http.Client
+	// StatusKey is sent with every push (autoban.StatusKeyHeader).
+	StatusKey string
+	Client    *http.Client
 
 	mu      sync.Mutex
 	loaded  bool
@@ -356,6 +358,7 @@ func (s *Service) send(ctx context.Context, body []byte) error {
 	if err != nil {
 		return err
 	}
+	req.Header.Set(autoban.StatusKeyHeader, s.StatusKey)
 	c := s.Client
 	if c == nil {
 		c = &http.Client{Timeout: 3 * time.Second}

@@ -251,6 +251,10 @@ func TestGatewayRestartForcesPush(t *testing.T) {
 	addHost(t, st, "shop.example.com", "auto", store.UnderAttackConfig{})
 	pushes, epoch := 0, "e1"
 	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get(autoban.StatusKeyHeader) != "k" { // the gateway's per-start key
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
 		if r.Method == http.MethodGet {
 			_, _ = w.Write([]byte(`{"hits":[],"epoch":"` + epoch + `"}`))
 			return
@@ -258,8 +262,8 @@ func TestGatewayRestartForcesPush(t *testing.T) {
 		pushes++
 	}))
 	defer gw.Close()
-	s := &Service{Store: st, Traffic: fakeTraffic{}, PushURL: gw.URL + "/under-attack"}
-	ban := &autoban.Service{Store: st, HitsURL: gw.URL + "/bad-behaviour", OnGatewayRestart: s.Trigger}
+	s := &Service{Store: st, Traffic: fakeTraffic{}, PushURL: gw.URL + "/under-attack", StatusKey: "k"}
+	ban := &autoban.Service{Store: st, HitsURL: gw.URL + "/bad-behaviour", StatusKey: "k", OnGatewayRestart: s.Trigger}
 	t0 := time.Unix(1_800_000_000, 0)
 	if _, err := ban.Pull(ctx); err != nil {
 		t.Fatal(err)

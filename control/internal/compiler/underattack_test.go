@@ -47,7 +47,8 @@ func TestRenderUnderAttack(t *testing.T) {
 		t.Errorf("auto host: %+v", ua)
 	}
 	conf := readFile(t, filepath.Join(dir, "nginx.conf"))
-	for _, w := range []string{"lua_shared_dict corvus_ua 1m;", "location = /under-attack {", `require("corvus.rules").set_under_attack()`} {
+	// the status endpoints' handlers check the per-start key from the environment
+	for _, w := range []string{"lua_shared_dict corvus_ua 1m;", "location = /under-attack {", `require("corvus.rules").set_under_attack()`, "env CORVUS_STATUS_KEY;"} {
 		if !strings.Contains(conf, w) {
 			t.Errorf("nginx.conf: missing %q", w)
 		}

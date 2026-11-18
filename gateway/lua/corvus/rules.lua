@@ -567,6 +567,29 @@ function _M.challenge_verify(host_id)
   return send_challenge(rule, ret)
 end
 
+-- The status-port handlers below change or read the gateway's protection state. They
+-- require the per-start key corvus-control passes in CORVUS_STATUS_KEY (header
+-- X-Corvus-Status-Key), so they are not reachable through a proxied target that points
+-- at the loopback status port. Without a key in the environment every request is
+-- refused. On refusal the response (403) is sent and false returned.
+function _M.status_key_ok()
+  local want = os.getenv("CORVUS_STATUS_KEY")
+  local got = ngx.var.http_x_corvus_status_key
+  local ok = type(want) == "string" and want ~= "" and type(got) == "string" and #got == #want
+  if ok then
+    local diff = 0
+    for i = 1, #want do
+      diff = bit.bor(diff, bit.bxor(byte(want, i), byte(got, i)))
+    end
+    ok = diff == 0
+  end
+  if not ok then
+    ngx.status = 403
+    ngx.say("forbidden")
+  end
+  return ok
+end
+
 -- Status-port handler: replace the ban list. Body:
 --   {"ips": {"<ip>": <expires unix | 0>}, "removed": ["<ip>", ...], "ack": {...}, "bb": {...}}
 -- "ips" is the full list. Each entry holds its expiry ("0" = permanent) and is only
@@ -577,6 +600,7 @@ end
 -- only every few minutes and after a gateway restart). Gateway-local bad-behaviour
 -- bans corvus-control has not recorded yet (pending record in corvus_bb_q) are kept.
 function _M.set_bans()
+  if not _M.status_key_ok() then return end
   ngx.req.read_body()
   local data = ngx.req.get_body_data()
   local cfg = data and cjson.decode(data)
@@ -647,6 +671,7 @@ end
 -- Entries expire on their own at the end of the activation, so a stopped
 -- corvus-control never leaves a host challenged for longer than announced.
 function _M.set_under_attack()
+  if not _M.status_key_ok() then return end
   ngx.req.read_body()
   local data = ngx.req.get_body_data()
   local cfg = data and cjson.decode(data)
@@ -788,6 +813,7 @@ end
 -- The epoch is created with the shared memory: when it changes, the gateway restarted
 -- with empty stores and corvus-control pushes its full lists again.
 function _M.bad_behaviour_hits()
+  if not _M.status_key_ok() then return end
   local q = ngx.shared.corvus_bb_q
   local out = {}
   local epoch = ""
