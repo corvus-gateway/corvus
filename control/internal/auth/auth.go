@@ -241,7 +241,25 @@ func (l *Limiter) Fail(key string) {
 	key = limiterKey(key)
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.fail(key, time.Now())
+}
+
+// Allow records an attempt for key unless key is blocked, in one step (Blocked followed
+// by Fail lets concurrent requests through between the two). It reports whether the
+// attempt may go ahead.
+func (l *Limiter) Allow(key string) bool {
+	key = limiterKey(key)
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	now := time.Now()
+	if len(l.prune(key, now)) >= l.Max {
+		return false
+	}
+	l.fail(key, now)
+	return true
+}
+
+func (l *Limiter) fail(key string, now time.Time) {
 	if now.Sub(l.lastSweep) > l.Window {
 		l.sweep(now)
 	}

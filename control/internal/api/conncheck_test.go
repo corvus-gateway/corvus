@@ -6,6 +6,10 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -115,6 +119,88 @@ func TestCheckConnection(t *testing.T) {
 	e.s.ConnCheck = nil
 	if m := check("http", "127.0.0.1", refused); m["kind"] != "refused" {
 		t.Fatalf("default checker: %v", m)
+	}
+}
+
+// Concurrent checks of one user cannot get past the per-minute limit (the limit is
+// checked and recorded in one step), and only a few checks run at once overall.
+func TestCheckConnectionLimits(t *testing.T) {
+	e := newFullEnv(t)
+	release := make(chan struct{})
+	var dialed atomic.Int32
+	started := make(chan struct{}, 64)
+	e.s.ConnCheck = &conncheck.Checker{Timeout: 5 * time.Second,
+		Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			dialed.Add(1)
+			started <- struct{}{}
+			select {
+			case <-release:
+			case <-ctx.Done():
+			}
+			return nil, syscall.ECONNREFUSED
+		}}
+	body := map[string]any{"forward_host": "192.0.2.10", "forward_port": 80}
+
+	// the global cap: connCheckConcurrent checks run, the next one is turned away
+	op := e.as("operator")
+	codes := make(chan int, connCheckConcurrent)
+	for i := 0; i < connCheckConcurrent; i++ {
+		go func() {
+			w, _ := e.zsAs(op, "POST", "/api/proxy-hosts/check", body)
+			codes <- w.Code
+		}()
+	}
+	for i := 0; i < connCheckConcurrent; i++ {
+		<-started
+	}
+	if w, _ := e.zsAs(e.cookie, "POST", "/api/proxy-hosts/check", body); w.Code != 429 {
+		t.Fatalf("over the concurrency cap: %d", w.Code)
+	}
+	close(release)
+	for i := 0; i < connCheckConcurrent; i++ {
+		if c := <-codes; c != 200 {
+			t.Fatalf("running check: %d", c)
+		}
+	}
+
+	// the per-user limit under concurrency: exactly Max checks get through
+	e.s.connLimit = auth.NewLimiter(5, time.Minute)
+	e.s.connSem = make(chan struct{}, 100)
+	dialed.Store(0)
+	var wg sync.WaitGroup
+	var ok, limited atomic.Int32
+	for i := 0; i < 30; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			switch w, _ := e.zsAs(e.cookie, "POST", "/api/proxy-hosts/check", body); w.Code {
+			case 200:
+				ok.Add(1)
+			case 429:
+				limited.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if ok.Load() != 5 || limited.Load() != 25 || dialed.Load() != 5 {
+		t.Fatalf("ok %d, limited %d, dialed %d", ok.Load(), limited.Load(), dialed.Load())
+	}
+}
+
+// A name that resolves to loopback cannot be used to probe Corvus's own services.
+func TestCheckConnectionInternalByName(t *testing.T) {
+	e := newFullEnv(t)
+	e.s.ConnCheck = &conncheck.Checker{Timeout: 200 * time.Millisecond,
+		Lookup: func(context.Context, string, string) ([]net.IP, error) {
+			return []net.IP{net.ParseIP("10.0.0.9"), net.ParseIP("127.0.0.1")}, nil
+		},
+		Dial: func(context.Context, string, string) (net.Conn, error) { return nil, syscall.ECONNREFUSED }}
+	m := e.must(422, "POST", "/api/proxy-hosts/check", map[string]any{"forward_scheme": "http", "forward_host": "sneaky.example.com", "forward_port": 9180})
+	if !strings.Contains(fmt.Sprint(m["message"]), "used internally") {
+		t.Fatalf("internal by name: %v", m)
+	}
+	if m := e.must(200, "POST", "/api/proxy-hosts/check", map[string]any{"forward_scheme": "http", "forward_host": "sneaky.example.com", "forward_port": 8080}); m["ok"] != false {
+		t.Fatalf("other port: %v", m)
 	}
 }
 

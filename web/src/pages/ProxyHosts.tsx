@@ -260,7 +260,7 @@ export default function ProxyHosts() {
             <SwitchRow label={t("websocket")} description={t("websocketDesc")} checked={f.websocket} onChange={(v) => set({ websocket: v })} />
           </FormSection>
 
-          {showLocations && <LocationsFields value={f.locations ?? []} onChange={(v) => set({ locations: v })} error={error} isAdmin={isAdmin} />}
+          {showLocations && <LocationsFields value={f.locations ?? []} onChange={(v) => set({ locations: v })} error={error} isAdmin={isAdmin} can={can} />}
 
           <FormSection title={t("secTls")}>
             <IdField label={t("certificate")} error={fieldErr(error, "certificate_id")}>

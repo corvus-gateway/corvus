@@ -50,7 +50,7 @@ export function ConnCheck({ scheme, host, port }: { scheme: string; host: string
         {r?.ok && (
           <p className="flex items-center gap-1.5 text-xs text-ok">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            {t("ccOk", { addr: r.address ?? r.target, ms: r.time_ms })}
+            {t("ccOk", { addr: r.addresses?.join(", ") ?? r.address ?? r.target, ms: r.time_ms })}
           </p>
         )}
         {r && !r.ok && (
