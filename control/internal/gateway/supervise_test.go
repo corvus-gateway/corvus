@@ -83,6 +83,12 @@ while true; do sleep 0.02; done
 	if p := o.Problem(); p != "" {
 		t.Fatalf("problem while running = %q", p)
 	}
+	// the process runs; let the script record its start before it is stopped (under
+	// load the QUIT could otherwise arrive before its first line)
+	waitFor(t, func() bool {
+		b, _ := os.ReadFile(filepath.Join(dir, "starts"))
+		return strings.Count(string(b), "start") >= 4
+	})
 
 	o.Stop(5 * time.Second)
 	select {
