@@ -260,7 +260,11 @@ export interface TimePoint {
 export interface Timeseries { step_s: number; points: TimePoint[] }
 export interface HostTraffic { host: string; requests: number; rps: number; s4xx: number; s5xx: number; error_rate: number; p95: number; bytes_out: number; blocked: number }
 export interface PathTraffic { host: string; path: string; requests: number; errors: number; p95: number }
-export interface LogLine { ts: number | string; host: string; method: string; path: string; status: number; rt_ms: number; bytes: number; ip: string; wr?: string; ua?: string; rule?: string }
+export interface LogLine {
+  ts: number | string; host: string; method: string; path: string; status: number; rt_ms: number; bytes: number; ip: string; wr?: string; ua?: string; rule?: string;
+  // traffic sources: referrer origin (scheme://host only) and UTM values
+  ref?: string; utm_source?: string; utm_medium?: string; utm_campaign?: string;
+}
 export type EventKind = "rate_limited" | "blocked_exploit" | "server_error" | "waitroom_queue" | "waitroom_fail"
   | "exploit_detected" | "blocked_rule" | "rule_logged" | "blocked_body" | "body_detected" | "banned" | "rate_limit_dry_run"
   | "challenge_issued" | "challenge_passed" | "challenge_failed";

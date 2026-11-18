@@ -20,8 +20,10 @@ description: "트래픽 관제로 호스트별·경로별 요청, 오류, 응답
 
 ## 요청 로그 { #request-logs }
 
-경로나 IP로 요청을 검색하고, 상태로 거르고, **CSV**나 **JSON**으로 내보낼 수 있습니다. 행을 누르면
-시각, 전체 요청, IP, User-Agent, 일치한 보안 규칙, 접속 대기열 판정 같은 상세 정보가 보입니다.
+경로, IP, 유입 출처, UTM 값으로 요청을 검색하고, 상태로 거르고, **CSV**, **JSON**, **Combined**(nginx의
+표준 액세스 로그 형식, [방문자 통계](#visitor-statistics) 참고)로 내보낼 수 있습니다. 행을 누르면 시각,
+전체 요청, IP, User-Agent, 유입 출처, UTM 값, 일치한 보안 규칙, 접속 대기열 판정 같은 상세 정보가
+보입니다.
 
 ![요청 로그 상세](../img/traffic-logs.png){ .shot }
 
@@ -41,6 +43,47 @@ description: "트래픽 관제로 호스트별·경로별 요청, 오류, 응답
 !!! tip "개인정보 보호"
     **네트워크 → 로그에서 IP 마스킹**을 켜면 로그와 내보낸 파일에서 클라이언트 IP의 마지막 부분을
     가립니다.
+
+### 유입 출처와 UTM
+
+방문자가 어디서 왔는지는 기록하되, 비밀이 담길 수 있는 URL 부분(비밀번호 재설정 토큰, OAuth 코드,
+API 키, 검색어)은 기록하지 않습니다.
+
+| 항목 | 기록하는 내용 | 예 |
+|---|---|---|
+| **유입 출처** | `Referer` 헤더의 출처(origin)만: 소문자로 바꾼 `scheme://host[:port]`. 경로, 쿼리, 프래그먼트, 사용자 이름은 기록하지 않습니다 | `https://www.google.com/search?q=…` → `https://www.google.com` |
+| **UTM** | 쿼리 문자열의 `utm_source`, `utm_medium`, `utm_campaign`만(디코딩, 각 최대 100자, 제어 문자 제거) | `?utm_source=newsletter&token=…` → `utm_source = newsletter` |
+
+나머지 쿼리 문자열은 기록하지 않습니다. 두 값 모두 게이트웨이(nginx)에서 먼저 줄인 뒤 넘기므로 전체
+Referer와 다른 쿼리 파라미터는 디스크에 닿지 않습니다. Corvus 1.6 이전에 기록된 로그 줄에는 유입
+출처와 UTM 값이 없습니다.
+
+## 방문자 통계 { #visitor-statistics }
+
+요청 로그로 방문자 수, 많이 본 페이지, 유입 출처를 보려면:
+
+1. **데이터 보관 → 요청 로그 저장**에서 **모든 요청**을 고릅니다. (**주요 요청만**은 오류와 차단만
+   남기므로 통계에는 부족합니다.)
+2. 로그를 nginx **combined** 형식으로 내보냅니다.
+    - **트래픽 관제 → 요청 로그 → Combined**: 지금 필터에 맞는 최근 요청(최대 1000개)
+    - **데이터 보관 → 요청 로그 파일 → Combined**: 하루치 전체를 내려받으면서 변환
+3. [GoAccess](https://goaccess.io/) 같은 로그 분석 도구로 분석합니다.
+
+    ```bash
+    goaccess access-2026-11-18.log --log-format=COMBINED -o report.html
+    ```
+
+내보내는 형식은 표준인
+`IP - - [시각] "METHOD /path?utm_source=… HTTP/1.1" status bytes "referrer" "user-agent"`입니다.
+Corvus는 쿼리 문자열과 프로토콜 버전을 보관하지 않으므로, 쿼리에는 기록된 UTM 값만 들어가고(없으면
+쿼리도 없음) 프로토콜은 항상 `HTTP/1.1`입니다. referrer는 기록된 출처이며 없으면 `-`입니다. **로그에서
+IP 마스킹**을 켜면 트래픽 관제에서 내보낸 파일의 IP도 가려집니다.
+
+!!! note "본격적인 웹 분석"
+    액세스 로그는 사람이 아니라 요청을 셉니다. 브라우저 캐시나 CDN이 응답한 방문은 보이지 않고,
+    봇과 브라우저를 확실히 구분하지 못하며, 화면 크기나 전환 같은 정보도 없습니다. 본격적인 웹
+    분석이 필요하면 [Umami](https://umami.is/), [Plausible](https://plausible.io/), Google Analytics 4
+    같은 도구를 Corvus와 함께 쓰세요. 요청 로그는 서버 쪽 기록으로 남습니다.
 
 ## 이벤트
 

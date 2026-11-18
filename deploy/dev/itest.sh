@@ -392,6 +392,27 @@ found=""; for i in 1 2 3 4 5 6; do c "$A/api/traffic/archives/access-$TODAY.json
 chk "$(c -o /dev/null -w '%{http_code}' "$A/api/traffic/archives/..%2Fcorvus.db")" 404 "archive path traversal refused"
 chk "$(c $A/api/settings/retention | js "d['usage']['db_bytes']>0")" True "storage usage reported"
 
+echo "[traffic sources]"
+# Only the Referer's origin and the three UTM values are logged: never the search terms,
+# other query parameters or their values (proxy host: Lua log; unknown host: nginx syslog).
+c -o /dev/null -X PUT $A/api/settings/retention -d '{"log_mode":"all","log_days":14,"log_max_mb":1024,"stats_days":30,"events_days":30}'
+sleep 1
+code -H 'Referer: https://user:pw@WWW.Google.com/search?q=secret#frag' "$G/src-check?utm_source=ig&utm_campaign=fall&token=abc" >/dev/null
+code -H 'Host: src-unknown.corvus.test' -H 'Referer: https://news.example.org:8443/a?b=secret' "$G/src-unknown?utm_medium=email&key=abc" >/dev/null
+sleep 3
+l=$(c "$A/api/traffic/logs?q=/src-check&limit=1")
+chk "$(echo "$l" | js "d['items'][0].get('ref')")" https://www.google.com "referrer reduced to its origin"
+chk "$(echo "$l" | js "(d['items'][0].get('utm_source'), d['items'][0].get('utm_medium'), d['items'][0].get('utm_campaign'))")" "('ig', None, 'fall')" "only the UTM values logged"
+chk "$(c "$A/api/traffic/logs?q=google.com&limit=5" | js "any(i['path']=='/src-check' for i in d['items'])")" True "log search matches the referrer"
+chk "$(c "$A/api/traffic/logs?q=/src-unknown&limit=1" | js "(d['items'][0].get('ref'), d['items'][0].get('utm_medium'))")" "('https://news.example.org:8443', 'email')" "referrer and UTM from the nginx access log (unknown host)"
+src=""; for i in 1 2 3 4 5 6; do src=$(c "$A/api/traffic/archives/access-$TODAY.jsonl" | grep -E '"/src-(check|unknown)"'); [ "$(echo "$src" | grep -c .)" = 2 ] && break; sleep 2; done
+chk "$(echo "$src" | grep -c '"rf":"https://www.google.com","us":"ig","uc":"fall"')" 1 "request log file: referrer origin and UTM values"
+chk "$(echo "$src" | grep -cE 'secret|token|abc|key=|user|frag')" 0 "request log file: no search terms, other parameters or credentials"
+chk "$(c "$A/api/traffic/archives/access-$TODAY.jsonl?format=combined" | grep -c '"GET /src-check?utm_source=ig&utm_campaign=fall HTTP/1.1" [0-9]* [0-9]* "https://www.google.com" "curl/')" 1 "combined export of a log file"
+chk "$(c "$A/api/traffic/logs?q=/src-&format=combined" | grep -cE 'secret|token|abc')" 0 "combined export: nothing but the UTM values"
+chk "$(c "$A/api/traffic/logs?q=/src-check&format=csv&limit=1" | head -1 | cut -d, -f12-)" "referrer,utm_source,utm_medium,utm_campaign" "CSV export: source columns"
+c -o /dev/null -X PUT $A/api/settings/retention -d '{"log_mode":"notable","log_days":14,"log_max_mb":1024,"stats_days":30,"events_days":30}'
+
 echo "[traffic API]"
 sleep 3
 s=$(c "$A/api/traffic/summary?range=15m")

@@ -86,6 +86,7 @@ Corvus は Nginx Proxy Manager のフォークではありません。既存の 
 **監視とアラート**
 - リアルタイムのリクエスト数/秒、ステータスコード、p50/p95/p99 レイテンシ、ホスト別・パス別の内訳
 - リクエストログの検索と CSV/JSON エクスポート、セキュリティイベント、保持期間とログローテーションを備えた永続的な履歴
+- 秘密情報を残さない流入元の記録（リファラーのオリジンと UTM 値のみ）と、GoAccess で訪問者統計を出せる nginx combined 形式のエクスポート
 - Slack、Mattermost、Discord、Teams、Telegram、または署名付き Webhook へのアラート通知
 - Prometheus `/metrics`
 

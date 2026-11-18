@@ -117,6 +117,11 @@ NPM의 `./data`, `./letsencrypt` 볼륨의 호스트 경로를 사용하세요. 
   합니다([스트림](../proxy/streams.md) 참고).
 - **업로드:** 가져온 프록시 호스트는 NPM과 같이 **최대 업로드 크기**가 2000 MB가 됩니다. 고급
   설정에서 `client_max_body_size`를 직접 지정한 호스트는 그 값을 그대로 씁니다.
+- **액세스 로그:** NPM은 프록시 호스트마다 액세스 로그를 남깁니다. Corvus에서는 **데이터 보관 →
+  요청 로그 저장 → 모든 요청**으로 둔 요청 로그가 이에 해당합니다(기본값인 *주요 요청만*은 오류, 차단,
+  보안 이벤트만 남깁니다). 통계가 필요하면 nginx combined 형식으로 내보내 GoAccess로 분석하세요
+  ([방문자 통계](../operations/traffic.md#visitor-statistics) 참고). NPM의 기존 로그 파일은 가져오지
+  않습니다.
 - **되돌아가기:** Corvus에서 `docker compose down`을 실행한 뒤 NPM에서 `docker compose up -d`를
   실행합니다.
 
@@ -131,4 +136,5 @@ NPM의 `./data`, `./letsencrypt` 볼륨의 호스트 경로를 사용하세요. 
 | SSL Certificates | **인증서** |
 | Access Lists | 사용자와 IP 규칙을 함께 가져와 같은 호스트에 연결합니다. 새 호스트에는 프록시 호스트 입력 화면의 **비밀번호 보호**를, IP 제한에는 [보안 규칙](../security/rules.md)을 사용하세요 |
 | Advanced (사용자 지정 Nginx 설정) | **고급 → 고급 nginx 설정** |
+| 액세스 로그 (`/data/logs/proxy-host-*_access.log`) | **데이터 보관 → 요청 로그 저장 → 모든 요청**으로 둔 [요청 로그](../operations/traffic.md#request-logs). GoAccess용으로는 **Combined**로 내보내기 |
 | Settings → Default Site | **차단·오류 페이지**의 [알 수 없는 호스트](../operations/pages.md#unknown-hosts): 404와 Congratulations는 **찾을 수 없음 페이지 (404)**가 되고, No Response(444)와 Redirect는 그대로 가져옵니다. Custom Page(HTML)는 가져오지 않습니다 |

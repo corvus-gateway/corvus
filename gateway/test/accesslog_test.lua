@@ -49,7 +49,7 @@ ngx.var = {
 }
 -- The same lines are parsed by control/internal/traffic/parse_test.go (TestParseLuaRecord).
 local want = "c1\t1762243516.123\tshop.example.com\tGET\t403\t1234\t0.012\t203.0.113.9\tqueue\t"
-  .. "sqli\tREJECTED_DRY_RUN\t7:block\tKR\tsig:log\t1\t/a\\\"b\\\\c\\td\tMozilla/5.0 \\u0001 ünïcode\n"
+  .. "sqli\tREJECTED_DRY_RUN\t7:block\tKR\tsig:log\t1\t/a\\\"b\\\\c\\td\tMozilla/5.0 \\u0001 ünïcode\t\t\t\t\n"
 al.record()
 eq(every, 1, "periodic flush timer started once")
 eq(timers, 0, "small batch kept in memory")
@@ -63,9 +63,26 @@ eq(sent[1]:sub(1, #want), want, "record format")
 local lines = 0
 for _ in sent[1]:gmatch("\n") do lines = lines + 1 end
 eq(lines, n, "every record in the datagram")
-eq(sent[1]:match("\n(c1[^\n]*)\n$"), "c1\t1762243516.123\th\tGET\t200\t0\t0\t1.1.1.1\t-\t\t\t\t\t\t\t/\t", "absent User-Agent")
+eq(sent[1]:match("\n(c1[^\n]*)\n$"), "c1\t1762243516.123\th\tGET\t200\t0\t0\t1.1.1.1\t-\t\t\t\t\t\t\t/\t\t\t\t\t", "absent User-Agent")
 al.record()
 eq(every, 1, "timer not started again")
+
+-- traffic sources: the referrer origin from nginx ($corvus_ref) and only the three UTM
+-- values, read only when the query mentions "utm_"; never the rest of the query
+local function last_record()
+  sent, timers = {}, 0
+  while timers == 0 do al.record() end
+  return sent[1]:match("\n(c1[^\n]*)\n$")
+end
+local base = "c1\t1\th\tGET\t200\t0\t0\t1.1.1.1\t-\t\t\t\t\t\t\t/p\tUA\t"
+ngx.var = { corvus_log_fields = "1\th\tGET\t200\t0\t0\t1.1.1.1\t-\t\t\t\t\t\t", uri = "/p", http_user_agent = "UA",
+  corvus_ref = "https://www.google.com", args = "utm_source=ig&token=abc&utm_campaign=fall%22x",
+  arg_utm_source = "ig", arg_utm_campaign = 'fall"x\t' }
+eq(last_record(), base .. 'https://www.google.com\tig\t\tfall\\"x\\t', "referrer origin and UTM values")
+ngx.var.args = "q=1"
+eq(last_record(), base .. "https://www.google.com\t\t\t", "UTM values not read without utm_ in the query")
+ngx.var.args, ngx.var.arg_utm_source = "utm_source=x", string.rep("s", 400)
+eq(#last_record():match("\t(s+)\t\t"), 300, "UTM value bounded")
 
 -- the flush timer cannot be created (fresh worker): logged, and retried with the next
 -- request instead of never flushing

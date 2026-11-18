@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -62,12 +63,23 @@ func (s *Server) downloadArchive(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not_found", "not found")
 		return
 	}
+	extendDeadlines(w, 30*time.Minute) // archives can be large
+	if r.URL.Query().Get("format") == "combined" {
+		// converted on the fly to nginx's "combined" format (GoAccess etc.), streamed
+		s.audit(r, "traffic.log_download", name, map[string]string{"format": "combined"})
+		base := strings.TrimSuffix(strings.TrimSuffix(filepath.Base(p), ".gz"), ".jsonl")
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="`+base+`.log"`)
+		if err := history.WriteCombined(w, p); err != nil {
+			slog.Warn("request log conversion", "file", name, "err", err)
+		}
+		return
+	}
 	s.audit(r, "traffic.log_download", name, nil)
 	ctype := "application/x-ndjson"
 	if strings.HasSuffix(name, ".gz") {
 		ctype = "application/gzip"
 	}
-	extendDeadlines(w, 30*time.Minute) // archives can be large
 	w.Header().Set("Content-Type", ctype)
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(p)+`"`)
 	http.ServeFile(w, r, p)

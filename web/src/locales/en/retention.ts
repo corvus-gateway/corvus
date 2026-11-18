@@ -13,4 +13,6 @@ export const retentionStrings: Record<K, string> = {
   droppedLines: "{n} log lines dropped because the disk could not keep up",
   archives: "Request log files", noArchives: "No log files", noArchivesDesc: "With the request log enabled, one file per day appears here.",
   fileName: "File", fileSize: "Size", fileModified: "Modified", retentionSaved: "Retention settings saved",
+  logModeAllHint: "\"All requests\" corresponds to the per-host access logs of Nginx Proxy Manager and is needed for visitor statistics (traffic sources, UTM campaigns).",
+  referrer: "Referrer", combinedHint: "Download in nginx combined format (for log analysers such as GoAccess)",
 };

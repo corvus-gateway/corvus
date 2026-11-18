@@ -13,4 +13,6 @@ export const retentionStrings: Record<K, string> = {
   droppedLines: "ディスク書き込みが追いつかず記録できなかったログ {n} 行",
   archives: "リクエストログファイル", noArchives: "ログファイルはありません", noArchivesDesc: "リクエストログを有効にすると、日ごとのファイルがここに表示されます。",
   fileName: "ファイル", fileSize: "サイズ", fileModified: "更新日時", retentionSaved: "保持設定を保存しました",
+  logModeAllHint: "「すべてのリクエスト」は Nginx Proxy Manager のホスト別アクセスログに相当し、訪問者統計（流入元・UTM キャンペーンの集計）に必要です。",
+  referrer: "流入元（リファラー）", combinedHint: "nginx の combined 形式でダウンロード（GoAccess などのログ解析ツール向け）",
 };

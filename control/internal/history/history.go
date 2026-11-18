@@ -625,6 +625,60 @@ func (s *Service) ArchivePath(name string) string {
 	return p
 }
 
+// maxLogLine bounds one request log line when converting (longer lines are skipped).
+const maxLogLine = 64 << 10
+
+// WriteCombined streams a request log file (by path, .jsonl or .jsonl.gz) to w in nginx's
+// "combined" log format (traffic.AppendCombined), one line at a time: memory use does
+// not depend on the file size. Lines that cannot be parsed (e.g. the half-written last
+// line of today's file) are skipped; lines written before 1.6.0 have no referrer or
+// UTM values and are converted all the same.
+func WriteCombined(w io.Writer, path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	var in io.Reader = f
+	if strings.HasSuffix(path, ".gz") {
+		zr, err := gzip.NewReader(f)
+		if err != nil {
+			return err
+		}
+		defer zr.Close()
+		in = zr
+	}
+	br := bufio.NewReaderSize(in, maxLogLine)
+	bw := bufio.NewWriterSize(w, 64<<10)
+	var out []byte
+	long := false // inside a line longer than the buffer: skipped up to its end
+	for {
+		line, err := br.ReadSlice('\n')
+		switch {
+		case errors.Is(err, bufio.ErrBufferFull):
+			long = true
+			continue
+		case long:
+			long = false
+		case len(line) > 1:
+			var r traffic.Record
+			if json.Unmarshal(line, &r) == nil && r.T > 0 {
+				l := r.Line()
+				out = traffic.AppendCombined(out[:0], &l)
+				if _, werr := bw.Write(out); werr != nil {
+					return werr
+				}
+			}
+		}
+		if err == io.EOF {
+			return bw.Flush()
+		}
+		if err != nil {
+			return err
+		}
+	}
+}
+
 // Usage reports storage use.
 func (s *Service) Usage() Usage {
 	u := Usage{CheckedAt: time.Now().UTC(), Dropped: s.dropped.Load()}

@@ -86,6 +86,7 @@ Go control plane, React console) that can **import an existing NPM setup**.
 **Monitoring & alerts**
 - Live requests/s, status codes, p50/p95/p99 latency, per-host and per-path breakdown
 - Request log search and CSV/JSON export, security events, persistent history with retention and log rotation
+- Traffic sources in the request log without leaking secrets (referrer origin and UTM values only) and nginx combined export for GoAccess visitor statistics
 - Alerts to Slack, Mattermost, Discord, Teams, Telegram or signed webhooks
 - Prometheus `/metrics`
 

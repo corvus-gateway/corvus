@@ -86,6 +86,7 @@ Corvus는 Nginx Proxy Manager의 포크가 아닙니다. 기존 NPM 설정을 **
 **모니터링 및 알림**
 - 실시간 초당 요청 수, 상태 코드, p50/p95/p99 지연 시간, 호스트별·경로별 분석
 - 요청 로그 검색과 CSV/JSON 내보내기, 보안 이벤트, 보존 기간과 로그 로테이션을 갖춘 영구 이력
+- 비밀이 새지 않는 유입 출처 기록(리퍼러 출처와 UTM 값만)과 GoAccess 방문자 통계용 nginx combined 형식 내보내기
 - Slack, Mattermost, Discord, Teams, Telegram 또는 서명된 웹훅으로 알림 전송
 - Prometheus `/metrics`
 

@@ -9,11 +9,18 @@
 -- Record format (same as log_format corvus_log in nginx.conf; parsed by
 -- control/internal/traffic/parse.go — keep the field order):
 --   c1 TAB msec TAB host TAB method TAB status TAB body_bytes TAB request_time TAB ip TAB wr TAB
---   exploit TAB limit_req TAB rule TAB country TAB body TAB ban TAB uri TAB user_agent
+--   exploit TAB limit_req TAB rule TAB country TAB body TAB ban TAB uri TAB user_agent TAB
+--   referrer_origin TAB utm_source TAB utm_medium TAB utm_campaign
 -- The fields up to "ban" come from one variable, $corvus_log_fields (a map in nginx.conf
 -- that composes them in C: one variable read instead of fourteen); none of them can hold
--- client-chosen bytes. uri and user_agent are escaped here like nginx's escape=json, so
--- no value contains a raw tab or newline.
+-- client-chosen bytes. The others are escaped here like nginx's escape=json, so no value
+-- contains a raw tab or newline.
+--
+-- Traffic sources are logged without secrets: referrer_origin is $corvus_ref (a map in
+-- nginx.conf that keeps only scheme://host[:port] of the Referer, never its path or
+-- query), and of the query string only the raw utm_source, utm_medium and utm_campaign
+-- values (read only when the query mentions "utm_"). corvus-control decodes, cleans and
+-- bounds them (control/internal/traffic/source.go).
 --
 -- Lossy by design, like the syslog output: when corvus-control is not listening or cannot
 -- keep up (the send would block), records are dropped; requests are never delayed.
@@ -26,6 +33,7 @@ local _M = {}
 local CHUNK = 16384      -- bytes per datagram (a full buffer is sent at once)
 local INTERVAL = 0.5     -- seconds: flush of a partly filled buffer
 local MAX_URI, MAX_UA = 1024, 512  -- corvus-control keeps less (traffic.go)
+local MAX_REF, MAX_UTM = 256, 300  -- corvus-control keeps 200 and 100 (decoded; source.go)
 
 local PATH            -- unix datagram socket of corvus-control
 local buf, nbuf, size = {}, 0, 0
@@ -105,8 +113,16 @@ function _M.record()
     end
   end
   local var = ngx.var
+  local src = "\t" .. esc(var.corvus_ref, MAX_REF)
+  local args = var.args
+  if args and find(args, "utm_", 1, true) then
+    src = src .. "\t" .. esc(var.arg_utm_source, MAX_UTM) .. "\t" .. esc(var.arg_utm_medium, MAX_UTM)
+      .. "\t" .. esc(var.arg_utm_campaign, MAX_UTM)
+  else
+    src = src .. "\t\t\t"
+  end
   local line = "c1\t" .. (var.corvus_log_fields or "") .. "\t" .. esc(var.uri, MAX_URI)
-    .. "\t" .. esc(var.http_user_agent, MAX_UA) .. "\n"
+    .. "\t" .. esc(var.http_user_agent, MAX_UA) .. src .. "\n"
   nbuf = nbuf + 1
   buf[nbuf] = line
   size = size + #line

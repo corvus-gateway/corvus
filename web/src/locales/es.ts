@@ -179,7 +179,7 @@ export const es: Partial<Record<keyof typeof ko, string>> = {
   // traffic
   trafficDesc: "Supervise solicitudes, errores y latencia en tiempo real, y busque o exporte registros.", allHosts: "Todos los hosts", live: "En vivo", tabOverview: "Resumen", tabLogs: "Registros de solicitudes", tabEvents: "Eventos",
   queuedRequests: "En cola", queuedHint: "Nuevos puestos en una cola de acceso", egress: "Salida", requestsByStatus: "Solicitudes por estado", latency: "Latencia de respuesta", latencyDesc: "Percentiles",
-  byHost: "Por host", topPaths: "Rutas principales", searchLogs: "Buscar ruta o IP", allStatus: "Todos los estados", noLogs: "No hay registros que mostrar", noLogsDesc: "Cambie los filtros o amplíe el periodo.",
+  byHost: "Por host", topPaths: "Rutas principales", searchLogs: "Buscar ruta, IP, origen o UTM", allStatus: "Todos los estados", noLogs: "No hay registros que mostrar", noLogsDesc: "Cambie los filtros o amplíe el periodo.",
   responseTime: "Tiempo de respuesta", eventType: "Tipo de evento", allEvents: "Todos los eventos", noEvents: "No hay eventos", noEventsDesc: "Los bloqueos, errores y esperas en cola aparecen aquí en orden cronológico.",
   evRateLimited: "Limitado por tasa", evBlockedExploit: "Ruta de exploit bloqueada", evServerError: "Error del servidor (5xx)", evWaitroomQueue: "Se formó una cola en la cola de acceso", evWaitroomFail: "Política de fallo de la cola de acceso aplicada",
   // deployments

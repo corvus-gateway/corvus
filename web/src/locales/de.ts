@@ -179,7 +179,7 @@ export const de: Partial<Record<keyof typeof ko, string>> = {
   // traffic
   trafficDesc: "Anfragen, Fehler und Latenz in Echtzeit beobachten sowie Logs durchsuchen und exportieren.", allHosts: "Alle Hosts", live: "Live", tabOverview: "Übersicht", tabLogs: "Anfrage-Logs", tabEvents: "Ereignisse",
   queuedRequests: "Eingereiht", queuedHint: "Neue Plätze in einer Zugriffswarteschlange", egress: "Ausgehend", requestsByStatus: "Anfragen nach Status", latency: "Antwortlatenz", latencyDesc: "Perzentile",
-  byHost: "Nach Host", topPaths: "Häufigste Pfade", searchLogs: "Pfad oder IP suchen", allStatus: "Alle Status", noLogs: "Keine Logs vorhanden", noLogsDesc: "Ändern Sie die Filter oder erweitern Sie den Zeitraum.",
+  byHost: "Nach Host", topPaths: "Häufigste Pfade", searchLogs: "Pfad, IP, Herkunft oder UTM suchen", allStatus: "Alle Status", noLogs: "Keine Logs vorhanden", noLogsDesc: "Ändern Sie die Filter oder erweitern Sie den Zeitraum.",
   responseTime: "Antwortzeit", eventType: "Ereignistyp", allEvents: "Alle Ereignisse", noEvents: "Keine Ereignisse", noEventsDesc: "Blockierungen, Fehler und Wartezeiten werden hier chronologisch angezeigt.",
   evRateLimited: "Ratenbegrenzt", evBlockedExploit: "Exploit-Pfad blockiert", evServerError: "Serverfehler (5xx)", evWaitroomQueue: "Warteschlange in Zugriffswarteschlange gebildet", evWaitroomFail: "Fehlerrichtlinie der Zugriffswarteschlange angewendet",
   // deployments

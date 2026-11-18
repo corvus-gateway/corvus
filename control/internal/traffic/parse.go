@@ -15,13 +15,16 @@ import (
 //
 //	c1 \t $msec \t $corvus_host \t $request_method \t $status \t $body_bytes_sent \t
 //	$request_time \t $remote_addr \t $corvus_wr \t $corvus_exploit \t $limit_req_status \t
-//	$corvus_rule \t $corvus_cc \t $corvus_body \t $corvus_ban \t $uri \t $http_user_agent
+//	$corvus_rule \t $corvus_cc \t $corvus_body \t $corvus_ban \t $uri \t $http_user_agent \t
+//	$corvus_ref \t $arg_utm_source \t $arg_utm_medium \t $arg_utm_campaign
 //
+// The last four fields (traffic sources, see source.go) were added in 1.6.0; records
+// without them (an older configuration still running during an upgrade) are accepted.
 // Proxy hosts send the same records from Lua (gateway/lua/corvus/accesslog.lua), several
 // per datagram.
 const logTag = "c1\t"
 
-const logFields = 17 // including the tag
+const logFields = 17 // including the tag, without the optional source fields
 
 var syslogSep = []byte(": ")
 
@@ -77,7 +80,22 @@ func parseTSV(b []byte, r *Record) bool {
 		f[n], b = b[:i], b[i+1:]
 		n++
 	}
-	f[n] = bytes.TrimRight(b, "\r") // the User-Agent is last; syslog adds nothing after it
+	// the User-Agent, then optionally the four source fields (the last field may end in
+	// "\r"; syslog adds nothing after it)
+	var src [4][]byte
+	if i := bytes.IndexByte(b, '\t'); i >= 0 {
+		f[n], b = b[:i], b[i+1:]
+		for k := 0; k < len(src)-1; k++ {
+			i := bytes.IndexByte(b, '\t')
+			if i < 0 {
+				return false
+			}
+			src[k], b = b[:i], b[i+1:]
+		}
+		src[len(src)-1] = bytes.TrimRight(b, "\r")
+	} else {
+		f[n] = bytes.TrimRight(b, "\r")
+	}
 	var err error
 	if r.T, err = parseFloat(f[0]); err != nil {
 		return false
@@ -107,6 +125,10 @@ func parseTSV(b []byte, r *Record) bool {
 	r.BN = unescape(f[13])
 	r.U = unescape(f[14])
 	r.UA = unescape(f[15])
+	r.RF = unescape(src[0])
+	r.US = unescape(src[1])
+	r.UM = unescape(src[2])
+	r.UC = unescape(src[3])
 	return true
 }
 
