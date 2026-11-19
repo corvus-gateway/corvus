@@ -81,6 +81,11 @@ ngx.var = { corvus_log_fields = "1\th\tGET\t200\t0\t0\t1.1.1.1\t-\t\t\t\t\t\t", 
 eq(last_record(), base .. 'https://www.google.com\tig\t\tfall\\"x\\t', "referrer origin and UTM values")
 ngx.var.args = "q=1"
 eq(last_record(), base .. "https://www.google.com\t\t\t", "UTM values not read without utm_ in the query")
+-- nginx matches argument names case-insensitively: $arg_utm_source is set for UTM_Source
+ngx.var.args, ngx.var.arg_utm_campaign = "UTM_Source=ig", nil
+eq(last_record(), base .. "https://www.google.com\tig\t\t", "UTM values read when the query names them in upper case")
+ngx.var.args = "Utm_Source=ig"
+eq(last_record(), base .. "https://www.google.com\tig\t\t", "UTM values read when the query names them in mixed case")
 ngx.var.args, ngx.var.arg_utm_source = "utm_source=x", string.rep("s", 400)
 eq(#last_record():match("\t(s+)\t\t"), 300, "UTM value bounded")
 

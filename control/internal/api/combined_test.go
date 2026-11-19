@@ -2,8 +2,12 @@ package api
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/csv"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -77,5 +81,42 @@ func TestArchiveCombinedDownload(t *testing.T) {
 	}
 	if w, _ := e.zsAs(op, "GET", "/api/traffic/archives/access-1999-01-01.jsonl?format=combined", nil); w.Code != 404 {
 		t.Fatalf("missing archive: %d", w.Code)
+	}
+
+	// not gzip data: an error answer, not an empty "access-2000-01-03.log"
+	if err := os.WriteFile(filepath.Join(dir, "logs", "access-2000-01-03.jsonl.gz"), []byte("not gzip"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	w, _ = e.zsAs(op, "GET", "/api/traffic/archives/access-2000-01-03.jsonl.gz?format=combined", nil)
+	if w.Code != 500 || w.Header().Get("Content-Disposition") != "" {
+		t.Fatalf("broken archive: %d %v %q", w.Code, w.Header(), w.Body.String())
+	}
+
+	// corrupt data after a valid start: part of the file is sent, then the connection is
+	// aborted (http.ErrAbortHandler) so the download fails instead of looking complete
+	var zb bytes.Buffer
+	zw, _ := gzip.NewWriterLevel(&zb, gzip.NoCompression)
+	for i := 0; i < 5000; i++ {
+		fmt.Fprintf(zw, `{"t":946857600,"h":"a.example","m":"GET","u":"/page/%d","s":200,"ip":"203.0.113.9","ua":"UA"}`+"\n", i)
+	}
+	zw.Close()
+	cut := filepath.Join(dir, "logs", "access-2000-01-04.jsonl.gz")
+	if err := os.WriteFile(cut, zb.Bytes()[:zb.Len()*3/4], 0o640); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/traffic/archives/access-2000-01-04.jsonl.gz?format=combined", nil)
+	withCookie(op)(req)
+	withCSRF()(req)
+	func() {
+		defer func() {
+			if p := recover(); p != http.ErrAbortHandler {
+				t.Errorf("truncated archive: recovered %v, want http.ErrAbortHandler", p)
+			}
+		}()
+		e.h.ServeHTTP(rec, req)
+	}()
+	if rec.Body.Len() == 0 || rec.Code != 200 {
+		t.Errorf("truncated archive: %d, %d bytes before the abort", rec.Code, rec.Body.Len())
 	}
 }

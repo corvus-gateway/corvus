@@ -2,6 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"path/filepath"
@@ -65,13 +68,35 @@ func (s *Server) downloadArchive(w http.ResponseWriter, r *http.Request) {
 	}
 	extendDeadlines(w, 30*time.Minute) // archives can be large
 	if r.URL.Query().Get("format") == "combined" {
-		// converted on the fly to nginx's "combined" format (GoAccess etc.), streamed
+		// converted on the fly to nginx's "combined" format (GoAccess etc.), streamed.
+		// The file is opened (and its gzip header read) before any header is sent, so a
+		// missing or unreadable file is an error answer, not an empty download.
+		in, err := history.OpenLog(p)
+		if errors.Is(err, fs.ErrNotExist) {
+			writeErr(w, http.StatusNotFound, "not_found", "not found")
+			return
+		}
+		if err != nil {
+			slog.Warn("request log conversion", "file", name, "err", err)
+			writeErr(w, http.StatusInternalServerError, "unreadable", "the log file cannot be read")
+			return
+		}
+		defer in.Close()
 		s.audit(r, "traffic.log_download", name, map[string]string{"format": "combined"})
 		base := strings.TrimSuffix(strings.TrimSuffix(filepath.Base(p), ".gz"), ".jsonl")
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Header().Set("Content-Disposition", `attachment; filename="`+base+`.log"`)
-		if err := history.WriteCombined(w, p); err != nil {
+		cw := &countWriter{w: w}
+		if err := history.WriteCombined(cw, in); err != nil {
 			slog.Warn("request log conversion", "file", name, "err", err)
+			if cw.n == 0 {
+				w.Header().Del("Content-Disposition")
+				writeErr(w, http.StatusInternalServerError, "unreadable", "the log file cannot be read")
+				return
+			}
+			// part of the file is already sent: break the connection so the client sees
+			// a failed download instead of a complete-looking, truncated file
+			panic(http.ErrAbortHandler)
 		}
 		return
 	}
@@ -83,4 +108,16 @@ func (s *Server) downloadArchive(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", ctype)
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(p)+`"`)
 	http.ServeFile(w, r, p)
+}
+
+// countWriter counts the bytes written through it.
+type countWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (c *countWriter) Write(p []byte) (int, error) {
+	n, err := c.w.Write(p)
+	c.n += int64(n)
+	return n, err
 }

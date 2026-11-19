@@ -52,11 +52,18 @@ API 키, 검색어)은 기록하지 않습니다.
 | 항목 | 기록하는 내용 | 예 |
 |---|---|---|
 | **유입 출처** | `Referer` 헤더의 출처(origin)만: 소문자로 바꾼 `scheme://host[:port]`. 경로, 쿼리, 프래그먼트, 사용자 이름은 기록하지 않습니다 | `https://www.google.com/search?q=…` → `https://www.google.com` |
-| **UTM** | 쿼리 문자열의 `utm_source`, `utm_medium`, `utm_campaign`만(디코딩, 각 최대 100자, 제어 문자 제거) | `?utm_source=newsletter&token=…` → `utm_source = newsletter` |
+| **UTM** | 쿼리 문자열의 `utm_source`, `utm_medium`, `utm_campaign`만(디코딩, 각 최대 100자, 제어 문자와 보이지 않는 서식 문자 제거) | `?utm_source=newsletter&token=…` → `utm_source = newsletter` |
 
 나머지 쿼리 문자열은 기록하지 않습니다. 두 값 모두 게이트웨이(nginx)에서 먼저 줄인 뒤 넘기므로 전체
-Referer와 다른 쿼리 파라미터는 디스크에 닿지 않습니다. Corvus 1.6 이전에 기록된 로그 줄에는 유입
-출처와 UTM 값이 없습니다.
+Referer와 다른 쿼리 파라미터는 요청 로그, 내보낸 파일, 통계에 들어가지 않습니다. Corvus 1.6 이전에
+기록된 로그 줄에는 유입 출처와 UTM 값이 없습니다.
+
+!!! warning "컨테이너 로그"
+    이 내용은 요청 로그에만 해당합니다. 컨테이너 로그(`docker logs`)로 나가는 nginx 자체의 오류·경고
+    메시지는 그 원인이 된 요청을 함께 적습니다(예: 요청 수 제한으로 거부된 요청, 응답하지 않는
+    업스트림). 여기에는 **쿼리 문자열을 포함한 전체 요청 줄**과 **전체 Referer**가 들어갈 수 있습니다.
+    컨테이너 로그는 민감한 정보로 다루고, 읽을 수 있는 사람과 Docker 로깅 드라이버의 보관 기간을
+    제한하세요.
 
 ## 방문자 통계 { #visitor-statistics }
 

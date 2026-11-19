@@ -628,26 +628,42 @@ func (s *Service) ArchivePath(name string) string {
 // maxLogLine bounds one request log line when converting (longer lines are skipped).
 const maxLogLine = 64 << 10
 
-// WriteCombined streams a request log file (by path, .jsonl or .jsonl.gz) to w in nginx's
-// "combined" log format (traffic.AppendCombined), one line at a time: memory use does
-// not depend on the file size. Lines that cannot be parsed (e.g. the half-written last
-// line of today's file) are skipped; lines written before 1.6.0 have no referrer or
-// UTM values and are converted all the same.
-func WriteCombined(w io.Writer, path string) error {
+// OpenLog opens a request log file (by path, .jsonl or .jsonl.gz) for reading,
+// decompressed. A missing file or one that is not gzip data fails here, before anything
+// is sent to a client.
+func OpenLog(path string) (io.ReadCloser, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer f.Close()
-	var in io.Reader = f
-	if strings.HasSuffix(path, ".gz") {
-		zr, err := gzip.NewReader(f)
-		if err != nil {
-			return err
-		}
-		defer zr.Close()
-		in = zr
+	if !strings.HasSuffix(path, ".gz") {
+		return f, nil
 	}
+	zr, err := gzip.NewReader(f)
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	return gzipFile{zr, f}, nil
+}
+
+type gzipFile struct {
+	*gzip.Reader
+	f *os.File
+}
+
+func (g gzipFile) Close() error {
+	g.Reader.Close()
+	return g.f.Close()
+}
+
+// WriteCombined streams a request log (OpenLog) to w in nginx's "combined" log format
+// (traffic.AppendCombined), one line at a time: memory use does not depend on the file
+// size. Lines that cannot be parsed (e.g. the half-written last line of today's file)
+// are skipped; lines written before 1.6.0 have no referrer or UTM values and are
+// converted all the same. A read error (e.g. corrupt compressed data) is returned: the
+// output is then incomplete.
+func WriteCombined(w io.Writer, in io.Reader) error {
 	br := bufio.NewReaderSize(in, maxLogLine)
 	bw := bufio.NewWriterSize(w, 64<<10)
 	var out []byte

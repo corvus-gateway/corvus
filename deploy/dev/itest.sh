@@ -399,7 +399,17 @@ c -o /dev/null -X PUT $A/api/settings/retention -d '{"log_mode":"all","log_days"
 sleep 1
 code -H 'Referer: https://user:pw@WWW.Google.com/search?q=secret#frag' "$G/src-check?utm_source=ig&utm_campaign=fall&token=abc" >/dev/null
 code -H 'Host: src-unknown.corvus.test' -H 'Referer: https://news.example.org:8443/a?b=secret' "$G/src-unknown?utm_medium=email&key=abc" >/dev/null
+# a malformed authority ("?" ends it before the "@") logs no part of the credentials
+code -H 'Referer: https://bob:pa?ss@evil.example/' "$G/src-cred" >/dev/null
+code -H 'Host: src-unknown.corvus.test' -H 'Referer: https://bob:pa?ss@evil.example/' "$G/src-cred-unknown" >/dev/null
+# UTM names in any case (nginx matches $arg_ names case-insensitively)
+code "$G/src-upper?UTM_Source=ig" >/dev/null
+# a User-Agent that escape=json expands to ~90 KB: bounded by nginx, the request is logged
+code -H 'Host: src-unknown.corvus.test' -H "User-Agent: $(head -c 15000 /dev/zero | tr '\0' '\001')" "$G/src-long?utm_source=$(head -c 3000 /dev/zero | tr '\0' 'u')" >/dev/null
 sleep 3
+chk "$(c "$A/api/traffic/logs?q=/src-cred&limit=5" | js "(len(d['items']), all(i.get('ref') in (None, '', 'https://evil.example') for i in d['items']))")" "(2, True)" "malformed Referer authority: no credentials logged"
+chk "$(c "$A/api/traffic/logs?q=/src-upper&limit=1" | js "d['items'][0].get('utm_source')")" ig "upper-case UTM name"
+chk "$(c "$A/api/traffic/logs?q=/src-long&limit=1" | js "(len(d['items']), len(d['items'][0].get('utm_source') or ''))")" "(1, 100)" "oversized User-Agent and UTM value (unknown host): logged, bounded"
 l=$(c "$A/api/traffic/logs?q=/src-check&limit=1")
 chk "$(echo "$l" | js "d['items'][0].get('ref')")" https://www.google.com "referrer reduced to its origin"
 chk "$(echo "$l" | js "(d['items'][0].get('utm_source'), d['items'][0].get('utm_medium'), d['items'][0].get('utm_campaign'))")" "('ig', None, 'fall')" "only the UTM values logged"

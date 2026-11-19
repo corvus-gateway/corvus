@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // nginxEscape mimics nginx's escape=json (ngx_escape_json).
@@ -150,5 +151,48 @@ func BenchmarkIngest(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		c.Ingest(benchLine)
+	}
+}
+
+// A syslog datagram longer than the receive buffer arrives cut short. When the cut falls
+// into the trailing User-Agent, referrer or UTM fields, the request is still recorded
+// with what arrived, so an oversized query or header cannot hide it.
+func TestParseTruncatedDatagram(t *testing.T) {
+	const bufSize = 64 << 10 // Listen's receive buffer
+	head := "<190>Nov 19 08:05:16 corvus: c1\t1762243516.5\t_\tGET\t404\t0\t0.001\t203.0.113.9\t-\t\t\t\t\t\t\t/admin\t"
+	for name, rest := range map[string]string{
+		"utm":           "UA\thttps://evil.example\t" + strings.Repeat("\\u0001", bufSize) + "\tm\tc",
+		"user-agent":    strings.Repeat("A", bufSize) + "\t\t\t\t",
+		"mid-escape":    strings.Repeat("a", bufSize-len(head)-3) + "\\u0001",
+		"mid-character": strings.Repeat("a", bufSize-len(head)-1) + "한",
+	} {
+		msg := []byte(head + rest)
+		if len(msg) > bufSize {
+			msg = msg[:bufSize]
+		}
+		var got []Record
+		if bad := parseDatagram(msg, func(r *Record) { got = append(got, *r) }); bad != 0 || len(got) != 1 {
+			t.Fatalf("%s: %d records, %d bad", name, len(got), bad)
+		}
+		r := got[0]
+		if r.S != 404 || r.U != "/admin" || r.IP != "203.0.113.9" || r.H != "_" {
+			t.Errorf("%s: %+v", name, r)
+		}
+		if name == "utm" && (r.UA != "UA" || r.RF != "https://evil.example" || r.US == "" || r.UM != "" || r.UC != "") {
+			t.Errorf("utm: UA %q RF %q UM %q UC %q", r.UA, r.RF, r.UM, r.UC)
+		}
+		if name == "user-agent" && (!strings.HasPrefix(r.UA, "AAAA") || r.RF != "" || r.US != "") {
+			t.Errorf("user-agent: RF %q US %q", r.RF, r.US)
+		}
+		if !utf8.ValidString(r.UA) {
+			t.Errorf("%s: invalid UTF-8 in the User-Agent", name)
+		}
+	}
+	// the fields up to the path are still required
+	for _, cut := range []string{"<190>Nov 19 08:05:16 corvus: c1\t1762243516.5\t_\tGET\t404\t0\t0.001\t203.0.113.9\t-\t\t\t\t\t\t",
+		"c1\t1762243516.5\t_\tGET\t4"} {
+		if parseDatagram([]byte(cut), func(*Record) { t.Errorf("parsed %q", cut) }) != 1 {
+			t.Errorf("%q not counted as bad", cut)
+		}
 	}
 }

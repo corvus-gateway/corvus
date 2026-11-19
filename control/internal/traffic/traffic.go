@@ -829,11 +829,13 @@ func (c *Collector) Logs(q LogQuery) []LogLine {
 		if q.Status != "" && !statusMatch(l.Status, q.Status) {
 			continue
 		}
+		if mask {
+			// before the search: matching the full address would let a viewer confirm
+			// a masked IP by searching for guesses
+			l.IP = MaskIP(l.IP)
+		}
 		if q.Q != "" && !l.matches(q.Q) {
 			continue
-		}
-		if mask {
-			l.IP = MaskIP(l.IP)
 		}
 		out = append(out, l)
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,24 +42,43 @@ func TestWriteCombined(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, p := range []string{plain, gz} {
-		var out bytes.Buffer
-		if err := WriteCombined(&out, p); err != nil {
+		in, err := OpenLog(p)
+		if err != nil {
 			t.Fatalf("%s: %v", p, err)
 		}
+		var out bytes.Buffer
+		if err := WriteCombined(&out, in); err != nil {
+			t.Fatalf("%s: %v", p, err)
+		}
+		in.Close()
 		if out.String() != want {
 			t.Errorf("%s:\n got %s\nwant %s", filepath.Base(p), out.String(), want)
 		}
 	}
 
-	if err := WriteCombined(&bytes.Buffer{}, filepath.Join(dir, "missing.jsonl")); err == nil {
-		t.Error("missing file: no error")
+	// failures before anything is written: missing file, not gzip data
+	if _, err := OpenLog(filepath.Join(dir, "missing.jsonl")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("missing file: %v", err)
 	}
 	bad := filepath.Join(dir, "bad.jsonl.gz")
 	os.WriteFile(bad, []byte("not gzip"), 0o600)
-	if err := WriteCombined(&bytes.Buffer{}, bad); err == nil {
+	if _, err := OpenLog(bad); err == nil {
 		t.Error("broken gzip: no error")
 	}
-	if err := WriteCombined(failWriter{}, plain); err == nil {
+	// corrupt data after a valid gzip header: the conversion fails (not a short success)
+	cut := filepath.Join(dir, "cut.jsonl.gz")
+	os.WriteFile(cut, zb.Bytes()[:zb.Len()/2], 0o600)
+	in, err := OpenLog(cut)
+	if err != nil {
+		t.Fatalf("cut gzip: %v", err)
+	}
+	if err := WriteCombined(&bytes.Buffer{}, in); err == nil {
+		t.Error("cut gzip: no error")
+	}
+	in.Close()
+	in, _ = OpenLog(plain)
+	defer in.Close()
+	if err := WriteCombined(failWriter{}, in); err == nil {
 		t.Error("write error not returned")
 	}
 }
