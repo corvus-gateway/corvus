@@ -1,5 +1,6 @@
 # Edge security watch:
-#  - weekly: are OpenResty / OpenSSL / PCRE2 / zlib still the newest upstream releases?
+#  - daily: are OpenResty / OpenSSL / PCRE2 / zlib still the newest upstream releases?
+#    (OpenResty is a source tarball, which Dependabot does not track)
 #  - weekly + on main: build the image, scan it (OS packages + binaries), publish an SBOM.
 name: security
 on:
@@ -7,7 +8,8 @@ on:
     branches: [main]
     paths: ["deploy/**", "gateway/**", "control/**", "web/package-lock.json", "go.sum"]
   schedule:
-    - cron: "17 2 * * 1"     # Mondays 02:17 UTC
+    - cron: "17 2 * * 1"     # Mondays 02:17 UTC: everything
+    - cron: "47 1 * * *"     # daily 01:47 UTC: upstream versions only
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,8 +26,11 @@ jobs:
       - id: check
         run: |
           set +e
-          sh deploy/openresty/check-upstream.sh | tee upstream.txt
-          echo "stale=$?" >> "$GITHUB_OUTPUT"
+          # not "| tee": $? would be tee's status and a stale component would never be reported
+          sh deploy/openresty/check-upstream.sh > upstream.txt
+          rc=$?
+          cat upstream.txt
+          echo "stale=$rc" >> "$GITHUB_OUTPUT"
       - name: Open an issue when a pinned component is out of date
         if: steps.check.outputs.stale != '0'
         env:
@@ -34,11 +39,17 @@ jobs:
           title="Security: upstream update available for the OpenResty build"
           if ! gh issue list --state open --search "$title in:title" --json number -q '.[0]' | grep -q .; then
             { echo "deploy/openresty/check-upstream.sh reports:"; echo '```'; cat upstream.txt; echo '```';
-              echo "Update versions + SHA-256 in deploy/openresty/build.sh."; } > body.md
+              echo "Update versions + SHA-256 in deploy/openresty/build.sh."
+              if ls deploy/openresty/patches/*.patch >/dev/null 2>&1; then
+                echo; echo "Temporary patches are applied during the build:"; ls deploy/openresty/patches/*.patch | sed 's/^/- /'
+                echo "When the new OpenResty bundles an nginx that already contains these fixes, delete the patch files and the \`patch\` step in build.sh (the build fails if a patch no longer applies)."
+              fi; } > body.md
             gh issue create --title "$title" --body-file body.md --label security || gh issue create --title "$title" --body-file body.md
           fi
 
   image:
+    # the daily schedule only checks upstream versions
+    if: github.event_name != 'schedule' || github.event.schedule == '17 2 * * 1'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,6 +84,8 @@ jobs:
           path: corvus-gateway.cdx.json
 
   config:
+    # the daily schedule only checks upstream versions
+    if: github.event_name != 'schedule' || github.event.schedule == '17 2 * * 1'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
