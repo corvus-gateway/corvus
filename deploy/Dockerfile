@@ -1,12 +1,13 @@
 # Corvus (Corvus) — single image: OpenResty data plane + corvus-control (PID 1).
 # Build from the repository root:  docker build -f deploy/Dockerfile -t corvus .
 #
-# OpenResty is compiled from verified sources (deploy/openresty/build.sh): OpenResty 1.31.8.1,
-# OpenSSL 3.5.9, PCRE2 10.49, zlib 1.3.2 on Alpine 3.24 — the official image links an older
+# OpenResty is compiled from verified sources (deploy/openresty/build.sh): OpenResty 1.31.8.1
+# (with the nginx 1.31.9 security fixes), OpenSSL 3.5.9, PCRE2 10.49, zlib 1.3.2 on Alpine 3.24 — the official image links an older
 # OpenSSL. Unused nginx modules (HTTP/3, mp4, flv, dav, mail, ssi …) are not compiled in.
 
 FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS openresty
 COPY deploy/openresty/build.sh /build.sh
+COPY deploy/openresty/patches/ /patches/
 RUN JOBS="$(nproc)" sh /build.sh
 
 FROM node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS web

@@ -35,6 +35,11 @@ fetch "https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${
 for f in *.tar.gz; do tar xzf "$f"; done
 
 cd "openresty-${OPENRESTY_VERSION}"
+# nginx security fixes (nginx 1.31.9, 2026-11-18: HTTP/2, resolver, request body, PROXY protocol v2,
+# stream ssl_preread, try_files, …) applied to the bundled nginx 1.31.8 until an OpenResty release
+# includes them. The patch is the src/ part of `git diff release-1.31.8 release-1.31.9` from
+# https://github.com/nginx/nginx (version header excluded); it must apply without rejects.
+patch -d bundle/nginx-1.31.8 -p1 --forward --no-backup-if-mismatch < /patches/nginx-1.31.9-security.patch
 # OpenSSL, PCRE2 and zlib are compiled in statically from the verified sources above.
 ./configure -j"$JOBS" \
   --prefix=/usr/local/openresty \
