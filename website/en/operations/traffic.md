@@ -53,11 +53,18 @@ tokens, OAuth codes, API keys, search terms):
 | Field | What is logged | Example |
 |---|---|---|
 | **Referrer** | Only the origin of the `Referer` header: `scheme://host[:port]`, lowercased. Never its path, query, fragment or user name | `https://www.google.com/search?q=…` → `https://www.google.com` |
-| **UTM** | Only `utm_source`, `utm_medium` and `utm_campaign` from the query string (decoded, at most 100 characters each, control characters removed) | `?utm_source=newsletter&token=…` → `utm_source = newsletter` |
+| **UTM** | Only `utm_source`, `utm_medium` and `utm_campaign` from the query string (decoded, at most 100 characters each, control and invisible formatting characters removed) | `?utm_source=newsletter&token=…` → `utm_source = newsletter` |
 
 The rest of the query string is never logged. The gateway reduces both before anything leaves nginx,
-so the full Referer and the other query parameters never reach the disk. Request log lines written
-before Corvus 1.6 have no referrer or UTM values.
+so the full Referer and the other query parameters never reach the request log, its exports or the
+statistics. Request log lines written before Corvus 1.6 have no referrer or UTM values.
+
+!!! warning "Container logs"
+    This applies to the request log only. nginx's own error and warning messages, which go to the
+    container log (`docker logs`), describe the request that caused them, for example a rate-limit
+    rejection or an unreachable upstream: they can contain the **full request line including the
+    query string** and the **full Referer**. Treat the container log as sensitive: limit who can
+    read it and how long your Docker logging driver keeps it.
 
 ## Visitor statistics { #visitor-statistics }
 

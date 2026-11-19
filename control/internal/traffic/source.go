@@ -40,23 +40,61 @@ func ReferrerOrigin(s string) string {
 	if j := strings.LastIndexByte(rest, '@'); j >= 0 {
 		rest = rest[j+1:]
 	}
-	if rest == "" || len(scheme)+3+len(rest) > maxOrigin {
+	if !validHostPort(rest) || len(scheme)+3+len(rest) > maxOrigin {
 		return ""
-	}
-	for j := 0; j < len(rest); j++ {
-		c := rest[j]
-		if !(isAlpha(c) || c >= '0' && c <= '9' || strings.IndexByte(".-_:[]", c) >= 0) {
-			return ""
-		}
 	}
 	return strings.ToLower(scheme + "://" + rest)
 }
 
+// validHostPort reports whether s is a host name ([A-Za-z0-9._-]+) or a bracketed IPv6
+// address ([0-9a-fA-F:.]+), optionally followed by ":" and a port of 1-5 digits. The
+// same pattern as map $corvus_ref in nginx.conf.tmpl: a malformed authority such as
+// "user:pa" (from "https://user:pa?ss@host/", whose "?" ends the authority) yields "",
+// never a part of the credentials.
+func validHostPort(s string) bool {
+	i := 0
+	if strings.HasPrefix(s, "[") {
+		j := strings.IndexByte(s, ']')
+		if j < 2 {
+			return false
+		}
+		for k := 1; k < j; k++ {
+			if c := s[k]; !(isHex(c) || c == ':' || c == '.') {
+				return false
+			}
+		}
+		i = j + 1
+	} else {
+		for i < len(s) && (isAlpha(s[i]) || s[i] >= '0' && s[i] <= '9' || s[i] == '.' || s[i] == '_' || s[i] == '-') {
+			i++
+		}
+		if i == 0 {
+			return false
+		}
+	}
+	if i == len(s) {
+		return true
+	}
+	port := s[i:]
+	if port[0] != ':' || len(port) < 2 || len(port) > 6 {
+		return false
+	}
+	for k := 1; k < len(port); k++ {
+		if port[k] < '0' || port[k] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func isHex(c byte) bool { return c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F' }
+
 func isAlpha(c byte) bool { return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' }
 
 // UTMValue cleans a raw utm_* query value: URL-decoded (kept raw when it is not valid
-// URL encoding), control characters removed, surrounding spaces trimmed, at most 100
-// bytes (cut at a character boundary).
+// URL encoding), control and invisible characters removed (Cc; Cf such as U+202E
+// RIGHT-TO-LEFT OVERRIDE or U+200B ZERO WIDTH SPACE; the separators U+2028/U+2029),
+// surrounding spaces trimmed, at most 100 bytes (cut at a character boundary).
 func UTMValue(s string) string {
 	if s == "" {
 		return ""
@@ -78,7 +116,7 @@ func UTMValue(s string) string {
 	}
 	s = strings.ToValidUTF8(s, "�")
 	s = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		if unicode.In(r, unicode.Cc, unicode.Cf, unicode.Zl, unicode.Zp) {
 			return -1
 		}
 		return r

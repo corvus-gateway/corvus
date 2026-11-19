@@ -19,12 +19,21 @@ import (
 //	$corvus_ref \t $arg_utm_source \t $arg_utm_medium \t $arg_utm_campaign
 //
 // The last four fields (traffic sources, see source.go) were added in 1.6.0; records
-// without them (an older configuration still running during an upgrade) are accepted.
+// without them (an older configuration still running during an upgrade) or cut short in
+// them are accepted (see minFields).
 // Proxy hosts send the same records from Lua (gateway/lua/corvus/accesslog.lua), several
 // per datagram.
 const logTag = "c1\t"
 
-const logFields = 17 // including the tag, without the optional source fields
+const (
+	logFields = 21 // including the tag
+	// Fields after the tag up to and including $uri. The ones after it (User-Agent,
+	// referrer origin, UTM values) are optional: missing in records of a configuration
+	// before 1.6.0, and missing or cut short when a datagram was longer than the receive
+	// buffer (the cut falls into the last fields; nginx bounds them, see nginx.conf.tmpl).
+	// Such a record is kept with what it has, so an oversized value cannot hide a request.
+	minFields = 15
+)
 
 var syslogSep = []byte(": ")
 
@@ -70,32 +79,23 @@ func parseRecord(line []byte, r *Record) bool {
 }
 
 func parseTSV(b []byte, r *Record) bool {
+	// the last field may end in "\r" (syslog adds nothing after it)
+	b = bytes.TrimRight(b, "\r")
 	var f [logFields - 1][]byte
 	n := 0
 	for n < len(f)-1 {
 		i := bytes.IndexByte(b, '\t')
 		if i < 0 {
-			return false
+			break
 		}
 		f[n], b = b[:i], b[i+1:]
 		n++
 	}
-	// the User-Agent, then optionally the four source fields (the last field may end in
-	// "\r"; syslog adds nothing after it)
-	var src [4][]byte
-	if i := bytes.IndexByte(b, '\t'); i >= 0 {
-		f[n], b = b[:i], b[i+1:]
-		for k := 0; k < len(src)-1; k++ {
-			i := bytes.IndexByte(b, '\t')
-			if i < 0 {
-				return false
-			}
-			src[k], b = b[:i], b[i+1:]
-		}
-		src[len(src)-1] = bytes.TrimRight(b, "\r")
-	} else {
-		f[n] = bytes.TrimRight(b, "\r")
+	f[n] = b
+	if n+1 < minFields {
+		return false
 	}
+	src := f[16:]
 	var err error
 	if r.T, err = parseFloat(f[0]); err != nil {
 		return false

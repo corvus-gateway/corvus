@@ -19,7 +19,7 @@
 -- Traffic sources are logged without secrets: referrer_origin is $corvus_ref (a map in
 -- nginx.conf that keeps only scheme://host[:port] of the Referer, never its path or
 -- query), and of the query string only the raw utm_source, utm_medium and utm_campaign
--- values (read only when the query mentions "utm_"). corvus-control decodes, cleans and
+-- values (read only when the query mentions "utm_" in any case). corvus-control decodes, cleans and
 -- bounds them (control/internal/traffic/source.go).
 --
 -- Lossy by design, like the syslog output: when corvus-control is not listening or cannot
@@ -115,7 +115,8 @@ function _M.record()
   local var = ngx.var
   local src = "\t" .. esc(var.corvus_ref, MAX_REF)
   local args = var.args
-  if args and find(args, "utm_", 1, true) then
+  -- nginx matches $arg_ names case-insensitively (UTM_Source=x sets $arg_utm_source)
+  if args and find(args, "[Uu][Tt][Mm]_") then
     src = src .. "\t" .. esc(var.arg_utm_source, MAX_UTM) .. "\t" .. esc(var.arg_utm_medium, MAX_UTM)
       .. "\t" .. esc(var.arg_utm_campaign, MAX_UTM)
   else
