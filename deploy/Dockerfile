@@ -2,7 +2,7 @@
 # Build from the repository root:  docker build -f deploy/Dockerfile -t corvus .
 #
 # OpenResty is compiled from verified sources (deploy/openresty/build.sh): OpenResty 1.31.8.1
-# (with the nginx 1.31.9 security fixes), OpenSSL 3.5.9, PCRE2 10.49, zlib 1.3.2 on Alpine 3.24 — the official image links an older
+# (with the nginx 1.31.9 security fixes), OpenSSL 3.5.9, PCRE2 10.49, zlib 1.4 on Alpine 3.24 — the official image links an older
 # OpenSSL. Unused nginx modules (HTTP/3, mp4, flv, dav, mail, ssi …) are not compiled in.
 
 FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS openresty
