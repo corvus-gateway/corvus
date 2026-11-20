@@ -94,6 +94,8 @@ host and port, **Add backend** adds another host and port; up to 32 backends per
 (`http`/`https`) is the same for all of them, and each backend follows the same rules as the first
 one (the [forward targets](#forward-targets) above, no duplicates).
 
+![Several backends with Check connection](../img/proxy-host-backends.png){ .shot .panel }
+
 - **Round-robin**: requests are spread over the backends in turn. Keep-alive connections are kept
   per backend.
 - **Passive failover**: when a backend refuses the connection or times out, the request is sent to
