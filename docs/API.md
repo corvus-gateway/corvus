@@ -297,6 +297,8 @@ The same fields work for `POST /api/certificates/acme`.
 | GET / POST | `/api/ip-lists` | viewer / operator | IP and User-Agent lists |
 | PUT / DELETE | `/api/ip-lists/{id}` | operator | Update / delete |
 | POST | `/api/ip-lists/{id}/refresh` | operator | Fetch a URL-fed list now; returns `{ "ip_list" }` (a failed fetch is reported in `fetch_error`) |
+| GET | `/api/ip-lists/{id}/entries` | viewer | Preview of a list (`limit`, at most 1000): entries of a typed list, merged ranges of a large feed |
+| GET | `/api/ip-lists/{id}/check` | viewer | Whether `ip` is in the list (works for feeds with millions of entries) |
 | GET / POST | `/api/bans` | viewer / operator | IP bans |
 | DELETE | `/api/bans/{id}` | operator | Remove a ban |
 | POST | `/api/bans/{id}/permanent` | operator | Make a ban permanent |
@@ -406,9 +408,9 @@ tested, deployed and rolled back with the rest of the configuration.
 | Method | Path | Role | Description |
 |---|---|---|---|
 | GET | `/api/traffic/summary`, `/timeseries`, `/hosts`, `/top-paths`, `/events` | viewer | Traffic statistics |
-| GET | `/api/traffic/logs` | viewer | Request log search (`q`, `host`, `status`, `limit`, `format`) |
+| GET | `/api/traffic/logs` | viewer | Request log search (`q`, `host`, `status`, `limit`); `format=csv`, `json` or `combined` (nginx combined, for GoAccess) downloads the result |
 | GET | `/api/traffic/archives` | operator | Rotated request log files |
-| GET | `/api/traffic/archives/{name}` | operator | Download a log file |
+| GET | `/api/traffic/archives/{name}` | operator | Download a daily log file (JSON lines); `?format=combined` converts it to nginx combined format |
 | GET / PUT | `/api/settings/retention` | admin | Retention and log rotation |
 | GET / POST | `/api/alerts/channels` | viewer / operator | Alert channels (Slack, Mattermost, Discord, Teams, Telegram, webhook) |
 | PUT / DELETE | `/api/alerts/channels/{id}` | operator | Update / delete |

@@ -25,7 +25,7 @@ docker compose up -d
 사용하세요.
 
 ```yaml
-    image: 'ghcr.io/corvus-gateway/gateway:1.2.9'
+    image: 'ghcr.io/corvus-gateway/gateway:1.8.0'
 ```
 
 릴리스 노트: [GitHub releases](https://github.com/corvus-gateway/corvus/releases).
