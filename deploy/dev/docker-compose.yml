@@ -99,6 +99,19 @@ services:
     mem_limit: 32m
     restart: unless-stopped
 
+  # Two backends of one proxy host (backend pool test): whoami echoes the hostname, so
+  # the round-robin and the failover are visible.
+  pool-a:
+    image: traefik/whoami:v1.10.3
+    hostname: pool-a
+    mem_limit: 32m
+    restart: unless-stopped
+  pool-b:
+    image: traefik/whoami:v1.10.3
+    hostname: pool-b
+    mem_limit: 32m
+    restart: unless-stopped
+
 volumes:
   corvus-data:
   redis-auth:

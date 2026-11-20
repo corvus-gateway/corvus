@@ -132,9 +132,35 @@ Proxy host fields: `domains` (array), `forward_scheme` (`http`/`https`), `forwar
 `client_ip` (`direct`, `cloudflare`, `trusted_proxies`), `waitroom_id`, `waitroom_path`,
 `rate_limit_id`, `access_list_id` or `basic_auth`, `block_exploits`, `body_inspection`
 (`off`, `log`, `block`), `body_max_kb`, `security_headers`, `under_attack`, `under_attack_config`,
-`max_upload_mb`, `upstream_timeout_s`, `gzip`, `advanced_config`, `locations`, `notes`, `enabled`.
-`under_attack`, `under_attack_config`, `locations` and `notes` keep their stored value when omitted
-from a `PUT` (`"locations": []` removes all locations).
+`max_upload_mb`, `upstream_timeout_s`, `gzip`, `advanced_config`, `locations`, `extra_targets`,
+`notes`, `enabled`.
+`under_attack`, `under_attack_config`, `locations`, `extra_targets` and `notes` keep their stored
+value when omitted from a `PUT` (`"locations": []` removes all locations, `"extra_targets": []` all
+extra backends).
+
+`extra_targets` (default `[]`) are further backends of the host, served round-robin together with
+`forward_host`/`forward_port`, which stay the first backend (so clients that only know those two
+fields keep working). Same scheme for all; at most 32 backends in total; each entry is validated
+like `forward_host`/`forward_port` and may not repeat another backend (`422` with the field, e.g.
+`extra_targets[1].forward_host`):
+
+```json
+"forward_host": "app1", "forward_port": 8080,
+"extra_targets": [{"forward_host": "app2", "forward_port": 8080}, {"forward_host": "10.0.0.13", "forward_port": 8080}]
+```
+
+With more than one backend, a backend that fails 3 times within 30 s is skipped for 30 s, and a
+failed request is retried on the next backend (nginx `proxy_next_upstream` defaults: on a
+connection error or timeout; never a `POST`, `PATCH` or `LOCK` request once it was sent). The connect
+timeout towards a pool is 3 s (10 s otherwise) unless `advanced_config` sets `proxy_connect_timeout`. Custom locations
+and streams have a single target.
+
+`POST /api/proxy-hosts/check` (operator; `forward_scheme`, `forward_host`, `forward_port`) tries a
+forward target the way the gateway reaches it. With `extra_targets` every backend is checked and the
+answer adds `targets` (one result per backend, in order); `ok` is then `true` only when all work.
+`GET /api/upstream-errors` (viewer) lists hosts whose upstream failed recently; for a host with
+several backends it adds `backends` (their number) and `all_down` (`true` when no backend was left
+to try).
 
 `notes` (proxy hosts, redirection hosts and streams) is free text for people, at most 1000
 characters; it is not used by the gateway configuration.

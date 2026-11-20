@@ -21,4 +21,17 @@ export const connCheckStrings: Record<ConnCheckKey, string> = {
   ueTip: "连接上游失败（{ago}）：{reason}",
   ueTipAction: "编辑该主机并使用“检查连接”查找原因。",
   ueSheetTitle: "访客看到了错误页面（{ago}）",
+  // backend pools
+  ccPoolSummary: "{n} 个后端中 {ok} 个可连接",
+  ueBadgeBackend: "后端错误",
+  ueTipBackend: "一个后端失败（{ago}）：{reason}",
+  ueTipOthers: "其他后端继续处理请求；失败的后端会被跳过 30 秒。",
+  ueAllDownTitle: "所有后端均失败",
+  ueAllDownHint: "此主机的所有后端都无法连接，因此访客看到了错误页面。请用“检查连接”逐一检查后端。",
+  ueSheetBackendTitle: "一个后端失败（{ago}）",
+  poolAdd: "添加后端",
+  poolHint: "请求以轮询（round-robin）方式分配到所有后端（协议相同）。失败的后端会被跳过 30 秒，之后再重试。",
+  poolBackend: "后端 {n}",
+  poolRemove: "移除后端",
+  poolCount: "{n} 个后端",
 };

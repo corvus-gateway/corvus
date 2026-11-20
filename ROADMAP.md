@@ -34,6 +34,7 @@ promise; priorities change with user feedback. Ideas and votes are welcome in
 
 ## Not planned
 
-To keep Corvus small and easy to operate, these are out of scope for now: load balancing across
-several backends, forward authentication for other apps, client-certificate (mTLS)
-authentication, and running as a cluster.
+To keep Corvus small and easy to operate, these are out of scope for now: load balancing beyond
+the simple round-robin over a proxy host's backends (active health checks, weights, sticky
+sessions), forward authentication for other apps, client-certificate (mTLS) authentication, and
+running as a cluster.

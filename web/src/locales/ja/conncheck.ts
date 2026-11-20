@@ -21,4 +21,17 @@ export const connCheckStrings: Record<ConnCheckKey, string> = {
   ueTip: "アップストリームへの接続に失敗（{ago}）: {reason}",
   ueTipAction: "ホストを編集し、「接続を確認」で原因を調べてください。",
   ueSheetTitle: "訪問者にエラーページが表示されました（{ago}）",
+  // backend pools
+  ccPoolSummary: "{n} 台中 {ok} 台のバックエンドに接続できました",
+  ueBadgeBackend: "バックエンドエラー",
+  ueTipBackend: "バックエンドの 1 台が失敗しました（{ago}）: {reason}",
+  ueTipOthers: "ほかのバックエンドがリクエストを処理し続け、失敗したバックエンドは 30 秒間スキップされます。",
+  ueAllDownTitle: "すべてのバックエンドが失敗",
+  ueAllDownHint: "このホストのどのバックエンドにも接続できなかったため、訪問者にエラーページが表示されました。「接続を確認」で各バックエンドを確認してください。",
+  ueSheetBackendTitle: "バックエンドの 1 台が失敗しました（{ago}）",
+  poolAdd: "バックエンドを追加",
+  poolHint: "リクエストはすべてのバックエンドにラウンドロビンで振り分けられます（スキームは共通）。失敗したバックエンドは 30 秒間スキップされ、その後再試行されます。",
+  poolBackend: "バックエンド {n}",
+  poolRemove: "バックエンドを削除",
+  poolCount: "バックエンド {n} 台",
 };

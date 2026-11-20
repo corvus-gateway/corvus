@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, Copy, Globe, Lock, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2, Users, Zap, Gauge, KeyRound, ExternalLink, UserPlus, X, Siren, ShieldOff } from "lucide-react";
+import { AlertTriangle, ArrowRight, Copy, Globe, Lock, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2, Users, Zap, Gauge, Server, KeyRound, ExternalLink, UserPlus, X, Siren, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
-import { api, type AccessList, type ClientIPMode, type ProxyHost, type RateLimit, type SecurityHeaders, type UnderAttackStatus, type UpstreamError, type Waitroom } from "../api";
+import { api, type ProxyTarget, type AccessList, type ClientIPMode, type ProxyHost, type RateLimit, type SecurityHeaders, type UnderAttackStatus, type UpstreamError, type Waitroom } from "../api";
 import { ConnCheck, UpstreamBadge, UpstreamCallout } from "../components/ConnCheck";
 import { UnderAttackFields, uaConfig, UA_DEFAULTS } from "../components/UnderAttackFields";
 import { LocationsFields } from "../components/LocationsFields";
@@ -40,12 +40,15 @@ const blank: Form = {
   client_ip: "direct", rate_limit_id: null, access_list_id: null, block_exploits: true,
   body_inspection: "log", body_max_kb: 1024, security_headers: "off",
   max_upload_mb: null, upstream_timeout_s: null, gzip: true, notes: "",
-  under_attack: "off", under_attack_config: { ...UA_DEFAULTS }, locations: [],
+  under_attack: "off", under_attack_config: { ...UA_DEFAULTS }, locations: [], extra_targets: [],
 };
+
+/** Backends per host, including the forward host (validate.MaxTargets). */
+const MAX_TARGETS = 32;
 
 function toForm(h: ProxyHost): Form {
   const { id: _i, created_at: _c, updated_at: _u, ...rest } = h;
-  return { ...blank, ...rest, under_attack: rest.under_attack ?? "off", under_attack_config: uaConfig(rest.under_attack_config), locations: rest.locations ?? [] };
+  return { ...blank, ...rest, under_attack: rest.under_attack ?? "off", under_attack_config: uaConfig(rest.under_attack_config), locations: rest.locations ?? [], extra_targets: rest.extra_targets ?? [] };
 }
 
 export default function ProxyHosts() {
@@ -87,11 +90,12 @@ export default function ProxyHosts() {
   const showHeaders = has("security_headers");
   const showUA = has("under_attack");
   const showLocations = has("locations");
+  const showPool = has("extra_targets");
   const showTuning = has("gzip");
   const showLimits = !limits.missing && has("rate_limit_id");
   const showLists = !lists.missing && has("access_list_id");
 
-  const list = useHostList(hosts.data, q, (h) => `${h.domains.join(" ")} ${h.forward_scheme}://${h.forward_host}:${h.forward_port} ${h.notes ?? ""}`);
+  const list = useHostList(hosts.data, q, (h) => `${h.domains.join(" ")} ${h.forward_scheme}://${h.forward_host}:${h.forward_port} ${(h.extra_targets ?? []).map((x) => `${x.forward_host}:${x.forward_port}`).join(" ")} ${h.notes ?? ""}`);
   const filtered = list.rows;
 
   const open = (h?: ProxyHost) => { setError(null); setEditing({ id: h?.id ?? null, form: h ? toForm(h) : { ...blank }, req: null, auth: authFrom(h) }); };
@@ -116,6 +120,7 @@ export default function ProxyHosts() {
     if (!showTuning) { delete body.max_upload_mb; delete body.upstream_timeout_s; delete body.gzip; }
     if (!showUA) { delete body.under_attack; delete body.under_attack_config; }
     if (!showLocations) { delete body.locations; }
+    if (!showPool) { delete body.extra_targets; }
     if (!showLimits) { delete body.rate_limit_id; }
     if (!showLists) { delete body.basic_auth; }
     const r = await run(() => (id ? api.put(`/api/proxy-hosts/${id}`, body) : api.post("/api/proxy-hosts", body)), { success: req ? undefined : t("savedDeployed") });
@@ -195,6 +200,11 @@ export default function ProxyHosts() {
                       </Td>
                       <Td className="hidden md:table-cell">
                         <Mono className="inline-flex items-center gap-1.5 text-fg-muted"><ArrowRight className="h-3 w-3 text-fg-subtle" aria-hidden />{h.forward_scheme}://{h.forward_host}:{h.forward_port}</Mono>
+                        {(h.extra_targets?.length ?? 0) > 0 && (
+                          <Tip label={<span className="block font-mono">{[{ forward_host: h.forward_host, forward_port: h.forward_port }, ...h.extra_targets!].map((x) => <span key={`${x.forward_host}:${x.forward_port}`} className="block">{x.forward_host}:{x.forward_port}</span>)}</span>}>
+                            <span tabIndex={0} className={cn(tipTrigger, "ml-1.5 align-middle")}><Badge tone="info" icon={Server}>{t("poolCount", { n: h.extra_targets!.length + 1 })}</Badge></span>
+                          </Tip>
+                        )}
                       </Td>
                       <Td className="hidden sm:table-cell"><SslBadge cert={h.certificate_id == null ? undefined : certById.get(h.certificate_id)} /></Td>
                       <Td className="hidden lg:table-cell">
@@ -255,7 +265,8 @@ export default function ProxyHosts() {
               <IdField label={t("forwardHost")} required error={fieldErr(error, "forward_host")}>{(id) => <Input id={id} className="font-mono" value={f.forward_host} onChange={(e) => set({ forward_host: e.target.value })} placeholder="app / 10.0.0.12" invalid={!!fieldErr(error, "forward_host")} />}</IdField>
               <IdField label={t("forwardPort")} required error={fieldErr(error, "forward_port")}>{(id) => <NumberInput id={id} min={1} max={65535} value={f.forward_port} onChange={(v) => set({ forward_port: v })} />}</IdField>
             </div>
-            {can && <ConnCheck scheme={f.forward_scheme} host={f.forward_host} port={f.forward_port} />}
+            {showPool && <PoolFields value={f.extra_targets ?? []} onChange={(v) => set({ extra_targets: v })} error={error} port={f.forward_port} />}
+            {can && <ConnCheck scheme={f.forward_scheme} host={f.forward_host} port={f.forward_port} extra={(f.extra_targets ?? []).map((x) => ({ host: x.forward_host, port: x.forward_port }))} />}
             {editing?.id != null && upErrById.has(editing.id) && <UpstreamCallout err={upErrById.get(editing.id)!} />}
             <SwitchRow label={t("websocket")} description={t("websocketDesc")} checked={f.websocket} onChange={(v) => set({ websocket: v })} />
           </FormSection>
@@ -428,5 +439,32 @@ export default function ProxyHosts() {
         {disabling && <div className="rounded-lg border border-line bg-surface-2 px-3 py-2 font-mono text-xs">{disabling.domains.join(", ")}</div>}
       </ConfirmDialog>
     </>
+  );
+}
+
+/** Further backends of the host (round-robin with the forward host above, same scheme). */
+function PoolFields({ value, onChange, error, port }: { value: ProxyTarget[]; onChange: (v: ProxyTarget[]) => void; error: unknown; port: number }) {
+  const { t } = useI18n();
+  const setAt = (i: number, p: Partial<ProxyTarget>) => onChange(value.map((x, j) => (j === i ? { ...x, ...p } : x)));
+  const err = (i: number, k: string) => fieldErr(error, `extra_targets[${i}].${k}`);
+  return (
+    <div className="space-y-3">
+      {value.map((x, i) => (
+        <div key={i} role="group" aria-label={t("poolBackend", { n: i + 2 })} className="grid grid-cols-[1fr_7rem_auto] items-start gap-3">
+          <IdField label={t("poolBackend", { n: i + 2 })} required error={err(i, "forward_host")}>
+            {(id) => <Input id={id} className="font-mono" value={x.forward_host} onChange={(e) => setAt(i, { forward_host: e.target.value })} placeholder="app2 / 10.0.0.13" invalid={!!err(i, "forward_host")} />}
+          </IdField>
+          <IdField label={t("forwardPort")} required error={err(i, "forward_port")}>
+            {(id) => <NumberInput id={id} min={1} max={65535} value={x.forward_port} onChange={(v) => setAt(i, { forward_port: v })} />}
+          </IdField>
+          <IconButton label={t("poolRemove")} className="mt-6" onClick={() => onChange(value.filter((_, j) => j !== i))}><X className="h-4 w-4" /></IconButton>
+        </div>
+      ))}
+      {fieldErr(error, "extra_targets") && <p role="alert" className="text-xs text-danger">{fieldErr(error, "extra_targets")}</p>}
+      {value.length > 0 && <p className="text-xs leading-5 text-fg-subtle">{t("poolHint")}</p>}
+      <Button size="sm" disabled={value.length + 1 >= MAX_TARGETS} onClick={() => onChange([...value, { forward_host: "", forward_port: value[value.length - 1]?.forward_port ?? port }])}>
+        <Plus className="h-3.5 w-3.5" />{t("poolAdd")}
+      </Button>
+    </div>
   );
 }

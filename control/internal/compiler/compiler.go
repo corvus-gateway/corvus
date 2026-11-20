@@ -211,10 +211,11 @@ type target struct {
 	Prefix    string // custom location path ("" = the host's forward host)
 	Name      string // upstream block name
 	Scheme    string // http | https
-	Addr      string // server address (see upstreamAddr)
+	Addr      string // server address (see upstreamAddr); of the first server in a pool
 	Port      int
-	Resolve   bool   // Addr is a name: resolved at run time (server … resolve)
-	Path      string // forward path replacing the location prefix ("" = URI unchanged)
+	Resolve   bool     // Addr is a name: resolved at run time (server … resolve)
+	Servers   []server // servers of the upstream block (several: a backend pool)
+	Path      string   // forward path replacing the location prefix ("" = URI unchanged)
 	Websocket bool
 	// Console: the target is the admin console itself (its port on loopback, the Docker
 	// host loopback is mapped to, or this container), so the request carries the gateway
@@ -226,6 +227,48 @@ type target struct {
 	ErrorCodes       []int
 	RateLimit        *store.RateLimit
 	Advanced         string // location advanced configuration
+	// OwnConnectTimeout: the host's advanced configuration sets proxy_connect_timeout.
+	OwnConnectTimeout bool
+}
+
+// server is one server line of an upstream block.
+type server struct {
+	Addr    string
+	Port    int
+	Resolve bool
+}
+
+// Passive failover of a backend pool: a backend that failed poolMaxFails times within
+// poolFailTimeout is skipped for poolFailTimeout, then tried again.
+const (
+	poolMaxFails    = 3
+	poolFailTimeout = "30s"
+)
+
+// Pool reports whether the upstream block has several servers (round-robin).
+func (t target) Pool() bool { return len(t.Servers) > 1 }
+
+// Zone reports whether the upstream block needs a shared memory zone: for run-time
+// resolution, and for a pool so that all workers share its backends' failure state.
+func (t target) Zone() bool {
+	if t.Pool() {
+		return true
+	}
+	for _, s := range t.Servers {
+		if s.Resolve {
+			return true
+		}
+	}
+	return false
+}
+
+// ServerParams are the parameters of every server line: a single server keeps no
+// failure state (every request tries it); pool backends are skipped after failures.
+func (t target) ServerParams() string {
+	if t.Pool() {
+		return fmt.Sprintf("max_fails=%d fail_timeout=%s", poolMaxFails, poolFailTimeout)
+	}
+	return "max_fails=0"
 }
 
 // wsTimeoutS is the upstream read/send timeout with WebSocket on when the host sets
@@ -250,16 +293,42 @@ func (t target) TimeoutS() int {
 func (t target) OwnReadTimeout() bool { return topLevelDirective(t.Advanced, "proxy_read_timeout") }
 func (t target) OwnSendTimeout() bool { return topLevelDirective(t.Advanced, "proxy_send_timeout") }
 
+// poolConnectTimeout is the connect timeout towards a backend pool: a backend that does
+// not answer (rather than refusing the connection) delays the request only this long
+// before it goes to the next backend (the global default is 10 s).
+const poolConnectTimeout = "3s"
+
+// ConnectTimeout is the proxy_connect_timeout of the location ("" = the global one): the
+// shorter poolConnectTimeout for a pool, unless the host's or the location's advanced
+// configuration sets the timeout itself (the operator's value wins, and nginx rejects a
+// second one in the same block).
+func (t target) ConnectTimeout() string {
+	if !t.Pool() || t.OwnConnectTimeout || topLevelDirective(t.Advanced, "proxy_connect_timeout") {
+		return ""
+	}
+	return poolConnectTimeout
+}
+
 // targets builds the host's upstream targets: its forward host, the custom locations,
 // and the target of the root location (a custom location "/" replaces the forward host).
 func (v *hostView) targets(static map[string]string, hostGW string, self func(string) bool) {
 	mk := func(name, scheme, host string, port int) target {
 		addr := upstreamAddr(host, static, hostGW)
 		return target{Name: name, Scheme: scheme, Addr: addr, Port: port, Resolve: !isIP(addr),
+			Servers:   []server{{Addr: addr, Port: port, Resolve: !isIP(addr)}},
 			Console:   v.P.AdminPort > 0 && port == v.P.AdminPort && consoleAddr(host, addr, hostGW, self),
 			Websocket: v.Websocket, UpstreamTimeoutS: v.UpstreamTimeoutS, ErrorCodes: v.ErrorCodes, RateLimit: v.RateLimit}
 	}
 	v.Host = mk(fmt.Sprintf("corvus_up_%d", v.ID), v.ForwardScheme, v.ForwardHost, v.ForwardPort)
+	for _, e := range v.ExtraTargets {
+		addr := upstreamAddr(e.ForwardHost, static, hostGW)
+		v.Host.Servers = append(v.Host.Servers, server{Addr: addr, Port: e.ForwardPort, Resolve: !isIP(addr)})
+		// the gateway key goes to the console only, never to a pool with other backends
+		if !(v.P.AdminPort > 0 && e.ForwardPort == v.P.AdminPort && consoleAddr(e.ForwardHost, addr, hostGW, self)) {
+			v.Host.Console = false
+		}
+	}
+	v.Host.OwnConnectTimeout = topLevelDirective(v.AdvancedConfig, "proxy_connect_timeout")
 	v.Upstream = v.Host.Addr
 	v.Root = v.Host
 	for i, l := range v.ProxyHost.Locations {
@@ -541,8 +610,10 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		}
 		v.targets(static, hostGW, c.self())
 		for _, t := range append([]target{v.Host}, v.LocUpstreams...) {
-			if why := c.P.InternalTarget(t.Addr, t.Port); why != "" {
-				return fmt.Errorf("proxy host %d: %s", h.ID, why)
+			for _, sv := range t.Servers {
+				if why := c.P.InternalTarget(sv.Addr, sv.Port); why != "" {
+					return fmt.Errorf("proxy host %d: %s", h.ID, why)
+				}
 			}
 		}
 		if hc.AccessListID != nil {

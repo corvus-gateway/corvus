@@ -257,3 +257,30 @@ func dialKind(ctx context.Context, err error) string {
 	}
 	return KindOther
 }
+
+// Target is a forward target to check: Host as the gateway uses it (see Check).
+type Target struct {
+	Host string
+	Port int
+}
+
+// MaxParallel bounds how many targets of one CheckAll are checked at once.
+const MaxParallel = 8
+
+// CheckAll checks several targets (a proxy host's backends) with the same scheme, at
+// most MaxParallel at a time; the results are in the order of targets.
+func (c *Checker) CheckAll(ctx context.Context, scheme string, targets []Target) []Result {
+	out := make([]Result, len(targets))
+	sem := make(chan struct{}, MaxParallel)
+	var wg sync.WaitGroup
+	for i, t := range targets {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer func() { <-sem; wg.Done() }()
+			out[i] = c.Check(ctx, scheme, t.Host, t.Port)
+		}()
+	}
+	wg.Wait()
+	return out
+}

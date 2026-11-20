@@ -21,6 +21,19 @@ export const koConnCheck = {
   ueTip: "업스트림 연결 실패 ({ago}): {reason}",
   ueTipAction: "호스트를 편집해 ‘연결 확인’으로 원인을 찾아보세요.",
   ueSheetTitle: "방문자에게 오류 페이지가 표시되었습니다 ({ago})",
+  // backend pools
+  ccPoolSummary: "백엔드 {n}개 중 {ok}개에 연결됨",
+  ueBadgeBackend: "백엔드 오류",
+  ueTipBackend: "백엔드 하나가 실패했습니다 ({ago}): {reason}",
+  ueTipOthers: "다른 백엔드가 계속 요청을 처리하며, 실패한 백엔드는 30초 동안 건너뜁니다.",
+  ueAllDownTitle: "모든 백엔드 실패",
+  ueAllDownHint: "이 호스트의 어떤 백엔드에도 연결할 수 없어 방문자에게 오류 페이지가 표시되었습니다. ‘연결 확인’으로 각 백엔드를 확인하세요.",
+  ueSheetBackendTitle: "백엔드 하나가 실패했습니다 ({ago})",
+  poolAdd: "백엔드 추가",
+  poolHint: "요청은 모든 백엔드에 라운드 로빈으로 나뉩니다(프로토콜은 동일). 실패한 백엔드는 30초 동안 건너뛴 뒤 다시 시도합니다.",
+  poolBackend: "백엔드 {n}",
+  poolRemove: "백엔드 제거",
+  poolCount: "백엔드 {n}개",
 };
 
 export type ConnCheckKey = keyof typeof koConnCheck;

@@ -54,6 +54,7 @@ Go control plane, React console) that can **import an existing NPM setup**.
 
 **Proxy & TLS**
 - Proxy hosts with wildcards, WebSocket, HTTP/2, forced HTTPS and custom Nginx snippets
+- Several backends per proxy host: requests spread round-robin, a failing backend skipped for 30 seconds (passive failover)
 - Notes on hosts and streams, to remember what each one is for (searchable)
 - Check connection: test a host's target from the gateway before saving (DNS, port, firewall, TLS), and see in the host list why visitors got a 502/504
 - Custom locations: route paths (e.g. `/api`) to their own upstream, with the host's protections

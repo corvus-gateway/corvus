@@ -108,6 +108,7 @@ func ProxyHost(h *store.ProxyHost) error {
 	if h.ForwardPort < 1 || h.ForwardPort > 65535 {
 		errs.add("forward_port", "invalid", "port must be 1-65535")
 	}
+	extraTargets(&errs, h)
 
 	if h.WaitroomPath == "" {
 		h.WaitroomPath = "/"
