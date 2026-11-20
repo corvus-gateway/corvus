@@ -151,7 +151,8 @@ like `forward_host`/`forward_port` and may not repeat another backend (`422` wit
 
 With more than one backend, a backend that fails 3 times within 30 s is skipped for 30 s, and a
 failed request is retried on the next backend (nginx `proxy_next_upstream` defaults: on a
-connection error or timeout; never a `POST`, `PATCH` or `LOCK` request once it was sent). Custom locations
+connection error or timeout; never a `POST`, `PATCH` or `LOCK` request once it was sent). The connect
+timeout towards a pool is 3 s (10 s otherwise) unless `advanced_config` sets `proxy_connect_timeout`. Custom locations
 and streams have a single target.
 
 `POST /api/proxy-hosts/check` (operator; `forward_scheme`, `forward_host`, `forward_port`) tries a

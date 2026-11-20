@@ -227,6 +227,8 @@ type target struct {
 	ErrorCodes       []int
 	RateLimit        *store.RateLimit
 	Advanced         string // location advanced configuration
+	// OwnConnectTimeout: the host's advanced configuration sets proxy_connect_timeout.
+	OwnConnectTimeout bool
 }
 
 // server is one server line of an upstream block.
@@ -291,6 +293,22 @@ func (t target) TimeoutS() int {
 func (t target) OwnReadTimeout() bool { return topLevelDirective(t.Advanced, "proxy_read_timeout") }
 func (t target) OwnSendTimeout() bool { return topLevelDirective(t.Advanced, "proxy_send_timeout") }
 
+// poolConnectTimeout is the connect timeout towards a backend pool: a backend that does
+// not answer (rather than refusing the connection) delays the request only this long
+// before it goes to the next backend (the global default is 10 s).
+const poolConnectTimeout = "3s"
+
+// ConnectTimeout is the proxy_connect_timeout of the location ("" = the global one): the
+// shorter poolConnectTimeout for a pool, unless the host's or the location's advanced
+// configuration sets the timeout itself (the operator's value wins, and nginx rejects a
+// second one in the same block).
+func (t target) ConnectTimeout() string {
+	if !t.Pool() || t.OwnConnectTimeout || topLevelDirective(t.Advanced, "proxy_connect_timeout") {
+		return ""
+	}
+	return poolConnectTimeout
+}
+
 // targets builds the host's upstream targets: its forward host, the custom locations,
 // and the target of the root location (a custom location "/" replaces the forward host).
 func (v *hostView) targets(static map[string]string, hostGW string, self func(string) bool) {
@@ -310,6 +328,7 @@ func (v *hostView) targets(static map[string]string, hostGW string, self func(st
 			v.Host.Console = false
 		}
 	}
+	v.Host.OwnConnectTimeout = topLevelDirective(v.AdvancedConfig, "proxy_connect_timeout")
 	v.Upstream = v.Host.Addr
 	v.Root = v.Host
 	for i, l := range v.ProxyHost.Locations {

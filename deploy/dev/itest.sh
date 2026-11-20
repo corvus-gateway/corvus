@@ -692,6 +692,9 @@ if [ -n "${CORVUS_POOL_B_CONTAINER:-}" ]; then
   R=$(for i in $(seq 1 12); do curl -s -m 30 -o /dev/null -w '%{http_code}/%{time_total}s ' -H 'Host: pool.corvus.test' "$G/fo-$i"; done)
   bad200=$(echo "$R" | tr ' ' '\n' | grep -v '^$' | grep -vc '^200/')
   [ "$bad200" = 0 ] && ok "pool-b stopped: every request still answered 200 by pool-a ($R)" || bad "requests failed with pool-b stopped: $R"
+  # a backend that does not answer is given up after the pool's 3 s connect timeout (not 10 s)
+  slow=$(echo "$R" | tr ' ' '\n' | sed -n 's|^200/\(.*\)s$|\1|p' | sort -n | tail -1)
+  $PY -c "import sys; sys.exit(0 if float(sys.argv[1]) < 6 else 1)" "${slow:-99}" && ok "failover to the next backend within the pool connect timeout (slowest ${slow}s)" || bad "failover too slow (slowest ${slow}s)"
   chk "$(pnames 6)" "pool-a pool-a pool-a pool-a pool-a pool-a " "the stopped backend is skipped"
   UE=$(c $A/api/upstream-errors | js "[(e.get('backends'), e.get('all_down', False), bool(e.get('upstream'))) for e in d if e['host_id']==$BH]")
   chk "$UE" "[(2, False, True)]" "upstream error names the failing backend of the pool (not all down)"

@@ -108,9 +108,10 @@ one (the [forward targets](#forward-targets) above, no duplicates).
 Deliberately not included, to keep the feature small: active health checks (backends are judged by
 real requests only), weights, sticky sessions (keep sessions in a shared store instead) and other
 balancing methods. [Custom locations](locations.md) and [streams](streams.md) keep a single
-target. A slow failure (a backend that does not answer, rather than refusing the connection) takes
-up to the connection timeout of 10 seconds before the next backend is tried, until the backend is
-skipped.
+target. A backend that does not answer at all (rather than refusing the connection, for example a
+stopped server) delays a request by the pool's connection timeout of 3 seconds (instead of the
+usual 10) before the next backend is tried, until the backend is skipped. A
+`proxy_connect_timeout` in the host's advanced configuration replaces these 3 seconds.
 
 The list shows **N backends** next to the forward target; hover it for the addresses. Through the
 [API](../reference/api.md), `forward_host`/`forward_port` stay the first backend and

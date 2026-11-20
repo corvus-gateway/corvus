@@ -46,6 +46,15 @@ func TestRenderBackendPool(t *testing.T) {
 		ExtraTargets: []store.Target{{ForwardHost: "b", ForwardPort: 80}},
 		Locations:    []store.Location{{Path: "/api", ForwardScheme: "http", ForwardHost: "api", ForwardPort: 80}}})
 
+	// the host's advanced configuration sets the connect timeout itself: it is kept
+	save(&store.ProxyHost{Domains: []string{"own.example.com"}, ForwardScheme: "http", ForwardHost: "a", ForwardPort: 80,
+		ExtraTargets:   []store.Target{{ForwardHost: "b", ForwardPort: 80}},
+		AdvancedConfig: "proxy_connect_timeout 20s;\nlocation /x { proxy_connect_timeout 1s; return 204; }"})
+	// a pool with a custom location "/" that sets its own: the pool is not used for "/"
+	save(&store.ProxyHost{Domains: []string{"rootloc.example.com"}, ForwardScheme: "http", ForwardHost: "a", ForwardPort: 80,
+		ExtraTargets: []store.Target{{ForwardHost: "b", ForwardPort: 80}},
+		Locations:    []store.Location{{Path: "/", ForwardScheme: "http", ForwardHost: "c", ForwardPort: 80, AdvancedConfig: "proxy_connect_timeout 5s;"}}})
+
 	out := filepath.Join(dir, "v1")
 	if err := c.Render(ctx, st, out); err != nil {
 		t.Fatal(err)
@@ -86,6 +95,34 @@ func TestRenderBackendPool(t *testing.T) {
 	loc := read("6")
 	if !strings.Contains(loc, "server b:80 max_fails=3 fail_timeout=30s resolve;") || !strings.Contains(loc, "server api:80 max_fails=0 resolve;") {
 		t.Errorf("pool with a custom location:\n%s", loc)
+	}
+
+	// connect timeout: 3 s towards a pool, nothing added for single targets or where the
+	// operator set one (no duplicate directive)
+	if n := strings.Count(pool, "proxy_connect_timeout 3s;"); n != 1 {
+		t.Errorf("pool: %d proxy_connect_timeout 3s, want 1", n)
+	}
+	for _, id := range []string{"1", "5"} {
+		if strings.Contains(read(id), "proxy_connect_timeout") {
+			t.Errorf("host %s (single target): connect timeout added", id)
+		}
+	}
+	if n := strings.Count(loc, "proxy_connect_timeout 3s;"); n != 1 {
+		t.Errorf("pool with a custom location: %d connect timeouts, want 1 (not in /api)", n)
+	}
+	if own := read("7"); strings.Contains(own, "proxy_connect_timeout 3s;") || strings.Count(own, "proxy_connect_timeout 20s;") != 1 {
+		t.Errorf("host's own connect timeout:\n%s", own)
+	}
+	if rl := read("8"); strings.Contains(rl, "proxy_connect_timeout 3s;") || strings.Count(rl, "proxy_connect_timeout 5s;") != 1 {
+		t.Errorf("custom location / with its own connect timeout:\n%s", rl)
+	}
+
+	two := []server{{Addr: "a", Port: 80}, {Addr: "b", Port: 80}}
+	if got := (target{Servers: two, Advanced: "proxy_connect_timeout 1s;"}).ConnectTimeout(); got != "" {
+		t.Errorf("location advanced configuration with its own connect timeout: %q", got)
+	}
+	if got := (target{Servers: two, Advanced: "# proxy_connect_timeout 1s;"}).ConnectTimeout(); got != "3s" {
+		t.Errorf("commented out: %q", got)
 	}
 
 	// Corvus's own services are refused for every backend, not just the first

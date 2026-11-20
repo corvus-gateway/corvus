@@ -58,6 +58,10 @@
             proxy_send_timeout {{.}}s;
 {{- end}}
 {{- end}}
+{{- with .ConnectTimeout}}
+            # Backend pool: a backend that does not answer is given up quickly (next backend).
+            proxy_connect_timeout {{.}};
+{{- end}}
             proxy_pass {{.Scheme}}://{{.Name}}{{.Path}};
 {{- if .ErrorCodes}}
             # Upstream down / timed out: Corvus error page. Error responses the
