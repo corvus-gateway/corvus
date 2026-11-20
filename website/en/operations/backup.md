@@ -21,7 +21,9 @@ The file `corvus-backup-<version>-<time>.tar.gz` contains:
 - `manifest.json`: versions and a SHA-256 checksum for every file
 
 Not included, because they are rebuilt or downloaded again: generated configuration versions,
-traffic history, request logs and the country database.
+traffic history, request logs, the country database and the entries of
+[IP lists from a URL](../security/ip-lists.md#large-blocklists). After a restore those lists are
+empty until they are downloaded again, automatically within about a minute.
 
 !!! danger "The backup contains private keys"
     It includes certificate private keys and the data key. Store it encrypted and access-controlled.

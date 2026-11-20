@@ -71,6 +71,7 @@ OpenResty, plano de control en Go, consola en React) que puede **importar una co
 **Corvus Sentinel — motor de seguridad**
 - Reglas de seguridad: coincidencia por IP, lista de IP, país, ruta, query, método, cabecera o lista de User-Agent → bloquear, permitir, registrar o desafiar, de forma global o por host
 - Listas de IP y de User-Agent mantenidas al día desde una URL (p. ej. nodos de salida de Tor, listas de bots maliciosos; ajustes predefinidos incluidos), actualizadas en segundo plano y redesplegadas solo cuando cambian
+- Grandes listas de bloqueo de IP desde una URL, con millones de entradas (p. ej. listas comunitarias de ~4 millones de direcciones): fusionadas en rangos de direcciones y guardadas en un archivo compacto que comparten todos los workers del gateway, así el consumo de memoria sigue siendo bajo incluso en equipos pequeños
 - Desafío del navegador sin servicios de terceros: una prueba de trabajo en JavaScript (dificultad ajustable) o una comprobación ligera por cookie, con una cookie de paso firmada y vinculada a la IP
 - Modo «bajo ataque» por host: desafía a todos los visitantes; se activa a mano o automáticamente mientras las solicitudes por segundo o la proporción de solicitudes bloqueadas superan un umbral (con alertas al activarse y desactivarse)
 - Inspección del cuerpo de las solicitudes JSON, de formulario y multipart (registrar o bloquear)
