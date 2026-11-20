@@ -79,11 +79,11 @@
 {{- end -}}
 {{- define "upstream" -}}
 upstream {{.Name}} {
-{{- if .Resolve}}
+{{- if .Zone}}
     zone {{.Name}} 64k;
-    server {{.Addr}}:{{.Port}} max_fails=0 resolve;
-{{- else}}
-    server {{.Addr}}:{{.Port}} max_fails=0;
+{{- end}}
+{{- range .Servers}}
+    server {{.Addr}}:{{.Port}} {{$.ServerParams}}{{if .Resolve}} resolve{{end}};
 {{- end}}
     keepalive 64;
     keepalive_requests 10000;
@@ -109,8 +109,16 @@ upstream {{.Name}} {
 # Forward host with a per-worker pool of idle keep-alive connections (no TCP handshake per
 # request). A name is resolved at run time ("resolve", http-level resolver, re-resolved
 # when the DNS answer expires): a stopped or not yet created upstream never blocks
+{{- if .Host.Pool}}
+# deployment, it answers 502 until the name resolves.
+# Backends: round-robin. A backend that fails 3 times within 30 s (connection error or
+# timeout) is skipped for 30 s, then tried again; the request goes on to the next backend
+# (nginx proxy_next_upstream defaults: on error and timeout, never a non-idempotent
+# request such as POST once it was sent, each backend at most once).
+{{- else}}
 # deployment, it answers 502 until the name resolves. max_fails=0: no passive health
 # state, every request tries the upstream (as with a single server).
+{{- end}}
 {{template "upstream" .Host}}
 {{- range .LocUpstreams}}
 

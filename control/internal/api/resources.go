@@ -111,6 +111,9 @@ type proxyHostInput struct {
 	UnderAttackConfig *store.UnderAttackConfig `json:"under_attack_config"`
 	// Custom locations; omitted = unchanged (new hosts: none), [] removes them all.
 	Locations *[]store.Location `json:"locations"`
+	// Additional backends (round-robin with forward_host/forward_port, which stay the
+	// first one); omitted = unchanged (new hosts: none), [] leaves a single target.
+	ExtraTargets *[]store.Target `json:"extra_targets"`
 
 	MaxUploadMB      *int  `json:"max_upload_mb"`      // null = global default (100 MB), 0 = unlimited
 	UpstreamTimeoutS *int  `json:"upstream_timeout_s"` // null = default (60 s); WebSocket hosts at least 1 h
@@ -167,6 +170,9 @@ func (in proxyHostInput) apply(h *store.ProxyHost) {
 	}
 	if in.Locations != nil {
 		h.Locations = *in.Locations
+	}
+	if in.ExtraTargets != nil {
+		h.ExtraTargets = *in.ExtraTargets
 	}
 	if in.Notes != nil {
 		h.Notes = *in.Notes
