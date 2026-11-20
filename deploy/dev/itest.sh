@@ -190,6 +190,60 @@ c -o /dev/null -X DELETE $A/api/ip-lists/$L
 put_host '' >/dev/null
 chk "$(c -o /dev/null -w '%{http_code}' -X DELETE $A/api/rate-limits/$RL)" 200 "delete rate limit"
 
+echo "[large IP list feed]"
+# A blocklist of 1.2 million entries from the fixtures file server (setup-fixtures.sh): kept as a
+# range file mapped by the gateway, not in the database or in Lua tables per worker.
+# CORVUS_FIXTURE_FEEDS: base URL of that server as corvus sees it; CORVUS_CONTAINER: the corvus
+# container (memory via docker stats). Both are set by ci-itest.sh.
+if [ -z "${CORVUS_FIXTURE_FEEDS:-}" ]; then
+  echo "  SKIP  CORVUS_FIXTURE_FEEDS not set"
+else
+  now() { $PY -c 'import time; print(time.time())'; }
+  since() { $PY -c "import sys,time; print('%.1f' % (time.time()-float(sys.argv[1])))" "$1"; }
+  mib() { [ -n "${CORVUS_CONTAINER:-}" ] && docker stats --no-stream --format '{{.MemUsage}}' "$CORVUS_CONTAINER" | $PY -c "
+import sys,re
+v,u=re.match(r'([0-9.]+)\s*([KMG]i?B)',sys.stdin.read()).groups()
+print(round(float(v)*{'KiB':1/1024,'MiB':1,'GiB':1024,'KB':1/1024,'MB':1,'GB':1024}[u]))"; }
+  workers() { [ -n "${CORVUS_CONTAINER:-}" ] && docker exec "$CORVUS_CONTAINER" sh -c 'for p in $(pgrep -f "nginx: worker"); do awk -v p=$p '"'"'/^(Rss|Pss|Private_Clean|Private_Dirty):/ {printf "%s %s=%dMiB", (n++?"":"worker " p), $1, $2/1024} END {print ""}'"'"' /proc/$p/smaps_rollup; done' 2>/dev/null; }
+  waitfetch() { # list id, previous fetched_at → wait until fetched again (max 3 min)
+    for _ in $(seq 1 180); do
+      st=$(c $A/api/ip-lists | js "[(x['fetched_at'] or '')+'|'+(x['fetch_error'] or '') for x in d if x['id']==$1][0]")
+      case "$st" in "$2|"*) ;; *"|") echo ok; return;; *) [ "${st#*|}" != "" ] && { echo "error: ${st#*|}"; return; };; esac
+      sleep 1
+    done; echo timeout; }
+  M0=$(mib)
+  t0=$(now)
+  FL=$(c -X POST $A/api/ip-lists -d "{\"name\":\"itest-feed\",\"source_url\":\"$CORVUS_FIXTURE_FEEDS/blocklist-out.txt\",\"refresh_s\":86400}" | js "d['ip_list']['id']")
+  chk "$(waitfetch $FL '')" ok "feed of 1.2 million entries fetched and deployed (${t0:+$(since $t0)} s)"
+  FD=$(c $A/api/ip-lists | js "__import__('json').dumps([x for x in d if x['id']==$FL][0])")
+  chk "$(echo "$FD" | js "d['item_count']>=1200000 and 0<d['range_count']<=d['item_count'] and d['items']==[] and len(d['data_hash'])==64")" True \
+    "entries kept as a range file ($(echo "$FD" | js "'%d entries, %d ranges' % (d['item_count'], d['range_count'])"))"
+  chk "$(c "$A/api/ip-lists/$FL/check?ip=198.51.100.7" | js "d['match']")" True "check an IP: listed address"
+  chk "$(c "$A/api/ip-lists/$FL/check?ip=203.0.113.200" | js "d['match']")" False "check an IP: other address"
+  chk "$(c "$A/api/ip-lists/$FL/entries?limit=5" | js "len(d['entries'])==5 and d['truncated']")" True "bounded preview"
+  B8=$(rule "$(cond itest-feed block '' "{\"field\":\"ip.src\",\"operator\":\"in\",\"value\":[\"list:$FL\"]},{\"field\":\"http.path\",\"operator\":\"eq\",\"value\":[\"/itest-feed\"]}")")
+  chk "$(code "$G/itest-feed")" 200 "client outside the feed list passes"
+  M1=$(mib); W1=$(workers)
+  # the same list with the private ranges the checks connect from
+  c -o /dev/null -X PUT $A/api/ip-lists/$FL -d "{\"name\":\"itest-feed\",\"source_url\":\"$CORVUS_FIXTURE_FEEDS/blocklist-in.txt\",\"refresh_s\":86400}"
+  chk "$(waitfetch $FL '')" ok "changed feed URL fetched"
+  chk "$(code "$G/itest-feed")" 403 "block: client IP in a 1.2-million-entry feed list"
+  chk "$(code "$G/itest-feed-other")" 200 "other paths pass"
+  t0=$(now)
+  chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/deployments)" 201 "full deployment with the large list (openresty -t, reload: $(since $t0) s)"
+  [ "$(since $t0 | cut -d. -f1)" -lt 15 ] && ok "deployment under 15 s" || bad "deployment took $(since $t0) s"
+  chk "$(code "$G/itest-feed")" 403 "still blocked after the reload"
+  M2=$(mib)
+  if [ -n "$M0" ] && [ -n "$M2" ]; then
+    echo "  info  container memory: ${M0} MiB before, ${M1} MiB with the list, ${M2} MiB after redeploying"
+    [ -n "$W1" ] && echo "$W1" | sed 's/^/  info  /'
+    [ $((M2 - M0)) -lt 120 ] && ok "memory growth with a 1.2-million-entry list: $((M2 - M0)) MiB" || bad "memory grew by $((M2 - M0)) MiB"
+  fi
+  c -o /dev/null -X DELETE $A/api/security-rules/$B8
+  chk "$(c -o /dev/null -w '%{http_code}' -X DELETE $A/api/ip-lists/$FL)" 200 "delete the feed list"
+  chk "$(code "$G/itest-feed")" 200 "unblocked after deleting the rule"
+fi
+
 echo "[request body inspection]"
 chk "$(put_host ',"body_inspection":"block"')" 200 "enable body inspection (block)"
 post() { curl -s -o /dev/null -w '%{http_code}' -X POST "$@"; }

@@ -121,7 +121,7 @@ function CondEditor({ row, index, onPatch, onRemove, error, nameError, lists, ge
                 <Select aria-label={t("addUaList")} value="" disabled={!avail.length} invalid={!!error && !refs.length} className="!h-8 text-xs"
                   onChange={(e) => e.target.value && setC({ value: [...refs, `list:${e.target.value}`] })}>
                   <option value="">{uaLists.length ? t("addUaList") : t("noUaListsYet")}</option>
-                  {avail.map((l) => <option key={l.id} value={l.id}>{l.name} ({t("nItems", { n: l.items?.length ?? 0 })})</option>)}
+                  {avail.map((l) => <option key={l.id} value={l.id}>{l.name} ({t("nItems", { n: l.item_count ?? l.items?.length ?? 0 })})</option>)}
                 </Select>
               </div>
             )}
@@ -143,7 +143,7 @@ function CondEditor({ row, index, onPatch, onRemove, error, nameError, lists, ge
                 <Select aria-label={t("addIpList")} value="" disabled={!avail.length} className="!h-8 text-xs"
                   onChange={(e) => e.target.value && setC({ value: [...refs, `list:${e.target.value}`, ...ips] })}>
                   <option value="">{ipLists.length ? t("addIpList") : t("noIpListsYet")}</option>
-                  {avail.map((l) => <option key={l.id} value={l.id}>{l.name} ({t("nItems", { n: l.items?.length ?? 0 })})</option>)}
+                  {avail.map((l) => <option key={l.id} value={l.id}>{l.name} ({t("nItems", { n: l.item_count ?? l.items?.length ?? 0 })})</option>)}
                 </Select>
               </div>
             )}

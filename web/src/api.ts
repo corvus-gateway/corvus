@@ -250,8 +250,15 @@ export type ListKind = "ip" | "user_agent";
 /** A list for security rules: IPs/CIDRs or User-Agent substrings; optionally fed from a URL (then read-only). */
 export interface IpList {
   id: number; name: string; description: string; kind?: ListKind; items: string[]; rules?: number; created_at?: string; updated_at?: string;
+  /** Number of entries; IP lists fed from a URL keep their entries in a range file (items is empty). */
+  item_count?: number; range_count?: number; data_hash?: string; data_missing?: boolean;
   source_url?: string; refresh_s?: number; fetched_at?: string | null; checked_at?: string | null; fetch_error?: string; fetch_error_hint?: string; fetch_warning?: string;
 }
+
+/** GET /api/ip-lists/{id}/entries: a bounded preview (file-backed lists: merged ranges). */
+export interface IpListEntries { entries: string[]; total: number; ranges: number; truncated: boolean; missing?: boolean }
+/** GET /api/ip-lists/{id}/check?ip= */
+export interface IpListCheck { ip: string; match: boolean; range?: string; missing?: boolean }
 
 export interface TimePoint {
   t: number | string; requests: number; s2xx: number; s3xx: number; s4xx: number; s5xx: number; blocked: number;

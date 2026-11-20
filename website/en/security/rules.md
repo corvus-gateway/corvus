@@ -26,7 +26,7 @@ All conditions in a group must match (**and**); any one group may match (**or**)
 
 | Field | Example |
 |---|---|
-| IP | `203.0.113.0/24`, or an [IP list](ip-lists.md) |
+| IP | `203.0.113.0/24`, or an [IP list](ip-lists.md) (lists from a URL may hold [millions of entries](ip-lists.md#large-blocklists)) |
 | Country | `CN`, `RU` (uses the built-in country database) |
 | Host, path, query | path *starts with* `/admin` |
 | Method | `POST` |

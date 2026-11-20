@@ -205,6 +205,8 @@ func (s *Server) Handler() http.Handler {
 	op("POST /api/ip-lists", s.createIPList)
 	op("PUT /api/ip-lists/{id}", s.updateIPList)
 	op("POST /api/ip-lists/{id}/refresh", s.refreshIPList)
+	priv("GET /api/ip-lists/{id}/entries", s.ipListEntries) // iplist_entries.go
+	priv("GET /api/ip-lists/{id}/check", s.ipListCheck)
 	op("DELETE /api/ip-lists/{id}", s.deleteIPList)
 
 	priv("GET /api/access-lists", s.listAccessLists)

@@ -35,6 +35,7 @@ import (
 	"corvus/control/internal/gateway"
 	"corvus/control/internal/geoip"
 	"corvus/control/internal/history"
+	"corvus/control/internal/ipset"
 	"corvus/control/internal/live"
 	"corvus/control/internal/netcfg"
 	"corvus/control/internal/sigs"
@@ -380,7 +381,7 @@ func run() error {
 		return err
 	}
 
-	comp := &compiler.Compiler{P: paths, Bundle: rulesSvc.Bundle, Cloudflare: func(ctx context.Context, s *store.Store) []string {
+	comp := &compiler.Compiler{P: paths, Lists: &ipset.Dir{Path: paths.ListDir()}, Bundle: rulesSvc.Bundle, Cloudflare: func(ctx context.Context, s *store.Store) []string {
 		cf := netcfg.Cloudflare(ctx, s)
 		return append(append([]string{}, cf.IPv4...), cf.IPv6...)
 	}, Hosts: func() map[string]string { return compiler.StaticHosts(env("CORVUS_HOSTS_FILE", "/etc/hosts")) },
@@ -521,7 +522,7 @@ func run() error {
 	go ua.Run(ctx)
 
 	// Lists fed from a URL (e.g. Tor exit nodes, bad-bot User-Agents).
-	listFeeds := &feeds.Service{Store: st, Apply: func(ctx context.Context, msg string, mutate func(tx *store.Store) error) error {
+	listFeeds := &feeds.Service{Store: st, Lists: comp.Lists, Apply: func(ctx context.Context, msg string, mutate func(tx *store.Store) error) error {
 		if dep.RollbackActive(ctx) {
 			// keep the operator's rollback: store the new list, deploy it later
 			slog.Warn("rollback active: list stored, not deployed", "reason", msg)
@@ -530,6 +531,19 @@ func run() error {
 		_, err := dep.Apply(ctx, nil, msg, mutate)
 		return err
 	}}
+	// Test only (deploy/dev integration checks): feeds from a private fixture server.
+	if hosts := env("CORVUS_TEST_FEED_HOSTS", ""); hosts != "" {
+		var ca []byte
+		if p := env("CORVUS_TEST_FEED_CA", ""); p != "" {
+			if ca, err = os.ReadFile(p); err != nil {
+				return fmt.Errorf("CORVUS_TEST_FEED_CA: %w", err)
+			}
+		}
+		if listFeeds.Client, err = feeds.TestClient(strings.Split(hosts, ","), ca); err != nil {
+			return fmt.Errorf("CORVUS_TEST_FEED_CA: %w", err)
+		}
+		slog.Warn("TEST ONLY: list feeds may use these private hosts", "hosts", hosts)
+	}
 	go listFeeds.Run(ctx)
 
 	// New release notice in the console (GitHub "latest release", twice a day).

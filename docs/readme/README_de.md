@@ -71,6 +71,7 @@ Go-Steuerungsebene, React-Konsole), die ein **bestehendes NPM-Setup importieren*
 **Corvus Sentinel — Sicherheits-Engine**
 - Sicherheitsregeln: Abgleich nach IP, IP-Liste, Land, Pfad, Query, Methode, Header oder User-Agent-Liste → blockieren, erlauben, protokollieren oder eine Challenge verlangen, global oder pro Host
 - IP- und User-Agent-Listen, die über eine URL aktuell gehalten werden (z. B. Tor-Exit-Nodes, Listen bösartiger Bots; Voreinstellungen enthalten), im Hintergrund aktualisiert und nur bei Änderungen neu ausgerollt
+- Große IP-Sperrlisten von einer URL mit Millionen Einträgen (z. B. Community-Listen mit ~4 Millionen Adressen): zu Adressbereichen zusammengefasst und in einer kompakten Datei gehalten, die sich alle Gateway-Worker teilen – der Speicherbedarf bleibt auch auf kleinen Geräten gering
 - Browser-Challenge ohne Drittanbieterdienste: ein JavaScript-Proof-of-Work (einstellbare Schwierigkeit) oder eine leichtgewichtige Cookie-Prüfung, mit einem signierten, an die IP gebundenen Pass-Cookie
 - „Angriffsmodus“ pro Host: jeder Besucher muss die Challenge bestehen — manuell eingeschaltet oder automatisch, solange die Anfragen pro Sekunde oder der Anteil blockierter Anfragen einen Schwellenwert überschreiten (mit Benachrichtigungen beim Ein- und Ausschalten)
 - Prüfung des Request-Bodys für JSON-, Formular- und Multipart-Inhalte (protokollieren oder blockieren)

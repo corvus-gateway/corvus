@@ -269,7 +269,8 @@ type ListFeeds interface {
 	Kick(id int64)
 }
 
-// decodeLarge is decode with a larger body limit (IP lists may hold 50,000 entries).
+// decodeLarge is decode with a larger body limit (IP lists edited in the console may
+// hold 50,000 entries; lists fed from a URL are never sent whole).
 func decodeLarge(w http.ResponseWriter, r *http.Request, v any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<20)
 	dec := json.NewDecoder(r.Body)
@@ -287,6 +288,7 @@ func (s *Server) listIPLists(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	s.markMissing(list)
 	writeJSON(w, 200, list)
 }
 
@@ -357,7 +359,7 @@ func (s *Server) saveIPList(w http.ResponseWriter, r *http.Request, id int64) {
 	if id != 0 {
 		code, action = 200, "ip_list.update"
 	}
-	s.audit(r, action, fmt.Sprintf("ip_list:%d", l.ID), map[string]any{"name": l.Name, "kind": l.Kind, "items": len(l.Items), "source_url": l.SourceURL})
+	s.audit(r, action, fmt.Sprintf("ip_list:%d", l.ID), map[string]any{"name": l.Name, "kind": l.Kind, "items": l.ItemCount, "source_url": l.SourceURL})
 	writeJSON(w, code, map[string]any{"ip_list": l, "version": v})
 }
 
@@ -380,7 +382,7 @@ func (s *Server) refreshIPList(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusServiceUnavailable, "unavailable", "list feeds are not available")
 		return
 	}
-	extendDeadlines(w, 3*time.Minute) // fetch plus deploy
+	extendDeadlines(w, 5*time.Minute) // fetch (up to 3 minutes) plus deploy
 	l, err := s.Feeds.Refresh(r.Context(), id)
 	if l == nil {
 		// no list to show: it does not exist (any more, e.g. deleted during the fetch)
@@ -397,7 +399,7 @@ func (s *Server) refreshIPList(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, "conflict", err.Error())
 		return
 	}
-	s.audit(r, "ip_list.refresh", fmt.Sprintf("ip_list:%d", id), map[string]any{"items": len(l.Items), "error": l.FetchError})
+	s.audit(r, "ip_list.refresh", fmt.Sprintf("ip_list:%d", id), map[string]any{"items": l.ItemCount, "error": l.FetchError})
 	writeJSON(w, 200, map[string]any{"ip_list": l})
 }
 

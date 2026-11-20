@@ -23,6 +23,7 @@ local challenge = require "corvus.challenge"
 local underattack = require "corvus.underattack"
 local accesslog = require "corvus.accesslog"
 local ipkey = require "corvus.ipkey"
+local iplist = require "corvus.iplist"
 local ffi = require "ffi"
 local bit = require "bit"
 
@@ -105,6 +106,37 @@ local function ip_matcher(nets)
   return m
 end
 
+-- IP lists referenced by a condition: range files mapped once per configuration load
+-- (corvus/iplist.lua), keyed by SHA-256. A file that cannot be used rejects the whole
+-- configuration (init_by_lua fails: `openresty -t` reports it, a reload keeps the
+-- running configuration); corvus-control checks the files before it renders them.
+local LIST_FILES = {}
+
+local function list_files(refs)
+  if type(refs) ~= "table" or #refs == 0 then return nil end
+  local out = {}
+  for i, r in ipairs(refs) do
+    local l = LIST_FILES[r.h]
+    if not l then
+      local err
+      l, err = iplist.open(r.p, r.h)
+      if not l then
+        error("corvus rules: IP list file " .. tostring(r.p) .. ": " .. tostring(err), 0)
+      end
+      LIST_FILES[r.h] = l
+    end
+    out[i] = l
+  end
+  return out
+end
+
+local function in_lists(ls, bin)
+  for i = 1, #ls do
+    if iplist.has(ls[i], bin) then return true end
+  end
+  return false
+end
+
 local function ip_in(m, bin)
   local fam = m[#bin]
   if not fam then return false end
@@ -182,6 +214,7 @@ local function compile_cond(c)
   local v = c.v or {}
   if c.f == "ip.src" then
     cc.ip = ip_matcher(v)
+    cc.lists = list_files(c.l)
   elseif c.f == "http.user_agent_list" then
     cc.ua = ualist.new(v)
   elseif c.op == "in" or c.op == "not_in" then
@@ -210,6 +243,7 @@ function _M.init(path)
     return
   end
   local compiled = {}
+  LIST_FILES = {}
   for i, r in ipairs(cfg.rules or {}) do
     local groups = {}
     for gi, g in ipairs(r.groups or {}) do
@@ -327,7 +361,7 @@ local function test(ctx, c, host)
   if op == "exists" then return v ~= nil and v ~= "" end
   if op == "not_exists" then return v == nil or v == "" end
   if c.f == "ip.src" then
-    local hit = v ~= nil and ip_in(c.ip, v)
+    local hit = v ~= nil and (ip_in(c.ip, v) or (c.lists ~= nil and in_lists(c.lists, v)))
     if op == "in" then return hit end
     return not hit
   end

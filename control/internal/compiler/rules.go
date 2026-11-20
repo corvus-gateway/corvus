@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"net"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"corvus/control/internal/ipset"
 	"corvus/control/internal/netcfg"
 	"corvus/control/internal/store"
 	"corvus/control/internal/validate"
@@ -56,6 +58,16 @@ type condJSON struct {
 	Op string   `json:"op"`
 	V  []string `json:"v"`
 	CI bool     `json:"ci,omitempty"`
+	// ip.src: IP lists, as range files mapped by the gateway (corvus/iplist.lua). The
+	// condition holds for an address in V or in any of them.
+	L []listFileJSON `json:"l,omitempty"`
+}
+
+// listFileJSON refers to a range file (internal/ipset) by path and SHA-256: the gateway
+// refuses the configuration if the file is missing or does not match.
+type listFileJSON struct {
+	Path   string `json:"p"`
+	SHA256 string `json:"h"`
 }
 
 type hostJSON struct {
@@ -94,12 +106,14 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 	}
 	listByID := map[int64][]string{}
 	listKind := map[int64]string{}
+	ipLists := &listFiles{c: c, lists: map[int64]store.IPList{}, refs: map[int64]listFileJSON{}}
 	for _, l := range lists {
 		lc := l
 		if err := validate.IPList(&lc); err != nil {
 			return nil, fmt.Errorf("list %d: %w", l.ID, err)
 		}
 		listByID[l.ID], listKind[l.ID] = lc.Items, lc.Kind
+		ipLists.lists[l.ID] = lc
 	}
 	hostIDs := map[int64]bool{}
 	for _, h := range hosts {
@@ -153,11 +167,11 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 			for _, cond := range g {
 				cj := condJSON{F: cond.Field, N: cond.Name, Op: cond.Operator, V: cond.Value, CI: cond.CI}
 				if cond.Field == "ip.src" {
-					nets, err := encodeNets(cond.Value, listByID)
+					nets, files, err := ipLists.encode(cond.Value)
 					if err != nil {
 						return nil, fmt.Errorf("security rule %d: %w", r.ID, err)
 					}
-					cj.V = nets
+					cj.V, cj.L = nets, files
 				}
 				if cond.Field == "http.user_agent_list" {
 					cj.V = uaEntries(cond.Value, listByID)
@@ -229,21 +243,95 @@ func uaEntries(values []string, lists map[int64][]string) []string {
 	return out
 }
 
-// encodeNets expands IP list references and encodes every network as
-// "<hex network bytes>/<prefix>" (IPv4: 8 hex digits, IPv6: 32) for the Lua matcher.
-func encodeNets(values []string, lists map[int64][]string) ([]string, error) {
-	var raw []string
+// listFiles turns the IP lists referenced by rules into range files (internal/ipset),
+// once per list and rendering.
+type listFiles struct {
+	c     *Compiler
+	lists map[int64]store.IPList // validated
+	refs  map[int64]listFileJSON
+}
+
+// ListDir is the directory of the range files (<DataDir>/lists).
+func (p Paths) ListDir() string { return filepath.Join(filepath.FromSlash(p.DataDir), "lists") }
+
+func (c *Compiler) listDir() *ipset.Dir {
+	if c.Lists != nil {
+		return c.Lists
+	}
+	return &ipset.Dir{Path: c.P.ListDir()}
+}
+
+// encode splits the values of an ip.src condition into networks written in the rule
+// (see encodeNets) and the range files of the lists it references.
+func (lf *listFiles) encode(values []string) ([]string, []listFileJSON, error) {
+	var inline []string
+	var files []listFileJSON
+	seen := map[int64]bool{}
 	for _, v := range values {
-		if id, ok := store.ListRef(v); ok {
-			items, ok := lists[id]
-			if !ok {
-				return nil, fmt.Errorf("IP list %d does not exist", id)
-			}
-			raw = append(raw, items...)
+		id, ok := store.ListRef(v)
+		if !ok {
+			inline = append(inline, v)
 			continue
 		}
-		raw = append(raw, v)
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		ref, err := lf.file(id)
+		if err != nil {
+			return nil, nil, err
+		}
+		files = append(files, ref)
 	}
+	nets, err := encodeNets(inline)
+	return nets, files, err
+}
+
+// file returns the range file of IP list id: the stored file of an IP feed, or one
+// written from the entries of a list kept in the database. A feed whose file is missing
+// or damaged (for example after restoring a backup, which does not carry them) is used
+// as an empty list, as before its first download; the feeds service downloads it again
+// at once and redeploys.
+func (lf *listFiles) file(id int64) (listFileJSON, error) {
+	if ref, ok := lf.refs[id]; ok {
+		return ref, nil
+	}
+	l, ok := lf.lists[id]
+	if !ok {
+		return listFileJSON{}, fmt.Errorf("IP list %d does not exist", id)
+	}
+	dir := lf.c.listDir()
+	var set *ipset.Set
+	hash := ""
+	if l.DataHash != "" {
+		if _, err := dir.Check(l.DataHash); err == nil {
+			hash = l.DataHash
+			dir.Touch(hash) // in use: a concurrent cleanup must spare it
+		} else {
+			slog.Warn("IP list entries unavailable, the list is empty until it is downloaded again", "list", l.Name, "err", err)
+			set = &ipset.Set{}
+		}
+	} else {
+		var err error
+		if set, err = ipset.FromEntries(l.Items); err != nil {
+			return listFileJSON{}, fmt.Errorf("IP list %d: %w", id, err)
+		}
+	}
+	if hash == "" {
+		info, err := dir.Write(set)
+		if err != nil {
+			return listFileJSON{}, fmt.Errorf("IP list %d: %w", id, err)
+		}
+		hash = info.Hash
+	}
+	ref := listFileJSON{Path: filepath.ToSlash(dir.File(hash)), SHA256: hash}
+	lf.refs[id] = ref
+	return ref, nil
+}
+
+// encodeNets encodes networks entered in a condition as "<hex network bytes>/<prefix>"
+// (IPv4: 8 hex digits, IPv6: 32) for the Lua matcher.
+func encodeNets(raw []string) ([]string, error) {
 	cidrs, err := netcfg.NormalizeCIDRs(raw)
 	if err != nil {
 		return nil, err

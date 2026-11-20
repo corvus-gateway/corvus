@@ -70,6 +70,7 @@ Go control plane, React console) that can **import an existing NPM setup**.
 **Corvus Sentinel — security engine**
 - Security rules: match IP, IP list, country, path, query, method, header or User-Agent list → block, allow, log or challenge, globally or per host
 - IP and User-Agent lists kept up to date from a URL (e.g. Tor exit nodes, bad-bot lists; presets included), refreshed in the background and redeployed only when they change
+- Large IP blocklists from a URL, with millions of entries (e.g. community lists of ~4 million addresses): merged into address ranges and kept in a compact file that all gateway workers share, so memory stays low even on small devices
 - Browser challenge without third-party services: a JavaScript proof of work (adjustable difficulty) or a lightweight cookie check, with a signed, IP-bound pass cookie
 - "Under attack" mode per host: challenge every visitor — switched on by hand, or automatically while requests per second or the share of blocked requests exceed a threshold (with alerts when it turns on and off)
 - Request body inspection for JSON, form and multipart bodies (log or block)

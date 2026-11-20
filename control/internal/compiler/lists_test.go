@@ -48,7 +48,7 @@ func TestRenderUserAgentListRule(t *testing.T) {
 	if ua.F != "http.user_agent_list" || ua.Op != "in" || strings.Join(ua.V, "|") != "ahrefsbot|indy library|sqlmap" {
 		t.Fatalf("UA condition = %+v", ua)
 	}
-	if ip := rules.Rules[0].Groups[1][0]; strings.Join(ip.V, ",") != "01020304/32" {
+	if ip := rules.Rules[0].Groups[1][0]; len(ip.V) != 0 || len(ip.L) != 1 || !strings.HasSuffix(ip.L[0].Path, "/lists/"+ip.L[0].SHA256+".bin") {
 		t.Fatalf("IP condition = %+v", ip)
 	}
 

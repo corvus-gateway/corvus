@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"corvus/control/internal/ipset"
 	"corvus/control/internal/store"
 )
 
@@ -20,7 +21,7 @@ func renderPagesEnv(t *testing.T) (*Compiler, *store.Store) {
 	t.Cleanup(func() { st.Close() })
 	p := Paths{DataDir: "/data", LuaDir: "/opt/corvus/lua", HTMLDir: "/opt/corvus/html", MimeTypes: "mime.types",
 		Resolver: "127.0.0.11", HTTPPort: 80, HTTPSPort: 443, StatusPort: 9180, ACMEPort: 9181, DefaultCert: "/data/certs/default"}
-	return &Compiler{P: p}, st
+	return &Compiler{P: p, Lists: &ipset.Dir{Path: filepath.Join(t.TempDir(), "lists")}}, st
 }
 
 func readFile(t *testing.T, path string) string {

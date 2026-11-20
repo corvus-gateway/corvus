@@ -21,8 +21,9 @@ const (
 	MaxValueLen      = 1024
 	MaxValues        = 1000
 	MaxRegexLen      = 512
-	MaxIPListItems   = 50000
-	MaxUAListItems   = 10000 // User-Agent lists are matched by a linear scan
+	MaxIPListItems   = 50000     // IP lists edited in the console (stored in the database)
+	MaxIPFeedItems   = 5_000_000 // IP lists fed from a URL (stored as a range file, internal/ipset)
+	MaxUAListItems   = 10000     // User-Agent lists are matched by a linear scan
 	MaxUAEntryLen    = 256
 	MinUAEntryLen    = 3 // shorter substrings match far too much
 	MinListRefreshS  = 300

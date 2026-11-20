@@ -43,6 +43,7 @@ func fakeData(t *testing.T) string {
 	write(t, filepath.Join(d, "history", "traffic.db"), "hist")
 	write(t, filepath.Join(d, "history", "logs", "2026-01-01.log.gz"), "log")
 	write(t, filepath.Join(d, "geoip", "country.bin"), "geo")
+	write(t, filepath.Join(d, "lists", strings.Repeat("ab", 32)+".bin"), "ranges") // IP feed entries: downloaded again
 	write(t, filepath.Join(d, "run", "corvus.pid"), "1")
 	return d
 }
