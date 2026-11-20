@@ -42,6 +42,8 @@ sleep 3
 
 # large IP list feed checks: served by the fixtures service, memory read with docker stats
 export CORVUS_FIXTURE_FEEDS=https://fixtures:8443 CORVUS_CONTAINER=$(dc ps -q corvus)
+# backend pool failover: the backend container stopped and started again by itest.sh
+export CORVUS_POOL_B_CONTAINER=$(dc ps -q pool-b)
 bash ./itest.sh; rc=$?
 errs=$(docker logs "$(dc ps -q corvus)" 2>&1 | grep -cE 'level=ERROR|GATEWAY DOWN')
 echo "gateway log: $errs error line(s)"

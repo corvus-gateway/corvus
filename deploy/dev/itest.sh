@@ -665,6 +665,46 @@ c -o /dev/null -X DELETE $A/api/proxy-hosts/$NH
 PORTS=$(for i in $(seq 1 20); do curl -s -H "Host: $H" "$G/pool-$i" | sed -n 's/^RemoteAddr: //p'; done | sort -u | wc -l)
 [ "$PORTS" -ge 1 ] && [ "$PORTS" -lt 20 ] && ok "upstream connections reused ($PORTS connections for 20 requests)" || bad "no upstream connection reuse ($PORTS connections for 20 requests)"
 
+echo "[backend pool]"
+# Two whoami backends (pool-a, pool-b in deploy/dev/docker-compose.yml) behind one host:
+# requests alternate between them; with one stopped, requests still succeed (it is skipped
+# for 30 s after failing), and it serves again once it is back and fail_timeout passed.
+BH=$(c -X POST $A/api/proxy-hosts -d '{"domains":["pool.corvus.test"],"forward_host":"pool-a","forward_port":80,"extra_targets":[{"forward_host":"pool-b","forward_port":80}]}' | js "d.get('id') or d.get('proxy_host',{}).get('id')")
+[ -n "$BH" ] && [ "$BH" != None ] && ok "host with two backends deploys" || bad "host with two backends rejected"
+chk "$(c $A/api/proxy-hosts/$BH | js "[(t['forward_host'],t['forward_port']) for t in d['extra_targets']]")" "[('pool-b', 80)]" "extra backend stored"
+sleep 2
+pnames() { for i in $(seq 1 "$1"); do curl -s -m 30 -H 'Host: pool.corvus.test' "$G/rr-$i" | sed -n 's/^Hostname: //p' | tr -d '\r'; done | tr '\n' ' '; }
+N=$(pnames 10)
+na=$(echo "$N" | tr ' ' '\n' | grep -c '^pool-a$'); nb=$(echo "$N" | tr ' ' '\n' | grep -c '^pool-b$')
+[ "$na" -ge 4 ] && [ "$nb" -ge 4 ] && [ $((na+nb)) = 10 ] && ok "requests alternate between the backends ($na x pool-a, $nb x pool-b: $N)" || bad "no round-robin: $N"
+CK=$(c -X POST $A/api/proxy-hosts/check -d '{"forward_scheme":"http","forward_host":"pool-a","forward_port":80,"extra_targets":[{"forward_host":"pool-b","forward_port":80}]}')
+chk "$(echo "$CK" | js "(d['ok'], [t['ok'] for t in d['targets']])")" "(True, [True, True])" "check connection answers per backend"
+chk "$(c -X POST $A/api/proxy-hosts/check -d '{"forward_scheme":"http","forward_host":"demo","forward_port":80}' | js "'targets' in d")" False "check connection of a single target answers as before"
+if [ -n "${CORVUS_CONTAINER:-}" ]; then
+  PC=$(docker exec "$CORVUS_CONTAINER" cat /data/nginx/current/hosts/$BH.conf 2>/dev/null)
+  chk "$(echo "$PC" | grep -cE 'server pool-[ab]:80 max_fails=3 fail_timeout=30s resolve;')" 2 "pool upstream: both backends with passive failover"
+  SC=$(docker exec "$CORVUS_CONTAINER" cat /data/nginx/current/hosts/$HOST1.conf 2>/dev/null)
+  echo "$SC" | grep -q 'server demo:80 max_fails=0 resolve;' && ! echo "$SC" | grep -q 'fail_timeout' && ok "single-target host unchanged (max_fails=0)" || bad "single-target upstream changed: $(echo "$SC" | grep -E '^\s*server ')"
+fi
+if [ -n "${CORVUS_POOL_B_CONTAINER:-}" ]; then
+  docker stop -t 1 "$CORVUS_POOL_B_CONTAINER" >/dev/null
+  t0=$(date +%s)
+  R=$(for i in $(seq 1 12); do curl -s -m 30 -o /dev/null -w '%{http_code}/%{time_total}s ' -H 'Host: pool.corvus.test' "$G/fo-$i"; done)
+  bad200=$(echo "$R" | tr ' ' '\n' | grep -v '^$' | grep -vc '^200/')
+  [ "$bad200" = 0 ] && ok "pool-b stopped: every request still answered 200 by pool-a ($R)" || bad "requests failed with pool-b stopped: $R"
+  chk "$(pnames 6)" "pool-a pool-a pool-a pool-a pool-a pool-a " "the stopped backend is skipped"
+  UE=$(c $A/api/upstream-errors | js "[(e.get('backends'), e.get('all_down', False), bool(e.get('upstream'))) for e in d if e['host_id']==$BH]")
+  chk "$UE" "[(2, False, True)]" "upstream error names the failing backend of the pool (not all down)"
+  docker start "$CORVUS_POOL_B_CONTAINER" >/dev/null
+  t1=$(date +%s); back=""
+  for _ in $(seq 1 30); do
+    case "$(pnames 4)" in *pool-b*) back=$(( $(date +%s) - t1 )); break;; esac
+    sleep 5
+  done
+  [ -n "$back" ] && ok "pool-b serves again ${back}s after it was started (stopped for $((t1 - t0))s)" || bad "pool-b did not come back within 150 s"
+fi
+c -o /dev/null -X DELETE $A/api/proxy-hosts/$BH
+
 echo "[custom locations]"
 # The host's own forward target is unreachable (demo:1); the locations route to demo:80.
 # whoami echoes the request line, so the forward path is visible.
