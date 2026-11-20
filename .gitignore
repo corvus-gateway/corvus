@@ -39,3 +39,4 @@ control/internal/webui/dist/*
 !/docs/SECURITY-ASSURANCE.md
 /site/
 /deploy/dev/import/
+/deploy/dev/fixtures/

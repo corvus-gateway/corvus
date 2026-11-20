@@ -19,7 +19,7 @@ finish() { [ -z "${KEEP_STACK:-}" ] && dc down -v --remove-orphans >/dev/null 2>
 die() { echo "ci-itest: $*"; logs; exit 1; }
 trap finish EXIT
 
-[ -s pebble-ca.pem ] && [ -s import/npm/data/database.sqlite ] || sh setup-fixtures.sh || die "fixtures"
+[ -s pebble-ca.pem ] && [ -s import/npm/data/database.sqlite ] && [ -s fixtures/www/blocklist-in.txt ] || sh setup-fixtures.sh || die "fixtures"
 dc down -v --remove-orphans >/dev/null 2>&1
 dc up -d --no-build --quiet-pull --wait --wait-timeout 180 || die "stack did not start"
 TOK=""
@@ -40,6 +40,8 @@ r=$(c -X POST "$A/api/proxy-hosts" -d "{\"domains\":[\"$CORVUS_HOST\"],\"forward
 [ "$r" = 201 ] || die "first proxy host answered $r"
 sleep 3
 
+# large IP list feed checks: served by the fixtures service, memory read with docker stats
+export CORVUS_FIXTURE_FEEDS=https://fixtures:8443 CORVUS_CONTAINER=$(dc ps -q corvus)
 bash ./itest.sh; rc=$?
 errs=$(docker logs "$(dc ps -q corvus)" 2>&1 | grep -cE 'level=ERROR|GATEWAY DOWN')
 echo "gateway log: $errs error line(s)"
