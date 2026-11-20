@@ -55,6 +55,7 @@ Go-Steuerungsebene, React-Konsole), die ein **bestehendes NPM-Setup importieren*
 
 **Proxy & TLS**
 - Proxy-Hosts mit Wildcards, WebSocket, HTTP/2, erzwungenem HTTPS und benutzerdefinierten Nginx-Snippets
+- Mehrere Backends pro Proxy-Host: Anfragen reihum (Round-Robin) verteilt, ein ausgefallenes Backend wird 30 Sekunden übersprungen (passives Failover)
 - Notizen zu Hosts und Streams, damit klar bleibt, wofür jeder da ist (durchsuchbar)
 - Verbindung prüfen: das Ziel eines Hosts vor dem Speichern vom Gateway aus testen (DNS, Port, Firewall, TLS), und in der Host-Liste sehen, warum Besucher 502/504 erhielten
 - Eigene Locations: Pfade (z. B. `/api`) an einen eigenen Upstream weiterleiten, mit dem Schutz des Hosts

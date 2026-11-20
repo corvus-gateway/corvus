@@ -53,7 +53,9 @@ before you save:
 - a TCP connection is opened (5 second limit), and for **https** a TLS handshake is made with the
   forward host as SNI. Certificates are not verified, as the gateway does not verify them either;
 - a name with several addresses is tried on each of them (up to 8), since the gateway spreads
-  requests over all of them: the check fails if one fails, and names that address.
+  requests over all of them: the check fails if one fails, and names that address;
+- a host with [several backends](#several-backends-round-robin) has each of them checked at once,
+  with the result per backend (one check against the limit below).
 
 The result is either *reached* with the address and time, or the reason with a hint:
 
@@ -78,6 +80,41 @@ the gateway tried and when it happened; the host's form shows the same with ngin
 warning disappears 15 minutes after the last failed request, or as soon as a saved change is
 deployed. It
 comes from the gateway's error log, so it shows what visitors actually got (502 or 504).
+
+For a host with [several backends](#several-backends-round-robin) the warning reads **Backend
+error** and names the backend that failed: the gateway retried the request on another backend, so
+visitors were normally still served. Only when no backend was left to try does it say **All
+backends failing**, which means visitors got the error page.
+
+#### Several backends (round-robin)
+
+A proxy host can forward to several copies of the same service, for example an app running on
+several servers that keeps its sessions in a shared store (Redis, a database). Under the first
+host and port, **Add backend** adds another host and port; up to 32 backends per host. The scheme
+(`http`/`https`) is the same for all of them, and each backend follows the same rules as the first
+one (the [forward targets](#forward-targets) above, no duplicates).
+
+- **Round-robin**: requests are spread over the backends in turn. Keep-alive connections are kept
+  per backend.
+- **Passive failover**: when a backend refuses the connection or times out, the request is sent to
+  the next backend. A backend that fails 3 times within 30 seconds is skipped for 30 seconds, then
+  tried again with real requests. A `POST`, `PATCH` or `LOCK` request that already reached a backend
+  is never repeated on another one (it might have been processed): that request gets the error
+  page.
+- With **https**, the first backend's host name is sent as SNI to all backends.
+- A host with a single target behaves exactly as before: every request goes to it, without failure
+  tracking.
+
+Deliberately not included, to keep the feature small: active health checks (backends are judged by
+real requests only), weights, sticky sessions (keep sessions in a shared store instead) and other
+balancing methods. [Custom locations](locations.md) and [streams](streams.md) keep a single
+target. A slow failure (a backend that does not answer, rather than refusing the connection) takes
+up to the connection timeout of 10 seconds before the next backend is tried, until the backend is
+skipped.
+
+The list shows **N backends** next to the forward target; hover it for the addresses. Through the
+[API](../reference/api.md), `forward_host`/`forward_port` stay the first backend and
+`extra_targets` lists the others; clients that do not send `extra_targets` keep working unchanged.
 
 ### Custom locations
 

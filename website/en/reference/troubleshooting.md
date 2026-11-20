@@ -46,6 +46,10 @@ the gateway does and suggests the fix (see
   [The services run on other servers](../getting-started/how-it-works.md#services-on-other-servers).
 - `upstream sent too big header`: very large cookies or headers from the app. Add
   `proxy_buffer_size 32k;` to the host's **Advanced nginx config**.
+- Host with [several backends](../proxy/proxy-hosts.md#several-backends-round-robin): a 502 means
+  every backend failed (**All backends failing**). When only one fails, the others answer and the
+  list shows **Backend error**. A `POST` that already reached a backend is not repeated on another
+  one, so requests in progress at the moment a backend stops can still get an error.
 
 ## 504 Gateway Timeout
 
