@@ -26,7 +26,7 @@ an hour, only the 5-minute statistics and events are kept.
 instead:
 
 ```yaml
-    image: 'ghcr.io/corvus-gateway/gateway:1.2.9'
+    image: 'ghcr.io/corvus-gateway/gateway:1.8.0'
 ```
 
 Release notes: [GitHub releases](https://github.com/corvus-gateway/corvus/releases).
