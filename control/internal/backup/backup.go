@@ -11,7 +11,10 @@
 //	rules/…         installed managed-rule bundle (when present)
 //
 // Regenerable or bulky data (nginx/ configuration versions, history/ traffic statistics
-// and request logs, geoip/, run/) is never included.
+// and request logs, geoip/, run/, lists/ IP list range files) is never included. The
+// entries of IP lists fed from a URL live only in lists/ (internal/ipset): after a
+// restore they are downloaded again at once (internal/feeds); until then those lists
+// are used as empty. Lists edited in the console are in the database.
 //
 // Restoring through the console is staged: the upload is validated and extracted to
 // <data>/restore-upload, confirming renames it to <data>/restore-pending, and the next

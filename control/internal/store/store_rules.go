@@ -231,14 +231,25 @@ const (
 )
 
 // IPList is a named list referenced by security rules ("list:<id>"): IP addresses/CIDRs
-// (kind "ip") or User-Agent substrings (kind "user_agent"). With SourceURL set, Items are
-// fetched periodically by the feeds service and are read-only.
+// (kind "ip") or User-Agent substrings (kind "user_agent"). With SourceURL set, entries
+// are fetched periodically by the feeds service and are read-only.
+//
+// Entries of IP feeds are not stored in the database: DataHash names the file with their
+// merged ranges (internal/ipset, <data>/lists/<hash>.bin), Items stays empty and
+// ItemCount/RangeCount describe the file. Other lists keep their entries in Items.
 type IPList struct {
-	ID           int64      `json:"id"`
-	Name         string     `json:"name"`
-	Description  string     `json:"description"`
-	Kind         string     `json:"kind"`
-	Items        []string   `json:"items"`
+	ID          int64    `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Kind        string   `json:"kind"`
+	Items       []string `json:"items"`
+	// ItemCount is the number of entries (len(Items) for lists stored in the database).
+	ItemCount int `json:"item_count"`
+	// RangeCount is the number of merged address ranges of a file-backed list.
+	RangeCount int    `json:"range_count,omitempty"`
+	DataHash   string `json:"data_hash,omitempty"`
+	// DataMissing: the file named by DataHash is missing or damaged (set by the API).
+	DataMissing  bool       `json:"data_missing,omitempty"`
 	SourceURL    string     `json:"source_url"`
 	RefreshS     int        `json:"refresh_s"`
 	FetchedAt    *time.Time `json:"fetched_at"`
@@ -254,7 +265,8 @@ type IPList struct {
 }
 
 func (s *Store) ListIPLists(ctx context.Context) ([]IPList, error) {
-	rows, err := s.q.QueryContext(ctx, `SELECT id, name, description, kind, items, source_url, refresh_s, fetched_at, checked_at, fetch_error, fetch_warning, created_at, updated_at
+	rows, err := s.q.QueryContext(ctx, `SELECT id, name, description, kind, items, source_url, refresh_s, fetched_at, checked_at, fetch_error, fetch_warning, created_at, updated_at,
+		data_hash, item_count, range_count
 		FROM ip_lists ORDER BY name`)
 	if err != nil {
 		return nil, err
@@ -264,7 +276,8 @@ func (s *Store) ListIPLists(ctx context.Context) ([]IPList, error) {
 		var l IPList
 		var items string
 		var fetched, checked sql.NullTime
-		if err := rows.Scan(&l.ID, &l.Name, &l.Description, &l.Kind, &items, &l.SourceURL, &l.RefreshS, &fetched, &checked, &l.FetchError, &l.FetchWarning, &l.CreatedAt, &l.UpdatedAt); err != nil {
+		if err := rows.Scan(&l.ID, &l.Name, &l.Description, &l.Kind, &items, &l.SourceURL, &l.RefreshS, &fetched, &checked, &l.FetchError, &l.FetchWarning, &l.CreatedAt, &l.UpdatedAt,
+			&l.DataHash, &l.ItemCount, &l.RangeCount); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -280,6 +293,9 @@ func (s *Store) ListIPLists(ctx context.Context) ([]IPList, error) {
 		l.FetchErrorHint = hints.Net(l.FetchError)
 		if l.Items == nil {
 			l.Items = []string{}
+		}
+		if l.DataHash == "" {
+			l.ItemCount, l.RangeCount = len(l.Items), 0
 		}
 		out = append(out, l)
 	}
@@ -372,9 +388,17 @@ func (s *Store) SaveIPList(ctx context.Context, l *IPList) error {
 	return nil
 }
 
+// ListData describes the file holding the entries of an IP feed (see IPList.DataHash).
+type ListData struct {
+	Hash   string
+	Items  int
+	Ranges int
+}
+
 // ListFetch is the outcome of one feed fetch.
 type ListFetch struct {
-	Items     []string // new entries; nil keeps the stored ones
+	Items     []string  // new entries; nil keeps the stored ones
+	Data      *ListData // new entries of an IP feed, kept in a file (instead of Items)
 	CheckedAt time.Time
 	FetchedAt *time.Time // set on success
 	Error     string
@@ -387,8 +411,11 @@ func (s *Store) SetIPListFetch(ctx context.Context, id int64, f ListFetch) error
 	var res sql.Result
 	var err error
 	switch {
+	case f.Data != nil:
+		res, err = s.q.ExecContext(ctx, `UPDATE ip_lists SET items='[]', data_hash=?, item_count=?, range_count=?, fetched_at=?, checked_at=?, fetch_error=?, fetch_warning=? WHERE id=?`,
+			f.Data.Hash, f.Data.Items, f.Data.Ranges, f.FetchedAt, f.CheckedAt, f.Error, f.Warning, id)
 	case f.Items != nil:
-		res, err = s.q.ExecContext(ctx, `UPDATE ip_lists SET items=?, fetched_at=?, checked_at=?, fetch_error=?, fetch_warning=? WHERE id=?`,
+		res, err = s.q.ExecContext(ctx, `UPDATE ip_lists SET items=?, data_hash='', item_count=0, range_count=0, fetched_at=?, checked_at=?, fetch_error=?, fetch_warning=? WHERE id=?`,
 			toJSON(f.Items), f.FetchedAt, f.CheckedAt, f.Error, f.Warning, id)
 	case f.FetchedAt != nil:
 		res, err = s.q.ExecContext(ctx, `UPDATE ip_lists SET fetched_at=?, checked_at=?, fetch_error=?, fetch_warning=? WHERE id=?`,
@@ -405,9 +432,10 @@ func (s *Store) SetIPListFetch(ctx context.Context, id int64, f ListFetch) error
 	return nil
 }
 
-// ResetIPListFetch clears the fetch status (the feed URL changed or was removed).
+// ResetIPListFetch clears the fetch status and the fetched entries kept in a file (the
+// feed URL or the list kind changed, or the URL was removed).
 func (s *Store) ResetIPListFetch(ctx context.Context, id int64) error {
-	_, err := s.q.ExecContext(ctx, `UPDATE ip_lists SET fetched_at=NULL, checked_at=NULL, fetch_error='', fetch_warning='' WHERE id=?`, id)
+	_, err := s.q.ExecContext(ctx, `UPDATE ip_lists SET fetched_at=NULL, checked_at=NULL, fetch_error='', fetch_warning='', data_hash='', item_count=0, range_count=0 WHERE id=?`, id)
 	return err
 }
 

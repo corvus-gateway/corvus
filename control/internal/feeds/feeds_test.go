@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"corvus/control/internal/ipset"
 	"corvus/control/internal/store"
 	"corvus/control/internal/validate"
 )
@@ -27,54 +29,62 @@ func TestParseIPFeed(t *testing.T) {
 		"300.1.1.1\n" +
 		"1.2.3.4\n" + // duplicate
 		"10.0.0.0/8\tprivate\r\n"
-	items, warn, err := Parse(store.ListKindIP, []byte(feed))
+	f, err := Parse(store.ListKindIP, []byte(feed))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"1.2.3.4/32", "5.6.7.0/24", "9.9.9.9/32", "2001:db8::1/128", "10.0.0.0/8"}
-	if strings.Join(items, ",") != strings.Join(want, ",") {
-		t.Fatalf("items = %v, want %v", items, want)
+	want := []string{"1.2.3.4", "5.6.7.0/24", "9.9.9.9", "10.0.0.0/8", "2001:db8::1"}
+	set := f.IP.Set()
+	if got := set.Preview(100); strings.Join(got, ",") != strings.Join(want, ",") || f.Count != 6 || set.Networks != 5 {
+		t.Fatalf("ranges = %v (%d lines, %d entries), want %v", got, f.Count, set.Networks, want)
 	}
-	if !strings.Contains(warn, "2 invalid lines") {
-		t.Fatalf("warning = %q", warn)
+	if !strings.Contains(f.Warning, "2 invalid lines") {
+		t.Fatalf("warning = %q", f.Warning)
 	}
 }
 
 func TestParseRejectsJunkAndEmpty(t *testing.T) {
-	if _, _, err := Parse(store.ListKindIP, []byte("<html><body>Not found</body></html>\n")); err == nil {
+	if _, err := Parse(store.ListKindIP, []byte("<html><body>Not found</body></html>\n")); err == nil {
 		t.Fatal("HTML page accepted as an IP feed")
 	}
-	if _, _, err := Parse(store.ListKindIP, []byte("# only comments\n\n")); err == nil {
+	if _, err := Parse(store.ListKindIP, []byte("# only comments\n\n")); err == nil {
 		t.Fatal("empty feed accepted")
+	}
+	// a very long line is skipped, not an error
+	f, err := Parse(store.ListKindIP, []byte(strings.Repeat("x", 3*maxLineBytes)+"\n1.2.3.4\n"+strings.Repeat("y", 2*maxLineBytes)))
+	if err != nil || f.Count != 1 || !strings.Contains(f.Warning, "2 invalid lines") {
+		t.Fatalf("long lines: %+v %v", f, err)
 	}
 }
 
 func TestParseTruncates(t *testing.T) {
+	defer func(n int) { ipFeedItems = n }(ipFeedItems)
+	ipFeedItems = 1000
 	var b strings.Builder
-	for i := 0; i < validate.MaxIPListItems+10; i++ {
-		fmt.Fprintf(&b, "10.%d.%d.%d\n", i>>16&255, i>>8&255, i&255)
+	for i := 0; i < ipFeedItems+10; i++ {
+		fmt.Fprintf(&b, "10.%d.%d.%d\n", i>>16&255, i>>7&255, i*2&255) // not adjacent: no merging
 	}
-	items, warn, err := Parse(store.ListKindIP, []byte(b.String()))
+	f, err := Parse(store.ListKindIP, []byte(b.String()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != validate.MaxIPListItems || !strings.Contains(warn, "only the first") {
-		t.Fatalf("len = %d, warning = %q", len(items), warn)
+	if f.Count != 1000 || f.IP.Set().Ranges() != 1000 || !strings.Contains(f.Warning, "1010 entries, only the first 1000") {
+		t.Fatalf("count = %d, warning = %q", f.Count, f.Warning)
 	}
 }
 
 func TestParseUAFeed(t *testing.T) {
 	feed := "# bad bots\nAhrefsBot\nIndy\\ Library\n1h4x\\.com\nahrefsbot\nab\n\x01bad\nMozilla/5.0 (compatible; Foo)\n"
-	items, warn, err := Parse(store.ListKindUserAgent, []byte(feed))
+	f, err := Parse(store.ListKindUserAgent, []byte(feed))
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"AhrefsBot", "Indy Library", "1h4x.com", "Mozilla/5.0 (compatible; Foo)"}
-	if strings.Join(items, "|") != strings.Join(want, "|") {
-		t.Fatalf("items = %q, want %q", items, want)
+	if strings.Join(f.Items, "|") != strings.Join(want, "|") || f.Count != 4 {
+		t.Fatalf("items = %q, want %q", f.Items, want)
 	}
-	if !strings.Contains(warn, "2 invalid lines") {
-		t.Fatalf("warning = %q", warn)
+	if !strings.Contains(f.Warning, "2 invalid lines") {
+		t.Fatalf("warning = %q", f.Warning)
 	}
 }
 
@@ -83,7 +93,7 @@ func TestFetchSizeLimitAndStatus(t *testing.T) {
 		switch r.URL.Path {
 		case "/big":
 			chunk := strings.Repeat("1.2.3.4\n", 1<<14)
-			for n := 0; n <= MaxFeedBytes; n += len(chunk) {
+			for n := int64(0); n <= ipFeedBytes; n += int64(len(chunk)) {
 				_, _ = w.Write([]byte(chunk))
 			}
 		case "/ok":
@@ -94,16 +104,21 @@ func TestFetchSizeLimitAndStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 	ctx := context.Background()
-	if _, _, err := Fetch(ctx, srv.Client(), srv.URL+"/big", store.ListKindIP); err == nil || !strings.Contains(err.Error(), "larger") {
+	defer func(n int64) { ipFeedBytes = n }(ipFeedBytes)
+	ipFeedBytes = 1 << 20
+	if _, err := Fetch(ctx, srv.Client(), srv.URL+"/big", store.ListKindIP); err == nil || !strings.Contains(err.Error(), "larger") {
 		t.Fatalf("oversized feed: err = %v", err)
 	}
-	if _, _, err := Fetch(ctx, srv.Client(), srv.URL+"/missing", store.ListKindIP); err == nil || !strings.Contains(err.Error(), "404") {
+	if _, err := Fetch(ctx, srv.Client(), srv.URL+"/missing", store.ListKindIP); err == nil || !strings.Contains(err.Error(), "404") {
 		t.Fatalf("404: err = %v", err)
 	}
-	if items, _, err := Fetch(ctx, srv.Client(), srv.URL+"/ok", store.ListKindIP); err != nil || len(items) != 1 {
-		t.Fatalf("ok: %v %v", items, err)
+	if f, err := Fetch(ctx, srv.Client(), srv.URL+"/ok", store.ListKindIP); err != nil || f.Count != 1 {
+		t.Fatalf("ok: %v %v", f, err)
 	}
-	if _, _, err := Fetch(ctx, srv.Client(), strings.Replace(srv.URL, "https", "http", 1)+"/ok", store.ListKindIP); err == nil {
+	if f, err := Fetch(ctx, srv.Client(), srv.URL+"/ok", store.ListKindUserAgent); err != nil || f.Count != 1 {
+		t.Fatalf("ok (UA): %v %v", f, err)
+	}
+	if _, err := Fetch(ctx, srv.Client(), strings.Replace(srv.URL, "https", "http", 1)+"/ok", store.ListKindIP); err == nil {
 		t.Fatal("http:// URL fetched")
 	}
 }
@@ -114,7 +129,7 @@ func TestSafeClientRefusesPrivateTargets(t *testing.T) {
 	}))
 	defer srv.Close()
 	// srv listens on 127.0.0.1: the guard must refuse the connection after resolution.
-	_, _, err := Fetch(context.Background(), SafeClient(), srv.URL+"/x", store.ListKindIP)
+	_, err := Fetch(context.Background(), SafeClient(), srv.URL+"/x", store.ListKindIP)
 	if err == nil || !strings.Contains(err.Error(), "non-public") {
 		t.Fatalf("loopback target: err = %v", err)
 	}
@@ -162,7 +177,7 @@ func newFixture(t *testing.T) *fixture {
 		_, _ = w.Write([]byte(f.body))
 	}))
 	t.Cleanup(f.srv.Close)
-	f.svc = &Service{Store: st, Client: f.srv.Client(),
+	f.svc = &Service{Store: st, Client: f.srv.Client(), Lists: &ipset.Dir{Path: filepath.Join(t.TempDir(), "lists")},
 		Apply: func(ctx context.Context, msg string, mutate func(tx *store.Store) error) error {
 			f.applies++
 			return st.WithTx(ctx, mutate)
@@ -189,8 +204,12 @@ func TestRefreshKeepsLastGoodAndRedeploysOnlyOnChange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Items) != 2 || got.FetchedAt == nil || got.FetchError != "" || f.applies != 1 {
+	if got.ItemCount != 2 || got.RangeCount != 2 || len(got.Items) != 0 || got.DataHash == "" || got.FetchedAt == nil || got.FetchError != "" || f.applies != 1 {
 		t.Fatalf("first fetch: %+v applies=%d", got, f.applies)
+	}
+	hash := got.DataHash
+	if _, err := f.svc.Lists.Check(hash); err != nil {
+		t.Fatalf("range file: %v", err)
 	}
 
 	// Same content in another order: no redeploy.
@@ -202,20 +221,38 @@ func TestRefreshKeepsLastGoodAndRedeploysOnlyOnChange(t *testing.T) {
 	// Server error: entries stay, error recorded, no redeploy.
 	f.serve(500, "oops")
 	got, err = f.svc.Refresh(ctx, l.ID)
-	if err == nil || got == nil || len(got.Items) != 2 || !strings.Contains(got.FetchError, "500") || got.FetchedAt == nil || f.applies != 1 {
+	if err == nil || got == nil || got.DataHash != hash || !strings.Contains(got.FetchError, "500") || got.FetchedAt == nil || f.applies != 1 {
 		t.Fatalf("failed fetch: err=%v list=%+v applies=%d", err, got, f.applies)
 	}
 	// Junk instead of a list (e.g. a captive portal page): same.
 	f.serve(200, "<html>login</html>")
-	if got, _ = f.svc.Refresh(ctx, l.ID); len(got.Items) != 2 || got.FetchError == "" || f.applies != 1 {
+	if got, _ = f.svc.Refresh(ctx, l.ID); got.DataHash != hash || got.FetchError == "" || f.applies != 1 {
 		t.Fatalf("junk: %+v applies=%d", got, f.applies)
 	}
 
 	// Changed content: redeploy, error cleared.
 	f.serve(200, "1.2.3.4\n")
 	got, err = f.svc.Refresh(ctx, l.ID)
-	if err != nil || len(got.Items) != 1 || got.FetchError != "" || f.applies != 2 {
+	if err != nil || got.ItemCount != 1 || got.DataHash == hash || got.FetchError != "" || f.applies != 2 {
 		t.Fatalf("changed: err=%v list=%+v applies=%d", err, got, f.applies)
+	}
+
+	// The stored file disappears (a restored backup does not carry it): due at once,
+	// and the same content is deployed again.
+	hash = got.DataHash
+	if err := os.Remove(f.svc.Lists.File(hash)); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	if !f.svc.dataMissing(*got, now) || f.svc.dataMissing(store.IPList{SourceURL: "https://x/", Kind: store.ListKindIP}, now) {
+		t.Fatal("missing data not noticed")
+	}
+	got, err = f.svc.Refresh(ctx, l.ID)
+	if err != nil || got.DataHash != hash || f.applies != 3 {
+		t.Fatalf("restored: err=%v list=%+v applies=%d", err, got, f.applies)
+	}
+	if f.svc.dataMissing(*got, now) {
+		t.Fatal("file not restored")
 	}
 
 	// Lists without a URL are not fetched.

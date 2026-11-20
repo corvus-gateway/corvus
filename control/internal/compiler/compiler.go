@@ -14,6 +14,7 @@ import (
 	"strings"
 	"text/template"
 
+	"corvus/control/internal/ipset"
 	"corvus/control/internal/netcfg"
 	"corvus/control/internal/sigs"
 	"corvus/control/internal/store"
@@ -152,6 +153,9 @@ func (p Paths) CertDir(id int64) string {
 
 type Compiler struct {
 	P Paths
+	// Lists stores the range files of IP lists (nil: <DataDir>/lists, without the cache
+	// of verified files).
+	Lists *ipset.Dir
 	// Cloudflare returns the trusted Cloudflare edge ranges (IPv4 + IPv6).
 	Cloudflare func(ctx context.Context, s *store.Store) []string
 	// Bundle returns the active managed rule bundle (body signatures); nil = built-in.

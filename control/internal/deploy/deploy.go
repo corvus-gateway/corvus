@@ -23,6 +23,7 @@ import (
 
 	"corvus/control/internal/compiler"
 	"corvus/control/internal/gateway"
+	"corvus/control/internal/ipset"
 	"corvus/control/internal/store"
 )
 
@@ -507,6 +508,7 @@ func (d *Deployer) prune(ctx context.Context) {
 		}
 	}
 	d.pruneCerts(ctx)
+	d.pruneLists(ctx)
 	// History rows: as many deployed versions as there are directories (older ones
 	// cannot be rolled back to anyway) and as many failed attempts.
 	if n, err := d.Store.PruneVersions(ctx, keep, keep); err != nil {
@@ -595,6 +597,94 @@ func (d *Deployer) certRefs() (map[string]bool, error) {
 			return err
 		}
 		for _, m := range re.FindAllSubmatch(bytes.ReplaceAll(data, []byte(`\`), []byte(`/`)), -1) {
+			refs[string(m[1])] = true
+		}
+		return nil
+	})
+	return refs, err
+}
+
+// listGrace: range files changed this recently are never removed (a feed download
+// whose deployment has not committed yet, a rendering in progress).
+const listGrace = 10 * time.Minute
+
+// pruneLists removes IP list range files (<DataDir>/lists/<sha256>.bin, internal/ipset)
+// that no list in the database and no retained version directory refers to, and
+// temporary files left by an interrupted write. Called under d.mu after the version
+// directories were pruned; on any doubt nothing is removed.
+func (d *Deployer) pruneLists(ctx context.Context) {
+	if d.Compiler == nil || d.Compiler.P.DataDir == "" {
+		return
+	}
+	dir := d.Compiler.P.ListDir()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	var candidates []string
+	for _, e := range entries {
+		if e.Type().IsRegular() && (ipset.FileName.MatchString(e.Name()) || strings.HasPrefix(e.Name(), ".tmp-")) {
+			candidates = append(candidates, e.Name())
+		}
+	}
+	if len(candidates) == 0 {
+		return
+	}
+	lists, err := d.Store.ListIPLists(ctx)
+	if err != nil {
+		return
+	}
+	keep := map[string]bool{}
+	for _, l := range lists {
+		if l.DataHash != "" {
+			keep[l.DataHash+".bin"] = true
+		}
+	}
+	refs, err := d.listRefs()
+	if err != nil {
+		slog.Warn("IP list file cleanup skipped", "err", err)
+		return
+	}
+	removed := 0
+	for _, name := range candidates {
+		if keep[name] || refs[name] {
+			continue
+		}
+		p := filepath.Join(dir, name)
+		if fi, err := os.Stat(p); err != nil || time.Since(fi.ModTime()) < listGrace {
+			continue
+		}
+		if err := os.Remove(p); err != nil {
+			slog.Warn("removing an unused IP list file", "file", p, "err", err)
+		} else {
+			removed++
+		}
+	}
+	if removed > 0 {
+		slog.Info("removed unused IP list files", "files", removed)
+	}
+}
+
+// listRefs returns the range file names (<sha256>.bin) the rules.json files of all
+// version directories refer to.
+func (d *Deployer) listRefs() (map[string]bool, error) {
+	re := regexp.MustCompile(`lists/([0-9a-f]{64}\.bin)"`)
+	refs := map[string]bool{}
+	err := filepath.WalkDir(d.versionsDir(), func(p string, e fs.DirEntry, err error) error {
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		if e.IsDir() || e.Name() != "rules.json" || !e.Type().IsRegular() {
+			return nil
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		for _, m := range re.FindAllSubmatch(bytes.ReplaceAll(data, []byte(`\\`), []byte(`/`)), -1) {
 			refs[string(m[1])] = true
 		}
 		return nil
