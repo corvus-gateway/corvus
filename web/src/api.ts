@@ -101,10 +101,15 @@ export interface ProxyHost {
   under_attack?: UnderAttackMode;
   under_attack_config?: UnderAttackConfig;
   locations?: ProxyLocation[];
+  /** Further backends, round-robin with forward_host/forward_port (the first one); same scheme. */
+  extra_targets?: ProxyTarget[];
   /** Read-only: usernames of the host's password protection (HTTP Basic auth). */
   basic_auth_users?: string[];
   created_at: string; updated_at: string;
 }
+
+/** One more backend of a proxy host (see ProxyHost.extra_targets). */
+export interface ProxyTarget { forward_host: string; forward_port: number }
 
 /** Custom location of a proxy host: a path prefix routed to its own upstream. */
 export interface ProxyLocation {
@@ -129,11 +134,15 @@ export type ConnFailKind = "dns" | "refused" | "timeout" | "unreachable" | "tls"
 /** POST /api/proxy-hosts/check: the forward target tried the way the gateway reaches it. */
 export interface ConnCheckResult {
   ok: boolean; kind?: ConnFailKind; message?: string; target: string; address?: string; addresses?: string[]; time_ms: number;
+  /** Several backends (extra_targets sent): the result of each one, in order; ok above only when all work. */
+  targets?: ConnCheckResult[];
 }
 
 /** GET /api/upstream-errors: a proxy host's latest failure to reach its upstream (last 15 minutes). */
 export interface UpstreamError {
   host_id: number; at: string; kind: ConnFailKind; upstream?: string; message: string;
+  /** Backend pools: the host's number of backends, and whether all of them were failing (none left to try). */
+  backends?: number; all_down?: boolean;
 }
 
 /** Security header preset of a proxy host (gateway/lua/corvus/headers.lua). */

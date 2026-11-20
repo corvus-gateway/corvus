@@ -21,4 +21,17 @@ export const connCheckStrings: Record<ConnCheckKey, string> = {
   ueTip: "Échec vers l’upstream ({ago}) : {reason}",
   ueTipAction: "Modifiez l’hôte et utilisez « Tester la connexion » pour trouver la cause.",
   ueSheetTitle: "Les visiteurs ont reçu une page d’erreur ({ago})",
+  // backend pools
+  ccPoolSummary: "{ok} backends sur {n} joignables",
+  ueBadgeBackend: "Erreur de backend",
+  ueTipBackend: "Un backend a échoué ({ago}) : {reason}",
+  ueTipOthers: "Les autres backends continuent de servir les requêtes ; celui qui échoue est ignoré pendant 30 secondes.",
+  ueAllDownTitle: "Tous les backends échouent",
+  ueAllDownHint: "Aucun backend de cet hôte n’a pu être joint : les visiteurs ont reçu une page d’erreur. Vérifiez chaque backend avec « Tester la connexion ».",
+  ueSheetBackendTitle: "Un backend a échoué ({ago})",
+  poolAdd: "Ajouter un backend",
+  poolHint: "Les requêtes sont réparties en round-robin entre tous les backends (même schéma). Un backend en échec est ignoré pendant 30 secondes, puis réessayé.",
+  poolBackend: "Backend {n}",
+  poolRemove: "Retirer le backend",
+  poolCount: "{n} backends",
 };

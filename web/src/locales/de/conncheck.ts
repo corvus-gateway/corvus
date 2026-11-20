@@ -21,4 +21,17 @@ export const connCheckStrings: Record<ConnCheckKey, string> = {
   ueTip: "Upstream nicht erreicht ({ago}): {reason}",
   ueTipAction: "Bearbeiten Sie den Host und finden Sie die Ursache mit „Verbindung prüfen“.",
   ueSheetTitle: "Besucher erhielten eine Fehlerseite ({ago})",
+  // backend pools
+  ccPoolSummary: "{ok} von {n} Backends erreichbar",
+  ueBadgeBackend: "Backend-Fehler",
+  ueTipBackend: "Ein Backend ist ausgefallen ({ago}): {reason}",
+  ueTipOthers: "Die anderen Backends bedienen weiter Anfragen; das ausgefallene wird 30 Sekunden lang übersprungen.",
+  ueAllDownTitle: "Alle Backends ausgefallen",
+  ueAllDownHint: "Keines der Backends dieses Hosts war erreichbar, daher erhielten Besucher eine Fehlerseite. Prüfen Sie jedes Backend mit „Verbindung prüfen“.",
+  ueSheetBackendTitle: "Ein Backend ist ausgefallen ({ago})",
+  poolAdd: "Backend hinzufügen",
+  poolHint: "Anfragen werden reihum (Round-Robin) auf alle Backends verteilt (gleiches Schema). Ein ausgefallenes Backend wird 30 Sekunden lang übersprungen und dann erneut versucht.",
+  poolBackend: "Backend {n}",
+  poolRemove: "Backend entfernen",
+  poolCount: "{n} Backends",
 };

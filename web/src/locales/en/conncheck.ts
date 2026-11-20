@@ -21,4 +21,17 @@ export const connCheckStrings: Record<ConnCheckKey, string> = {
   ueTip: "Upstream failed ({ago}): {reason}",
   ueTipAction: "Edit the host and use Check connection to find the cause.",
   ueSheetTitle: "Visitors got an error page ({ago})",
+  // backend pools
+  ccPoolSummary: "{ok} of {n} backends reachable",
+  ueBadgeBackend: "Backend error",
+  ueTipBackend: "A backend failed ({ago}): {reason}",
+  ueTipOthers: "The other backends keep serving requests; the failing one is skipped for 30 seconds.",
+  ueAllDownTitle: "All backends failing",
+  ueAllDownHint: "None of this host's backends could be reached, so visitors got an error page. Check each backend with Check connection.",
+  ueSheetBackendTitle: "A backend failed ({ago})",
+  poolAdd: "Add backend",
+  poolHint: "Requests are spread round-robin over all backends (same scheme). A backend that fails is skipped for 30 seconds, then tried again.",
+  poolBackend: "Backend {n}",
+  poolRemove: "Remove backend",
+  poolCount: "{n} backends",
 };
