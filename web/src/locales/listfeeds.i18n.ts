@@ -8,7 +8,7 @@ export const koListFeeds = {
   listSourceManual: "직접 입력",
   listSourceUrl: "URL에서 가져오기",
   listUrl: "URL",
-  listUrlHint: "https:// 주소만 허용되며 내부·사설 주소는 거부됩니다. 한 줄에 항목 하나, #·;로 시작하는 줄은 주석입니다. 최대 5MB. 저장하면 백그라운드에서 가져옵니다.",
+  listUrlHint: "https:// 주소만 허용되며 내부·사설 주소는 거부됩니다. 한 줄에 항목 하나, #·;로 시작하는 줄은 주석입니다. IP 목록은 최대 64MB·500만 항목, User-Agent 목록은 최대 5MB. 저장하면 백그라운드에서 가져옵니다.",
   listRefresh: "새로고침 주기",
   listEveryMin: "{n}분마다",
   listEveryHour: "{n}시간마다",
@@ -36,6 +36,17 @@ export const koListFeeds = {
   noUaListsYet: "User-Agent 목록 없음",
   kindShortIp: "IP",
   kindShortUa: "UA",
+  listFeedRanges: "겹치거나 이어지는 항목을 합쳐 주소 범위 {n}개로 저장",
+  listPreview: "처음 {n}개 (전체 {total}개 중)",
+  listPreviewAll: "전체 {n}개",
+  listPreviewRangesNote: "합쳐진 주소 범위로 표시합니다(주소, CIDR 또는 시작-끝).",
+  listCheckIp: "IP 주소 확인",
+  listCheckPh: "예: 203.0.113.7",
+  listCheckBtn: "확인",
+  listCheckMatch: "{ip}은(는) 이 목록에 있습니다 ({range})",
+  listCheckNoMatch: "{ip}은(는) 이 목록에 없습니다",
+  listCheckInvalid: "올바른 IP 주소를 입력하세요",
+  listDataMissing: "가져온 항목 파일이 없습니다(예: 백업 복원 후). 다시 받을 때까지 이 목록은 비어 있는 것으로 처리되며, 1분 안에 자동으로 다시 받습니다.",
 };
 
 export type ListFeedsKey = keyof typeof koListFeeds;

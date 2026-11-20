@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { AlertTriangle, ChevronDown, Eye, Link2, ListChecks, Pencil, Plus, RefreshCw, Sparkles, Trash2 } from "lucide-react";
-import { ApiError, api, deployedVersion, type IpList, type ListKind } from "../api";
+import { AlertTriangle, CheckCircle2, ChevronDown, Eye, Link2, ListChecks, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, XCircle } from "lucide-react";
+import { ApiError, api, deployedVersion, type IpList, type IpListCheck, type IpListEntries, type ListKind } from "../api";
 import { ErrorBox, PageHeader, Toolbar, useSubmit } from "../components/common";
 import { ErrorHint, useErrorToast, useHintText } from "../components/ErrorHint";
 import { Button } from "../components/ui/button";
@@ -20,6 +20,9 @@ type Source = "manual" | "url";
 interface Form { name: string; description: string; kind: ListKind; source: Source; url: string; refresh: number; text: string }
 const blank: Form = { name: "", description: "", kind: "ip", source: "manual", url: "", refresh: 3600, text: "" };
 const parseItems = (text: string) => [...new Set(text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean))];
+/** Entries of a list: IP lists fed from a URL keep them in a file and report only the count. */
+const countOf = (r: IpList) => r.item_count ?? r.items?.length ?? 0;
+const PREVIEW = 100;
 
 /** Presets only prefill the form; nothing is fetched until the operator saves. */
 const PRESETS: { id: string; name: string; kind: ListKind; url: string; label: "presetTor" | "presetBadBots"; desc: "presetTorDesc" | "presetBadBotsDesc" }[] = [
@@ -65,7 +68,7 @@ export default function IpLists() {
       const res = await api.post<{ ip_list: IpList }>(`/api/ip-lists/${r.id}/refresh`);
       const l = res.ip_list;
       if (l.fetch_error) toast.error(t("listFetchFailed"), { description: `${l.fetch_error} · ${hintText(l.fetch_error_hint) || t("listFetchFailedDesc")}` });
-      else toast.success(t("listRefreshed"), { description: t("nItems", { n: fmtNum(l.items?.length ?? 0) }) });
+      else toast.success(t("listRefreshed"), { description: t("nItems", { n: fmtNum(countOf(l)) }) });
       setEditing((e) => (e && e.id === l.id ? { ...e, orig: l, form: { ...e.form, text: (l.items ?? []).join("\n") } } : e));
       done();
     } catch (e) {
@@ -153,7 +156,7 @@ export default function IpLists() {
                         )}
                         {!r.source_url && r.description && <div className="truncate text-xs text-fg-subtle" title={r.description}>{r.description}</div>}
                       </Td>
-                      <Td className="num text-right">{fmtNum(r.items?.length ?? 0)}</Td>
+                      <Td className="num text-right">{fmtNum(countOf(r))}{r.data_missing && <AlertTriangle className="ml-1 inline h-3.5 w-3.5 text-warn" aria-label={t("listDataMissing")} />}</Td>
                       <Td className="hidden sm:table-cell">{r.rules ? <Link to="/security-rules" className="text-sm text-brand hover:underline">{t("rulesN", { n: r.rules })}</Link> : <span className="text-xs text-fg-subtle">{t("notUsed")}</span>}</Td>
                       <Td className="hidden text-fg-muted md:table-cell" title={upd ? fmtDateTime(upd, lang) : undefined}>{upd ? relTime(upd, lang) : r.source_url ? <span className="text-xs text-fg-subtle">{t("listNotFetched")}</span> : "–"}</Td>
                       <Td className="text-right"><RowMenu items={[
@@ -208,13 +211,14 @@ export default function IpLists() {
                   </div>
                   <div className="text-fg-muted">
                     {t("listLastFetched")}: {orig.fetched_at ? <span title={fmtDateTime(orig.fetched_at, lang)}>{relTime(orig.fetched_at, lang)}</span> : t("listNotFetched")}
-                    {" · "}<span className="num">{t("listFeedEntries", { n: fmtNum(orig.items?.length ?? 0) })}</span>
+                    {" · "}<span className="num">{t("listFeedEntries", { n: fmtNum(countOf(orig)) })}</span>
+                    {!!orig.range_count && <>{" · "}<span className="num">{t("listFeedRanges", { n: fmtNum(orig.range_count) })}</span></>}
                   </div>
+                  {orig.data_missing && <Callout tone="warn" icon={AlertTriangle}>{t("listDataMissing")}</Callout>}
                   {orig.fetch_error && <Callout tone="warn" icon={AlertTriangle} title={t("listFetchFailed")}><span className="break-all">{orig.fetch_error}</span> {t("listFetchFailedDesc")}<ErrorHint code={orig.fetch_error_hint} className="mt-1.5" /></Callout>}
                   {orig.fetch_warning && <Callout tone="neutral" icon={AlertTriangle} title={t("listFetchWarning")}>{orig.fetch_warning}</Callout>}
-                  {(orig.items?.length ?? 0) > 0 && (
-                    <Textarea aria-label={t("entries")} rows={8} readOnly spellCheck={false} className="bg-surface font-mono text-xs leading-5" value={(orig.items ?? []).join("\n")} />
-                  )}
+                  {countOf(orig) > 0 && <ListPreview list={orig} />}
+                  {listKind(orig) === "ip" && countOf(orig) > 0 && <ListCheck id={orig.id} />}
                 </div>
               ) : <p className="text-xs text-fg-subtle">{t("listFeedPending")}</p>}
             </>) : (<>
@@ -224,6 +228,7 @@ export default function IpLists() {
                   onChange={(e) => set({ text: e.target.value })} placeholder={isUa ? "AhrefsBot\nsqlmap\nIndy Library" : "203.0.113.7\n10.0.0.0/8\n2001:db8::/32"} invalid={!!err("items")} />}
               </IdField>
               {!err("items") && <p className="num text-xs text-fg-subtle">{t("ipListCount", { n: fmtNum(items.length), max: fmtNum(max) })}</p>}
+              {!isUa && orig && !orig.source_url && listKind(orig) === "ip" && countOf(orig) > 0 && <ListCheck id={orig.id} />}
               {invalid.length > 0 && (
                 <Callout tone="warn" icon={AlertTriangle} title={isUa ? t("listUaInvalid", { n: invalid.length }) : t("ipListInvalid", { n: invalid.length })}>
                   <span className="font-mono text-xs">{invalid.slice(0, 5).join(", ")}{invalid.length > 5 ? " …" : ""}</span>
@@ -236,6 +241,73 @@ export default function IpLists() {
 
       <DeleteIpList target={deleting} onClose={() => setDeleting(null)} onDone={done} />
     </>
+  );
+}
+
+/** First entries of a list, loaded on demand (a feed may hold millions). */
+function ListPreview({ list }: { list: IpList }) {
+  const { t } = useI18n();
+  const [data, setData] = useState<IpListEntries | null>(null);
+  const key = `${list.id}:${list.data_hash ?? ""}:${list.fetched_at ?? ""}`;
+  useEffect(() => {
+    let live = true;
+    setData(null);
+    api.get<IpListEntries>(`/api/ip-lists/${list.id}/entries?limit=${PREVIEW}`).then((d) => { if (live) setData(d); }).catch(() => { if (live) setData(null); });
+    return () => { live = false; };
+  }, [key]); // key covers list.id
+  if (!data || data.missing || !data.entries.length) return null;
+  const fileBacked = !!list.data_hash;
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs text-fg-subtle">
+        <span className="num">{data.truncated ? t("listPreview", { n: fmtNum(data.entries.length), total: fmtNum(fileBacked ? data.ranges : data.total) }) : t("listPreviewAll", { n: fmtNum(data.entries.length) })}</span>
+        {fileBacked && <span>{t("listPreviewRangesNote")}</span>}
+      </div>
+      <Textarea aria-label={t("entries")} rows={8} readOnly spellCheck={false} className="bg-surface font-mono text-xs leading-5" value={data.entries.join("\n") + (data.truncated ? "\n…" : "")} />
+    </div>
+  );
+}
+
+/** "Check an IP address" against a saved IP list (as the gateway matches it). */
+function ListCheck({ id }: { id: number }) {
+  const { t } = useI18n();
+  const toastError = useErrorToast();
+  const [ip, setIp] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState<IpListCheck | null>(null);
+  const [bad, setBad] = useState(false);
+  useEffect(() => { setRes(null); setIp(""); setBad(false); }, [id]);
+  const check = async () => {
+    const v = ip.trim();
+    if (!v) return;
+    setBusy(true);
+    setBad(false);
+    try {
+      setRes(await api.get<IpListCheck>(`/api/ip-lists/${id}/check?ip=${encodeURIComponent(v)}`));
+    } catch (e) {
+      setRes(null);
+      if (e instanceof ApiError && e.status === 400) setBad(true);
+      else toastError(e);
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="space-y-1.5">
+      <div className="text-xs font-medium text-fg-muted">{t("listCheckIp")}</div>
+      <div className="flex gap-2">
+        <Input aria-label={t("listCheckIp")} className="font-mono text-xs sm:w-64" value={ip} placeholder={t("listCheckPh")} invalid={bad} maxLength={64}
+          onChange={(e) => { setIp(e.target.value); setRes(null); setBad(false); }}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void check(); } }} />
+        <Button size="sm" onClick={check} loading={busy} disabled={!ip.trim()}><Search className="h-3.5 w-3.5" />{t("listCheckBtn")}</Button>
+      </div>
+      {bad && <p className="text-xs text-danger">{t("listCheckInvalid")}</p>}
+      {res && !res.missing && (
+        <p role="status" className={cn("flex items-center gap-1.5 text-xs", res.match ? "text-warn" : "text-fg-muted")}>
+          {res.match ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> : <XCircle className="h-3.5 w-3.5" aria-hidden />}
+          <span className="font-mono">{res.match ? t("listCheckMatch", { ip: res.ip, range: res.range ?? "" }) : t("listCheckNoMatch", { ip: res.ip })}</span>
+        </p>
+      )}
+      {res?.missing && <p className="text-xs text-warn">{t("listDataMissing")}</p>}
+    </div>
   );
 }
 
