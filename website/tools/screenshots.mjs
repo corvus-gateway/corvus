@@ -66,6 +66,8 @@ const shots = [
     __qa("[role=dialog] button").find(b => /^(Check connection|연결 확인)$/.test(b.textContent.trim())).click(); await __sleep(2500);`, dialog: true },
   { name: "proxy-host-check", path: "/proxy-hosts", act: `await __edit("app.example.com");
     __qa("[role=dialog] button").find(b => /^(Check connection|연결 확인)$/.test(b.textContent.trim())).click(); await __sleep(2500);`, dialog: true },
+  // needs a host maint.example.com that serves the maintenance page (and has a location /api)
+  { name: "proxy-host-page", path: "/proxy-hosts", act: `await __edit("maint.example.com"); await __scrollTo(/^(Serve a page|페이지 표시)$/); await __sleep(1200);`, dialog: true },
   { name: "proxy-host-locations", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^(Custom locations|사용자 지정 위치)$/);`, dialog: true },
   { name: "proxy-host-tls", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^TLS$/);`, dialog: true },
   { name: "proxy-host-protection", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^(Protection|보호)$/);`, dialog: true },

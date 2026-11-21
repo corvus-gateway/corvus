@@ -56,6 +56,7 @@ OpenResty, plano de control en Go, consola en React) que puede **importar una co
 **Proxy y TLS**
 - Hosts proxy con comodines, WebSocket, HTTP/2, HTTPS forzado y fragmentos de Nginx personalizados
 - Varios backends por host proxy: peticiones repartidas en round-robin y un backend que falla se omite durante 30 segundos (failover pasivo)
+- Páginas sin backend: un host proxy puede servir una página de «próximamente», de mantenimiento o de dominio aparcado (o su propio HTML) con el estado que elija, con todas las protecciones; las ubicaciones personalizadas siguen reenviando (p. ej. `/api` durante el mantenimiento)
 - Notas en hosts y streams para recordar para qué sirve cada uno (con búsqueda)
 - Comprobar conexión: probar el destino de un host desde el gateway antes de guardar (DNS, puerto, firewall, TLS), y ver en la lista de hosts por qué los visitantes recibieron un 502/504
 - Ubicaciones personalizadas: rutas (p. ej. `/api`) hacia su propio upstream, con las protecciones del host

@@ -1,0 +1,53 @@
+<!doctype html>
+<html{{if .HTMLLang}} lang="{{.HTMLLang}}"{{end}}>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
+<title>{{.Title}}</title>
+<style>
+  :root { --bg: #f5f6f8; --card: #fff; --fg: #0f172a; --muted: #5b6474; --line: #e7e9ee; --accent: #4f46e5; --accent-soft: rgba(79,70,229,.10); }
+  .maintenance { --accent: #b45309; --accent-soft: rgba(180,83,9,.10); }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b0d12; --card: #14171d; --fg: #eef1f6; --muted: #a3abba; --line: #232832; --accent: #a5b4fc; --accent-soft: rgba(165,180,252,.14); }
+    .maintenance { --accent: #fbbf24; --accent-soft: rgba(251,191,36,.14); }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; background: var(--bg); color: var(--fg);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "PingFang SC", "Microsoft YaHei", "Hiragino Sans", "Yu Gothic", sans-serif; }
+  .card { width: 100%; max-width: 30rem; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 30px; box-shadow: 0 12px 32px -12px rgba(15,23,42,.18); }
+  .pill { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 4px 10px; border-radius: 999px; margin-bottom: 14px; }
+  h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: -.01em; overflow-wrap: anywhere; }
+  p { margin: 0; color: var(--muted); white-space: pre-line; overflow-wrap: anywhere; }
+  html:lang(ko) p { word-break: keep-all; }
+  .site { margin-top: 18px; font-size: 13px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+</style>
+</head>
+<body class="{{.Template}}">
+  <main class="card">
+    <span class="pill" id="p">{{.Pill}}</span>
+    <h1 id="h">{{.Title}}</h1>
+    <p id="m">{{.Message}}</p>
+    <div class="site">{{.Host}}</div>
+  </main>
+<script>
+(function () {
+  var L = {{.Texts}}, own = {{.Own}};
+  var langs = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
+  for (var i = 0; i < langs.length; i++) {
+    var p = String(langs[i] || "").toLowerCase().split("-")[0];
+    if (p === {{.Lang}}) return;
+    var s = L[p];
+    if (s) {
+      if (!own[0] && !own[1]) document.documentElement.lang = p === "zh" ? "zh-CN" : p;
+      document.getElementById("p").textContent = s[0];
+      if (!own[0]) { document.getElementById("h").textContent = s[1]; document.title = s[1]; }
+      if (!own[1]) document.getElementById("m").textContent = s[2];
+      return;
+    }
+  }
+})();
+</script>
+</body>
+</html>

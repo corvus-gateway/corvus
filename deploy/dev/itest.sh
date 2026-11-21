@@ -730,6 +730,57 @@ chk "$(lcode "$G/anything")" 200 "root location answers from its upstream"
 chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$LH -d '{"domains":["loc.corvus.test"],"forward_host":"demo","forward_port":1,"locations":[{"path":"/__corvus/x","forward_host":"demo","forward_port":80}]}')" 422 "reserved location path rejected"
 c -o /dev/null -X DELETE $A/api/proxy-hosts/$LH
 
+echo "[static pages]"
+# A host that serves a page instead of forwarding: no forward target, the same page for
+# every path and method, and the host's protections still apply.
+SPJ='{"domains":["page.corvus.test"],"block_exploits":true,"content":"page"'
+SP=$(c -X POST $A/api/proxy-hosts -d "$SPJ,\"page\":{\"template\":\"maintenance\"}}" | js "d.get('id') or d.get('proxy_host',{}).get('id')")
+[ -n "$SP" ] && [ "$SP" != None ] && ok "host that serves a page deploys without a forward target" || bad "page host rejected"
+chk "$(c $A/api/proxy-hosts/$SP | js "(d['content'], d['page']['template'], d['page']['status'], d['forward_host'])")" "('page', 'maintenance', 503, '')" "page host stored (maintenance defaults to 503)"
+sleep 2
+spget() { curl -s -H 'Host: page.corvus.test' "$@"; }
+R=$(spget -D - "$G/any/path?x=1" | tr -d '\r')
+chk "$(echo "$R" | awk 'NR==1{print $2}')" 503 "maintenance page answers 503 for any path"
+chk "$(echo "$R" | awk -F': ' 'tolower($1)=="cache-control"{print $2}')" no-store "503 page is not cached (no-store)"
+chk "$(echo "$R" | awk -F': ' 'tolower($1)=="content-type"{print $2}')" "text/html; charset=utf-8" "page is HTML (UTF-8)"
+echo "$R" | grep -q 'Down for maintenance' && ok "built-in maintenance template served" || bad "maintenance template missing"
+echo "$R" | grep -q '<div class="site">page.corvus.test</div>' && ok "page shows the host name" || bad "host name not filled in"
+chk "$(spget -o /dev/null -w '%{http_code}' -X POST -d 'a=1' "$G/form")" 503 "POST gets the page too"
+chk "$(spget -o /dev/null -w '%{http_code}/%{size_download}' -I "$G/")" 503/0 "HEAD: status without a body"
+if [ -n "${CORVUS_CONTAINER:-}" ]; then
+  SPC=$(docker exec "$CORVUS_CONTAINER" cat /data/nginx/current/hosts/$SP.conf 2>/dev/null)
+  echo "$SPC" | grep -q 'require("corvus.page").serve(' && ! echo "$SPC" | grep -q "upstream corvus_up_$SP {" && ok "page host rendered without an upstream block" || bad "page host config: $(echo "$SPC" | grep -E 'upstream|corvus.page')"
+fi
+chk "$(spget -o /dev/null -w '%{http_code}' "$G/.env")" 403 "attack-pattern blocking still applies on a page host"
+SPR=$(rule "$(cond itest-page-block block '' '{"field":"http.path","operator":"starts_with","value":["/itest-page-blocked"]}')")
+chk "$(spget -o /dev/null -w '%{http_code}' "$G/itest-page-blocked/x")" 403 "security rule blocks on a page host"
+c -o /dev/null -X DELETE $A/api/security-rules/$SPR
+# custom HTML, served byte for byte
+$PY -c "import json; print(json.dumps({'template':'custom','status':200,'html':'<!doctype html>\n<title>itest</title>\n<p>{{HOST}} é✓ \$host ; } \"q\" &amp;</p>\n'}))" > "$T/page.json"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$SP -d "$SPJ,\"page\":$(cat "$T/page.json")}")" 200 "switch to custom HTML (200)"
+sleep 1
+spget -o "$TN/page.out" "$G/"
+chk "$($PY -c "import json,sys; print(open(sys.argv[1],'rb').read().decode() == json.load(open(sys.argv[2]))['html'])" "$TN/page.out" "$TN/page.json")" True "custom HTML served exactly"
+SPB=$($PY -c "import json,sys; print(len(json.load(open(sys.argv[1]))['html'].encode()))" "$TN/page.json")
+chk "$(c $A/api/proxy-hosts | js "[(h['page']['html'], h['page']['html_bytes']) for h in d if h['id']==$SP][0]")" "('', $SPB)" "host list leaves the HTML out and reports its size"
+chk "$(c $A/api/proxy-hosts/$SP | js "d['page']['html_bytes'] == len(d['page']['html'].encode()) > 0")" True "single host returns the HTML"
+chk "$(spget -o /dev/null -D - "$G/" | tr -d '\r' | awk -F': ' 'tolower($1)=="cache-control"{print $2}')" "" "200 page without no-store"
+# Basic auth and a custom location that still forwards
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$SP -d "$SPJ,\"basic_auth\":{\"enabled\":true,\"users\":[{\"username\":\"pageu\",\"password\":\"page-pass-123\"}]},\"locations\":[{\"path\":\"/api\",\"forward_host\":\"demo\",\"forward_port\":80}]}")" 200 "password protection and a location on the page host"
+sleep 1
+chk "$(spget -o /dev/null -w '%{http_code}' "$G/")" 401 "password required for the page"
+chk "$(spget -o /dev/null -w '%{http_code}' -u pageu:page-pass-123 "$G/")" 200 "page with the correct password"
+spget -u pageu:page-pass-123 "$G/api/x" | grep -q '^GET /api/x HTTP/1.1' && ok "location /api still forwards to its backend" || bad "location on a page host does not forward"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$SP -d "$SPJ,\"locations\":[{\"path\":\"/\",\"forward_host\":\"demo\",\"forward_port\":80}]}")" 422 "location / on a page host rejected"
+# back to forwarding
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$SP -d '{"domains":["page.corvus.test"],"content":"forward","basic_auth":{"enabled":false,"users":[]}}')" 422 "forward mode needs a forward target"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$SP -d '{"domains":["page.corvus.test"],"content":"forward","forward_host":"demo","forward_port":80,"basic_auth":{"enabled":false,"users":[]}}')" 200 "switch the host back to forwarding"
+sleep 1
+spget "$G/back" | grep -q '^GET /back HTTP/1.1' && ok "host forwards again" || bad "host does not forward after switching back"
+chk "$(c $A/api/proxy-hosts/$SP | js "(d['content'], d['page']['template'])")" "('forward', 'custom')" "page kept for switching again"
+c -o /dev/null -X DELETE $A/api/proxy-hosts/$SP
+rm -f "$T/page.json" "$T/page.out"
+
 echo "[streams]"
 # TCP port forwarding: container port 8090 (published by deploy/dev/docker-compose.yml) → demo:80.
 for id in $(c $A/api/streams | js "' '.join(str(s['id']) for s in d if s['incoming_port']==8090)"); do c -o /dev/null -X DELETE $A/api/streams/$id; done

@@ -1,10 +1,12 @@
-import { ChevronRight, Plus, X } from "lucide-react";
+import { ChevronRight, Plus, Route, X } from "lucide-react";
 import type { ProxyLocation } from "../api";
 import { useI18n } from "../i18n";
 import { cn } from "../lib/utils";
 import { Button, IconButton } from "./ui/button";
 import { IdField, Input, NumberInput, Select, Textarea, fieldErr } from "./ui/form";
 import { ConnCheck } from "./ConnCheck";
+import { Badge } from "./ui/display";
+import { Tip, tipTrigger } from "./ui/overlay";
 
 const blankLocation: ProxyLocation = { path: "", forward_scheme: "http", forward_host: "", forward_port: 80, forward_path: "", advanced_config: "" };
 
@@ -73,5 +75,20 @@ export function LocationsFields({ value, onChange, error, isAdmin, can }: {
         </div>
       </details>
     </section>
+  );
+}
+
+/** Host list: "N locations" with each location (path → target) in a tooltip, also reachable by keyboard. */
+export function LocationsBadge({ locations }: { locations?: ProxyLocation[] }) {
+  const { t } = useI18n();
+  if (!locations?.length) return null;
+  const lines = locations.map((l) => `${l.path} → ${l.forward_scheme}://${l.forward_host}:${l.forward_port}`);
+  const label = locations.length === 1 ? t("locationOne") : t("locationsCount", { n: locations.length });
+  return (
+    <Tip label={<span className="block font-mono">{lines.map((s, i) => <span key={i} className="block break-all">{s}</span>)}</span>}>
+      <span tabIndex={0} aria-label={`${label}: ${lines.join(", ")}`} className={cn(tipTrigger, "ml-1.5 align-middle")}>
+        <Badge icon={Route}>{label}</Badge>
+      </span>
+    </Tip>
   );
 }

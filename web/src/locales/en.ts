@@ -12,6 +12,7 @@ import { proxyProtocolStrings } from "./en/proxyprotocol";
 import { updateStrings } from "./en/update";
 import { headersStrings } from "./en/headers";
 import { locationsStrings } from "./en/locations";
+import { staticPageStrings } from "./en/staticpage";
 import { limitsStrings } from "./en/limits";
 import { certReplaceStrings } from "./en/certreplace";
 import { dnsCredsStrings } from "./en/dnscreds";
@@ -225,6 +226,7 @@ export const en: Record<keyof typeof ko, string> = {
   ...updateStrings,
   ...headersStrings,
   ...locationsStrings,
+  ...staticPageStrings,
   ...limitsStrings,
   ...certReplaceStrings,
   ...dnsCredsStrings,

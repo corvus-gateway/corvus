@@ -4,6 +4,7 @@ export const locationsStrings: Record<LocationsKey, string> = {
   secLocations: "Eigene Locations",
   locationsDesc: "Leitet Pfade an einen anderen Upstream weiter. Jede Location behält den Schutz des Hosts (Sicherheitsregeln, Ratenlimit, Basic-Auth, Zugangswarteschlange). Die Location / ersetzt das Weiterleitungsziel.",
   locationsCount: "{n} Locations",
+  locationOne: "1 Location",
   addLocation: "Location hinzufügen",
   locPath: "Pfad",
   locForwardPath: "Zielpfad",

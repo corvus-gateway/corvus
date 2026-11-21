@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, Copy, Globe, Lock, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2, Users, Zap, Gauge, Server, KeyRound, ExternalLink, UserPlus, X, Siren, ShieldOff } from "lucide-react";
+import { AlertTriangle, ArrowRight, Copy, FileText, Globe, Lock, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2, Users, Zap, Gauge, Server, KeyRound, ExternalLink, UserPlus, X, Siren, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 import { api, type ProxyTarget, type AccessList, type ClientIPMode, type ProxyHost, type RateLimit, type SecurityHeaders, type UnderAttackStatus, type UpstreamError, type Waitroom } from "../api";
 import { ConnCheck, UpstreamBadge, UpstreamCallout } from "../components/ConnCheck";
 import { UnderAttackFields, uaConfig, UA_DEFAULTS } from "../components/UnderAttackFields";
-import { LocationsFields } from "../components/LocationsFields";
+import { LocationsBadge, LocationsFields } from "../components/LocationsFields";
+import { StaticPageFields, blankPage, hostSearchText, pageLabel, pageOf } from "../components/StaticPageFields";
 import { NoteLine, NotesSection } from "../components/NotesField";
 import { MoreDomains, SortTh, SslBadge, useCertificates, useHostList } from "../components/hosts";
 import { Pagination } from "../components/Pagination";
@@ -41,6 +42,7 @@ const blank: Form = {
   body_inspection: "log", body_max_kb: 1024, security_headers: "off",
   max_upload_mb: null, upstream_timeout_s: null, gzip: true, notes: "",
   under_attack: "off", under_attack_config: { ...UA_DEFAULTS }, locations: [], extra_targets: [],
+  content: "forward", page: { ...blankPage },
 };
 
 /** Backends per host, including the forward host (validate.MaxTargets). */
@@ -48,7 +50,10 @@ const MAX_TARGETS = 32;
 
 function toForm(h: ProxyHost): Form {
   const { id: _i, created_at: _c, updated_at: _u, ...rest } = h;
-  return { ...blank, ...rest, under_attack: rest.under_attack ?? "off", under_attack_config: uaConfig(rest.under_attack_config), locations: rest.locations ?? [], extra_targets: rest.extra_targets ?? [] };
+  return { ...blank, ...rest, under_attack: rest.under_attack ?? "off", under_attack_config: uaConfig(rest.under_attack_config), locations: rest.locations ?? [], extra_targets: rest.extra_targets ?? [],
+    content: rest.content ?? "forward", page: pageOf(rest.page),
+    // a page host without a forward target: the form starts with the defaults for switching
+    ...(rest.content === "page" && !rest.forward_host ? { forward_port: 80, forward_scheme: "http" } : {}) };
 }
 
 export default function ProxyHosts() {
@@ -69,7 +74,8 @@ export default function ProxyHosts() {
   const upErrById = useMemo(() => new Map((upErrs.data ?? []).map((e) => [e.host_id, e])), [upErrs.data]);
 
   const [q, setQ] = useState("");
-  const [editing, setEditing] = useState<{ id: number | null; form: Form; req: CertReq | null; auth: BasicAuthForm } | null>(null);
+  // htmlMissing: the host's custom page HTML could not be loaded; it is left out on save (kept as stored)
+  const [editing, setEditing] = useState<{ id: number | null; form: Form; req: CertReq | null; auth: BasicAuthForm; htmlMissing?: boolean } | null>(null);
   const dirty = useDirty(editing);
   const [deleting, setDeleting] = useState<ProxyHost | null>(null);
   const { busy, error, setError, run } = useSubmit();
@@ -91,14 +97,23 @@ export default function ProxyHosts() {
   const showUA = has("under_attack");
   const showLocations = has("locations");
   const showPool = has("extra_targets");
+  const showContent = has("content");
   const showTuning = has("gzip");
   const showLimits = !limits.missing && has("rate_limit_id");
   const showLists = !lists.missing && has("access_list_id");
 
-  const list = useHostList(hosts.data, q, (h) => `${h.domains.join(" ")} ${h.forward_scheme}://${h.forward_host}:${h.forward_port} ${(h.extra_targets ?? []).map((x) => `${x.forward_host}:${x.forward_port}`).join(" ")} ${h.notes ?? ""}`);
+  const list = useHostList(hosts.data, q, (h) => hostSearchText(h, t));
   const filtered = list.rows;
 
-  const open = (h?: ProxyHost) => { setError(null); setEditing({ id: h?.id ?? null, form: h ? toForm(h) : { ...blank }, req: null, auth: authFrom(h) }); };
+  const open = async (h?: ProxyHost) => {
+    setError(null);
+    let htmlMissing = false;
+    // The list leaves custom page HTML out (html_bytes only): load the host before the form opens.
+    if (h && (h.page?.html_bytes ?? 0) > 0 && !h.page?.html) {
+      try { h = await api.get<ProxyHost>(`/api/proxy-hosts/${h.id}`); } catch { htmlMissing = true; toast.error(t("spHtmlNotLoaded")); }
+    }
+    setEditing({ id: h?.id ?? null, form: h ? toForm(h) : { ...blank }, req: null, auth: authFrom(h), htmlMissing });
+  };
   const newReq = (): CertReq => ({ email: user.email, dns: false, dnsc: newDnsChoice(providers[0]), staging: false, agree: false });
 
   const save = async () => {
@@ -121,6 +136,13 @@ export default function ProxyHosts() {
     if (!showUA) { delete body.under_attack; delete body.under_attack_config; }
     if (!showLocations) { delete body.locations; }
     if (!showPool) { delete body.extra_targets; }
+    // page: sent in page mode only (omitted = unchanged, so switching back keeps it)
+    if (!showContent) { delete body.content; delete body.page; } else if (form.content !== "page") { delete body.page; }
+    else if (form.page) {
+      // html_bytes is read-only; html omitted = the stored page is kept (not loaded, or unchanged)
+      const { html_bytes: _b, ...page } = form.page;
+      body.page = editing.htmlMissing && !page.html ? { ...page, html: undefined } : page;
+    }
     if (!showLimits) { delete body.rate_limit_id; }
     if (!showLists) { delete body.basic_auth; }
     const r = await run(() => (id ? api.put(`/api/proxy-hosts/${id}`, body) : api.post("/api/proxy-hosts", body)), { success: req ? undefined : t("savedDeployed") });
@@ -199,12 +221,17 @@ export default function ProxyHosts() {
                         <NoteLine notes={h.notes} />
                       </Td>
                       <Td className="hidden md:table-cell">
-                        <Mono className="inline-flex items-center gap-1.5 text-fg-muted"><ArrowRight className="h-3 w-3 text-fg-subtle" aria-hidden />{h.forward_scheme}://{h.forward_host}:{h.forward_port}</Mono>
-                        {(h.extra_targets?.length ?? 0) > 0 && (
+                        {h.content === "page" ? (
+                          <span className="inline-flex items-center gap-1.5 text-sm text-fg-muted"><FileText className="h-3 w-3 text-fg-subtle" aria-hidden />{t("spListPage", { name: pageLabel(t, h.page) })}</span>
+                        ) : (
+                          <Mono className="inline-flex items-center gap-1.5 text-fg-muted"><ArrowRight className="h-3 w-3 text-fg-subtle" aria-hidden />{h.forward_scheme}://{h.forward_host}:{h.forward_port}</Mono>
+                        )}
+                        {h.content !== "page" && (h.extra_targets?.length ?? 0) > 0 && (
                           <Tip label={<span className="block font-mono">{[{ forward_host: h.forward_host, forward_port: h.forward_port }, ...h.extra_targets!].map((x) => <span key={`${x.forward_host}:${x.forward_port}`} className="block">{x.forward_host}:{x.forward_port}</span>)}</span>}>
                             <span tabIndex={0} className={cn(tipTrigger, "ml-1.5 align-middle")}><Badge tone="info" icon={Server}>{t("poolCount", { n: h.extra_targets!.length + 1 })}</Badge></span>
                           </Tip>
                         )}
+                        <LocationsBadge locations={h.locations} />
                       </Td>
                       <Td className="hidden sm:table-cell"><SslBadge cert={h.certificate_id == null ? undefined : certById.get(h.certificate_id)} /></Td>
                       <Td className="hidden lg:table-cell">
@@ -256,7 +283,15 @@ export default function ProxyHosts() {
             </Field>
           </FormSection>
 
-          <FormSection title={t("secForward")}>
+          <FormSection title={f.content === "page" ? t("spPage") : t("secForward")}>
+            {showContent && (
+              <Segmented label={t("spContent")} value={f.content ?? "forward"} onChange={(v) => set({ content: v })}
+                options={[{ value: "forward", label: t("spForward") }, { value: "page", label: t("spPage") }]} />
+            )}
+            {f.content === "page" ? (<>
+              <p className="text-xs leading-5 text-fg-subtle">{t("spPageDesc")}</p>
+              <StaticPageFields value={pageOf(f.page)} onChange={(page) => set({ page })} error={error} host={f.domains[0] ?? ""} htmlMissing={!!editing?.htmlMissing} />
+            </>) : (<>
             <Field label={t("scheme")}>
               <Segmented label={t("scheme")} value={f.forward_scheme as "http" | "https"} onChange={(v) => set({ forward_scheme: v, forward_port: f.forward_port === 80 && v === "https" ? 443 : f.forward_port === 443 && v === "http" ? 80 : f.forward_port })}
                 options={[{ value: "http", label: "http" }, { value: "https", label: "https" }]} />
@@ -269,6 +304,7 @@ export default function ProxyHosts() {
             {can && <ConnCheck scheme={f.forward_scheme} host={f.forward_host} port={f.forward_port} extra={(f.extra_targets ?? []).map((x) => ({ host: x.forward_host, port: x.forward_port }))} />}
             {editing?.id != null && upErrById.has(editing.id) && <UpstreamCallout err={upErrById.get(editing.id)!} />}
             <SwitchRow label={t("websocket")} description={t("websocketDesc")} checked={f.websocket} onChange={(v) => set({ websocket: v })} />
+            </>)}
           </FormSection>
 
           {showLocations && <LocationsFields value={f.locations ?? []} onChange={(v) => set({ locations: v })} error={error} isAdmin={isAdmin} can={can} />}

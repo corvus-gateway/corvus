@@ -12,6 +12,7 @@ import { proxyProtocolStrings } from "./zh/proxyprotocol";
 import { updateStrings } from "./zh/update";
 import { headersStrings } from "./zh/headers";
 import { locationsStrings } from "./zh/locations";
+import { staticPageStrings } from "./zh/staticpage";
 import { limitsStrings } from "./zh/limits";
 import { certReplaceStrings } from "./zh/certreplace";
 import { dnsCredsStrings } from "./zh/dnscreds";
@@ -326,6 +327,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   ...updateStrings,
   ...headersStrings,
   ...locationsStrings,
+  ...staticPageStrings,
   ...limitsStrings,
   ...certReplaceStrings,
   ...dnsCredsStrings,
