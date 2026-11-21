@@ -33,7 +33,7 @@ func TestProxyHostStaticPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := s.ProxyHostByID(ctx, h.ID)
-	if err != nil || !got.IsPage() || got.Page != h.Page {
+	if err != nil || !got.IsPage() || got.Page != h.Page || got.Page.HTMLBytes != len(html) {
 		t.Fatalf("round trip: %v %v %+v", err, got.Content, got.Page.Status)
 	}
 	// a new host without a content mode is stored as forward

@@ -18,6 +18,7 @@ export const koStaticPage = {
   spPreviewHint: "콘솔 언어로 표시한 미리보기입니다. 방문자에게는 기본 문구가 브라우저 언어로 표시됩니다.",
   spPreviewFailed: "미리보기를 표시할 수 없습니다",
   spListPage: "페이지: {name}",
+  spHtmlNotLoaded: "페이지의 HTML을 불러오지 못했습니다. 여기에 새 HTML을 입력하지 않으면 저장된 내용이 그대로 유지됩니다.",
 } as const;
 
 export type StaticPageKey = keyof typeof koStaticPage;

@@ -74,7 +74,8 @@ export default function ProxyHosts() {
   const upErrById = useMemo(() => new Map((upErrs.data ?? []).map((e) => [e.host_id, e])), [upErrs.data]);
 
   const [q, setQ] = useState("");
-  const [editing, setEditing] = useState<{ id: number | null; form: Form; req: CertReq | null; auth: BasicAuthForm } | null>(null);
+  // htmlMissing: the host's custom page HTML could not be loaded; it is left out on save (kept as stored)
+  const [editing, setEditing] = useState<{ id: number | null; form: Form; req: CertReq | null; auth: BasicAuthForm; htmlMissing?: boolean } | null>(null);
   const dirty = useDirty(editing);
   const [deleting, setDeleting] = useState<ProxyHost | null>(null);
   const { busy, error, setError, run } = useSubmit();
@@ -104,7 +105,15 @@ export default function ProxyHosts() {
   const list = useHostList(hosts.data, q, (h) => hostSearchText(h, t));
   const filtered = list.rows;
 
-  const open = (h?: ProxyHost) => { setError(null); setEditing({ id: h?.id ?? null, form: h ? toForm(h) : { ...blank }, req: null, auth: authFrom(h) }); };
+  const open = async (h?: ProxyHost) => {
+    setError(null);
+    let htmlMissing = false;
+    // The list leaves custom page HTML out (html_bytes only): load the host before the form opens.
+    if (h && (h.page?.html_bytes ?? 0) > 0 && !h.page?.html) {
+      try { h = await api.get<ProxyHost>(`/api/proxy-hosts/${h.id}`); } catch { htmlMissing = true; toast.error(t("spHtmlNotLoaded")); }
+    }
+    setEditing({ id: h?.id ?? null, form: h ? toForm(h) : { ...blank }, req: null, auth: authFrom(h), htmlMissing });
+  };
   const newReq = (): CertReq => ({ email: user.email, dns: false, dnsc: newDnsChoice(providers[0]), staging: false, agree: false });
 
   const save = async () => {
@@ -129,6 +138,11 @@ export default function ProxyHosts() {
     if (!showPool) { delete body.extra_targets; }
     // page: sent in page mode only (omitted = unchanged, so switching back keeps it)
     if (!showContent) { delete body.content; delete body.page; } else if (form.content !== "page") { delete body.page; }
+    else if (form.page) {
+      // html_bytes is read-only; html omitted = the stored page is kept (not loaded, or unchanged)
+      const { html_bytes: _b, ...page } = form.page;
+      body.page = editing.htmlMissing && !page.html ? { ...page, html: undefined } : page;
+    }
     if (!showLimits) { delete body.rate_limit_id; }
     if (!showLists) { delete body.basic_auth; }
     const r = await run(() => (id ? api.put(`/api/proxy-hosts/${id}`, body) : api.post("/api/proxy-hosts", body)), { success: req ? undefined : t("savedDeployed") });
@@ -276,7 +290,7 @@ export default function ProxyHosts() {
             )}
             {f.content === "page" ? (<>
               <p className="text-xs leading-5 text-fg-subtle">{t("spPageDesc")}</p>
-              <StaticPageFields value={pageOf(f.page)} onChange={(page) => set({ page })} error={error} host={f.domains[0] ?? ""} />
+              <StaticPageFields value={pageOf(f.page)} onChange={(page) => set({ page })} error={error} host={f.domains[0] ?? ""} htmlMissing={!!editing?.htmlMissing} />
             </>) : (<>
             <Field label={t("scheme")}>
               <Segmented label={t("scheme")} value={f.forward_scheme as "http" | "https"} onChange={(v) => set({ forward_scheme: v, forward_port: f.forward_port === 80 && v === "https" ? 443 : f.forward_port === 443 && v === "http" ? 80 : f.forward_port })}

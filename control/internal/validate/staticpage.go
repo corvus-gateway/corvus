@@ -58,6 +58,7 @@ func StaticPage(p *store.StaticPage) error {
 
 // staticPage normalizes and validates a static page in place.
 func staticPage(errs *Errors, p *store.StaticPage) {
+	defer func() { p.HTMLBytes = len(p.HTML) }()
 	p.Template = strings.TrimSpace(p.Template)
 	if p.Template == "" {
 		p.Template = store.PageComingSoon

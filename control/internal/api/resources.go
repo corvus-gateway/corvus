@@ -116,8 +116,8 @@ type proxyHostInput struct {
 	ExtraTargets *[]store.Target `json:"extra_targets"`
 	// Content mode ("forward" | "page") and the page; omitted = unchanged (new hosts:
 	// forward). forward_host/forward_port are required only in forward mode.
-	Content *string           `json:"content"`
-	Page    *store.StaticPage `json:"page"`
+	Content *string    `json:"content"`
+	Page    *pageInput `json:"page"`
 
 	MaxUploadMB      *int  `json:"max_upload_mb"`      // null = global default (100 MB), 0 = unlimited
 	UpstreamTimeoutS *int  `json:"upstream_timeout_s"` // null = default (60 s); WebSocket hosts at least 1 h
@@ -182,10 +182,39 @@ func (in proxyHostInput) apply(h *store.ProxyHost) {
 		h.Content = *in.Content
 	}
 	if in.Page != nil {
-		h.Page = *in.Page
+		in.Page.apply(&h.Page)
 	}
 	if in.Notes != nil {
 		h.Notes = *in.Notes
+	}
+}
+
+// pageInput is a host's page in a request. html omitted (or null) keeps the stored HTML:
+// the host list leaves it out, so a client that saves a host it read from the list
+// never wipes it. html_bytes is read-only and ignored.
+type pageInput struct {
+	Template  string  `json:"template"`
+	Status    int     `json:"status"`
+	Title     string  `json:"title"`
+	Message   string  `json:"message"`
+	HTML      *string `json:"html"`
+	HTMLBytes *int    `json:"html_bytes"`
+}
+
+func (in pageInput) apply(p *store.StaticPage) {
+	html := p.HTML
+	if in.HTML != nil {
+		html = *in.HTML
+	}
+	*p = store.StaticPage{Template: in.Template, Status: in.Status, Title: in.Title, Message: in.Message, HTML: html, HTMLBytes: len(html)}
+}
+
+// listHosts strips custom page HTML from a host list (up to 256 KB per host, polled by
+// the console); page.html_bytes still tells its size.
+func listHosts(list []store.ProxyHost) {
+	for i := range list {
+		list[i].Page.HTMLBytes = len(list[i].Page.HTML)
+		list[i].Page.HTML = ""
 	}
 }
 
@@ -289,6 +318,7 @@ func (s *Server) listProxyHosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.withAuthUsers(r.Context(), list)
+	listHosts(list)
 	writeJSON(w, 200, list)
 }
 

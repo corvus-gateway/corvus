@@ -711,10 +711,13 @@ type StaticPage struct {
 	Title    string `json:"title"`    // built-in templates: replaces the default heading ("" = default)
 	Message  string `json:"message"`  // built-in templates: replaces the default text ("" = default)
 	HTML     string `json:"html"`     // custom: the page, served as is
+	// HTMLBytes is the size of HTML (read-only, never stored). The proxy host list leaves
+	// HTML out and reports only its size; GET /api/proxy-hosts/{id} returns both.
+	HTMLBytes int `json:"html_bytes"`
 }
 
 // IsZero reports whether no page was set.
-func (p StaticPage) IsZero() bool { return p == StaticPage{} }
+func (p StaticPage) IsZero() bool { p.HTMLBytes = 0; return p == StaticPage{} }
 
 // IsPage reports whether the host serves a static page instead of forwarding.
 func (h *ProxyHost) IsPage() bool { return h.Content == ContentPage }
@@ -784,6 +787,7 @@ func scanProxyHost(row interface{ Scan(...any) error }) (*ProxyHost, error) {
 		h.ExtraTargets = []Target{}
 	}
 	_ = json.Unmarshal([]byte(page), &h.Page)
+	h.Page.HTMLBytes = len(h.Page.HTML)
 	h.Websocket, h.SSLForced, h.HTTP2, h.Enabled = ws == 1, ssl == 1, h2 == 1, en == 1
 	if cert.Valid {
 		h.CertificateID = &cert.Int64
@@ -850,7 +854,10 @@ func (s *Store) SaveProxyHost(ctx context.Context, h *ProxyHost) error {
 	if h.Content == "" {
 		h.Content = ContentForward
 	}
-	page := toJSON(h.Page)
+	h.Page.HTMLBytes = len(h.Page.HTML)
+	stored := h.Page
+	stored.HTMLBytes = 0 // derived, not stored
+	page := toJSON(stored)
 	if h.ID == 0 {
 		res, err := s.q.ExecContext(ctx, `INSERT INTO proxy_hosts(domains, forward_scheme, forward_host, forward_port, websocket, certificate_id, ssl_forced, http2, waitroom_id, waitroom_path, advanced_config, enabled, client_ip, rate_limit_id, access_list_id, block_exploits, body_inspection, body_max_kb, security_headers, under_attack, under_attack_config, max_upload_mb, upstream_timeout_s, gzip, locations, extra_targets, content, page, notes, created_at, updated_at)
 			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,

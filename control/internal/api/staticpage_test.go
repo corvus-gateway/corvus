@@ -129,6 +129,65 @@ func TestProxyHostStaticPageAPI(t *testing.T) {
 	}
 }
 
+// The host list leaves custom HTML out (its size in page.html_bytes); the single host
+// has it. A PUT without page.html (an older client, or the console before it loaded the
+// HTML) keeps the stored page; an explicit html replaces it.
+func TestProxyHostPageHTMLInList(t *testing.T) {
+	e := newFullEnv(t)
+	ctx := context.Background()
+	html := "<!doctype html><h1>Own page</h1>" + strings.Repeat("x", 50*1024)
+	m := zsObj(t, e.must(201, "POST", "/api/proxy-hosts", map[string]any{
+		"domains": []string{"own.example.com"}, "content": "page", "page": map[string]any{"template": "custom", "html": html},
+	}), "proxy_host")
+	ph := id(m)
+	path := fmt.Sprintf("/api/proxy-hosts/%d", ph)
+
+	listed := func() map[string]any {
+		t.Helper()
+		_, list := e.callList("GET", "/api/proxy-hosts")
+		for _, x := range list {
+			if h := x.(map[string]any); int64(h["id"].(float64)) == ph {
+				return h["page"].(map[string]any)
+			}
+		}
+		t.Fatal("host not listed")
+		return nil
+	}
+	if p := listed(); p["html"] != "" || p["html_bytes"] != float64(len(html)) || p["template"] != "custom" {
+		t.Fatalf("list page: template %v, html %d bytes, html_bytes %v", p["template"], len(fmt.Sprint(p["html"])), p["html_bytes"])
+	}
+	if p := e.must(200, "GET", path, nil)["page"].(map[string]any); p["html"] != html || p["html_bytes"] != float64(len(html)) {
+		t.Fatalf("single host: html_bytes %v", p["html_bytes"])
+	}
+
+	// save the page as read from the list (html left out, html_bytes sent back): kept
+	lp := listed()
+	delete(lp, "html")
+	e.must(200, "PUT", path, map[string]any{"domains": []string{"own.example.com"}, "content": "page", "page": lp, "notes": "edited"})
+	// an older client that sends no page at all: kept
+	e.must(200, "PUT", path, map[string]any{"domains": []string{"own.example.com"}})
+	// html null: kept too
+	e.must(200, "PUT", path, map[string]any{"domains": []string{"own.example.com"}, "page": map[string]any{"template": "custom", "status": 410, "html": nil}})
+	h, _ := e.s.Store.ProxyHostByID(ctx, ph)
+	if h.Page.HTML != html || h.Page.Status != 410 || h.Notes != "edited" {
+		t.Fatalf("stored page after saves without html: %d bytes, status %d", len(h.Page.HTML), h.Page.Status)
+	}
+	if p, err := os.ReadFile(filepath.Join(e.dir, "nginx", "current", "pages", fmt.Sprintf("host-%d.html", ph))); err != nil || string(p) != html {
+		t.Fatalf("deployed page after saves without html: %d bytes, %v", len(p), err)
+	}
+	// an explicit html replaces it; an explicit empty one is refused, never stored
+	e.must(200, "PUT", path, map[string]any{"domains": []string{"own.example.com"}, "page": map[string]any{"template": "custom", "html": "<p>new</p>"}})
+	e.must(422, "PUT", path, map[string]any{"domains": []string{"own.example.com"}, "page": map[string]any{"template": "custom", "html": ""}})
+	if h, _ := e.s.Store.ProxyHostByID(ctx, ph); h.Page.HTML != "<p>new</p>" || h.Page.HTMLBytes != len("<p>new</p>") {
+		t.Fatalf("replaced page: %q", h.Page.HTML)
+	}
+	// a built-in template drops the HTML
+	e.must(200, "PUT", path, map[string]any{"domains": []string{"own.example.com"}, "page": map[string]any{"template": "parked"}})
+	if p := listed(); p["html_bytes"] != float64(0) || p["template"] != "parked" {
+		t.Fatalf("built-in template: %v", p)
+	}
+}
+
 // The console's page preview: built-in texts in the console language with the host
 // name; custom HTML as entered; invalid pages answer 422.
 func TestStaticPagePreview(t *testing.T) {

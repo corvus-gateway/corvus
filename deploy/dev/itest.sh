@@ -761,6 +761,9 @@ chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$SP -d "$SPJ,\
 sleep 1
 spget -o "$TN/page.out" "$G/"
 chk "$($PY -c "import json,sys; print(open(sys.argv[1],'rb').read().decode() == json.load(open(sys.argv[2]))['html'])" "$TN/page.out" "$TN/page.json")" True "custom HTML served exactly"
+SPB=$($PY -c "import json,sys; print(len(json.load(open(sys.argv[1]))['html'].encode()))" "$TN/page.json")
+chk "$(c $A/api/proxy-hosts | js "[(h['page']['html'], h['page']['html_bytes']) for h in d if h['id']==$SP][0]")" "('', $SPB)" "host list leaves the HTML out and reports its size"
+chk "$(c $A/api/proxy-hosts/$SP | js "d['page']['html_bytes'] == len(d['page']['html'].encode()) > 0")" True "single host returns the HTML"
 chk "$(spget -o /dev/null -D - "$G/" | tr -d '\r' | awk -F': ' 'tolower($1)=="cache-control"{print $2}')" "" "200 page without no-store"
 # Basic auth and a custom location that still forwards
 chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$SP -d "$SPJ,\"basic_auth\":{\"enabled\":true,\"users\":[{\"username\":\"pageu\",\"password\":\"page-pass-123\"}]},\"locations\":[{\"path\":\"/api\",\"forward_host\":\"demo\",\"forward_port\":80}]}")" 200 "password protection and a location on the page host"

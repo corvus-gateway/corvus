@@ -19,4 +19,5 @@ export const staticPageStrings: Record<StaticPageKey, string> = {
   spPreviewHint: "Предпросмотр на языке консоли; посетители видят стандартные тексты на языке своего браузера.",
   spPreviewFailed: "Не удалось показать предпросмотр",
   spListPage: "Страница: {name}",
+  spHtmlNotLoaded: "Не удалось загрузить HTML страницы. Он останется сохранённым, если не ввести здесь новый HTML.",
 };

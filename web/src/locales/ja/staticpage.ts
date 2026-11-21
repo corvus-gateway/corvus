@@ -19,4 +19,5 @@ export const staticPageStrings: Record<StaticPageKey, string> = {
   spPreviewHint: "コンソールの言語で表示したプレビューです。訪問者には既定の文言がブラウザの言語で表示されます。",
   spPreviewFailed: "プレビューを表示できません",
   spListPage: "ページ: {name}",
+  spHtmlNotLoaded: "ページの HTML を読み込めませんでした。ここに新しい HTML を入力しない限り、保存済みの内容のまま残ります。",
 };

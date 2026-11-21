@@ -38,7 +38,11 @@ export function hostSearchText(h: ProxyHost, t: (k: Key) => string): string {
 }
 
 /** "Serve a page": template, status, texts or HTML, and a preview from the control plane. */
-export function StaticPageFields({ value, onChange, error, host }: { value: StaticPage; onChange: (p: StaticPage) => void; error: unknown; host: string }) {
+export function StaticPageFields({ value, onChange, error, host, htmlMissing }: {
+  value: StaticPage; onChange: (p: StaticPage) => void; error: unknown; host: string;
+  /** The stored HTML could not be loaded: it is kept unless new HTML is entered. */
+  htmlMissing?: boolean;
+}) {
   const { t } = useI18n();
   const set = (p: Partial<StaticPage>) => onChange({ ...value, ...p });
   const custom = value.template === "custom";
@@ -69,7 +73,7 @@ export function StaticPageFields({ value, onChange, error, host }: { value: Stat
       </div>
       <p className="-mt-2 text-xs leading-5 text-fg-subtle">{t("spStatusHint")}</p>
       {custom ? (
-        <IdField label={t("pageHtml")} required hint={tooLarge ? undefined : `${t("spHtmlHint")} ${t("pageBytes", { n: (size / 1024).toFixed(1), max: MAX_HTML / 1024 })}`}
+        <IdField label={t("pageHtml")} required hint={tooLarge ? undefined : htmlMissing && !value.html ? t("spHtmlNotLoaded") : `${t("spHtmlHint")}${t("pageBytes", { n: (size / 1024).toFixed(1), max: MAX_HTML / 1024 })}`}
           error={tooLarge ? t("pageTooLarge", { max: MAX_HTML / 1024 }) : fieldErr(error, "page.html")}>
           {(id) => <Textarea id={id} rows={12} spellCheck={false} className="font-mono text-xs leading-5" value={value.html} invalid={tooLarge || !!fieldErr(error, "page.html")}
             onChange={(e) => set({ html: e.target.value })} placeholder={"<!doctype html>\n<title>…</title>\n<h1>…</h1>"} />}

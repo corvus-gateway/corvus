@@ -157,7 +157,8 @@ hosts forward, and updates leave the mode alone.
 | `template` | `coming_soon` (default), `maintenance`, `parked` or `custom` |
 | `status` | `200`, `404`, `410` or `503`; omitted/`0` = `503` for `maintenance`, `200` otherwise. Answers other than 200 carry `Cache-Control: no-store` |
 | `title`, `message` | Built-in templates only: replace the default heading (one line, ≤ 200 characters) and text (≤ 2000 characters, line breaks kept). Shown as plain text (HTML-escaped). Empty = the default text, shown in the visitor's browser language |
-| `html` | `custom` only: the page, at most 256 KB of UTF-8, served exactly as sent (no placeholders) |
+| `html` | `custom` only: the page, at most 256 KB of UTF-8, served exactly as sent (no placeholders). Omitted or `null` in a `PUT` keeps the stored HTML |
+| `html_bytes` | Read-only: the size of `html`. `GET /api/proxy-hosts` (the list) leaves `html` out (`""`) and reports only `html_bytes`; `GET /api/proxy-hosts/{id}` returns both |
 
 The page is checked whenever it is set, also in `forward` mode (switching modes keeps it). A
 `page` host may have custom locations, which keep forwarding, but not a location `/` nor a

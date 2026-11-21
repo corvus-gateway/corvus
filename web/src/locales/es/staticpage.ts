@@ -19,4 +19,5 @@ export const staticPageStrings: Record<StaticPageKey, string> = {
   spPreviewHint: "Vista previa en el idioma de la consola; los visitantes ven los textos predeterminados en el idioma de su navegador.",
   spPreviewFailed: "No se pudo mostrar la vista previa",
   spListPage: "Página: {name}",
+  spHtmlNotLoaded: "No se pudo cargar el HTML de la página. Se mantiene tal como está guardado salvo que introduzca aquí un HTML nuevo.",
 };

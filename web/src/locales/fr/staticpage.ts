@@ -19,4 +19,5 @@ export const staticPageStrings: Record<StaticPageKey, string> = {
   spPreviewHint: "Aperçu dans la langue de la console ; les visiteurs voient les textes par défaut dans la langue de leur navigateur.",
   spPreviewFailed: "Impossible d’afficher l’aperçu",
   spListPage: "Page : {name}",
+  spHtmlNotLoaded: "Le HTML de la page n’a pas pu être chargé. Il reste tel qu’enregistré, sauf si vous saisissez ici un nouveau HTML.",
 };

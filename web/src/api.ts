@@ -114,7 +114,13 @@ export interface ProxyHost {
 export type HostContent = "forward" | "page";
 export type PageTemplate = "parked" | "coming_soon" | "maintenance" | "custom";
 /** Page of a proxy host in "page" mode: a built-in template (optional title/message) or custom HTML. */
-export interface StaticPage { template: PageTemplate | ""; status: number; title: string; message: string; html: string }
+export interface StaticPage {
+  template: PageTemplate | ""; status: number; title: string; message: string;
+  /** Custom HTML; empty in the host list (load the host to get it). Omitted on save = unchanged. */
+  html: string;
+  /** Read-only: size of the custom HTML (also in the list). */
+  html_bytes?: number;
+}
 
 /** One more backend of a proxy host (see ProxyHost.extra_targets). */
 export interface ProxyTarget { forward_host: string; forward_port: number }

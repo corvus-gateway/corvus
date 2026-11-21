@@ -19,4 +19,5 @@ export const staticPageStrings: Record<StaticPageKey, string> = {
   spPreviewHint: "以控制台语言显示的预览；访问者看到的默认文字为其浏览器语言。",
   spPreviewFailed: "无法显示预览",
   spListPage: "页面：{name}",
+  spHtmlNotLoaded: "无法加载页面的 HTML。除非在此输入新的 HTML，否则将保留已保存的内容。",
 };
