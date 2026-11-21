@@ -64,7 +64,7 @@ func (s *Server) patchProxyHost(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	s.audit(r, "proxy_host.update", fmt.Sprintf("proxy_host:%d", id), map[string]any{"before": before, "after": h})
+	s.audit(r, "proxy_host.update", fmt.Sprintf("proxy_host:%d", id), map[string]any{"before": auditHost(before), "after": auditHost(h)})
 	s.underAttackChanged()
 	writeJSON(w, 200, map[string]any{"proxy_host": h, "version": v})
 }

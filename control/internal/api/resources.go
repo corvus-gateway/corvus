@@ -114,6 +114,10 @@ type proxyHostInput struct {
 	// Additional backends (round-robin with forward_host/forward_port, which stay the
 	// first one); omitted = unchanged (new hosts: none), [] leaves a single target.
 	ExtraTargets *[]store.Target `json:"extra_targets"`
+	// Content mode ("forward" | "page") and the page; omitted = unchanged (new hosts:
+	// forward). forward_host/forward_port are required only in forward mode.
+	Content *string           `json:"content"`
+	Page    *store.StaticPage `json:"page"`
 
 	MaxUploadMB      *int  `json:"max_upload_mb"`      // null = global default (100 MB), 0 = unlimited
 	UpstreamTimeoutS *int  `json:"upstream_timeout_s"` // null = default (60 s); WebSocket hosts at least 1 h
@@ -174,9 +178,26 @@ func (in proxyHostInput) apply(h *store.ProxyHost) {
 	if in.ExtraTargets != nil {
 		h.ExtraTargets = *in.ExtraTargets
 	}
+	if in.Content != nil {
+		h.Content = *in.Content
+	}
+	if in.Page != nil {
+		h.Page = *in.Page
+	}
 	if in.Notes != nil {
 		h.Notes = *in.Notes
 	}
+}
+
+// auditHost is a proxy host as recorded in the audit log: a custom page's HTML (up to
+// 256 KB) is replaced by its size.
+func auditHost(h *store.ProxyHost) any {
+	if h == nil || h.Page.HTML == "" {
+		return h
+	}
+	c := *h
+	c.Page.HTML = fmt.Sprintf("(%d bytes)", len(h.Page.HTML))
+	return &c
 }
 
 // checkProxyHost validates a host against the rest of the configuration (inside the tx).
@@ -329,7 +350,7 @@ func (s *Server) createProxyHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.startOrder(r, cert, newCred)
-	s.audit(r, "proxy_host.create", fmt.Sprintf("proxy_host:%d", h.ID), h)
+	s.audit(r, "proxy_host.create", fmt.Sprintf("proxy_host:%d", h.ID), auditHost(h))
 	s.underAttackChanged()
 	writeJSON(w, 201, map[string]any{"proxy_host": h, "version": v, "certificate": cert})
 }
@@ -384,7 +405,7 @@ func (s *Server) updateProxyHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.startOrder(r, cert, newCred)
-	s.audit(r, "proxy_host.update", fmt.Sprintf("proxy_host:%d", id), map[string]any{"before": before, "after": h})
+	s.audit(r, "proxy_host.update", fmt.Sprintf("proxy_host:%d", id), map[string]any{"before": auditHost(before), "after": auditHost(h)})
 	s.underAttackChanged()
 	writeJSON(w, 200, map[string]any{"proxy_host": h, "version": v, "certificate": cert})
 }
@@ -414,7 +435,7 @@ func (s *Server) deleteProxyHost(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	s.audit(r, "proxy_host.delete", fmt.Sprintf("proxy_host:%d", id), before)
+	s.audit(r, "proxy_host.delete", fmt.Sprintf("proxy_host:%d", id), auditHost(before))
 	s.underAttackChanged()
 	writeJSON(w, 200, map[string]any{"version": v})
 }

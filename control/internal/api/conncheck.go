@@ -182,7 +182,7 @@ func (s *Server) listUpstreamErrors(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		e := upstreamError{HostID: h.ID, At: f.At, Kind: f.Kind, Upstream: f.Upstream, Message: f.Message}
-		if n := len(h.ExtraTargets) + 1; n > 1 {
+		if n := len(h.ExtraTargets) + 1; n > 1 && !h.IsPage() { // a page host: errors come from its locations
 			e.Backends = n
 			e.AllDown = strings.Contains(strings.ToLower(f.Message), "no live upstreams")
 			if e.AllDown {

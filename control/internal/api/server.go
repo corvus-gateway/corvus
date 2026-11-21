@@ -124,7 +124,8 @@ func (s *Server) Handler() http.Handler {
 	op("PATCH /api/proxy-hosts/{id}", s.patchProxyHost)
 	op("DELETE /api/proxy-hosts/{id}", s.deleteProxyHost)
 	op("POST /api/proxy-hosts/{id}/under-attack/deactivate", s.deactivateUnderAttack)
-	op("POST /api/proxy-hosts/check", s.checkConnection) // conncheck.go
+	op("POST /api/proxy-hosts/check", s.checkConnection)          // conncheck.go
+	op("POST /api/proxy-hosts/page-preview", s.previewStaticPage) // staticpage.go
 	priv("GET /api/upstream-errors", s.listUpstreamErrors)
 	priv("GET /api/under-attack", s.listUnderAttack)
 

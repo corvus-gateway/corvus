@@ -104,11 +104,16 @@ func ProxyHost(h *store.ProxyHost) error {
 	if h.ForwardScheme != "http" && h.ForwardScheme != "https" {
 		errs.add("forward_scheme", "invalid", "scheme must be http or https")
 	}
-	h.ForwardHost = forwardHost(&errs, "forward_host", h.ForwardHost)
-	if h.ForwardPort < 1 || h.ForwardPort > 65535 {
-		errs.add("forward_port", "invalid", "port must be 1-65535")
+	if h.Content == store.ContentPage && strings.TrimSpace(h.ForwardHost) == "" {
+		// a host that serves a page needs no forward target
+		h.ForwardHost, h.ForwardPort, h.ExtraTargets = "", 0, []store.Target{}
+	} else {
+		h.ForwardHost = forwardHost(&errs, "forward_host", h.ForwardHost)
+		if h.ForwardPort < 1 || h.ForwardPort > 65535 {
+			errs.add("forward_port", "invalid", "port must be 1-65535")
+		}
+		extraTargets(&errs, h)
 	}
-	extraTargets(&errs, h)
 
 	if h.WaitroomPath == "" {
 		h.WaitroomPath = "/"
@@ -132,6 +137,7 @@ func ProxyHost(h *store.ProxyHost) error {
 		errs.add("advanced_config", "invalid", "%s", err.Error())
 	}
 	locations(&errs, h)
+	content(&errs, h)
 	return errs.OrNil()
 }
 

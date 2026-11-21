@@ -681,7 +681,43 @@ type ProxyHost struct {
 
 	// Custom locations: path prefixes routed to their own upstream (NPM "custom locations").
 	Locations []Location `json:"locations"`
+
+	// Content is what the host answers with: ContentForward (proxy to the forward host,
+	// the default) or ContentPage (serve Page; the forward target is not used).
+	Content string     `json:"content"`
+	Page    StaticPage `json:"page"`
 }
+
+// Content modes of a proxy host.
+const (
+	ContentForward = "forward"
+	ContentPage    = "page"
+)
+
+// Static page templates (StaticPage.Template).
+const (
+	PageParked      = "parked"
+	PageComingSoon  = "coming_soon"
+	PageMaintenance = "maintenance"
+	PageCustom      = "custom"
+)
+
+// StaticPage is the page a proxy host in ContentPage mode serves for every path (custom
+// locations excepted): a built-in template with an optional title and message, or the
+// operator's own HTML.
+type StaticPage struct {
+	Template string `json:"template"` // parked | coming_soon | maintenance | custom
+	Status   int    `json:"status"`   // 200 | 404 | 410 | 503
+	Title    string `json:"title"`    // built-in templates: replaces the default heading ("" = default)
+	Message  string `json:"message"`  // built-in templates: replaces the default text ("" = default)
+	HTML     string `json:"html"`     // custom: the page, served as is
+}
+
+// IsZero reports whether no page was set.
+func (p StaticPage) IsZero() bool { return p == StaticPage{} }
+
+// IsPage reports whether the host serves a static page instead of forwarding.
+func (h *ProxyHost) IsPage() bool { return h.Content == ContentPage }
 
 // Location routes a path prefix of a proxy host to its own upstream. It keeps the host's
 // protections (security rules, bans, rate limit, Basic auth, access queue).
@@ -723,15 +759,15 @@ type UnderAttackConfig struct {
 	DurationS  int      `json:"duration_s"`
 }
 
-const phCols = `id, domains, forward_scheme, forward_host, forward_port, websocket, certificate_id, ssl_forced, http2, waitroom_id, waitroom_path, advanced_config, enabled, client_ip, rate_limit_id, access_list_id, block_exploits, body_inspection, body_max_kb, security_headers, under_attack, under_attack_config, max_upload_mb, upstream_timeout_s, gzip, locations, extra_targets, notes, created_at, updated_at`
+const phCols = `id, domains, forward_scheme, forward_host, forward_port, websocket, certificate_id, ssl_forced, http2, waitroom_id, waitroom_path, advanced_config, enabled, client_ip, rate_limit_id, access_list_id, block_exploits, body_inspection, body_max_kb, security_headers, under_attack, under_attack_config, max_upload_mb, upstream_timeout_s, gzip, locations, extra_targets, content, page, notes, created_at, updated_at`
 
 func scanProxyHost(row interface{ Scan(...any) error }) (*ProxyHost, error) {
 	h := &ProxyHost{}
-	var domains, uaCfg, locs, extra string
+	var domains, uaCfg, locs, extra, page string
 	var ws, ssl, h2, en, be, gz int
 	var cert, wr, rl, al, mu, ut sql.NullInt64
 	if err := row.Scan(&h.ID, &domains, &h.ForwardScheme, &h.ForwardHost, &h.ForwardPort, &ws, &cert, &ssl, &h2, &wr, &h.WaitroomPath, &h.AdvancedConfig, &en,
-		&h.ClientIP, &rl, &al, &be, &h.BodyInspection, &h.BodyMaxKB, &h.SecurityHeaders, &h.UnderAttack, &uaCfg, &mu, &ut, &gz, &locs, &extra, &h.Notes, &h.CreatedAt, &h.UpdatedAt); err != nil {
+		&h.ClientIP, &rl, &al, &be, &h.BodyInspection, &h.BodyMaxKB, &h.SecurityHeaders, &h.UnderAttack, &uaCfg, &mu, &ut, &gz, &locs, &extra, &h.Content, &page, &h.Notes, &h.CreatedAt, &h.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -747,6 +783,7 @@ func scanProxyHost(row interface{ Scan(...any) error }) (*ProxyHost, error) {
 	if h.ExtraTargets == nil {
 		h.ExtraTargets = []Target{}
 	}
+	_ = json.Unmarshal([]byte(page), &h.Page)
 	h.Websocket, h.SSLForced, h.HTTP2, h.Enabled = ws == 1, ssl == 1, h2 == 1, en == 1
 	if cert.Valid {
 		h.CertificateID = &cert.Int64
@@ -810,11 +847,15 @@ func (s *Store) SaveProxyHost(ctx context.Context, h *ProxyHost) error {
 		h.ExtraTargets = []Target{}
 	}
 	extra := toJSON(h.ExtraTargets)
+	if h.Content == "" {
+		h.Content = ContentForward
+	}
+	page := toJSON(h.Page)
 	if h.ID == 0 {
-		res, err := s.q.ExecContext(ctx, `INSERT INTO proxy_hosts(domains, forward_scheme, forward_host, forward_port, websocket, certificate_id, ssl_forced, http2, waitroom_id, waitroom_path, advanced_config, enabled, client_ip, rate_limit_id, access_list_id, block_exploits, body_inspection, body_max_kb, security_headers, under_attack, under_attack_config, max_upload_mb, upstream_timeout_s, gzip, locations, extra_targets, notes, created_at, updated_at)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		res, err := s.q.ExecContext(ctx, `INSERT INTO proxy_hosts(domains, forward_scheme, forward_host, forward_port, websocket, certificate_id, ssl_forced, http2, waitroom_id, waitroom_path, advanced_config, enabled, client_ip, rate_limit_id, access_list_id, block_exploits, body_inspection, body_max_kb, security_headers, under_attack, under_attack_config, max_upload_mb, upstream_timeout_s, gzip, locations, extra_targets, content, page, notes, created_at, updated_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			toJSON(h.Domains), h.ForwardScheme, h.ForwardHost, h.ForwardPort, b2i(h.Websocket), h.CertificateID, b2i(h.SSLForced), b2i(h.HTTP2),
-			h.WaitroomID, h.WaitroomPath, h.AdvancedConfig, b2i(h.Enabled), h.ClientIP, h.RateLimitID, h.AccessListID, b2i(h.BlockExploits), h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders, h.UnderAttack, uaCfg, h.MaxUploadMB, h.UpstreamTimeoutS, b2i(h.Gzip), locs, extra, h.Notes, t, t)
+			h.WaitroomID, h.WaitroomPath, h.AdvancedConfig, b2i(h.Enabled), h.ClientIP, h.RateLimitID, h.AccessListID, b2i(h.BlockExploits), h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders, h.UnderAttack, uaCfg, h.MaxUploadMB, h.UpstreamTimeoutS, b2i(h.Gzip), locs, extra, h.Content, page, h.Notes, t, t)
 		if err != nil {
 			return err
 		}
@@ -822,9 +863,9 @@ func (s *Store) SaveProxyHost(ctx context.Context, h *ProxyHost) error {
 		h.CreatedAt, h.UpdatedAt = t, t
 		return nil
 	}
-	res, err := s.q.ExecContext(ctx, `UPDATE proxy_hosts SET domains=?, forward_scheme=?, forward_host=?, forward_port=?, websocket=?, certificate_id=?, ssl_forced=?, http2=?, waitroom_id=?, waitroom_path=?, advanced_config=?, enabled=?, client_ip=?, rate_limit_id=?, access_list_id=?, block_exploits=?, body_inspection=?, body_max_kb=?, security_headers=?, under_attack=?, under_attack_config=?, max_upload_mb=?, upstream_timeout_s=?, gzip=?, locations=?, extra_targets=?, notes=?, updated_at=? WHERE id=?`,
+	res, err := s.q.ExecContext(ctx, `UPDATE proxy_hosts SET domains=?, forward_scheme=?, forward_host=?, forward_port=?, websocket=?, certificate_id=?, ssl_forced=?, http2=?, waitroom_id=?, waitroom_path=?, advanced_config=?, enabled=?, client_ip=?, rate_limit_id=?, access_list_id=?, block_exploits=?, body_inspection=?, body_max_kb=?, security_headers=?, under_attack=?, under_attack_config=?, max_upload_mb=?, upstream_timeout_s=?, gzip=?, locations=?, extra_targets=?, content=?, page=?, notes=?, updated_at=? WHERE id=?`,
 		toJSON(h.Domains), h.ForwardScheme, h.ForwardHost, h.ForwardPort, b2i(h.Websocket), h.CertificateID, b2i(h.SSLForced), b2i(h.HTTP2),
-		h.WaitroomID, h.WaitroomPath, h.AdvancedConfig, b2i(h.Enabled), h.ClientIP, h.RateLimitID, h.AccessListID, b2i(h.BlockExploits), h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders, h.UnderAttack, uaCfg, h.MaxUploadMB, h.UpstreamTimeoutS, b2i(h.Gzip), locs, extra, h.Notes, t, h.ID)
+		h.WaitroomID, h.WaitroomPath, h.AdvancedConfig, b2i(h.Enabled), h.ClientIP, h.RateLimitID, h.AccessListID, b2i(h.BlockExploits), h.BodyInspection, h.BodyMaxKB, h.SecurityHeaders, h.UnderAttack, uaCfg, h.MaxUploadMB, h.UpstreamTimeoutS, b2i(h.Gzip), locs, extra, h.Content, page, h.Notes, t, h.ID)
 	if err != nil {
 		return err
 	}

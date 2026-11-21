@@ -202,6 +202,7 @@ type hostView struct {
 	ErrorCodes      []int  // upstream errors answered with the error page (see UpstreamErrorCodes)
 	UploadLimit     string // client_max_body_size for the server ("" = global default)
 	GzipOff         bool   // the host turned compression off
+	ServesPage      bool   // the host serves a static page (Root.PageFile), no forward host
 	P               Paths
 }
 
@@ -229,6 +230,11 @@ type target struct {
 	Advanced         string // location advanced configuration
 	// OwnConnectTimeout: the host's advanced configuration sets proxy_connect_timeout.
 	OwnConnectTimeout bool
+	// PageFile: instead of proxying, the location serves this page (a host that serves
+	// a static page) with PageStatus; PageHost: the page has the host name marker.
+	PageFile   string
+	PageStatus int
+	PageHost   bool
 }
 
 // server is one server line of an upstream block.
@@ -319,6 +325,12 @@ func (v *hostView) targets(static map[string]string, hostGW string, self func(st
 			Console:   v.P.AdminPort > 0 && port == v.P.AdminPort && consoleAddr(host, addr, hostGW, self),
 			Websocket: v.Websocket, UpstreamTimeoutS: v.UpstreamTimeoutS, ErrorCodes: v.ErrorCodes, RateLimit: v.RateLimit}
 	}
+	if v.ServesPage {
+		// no upstream block: "/" (and a protected access queue path) serve the page
+		v.Root = v.Host
+		v.addLocations(mk)
+		return
+	}
 	v.Host = mk(fmt.Sprintf("corvus_up_%d", v.ID), v.ForwardScheme, v.ForwardHost, v.ForwardPort)
 	for _, e := range v.ExtraTargets {
 		addr := upstreamAddr(e.ForwardHost, static, hostGW)
@@ -331,6 +343,12 @@ func (v *hostView) targets(static map[string]string, hostGW string, self func(st
 	v.Host.OwnConnectTimeout = topLevelDirective(v.AdvancedConfig, "proxy_connect_timeout")
 	v.Upstream = v.Host.Addr
 	v.Root = v.Host
+	v.addLocations(mk)
+}
+
+// addLocations adds the targets of the custom locations; a location "/" replaces the
+// root target.
+func (v *hostView) addLocations(mk func(name, scheme, host string, port int) target) {
 	for i, l := range v.ProxyHost.Locations {
 		t := mk(fmt.Sprintf("corvus_up_%d_%d", v.ID, i+1), l.ForwardScheme, l.ForwardHost, l.ForwardPort)
 		t.Prefix, t.Path, t.Advanced = l.Path, l.ForwardPath, l.AdvancedConfig
@@ -608,8 +626,20 @@ func (c *Compiler) Render(ctx context.Context, s *store.Store, dir string) error
 		if !topLevelDirective(hc.AdvancedConfig, "error_page") {
 			v.ErrorCodes = errorCodes(v.RateLimit)
 		}
+		if hc.IsPage() {
+			file, err := writeStaticPage(dir, &hc)
+			if err != nil {
+				return err
+			}
+			v.ServesPage = true
+			v.Host = target{PageFile: file, PageStatus: hc.Page.Status, PageHost: hc.Page.Template != store.PageCustom}
+		}
 		v.targets(static, hostGW, c.self())
-		for _, t := range append([]target{v.Host}, v.LocUpstreams...) {
+		upstreams := v.LocUpstreams
+		if !v.ServesPage {
+			upstreams = append([]target{v.Host}, upstreams...)
+		}
+		for _, t := range upstreams {
 			for _, sv := range t.Servers {
 				if why := c.P.InternalTarget(sv.Addr, sv.Port); why != "" {
 					return fmt.Errorf("proxy host %d: %s", h.ID, why)
