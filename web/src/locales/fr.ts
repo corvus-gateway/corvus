@@ -12,6 +12,7 @@ import { proxyProtocolStrings } from "./fr/proxyprotocol";
 import { updateStrings } from "./fr/update";
 import { headersStrings } from "./fr/headers";
 import { locationsStrings } from "./fr/locations";
+import { staticPageStrings } from "./fr/staticpage";
 import { limitsStrings } from "./fr/limits";
 import { certReplaceStrings } from "./fr/certreplace";
 import { dnsCredsStrings } from "./fr/dnscreds";
@@ -325,6 +326,7 @@ export const fr: Partial<Record<keyof typeof ko, string>> = {
   ...updateStrings,
   ...headersStrings,
   ...locationsStrings,
+  ...staticPageStrings,
   ...limitsStrings,
   ...certReplaceStrings,
   ...dnsCredsStrings,

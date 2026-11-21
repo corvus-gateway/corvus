@@ -12,6 +12,7 @@ import { proxyProtocolStrings } from "./ru/proxyprotocol";
 import { updateStrings } from "./ru/update";
 import { headersStrings } from "./ru/headers";
 import { locationsStrings } from "./ru/locations";
+import { staticPageStrings } from "./ru/staticpage";
 import { limitsStrings } from "./ru/limits";
 import { certReplaceStrings } from "./ru/certreplace";
 import { dnsCredsStrings } from "./ru/dnscreds";
@@ -325,6 +326,7 @@ export const ru: Partial<Record<keyof typeof ko, string>> = {
   ...updateStrings,
   ...headersStrings,
   ...locationsStrings,
+  ...staticPageStrings,
   ...limitsStrings,
   ...certReplaceStrings,
   ...dnsCredsStrings,

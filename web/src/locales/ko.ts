@@ -12,6 +12,7 @@ import { koProxyProtocol } from "./proxyprotocol.i18n";
 import { koUpdate } from "./update.i18n";
 import { koHeaders } from "./headers.i18n";
 import { koLocations } from "./locations.i18n";
+import { koStaticPage } from "./staticpage.i18n";
 import { koLimits } from "./limits.i18n";
 import { koCertReplace } from "./certreplace.i18n";
 import { koDnsCreds } from "./dnscreds.i18n";
@@ -223,6 +224,7 @@ export const ko = {
   ...koUpdate,
   ...koHeaders,
   ...koLocations,
+  ...koStaticPage,
   ...koLimits,
   ...koCertReplace,
   ...koDnsCreds,

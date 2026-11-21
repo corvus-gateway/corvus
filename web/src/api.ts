@@ -105,8 +105,16 @@ export interface ProxyHost {
   extra_targets?: ProxyTarget[];
   /** Read-only: usernames of the host's password protection (HTTP Basic auth). */
   basic_auth_users?: string[];
+  /** "page": the host serves `page` instead of forwarding (forward_* optional). Default "forward". */
+  content?: HostContent;
+  page?: StaticPage;
   created_at: string; updated_at: string;
 }
+
+export type HostContent = "forward" | "page";
+export type PageTemplate = "parked" | "coming_soon" | "maintenance" | "custom";
+/** Page of a proxy host in "page" mode: a built-in template (optional title/message) or custom HTML. */
+export interface StaticPage { template: PageTemplate | ""; status: number; title: string; message: string; html: string }
 
 /** One more backend of a proxy host (see ProxyHost.extra_targets). */
 export interface ProxyTarget { forward_host: string; forward_port: number }
