@@ -97,6 +97,7 @@ Role: **public** = no authentication · **viewer** = any signed-in user or token
 | PUT | `/api/proxy-hosts/{id}` | operator | Replace |
 | PATCH | `/api/proxy-hosts/{id}` | operator | Turn on or off: `{"enabled": bool}` (nothing else changes) |
 | DELETE | `/api/proxy-hosts/{id}` | operator | Delete |
+| POST | `/api/proxy-hosts/page-preview` | operator | Render a static page for the console preview (see `content` below) |
 | GET | `/api/under-attack` | viewer | Hosts with under attack mode `on` or `auto` and whether it is active now |
 | POST | `/api/proxy-hosts/{id}/under-attack/deactivate` | operator | End an automatic activation now (`409` when none is running) |
 | GET | `/api/redirection-hosts` | viewer | List redirection hosts |
@@ -133,10 +134,39 @@ Proxy host fields: `domains` (array), `forward_scheme` (`http`/`https`), `forwar
 `rate_limit_id`, `access_list_id` or `basic_auth`, `block_exploits`, `body_inspection`
 (`off`, `log`, `block`), `body_max_kb`, `security_headers`, `under_attack`, `under_attack_config`,
 `max_upload_mb`, `upstream_timeout_s`, `gzip`, `advanced_config`, `locations`, `extra_targets`,
-`notes`, `enabled`.
-`under_attack`, `under_attack_config`, `locations`, `extra_targets` and `notes` keep their stored
-value when omitted from a `PUT` (`"locations": []` removes all locations, `"extra_targets": []` all
-extra backends).
+`content`, `page`, `notes`, `enabled`.
+`under_attack`, `under_attack_config`, `locations`, `extra_targets`, `content`, `page` and `notes`
+keep their stored value when omitted from a `PUT` (`"locations": []` removes all locations,
+`"extra_targets": []` all extra backends).
+
+`content` (default `forward`) is what the host answers with: `forward` proxies to the forward
+target as always; `page` serves `page` for every path and method instead (no upstream; security
+rules, bans, attack-pattern and body inspection, "under attack" mode, rate limit, Basic auth, the
+access queue, Force HTTPS/HSTS, security headers, the access log and statistics apply as usual).
+`forward_host`/`forward_port` are required only in `forward` mode; a `page` host may keep one (it
+is validated when set) or send `""`/`0`. Clients that do not know `content` keep working: new
+hosts forward, and updates leave the mode alone.
+
+```json
+"content": "page",
+"page": {"template": "maintenance", "status": 503, "title": "", "message": "Back at 18:00 UTC", "html": ""}
+```
+
+| Field | Meaning |
+|---|---|
+| `template` | `coming_soon` (default), `maintenance`, `parked` or `custom` |
+| `status` | `200`, `404`, `410` or `503`; omitted/`0` = `503` for `maintenance`, `200` otherwise. Answers other than 200 carry `Cache-Control: no-store` |
+| `title`, `message` | Built-in templates only: replace the default heading (one line, ≤ 200 characters) and text (≤ 2000 characters, line breaks kept). Shown as plain text (HTML-escaped). Empty = the default text, shown in the visitor's browser language |
+| `html` | `custom` only: the page, at most 256 KB of UTF-8, served exactly as sent (no placeholders) |
+
+The page is checked whenever it is set, also in `forward` mode (switching modes keeps it). A
+`page` host may have custom locations, which keep forwarding, but not a location `/` nor a
+`location /` in `advanced_config` (`422`, field `locations[i].path` / `advanced_config`, code
+`page_host`). The audit log records custom HTML by its size only.
+
+`POST /api/proxy-hosts/page-preview` (operator; `{"page": {…}, "host": "example.com", "lang": "ko"}`)
+answers `{"html": "…", "status": 503}`: the page as the gateway serves it, built-in texts in `lang`
+and the host name filled in (custom HTML unchanged); `422` for an invalid page.
 
 `extra_targets` (default `[]`) are further backends of the host, served round-robin together with
 `forward_host`/`forward_port`, which stay the first backend (so clients that only know those two

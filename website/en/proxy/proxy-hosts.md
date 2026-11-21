@@ -11,8 +11,9 @@ applies TLS and protection on the way. For a step-by-step first setup see
 ![Proxy hosts](../img/proxy-hosts.png){ .shot }
 
 The list shows each host's target, certificate and the features that are on (HTTPS, WebSocket,
-access queue, rate limit, exploit blocking, security headers …). The switch in **Status** turns a
-host off without deleting it.
+access queue, rate limit, exploit blocking, security headers …). A host that
+[serves a page](#serve-a-page-instead-of-a-backend) shows the page instead of a target, for example
+**Page: Maintenance (503)**. The switch in **Status** turns a host off without deleting it.
 
 ## The form, section by section
 
@@ -119,9 +120,55 @@ The list shows **N backends** next to the forward target; hover it for the addre
 [API](../reference/api.md), `forward_host`/`forward_port` stay the first backend and
 `extra_targets` lists the others; clients that do not send `extra_targets` keep working unchanged.
 
+### Serve a page instead of a backend
+
+When a domain has no service yet, or its service is down for maintenance, choose **Serve a page**
+instead of **Forward to a service** at the top of the forward target section. The gateway then
+answers with a page itself: no forward host is needed, and **Check connection** is not shown.
+
+![A proxy host that serves a maintenance page](../img/proxy-host-page.png){ .shot .panel }
+
+| Template | Shows | Default status |
+|---|---|---|
+| Coming soon | "Coming soon" with a short text | 200 |
+| Maintenance | "Down for maintenance" with a short text | 503 |
+| Parked domain | "This domain is parked" | 200 |
+| Custom HTML | Your own page, sent exactly as entered (up to 256 KB) | 200 |
+
+- **HTTP status**: 200, 404, 410 or 503. 503 is the usual answer while a site is down for
+  maintenance: search engines come back later instead of indexing the page. Answers other than 200
+  carry `Cache-Control: no-store`, so browsers and CDNs do not keep the page once the host forwards
+  again. No `Retry-After` header is sent.
+- **Title** and **Message** (built-in templates): leave them empty for the default text, which the
+  page shows in the visitor's browser language (the 8 console languages). Your own text is shown as
+  entered, as plain text: HTML is escaped, line breaks are kept. The built-in pages also show the
+  host name and look like the gateway's [block and error pages](../operations/pages.md), in light
+  and dark.
+- **Custom HTML**: put images (`data:` URLs) and CSS into the page or load them from another site;
+  the host serves only this one page. Nothing in it is replaced (`{{HOST}}` stays as written).
+- The preview in the form is rendered by the control plane with the same template, in the console
+  language.
+- The page answers every path and method (`GET /anything`, `POST /form` …); `HEAD` gets the headers
+  only.
+- Everything else applies as for a host that forwards: security rules, bans, attack-pattern
+  blocking, "under attack" mode, rate limit, Basic auth, the access queue, Force HTTPS and HSTS,
+  security headers, the access log and traffic statistics.
+- [Custom locations](locations.md) keep forwarding, for example a maintenance page at `/` while
+  `/api` still reaches the backend. A location `/` is not allowed on a host that serves a page (it
+  would replace the page), nor a `location /` in its advanced configuration.
+- Switching back to **Forward to a service** keeps the page (and a host that serves a page keeps a
+  forward target entered before), so you can switch back and forth.
+
+Through the [API](../reference/api.md) the host has `content` (`forward` or `page`) and `page`;
+clients that do not send them keep working unchanged.
+
 ### Custom locations
 
 Send paths such as `/api` to another service. See [Custom locations](locations.md).
+
+In the list, a host with custom locations shows **N locations** next to its target; hover the badge
+or move the keyboard focus to it to see each path with its target. The list search also finds a host
+by a location's path or forward host.
 
 ### TLS
 

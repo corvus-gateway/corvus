@@ -56,6 +56,7 @@ OpenResty, plan de contrôle en Go, console React) capable d'**importer une conf
 **Proxy et TLS**
 - Hôtes proxy avec jokers (wildcards), WebSocket, HTTP/2, HTTPS forcé et extraits Nginx personnalisés
 - Plusieurs backends par hôte proxy : requêtes réparties en round-robin, un backend en échec ignoré pendant 30 secondes (basculement passif)
+- Pages sans backend : un hôte proxy peut servir une page « bientôt disponible », de maintenance ou de domaine parqué (ou votre propre HTML) avec le statut de votre choix, protections comprises ; les emplacements personnalisés continuent de transférer (p. ex. `/api` pendant la maintenance)
 - Notes sur les hôtes et les streams, pour se souvenir à quoi sert chacun (avec recherche)
 - Tester la connexion : vérifier la cible d’un hôte depuis la passerelle avant d’enregistrer (DNS, port, pare-feu, TLS), et voir dans la liste des hôtes pourquoi les visiteurs ont reçu une 502/504
 - Emplacements personnalisés : des chemins (ex. `/api`) vers leur propre upstream, avec les protections de l'hôte
