@@ -40,6 +40,19 @@ services:
 | 80 / 443 | Gateway: the traffic you proxy |
 | 9443 | Admin console and API. Allow only trusted networks (firewall, or *Network → Admin console allowed networks*) |
 
+!!! warning "ufw and firewalld do not filter ports published by Docker"
+    Docker adds its own NAT rules for `ports:`, so connections to a published port never pass
+    through ufw's (or firewalld's) input rules: a port that `ufw status` shows as closed can still be
+    reachable from the internet. To keep the console private, use one of these:
+
+    - **Admin console allowed networks** on the *Network* page (enforced by Corvus itself).
+    - Publish the console only on an address that isn't public, e.g. `'127.0.0.1:9443:9443'` (then use
+      an SSH tunnel) or `'10.0.0.5:9443:9443'` (a LAN or VPN address).
+    - Filter in the `DOCKER-USER` iptables chain, which Docker leaves alone.
+
+    With [host networking](#run-it-with-host-networking-optional) there is no Docker NAT, and your
+    host firewall applies as usual.
+
 All settings, certificates and history are stored in `./data`.
 
 ## 2. Start it
