@@ -64,8 +64,9 @@ they created are deleted. See the [HTTP API](../reference/api.md).
   minutes, the account is locked for a while. A browser that signed in to the account before keeps
   its own count, so failures from elsewhere don't lock you out. Wrong current passwords when
   changing the password or turning off two-step verification count the same way.
-- Allow port 9443 only from trusted networks: with a firewall, or with **Admin console allowed
-  networks** on the *Network* page.
+- Allow port 9443 only from trusted networks: with **Admin console allowed networks** on the
+  *Network* page, by publishing it on a private address only, or with a firewall. ufw and firewalld do
+  not filter ports published by Docker ([details](../getting-started/install.md)).
 - Locked out by that list? Start the container once with `CORVUS_ADMIN_ALLOW_ANY=1`, fix the list,
   and remove the variable again.
 - To reach the console under a name or another IP, add them to its certificate with
