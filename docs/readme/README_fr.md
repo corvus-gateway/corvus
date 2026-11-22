@@ -27,11 +27,15 @@
 
 </div>
 
-Corvus est une passerelle auto-hébergée placée devant vos services web. Elle est aussi simple à
-exploiter que Nginx Proxy Manager — domaines, redirection et SSL gratuit en quelques clics — et elle
-**surveille, protège et contrôle** en plus le trafic qui la traverse : supervision en direct, blocage
-des attaques, limitation de débit et file d'accès pour absorber les pics de trafic. Tout s'exécute
-sur votre propre serveur ; aucun trafic n'est envoyé vers un cloud tiers.
+Corvus est un **reverse proxy auto-hébergé avec pare-feu applicatif web (WAF) intégré**, gratuit et
+open source (Apache-2.0). Il est aussi simple à exploiter que Nginx Proxy Manager (domaines,
+redirection et SSL Let's Encrypt gratuit en quelques clics dans une console web) et il
+**surveille, protège et contrôle** en plus le trafic qui le traverse : blocage des attaques activé
+par défaut, bannissement automatique d'IP, limitation de débit, défi anti-bots, supervision en
+direct et file d'accès pour absorber les pics de trafic. Un seul conteneur Docker, toutes les
+fonctions gratuites, et aucun trafic n'est envoyé vers un cloud tiers.
+[Comparaison](https://corvusgateway.org/compare/) avec Nginx Proxy Manager, Caddy, Traefik,
+BunkerWeb, SafeLine et d'autres.
 
 <p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
 

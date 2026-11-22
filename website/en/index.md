@@ -1,5 +1,5 @@
 ---
-description: "Corvus AWPG is a self-hosted gateway for your web services: reverse proxy and free SSL as easy as Nginx Proxy Manager, plus WAF rules, auto-bans, a traffic monitor and an access queue."
+description: "Corvus AWPG is a free, open-source, self-hosted reverse proxy with a built-in WAF: proxy hosts and free SSL as easy as Nginx Proxy Manager, plus attack blocking, auto-bans, rate limits, a traffic monitor and a waiting room."
 title: Corvus AWPG
 hide:
   - navigation
@@ -7,10 +7,11 @@ hide:
 
 # Corvus AWPG
 
-**Corvus is a self-hosted gateway that sits in front of your web services.** It is as easy to run
-as Nginx Proxy Manager (domains, forwarding and free SSL in a few clicks), and it also **watches,
-protects and controls** the traffic that passes through it. Everything runs on your own server; no
-traffic goes to a third-party cloud.
+**Corvus is a free, open-source, self-hosted reverse proxy with a built-in web application firewall
+(WAF).** It is as easy to run as Nginx Proxy Manager (domains, forwarding and free SSL in a few
+clicks), and it also **watches, protects and controls** the traffic that passes through it.
+Everything runs on your own server; no traffic goes to a third-party cloud. Apache-2.0, one Docker
+container, every feature free.
 
 Corvus takes ports 80 and 443 and passes each request on to the right app or web server behind it,
 so you can run several sites on one server with HTTPS and protection in front of all of them.
@@ -49,6 +50,16 @@ server you already run.
 | **Access queue** | [Capacity-based waiting room](access-queue.md) for traffic spikes |
 | **Monitoring** | [Live traffic, request logs and security events](operations/traffic.md), [visitor statistics](operations/traffic.md#visitor-statistics) with referrer origins, UTM values and GoAccess-ready exports, [alerts](operations/alerts.md) to Slack, Discord, Teams, Telegram and more |
 | **Operations** | Every change is tested and versioned, [backup & restore](operations/backup.md), [roles, MFA and SSO](operations/users.md), [update notices](reference/configuration.md) |
+
+## Learn more
+
+- **Guides:** [Securing self-hosted services exposed to the internet](guides/secure-self-hosted.md) ·
+  [Blocking bots and scanners](guides/block-bots.md) · [Traffic floods and DDoS](guides/ddos.md) ·
+  [A WAF for Nginx Proxy Manager](guides/waf-for-npm.md)
+- **Compare:** [Corvus and other reverse proxies and WAFs](compare/index.md): Nginx Proxy Manager,
+  NPMplus, Caddy, Traefik, Zoraxy, BunkerWeb, SafeLine, CrowdSec, Pangolin, and when Corvus is the
+  wrong choice
+- **[FAQ](faq.md):** license, requirements, what Corvus does and does not do
 
 !!! tip "Safe defaults"
     You don't need to write a single rule to get started. Basic attack detection is on for every new

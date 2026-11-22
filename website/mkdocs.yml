@@ -1,7 +1,7 @@
 # English documentation. The Korean site (mkdocs.ko.yml) inherits this file.
 # Build both: website/build.sh  ·  preview: mkdocs serve -f website/mkdocs.yml
 site_name: Corvus AWPG
-site_description: Self-hosted web gateway with built-in protection, monitoring and an access queue.
+site_description: Open-source, self-hosted reverse proxy with a built-in WAF, automatic bans, monitoring and an access queue.
 site_url: https://corvusgateway.org/
 repo_url: https://github.com/corvus-gateway/corvus
 repo_name: corvus-gateway/corvus
@@ -73,6 +73,9 @@ markdown_extensions:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
+hooks:
+  - hooks/seo.py   # JSON-LD on every page, llms.txt and llms-full.txt
+
 validation:
   links:
     absolute_links: relative_to_docs
@@ -85,7 +88,6 @@ nav:
       - Install: getting-started/install.md
       - Install on a NAS: getting-started/nas.md
       - First proxy host: getting-started/first-host.md
-      - Corvus vs NPM: getting-started/compare-npm.md
       - Migrate from NPM: getting-started/migrate-npm.md
       - Upgrade: getting-started/upgrade.md
   - Proxy:
@@ -101,6 +103,22 @@ nav:
       - Challenge & under attack: security/challenge.md
       - Bans & rate limits: security/bans.md
   - Access queue: access-queue.md
+  - Guides:
+      - Securing self-hosted services: guides/secure-self-hosted.md
+      - Blocking bots and scanners: guides/block-bots.md
+      - Traffic floods and DDoS: guides/ddos.md
+      - A WAF for Nginx Proxy Manager: guides/waf-for-npm.md
+  - Compare:
+      - Overview: compare/index.md
+      - vs Nginx Proxy Manager: getting-started/compare-npm.md
+      - vs NPMplus: compare/npmplus.md
+      - vs Caddy: compare/caddy.md
+      - vs Traefik: compare/traefik.md
+      - vs Zoraxy: compare/zoraxy.md
+      - vs BunkerWeb: compare/bunkerweb.md
+      - vs SafeLine: compare/safeline.md
+      - and CrowdSec: compare/crowdsec.md
+      - vs Pangolin: compare/pangolin.md
   - Operations:
       - Traffic monitor: operations/traffic.md
       - Alerts: operations/alerts.md
@@ -113,3 +131,4 @@ nav:
       - HTTP API: reference/api.md
       - Performance: reference/performance.md
       - Troubleshooting: reference/troubleshooting.md
+      - FAQ: faq.md
