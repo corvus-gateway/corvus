@@ -7,6 +7,7 @@ import { koTokens } from "./tokens.i18n";
 import { koRedirects } from "./redirects.i18n";
 import { koStreams } from "./streams.i18n";
 import { koNotes } from "./notes.i18n";
+import { koCrash } from "./crash.i18n";
 import { koConnCheck } from "./conncheck.i18n";
 import { koProxyProtocol } from "./proxyprotocol.i18n";
 import { koUpdate } from "./update.i18n";
@@ -219,6 +220,7 @@ export const ko = {
   ...koRedirects,
   ...koStreams,
   ...koNotes,
+  ...koCrash,
   ...koConnCheck,
   ...koProxyProtocol,
   ...koUpdate,

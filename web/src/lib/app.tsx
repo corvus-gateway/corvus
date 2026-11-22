@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from "react";
 import type { Overview, User } from "../api";
 import { useResource } from "../hooks/useResource";
 
@@ -22,8 +22,13 @@ export function AppProvider({ user, setUser, logout, children }: { user: User; s
     window.addEventListener("corvus:refresh", refreshOverview);
     return () => window.removeEventListener("corvus:refresh", refreshOverview);
   }, [refreshOverview]);
+  // One value while nothing changed: the overview is polled every few seconds, and a new
+  // object each time would draw the open page again with every poll.
+  const { data: overview, error: overviewError } = ov;
+  const value = useMemo(() => ({ user, setUser, overview, overviewError, refreshOverview, logout }),
+    [user, setUser, overview, overviewError, refreshOverview, logout]);
   return (
-    <Ctx.Provider value={{ user, setUser, overview: ov.data, overviewError: ov.error, refreshOverview, logout }}>
+    <Ctx.Provider value={value}>
       {children}
     </Ctx.Provider>
   );

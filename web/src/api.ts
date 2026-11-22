@@ -54,6 +54,7 @@ export async function getText(path: string): Promise<string> {
   if (!res.ok) {
     let b: any = null;
     try { b = JSON.parse(text); } catch { /* not json */ }
+    if (res.status === 401) window.dispatchEvent(new Event("corvus:unauthorized")); // signed out meanwhile
     throw new ApiError(res.status, b);
   }
   return text;
