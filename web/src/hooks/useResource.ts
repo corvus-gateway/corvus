@@ -12,7 +12,7 @@ export interface Resource<T> {
   reload: () => void;
 }
 
-interface Got<T> { path: string; data: T }
+interface Got<T> { path: string; data: T; raw: string }
 interface Failed { path: string; error: unknown }
 
 /**
@@ -38,7 +38,13 @@ export function useResource<T>(path: string | null, opts: { poll?: number } = {}
       setFetching(true);
       try {
         const d = await api.get<T>(path);
-        if (alive) { setGot({ path, data: d }); setFailed(null); }
+        if (alive) {
+          // A poll that brings back what is already shown keeps the same object, so the
+          // page (and everything that reads a polled context) is not drawn again for it.
+          const raw = JSON.stringify(d);
+          setGot((prev) => (prev && prev.path === path && prev.raw === raw ? prev : { path, data: d, raw }));
+          setFailed(null);
+        }
       } catch (e) {
         if (alive) setFailed({ path, error: e });
       } finally {

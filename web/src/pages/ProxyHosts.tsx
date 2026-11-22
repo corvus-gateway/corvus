@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowRight, Copy, FileText, Globe, Lock, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2, Users, Zap, Gauge, Server, KeyRound, ExternalLink, UserPlus, X, Siren, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 import { api, type ProxyTarget, type AccessList, type ClientIPMode, type ProxyHost, type RateLimit, type SecurityHeaders, type UnderAttackStatus, type UpstreamError, type Waitroom } from "../api";
@@ -105,12 +105,16 @@ export default function ProxyHosts() {
   const list = useHostList(hosts.data, q, (h) => hostSearchText(h, t));
   const filtered = list.rows;
 
+  const openSeq = useRef(0);
   const open = async (h?: ProxyHost) => {
+    const seq = ++openSeq.current;
     setError(null);
     let htmlMissing = false;
     // The list leaves custom page HTML out (html_bytes only): load the host before the form opens.
     if (h && (h.page?.html_bytes ?? 0) > 0 && !h.page?.html) {
       try { h = await api.get<ProxyHost>(`/api/proxy-hosts/${h.id}`); } catch { htmlMissing = true; toast.error(t("spHtmlNotLoaded")); }
+      // another host (or "add") was opened while this one was loading: leave that form alone
+      if (seq !== openSeq.current) return;
     }
     setEditing({ id: h?.id ?? null, form: h ? toForm(h) : { ...blank }, req: null, auth: authFrom(h), htmlMissing });
   };
