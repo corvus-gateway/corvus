@@ -24,10 +24,18 @@ if [ "$(id -u)" = "0" ]; then
   if [ "$(stat -c %u:%g "$data")" != "$uid:$gid" ]; then
     echo "corvus: setting owner of $data to $uid:$gid"
     chown -R "$uid:$gid" "$data"
+  elif [ -n "$(find "$data" \( ! -user "$uid" -o ! -group "$gid" \) -print -quit 2>/dev/null)" ]; then
+    # The directory itself is right but something inside is not (files copied back in as
+    # root, for example): Corvus could not read its own keys. Not fatal when a file cannot
+    # be changed (a read-only mount below the data directory).
+    echo "corvus: setting owner of files in $data to $uid:$gid"
+    chown -R "$uid:$gid" "$data" || echo "corvus: some files in $data could not be changed" >&2
   fi
-  # CAP_NET_BIND_SERVICE is bit 10; it is missing when the container runs with cap_drop: ALL.
+  # Keeping CAP_NET_BIND_SERVICE (bit 10) while dropping the rest of the bounding set needs
+  # CAP_SETPCAP (bit 8). Both are there by default; with cap_drop: ALL neither is, and with
+  # only some capabilities added back setpriv would fail, so su-exec is used instead.
   bnd=$(awk '/^CapBnd:/ {print $2}' /proc/self/status)
-  if [ $((0x$bnd & 0x400)) -ne 0 ]; then
+  if [ $((0x$bnd & 0x500)) -eq $((0x500)) ]; then
     exec setpriv --reuid="$uid" --regid="$gid" --clear-groups \
       --bounding-set=-all,+net_bind_service --inh-caps=-all,+net_bind_service \
       --ambient-caps=-all,+net_bind_service \

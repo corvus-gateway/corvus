@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -62,7 +63,11 @@ func CheckTarget(kind string, t Target) error {
 	if u.User != nil {
 		return errors.New("credentials in the URL are not allowed")
 	}
-	if ip := net.ParseIP(u.Hostname()); (ip != nil && blockedIP(ip)) || strings.EqualFold(u.Hostname(), "localhost") {
+	host := u.Hostname()
+	if i := strings.IndexByte(host, '%'); i >= 0 {
+		host = host[:i] // an IPv6 zone ("fe80::1%eth0") is not part of the address
+	}
+	if ip := net.ParseIP(host); (ip != nil && blockedIP(ip)) || strings.EqualFold(host, "localhost") {
 		return errors.New("loopback and link-local destinations are not allowed")
 	}
 	return nil
@@ -229,9 +234,11 @@ var client = &http.Client{
 		// No proxy: the dial guard below must see the real destination address.
 		Proxy: nil,
 		DialContext: (&net.Dialer{Timeout: 5 * time.Second, Control: func(network, address string, _ syscall.RawConn) error {
-			host, _, _ := net.SplitHostPort(address)
-			if ip := net.ParseIP(host); ip != nil && blockedIP(ip) {
-				return fmt.Errorf("destination %s is not allowed", host)
+			// address is the literal address being dialled; one that cannot be read is
+			// refused (a zone, as in "[fe80::1%eth0]:80", is not part of the address)
+			ap, err := netip.ParseAddrPort(address)
+			if err != nil || blockedIP(net.IP(ap.Addr().WithZone("").Unmap().AsSlice())) {
+				return fmt.Errorf("destination %s is not allowed", address)
 			}
 			return nil
 		}}).DialContext,

@@ -43,6 +43,7 @@ import (
 	"corvus/control/internal/traffic"
 	"corvus/control/internal/underattack"
 	"corvus/control/internal/update"
+	"corvus/control/internal/validate"
 	"corvus/control/internal/webui"
 )
 
@@ -237,6 +238,7 @@ func applyStagedRestore(dataDir string, now time.Time) error {
 func run() error {
 	dataDir := env("CORVUS_DATA_DIR", "/data")
 	withGateway := envBool("CORVUS_GATEWAY", true)
+	validate.SetDataDir(dataDir)
 	if err := applyStagedRestore(dataDir, time.Now()); err != nil {
 		return err
 	}

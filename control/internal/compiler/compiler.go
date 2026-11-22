@@ -762,5 +762,6 @@ func writeHtpasswd(path string, users []store.AccessListUser) error {
 	for _, u := range users {
 		b.WriteString(u.Username + ":" + u.PasswordHash + "\n")
 	}
-	return os.WriteFile(path, []byte(b.String()), 0o644)
+	// password hashes: only the gateway (same user) reads them
+	return os.WriteFile(path, []byte(b.String()), 0o600)
 }

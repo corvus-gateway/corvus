@@ -529,6 +529,10 @@ function _M.endpoint()
     if sid and session_over_budget(sid) then return send_too_many(room) end
     local res, err
     if q then
+      -- Queue cookies are handed out without any state, so a client can come with a new
+      -- session on every call: one this gateway has not seen counts as a new entry
+      -- before it may cause work in Redis (visitors sent here by access() are known).
+      if not allow_new_entry(room, q.sid) then return send_too_many(room) end
       res, err = run(room, "poll", q.sid)
       if res and res.code == NOT_FOUND then -- new or dropped → (re)join at the back
         if not allow_new_entry(room, q.sid) then return send_too_many(room) end

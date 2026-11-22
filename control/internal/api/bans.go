@@ -173,21 +173,51 @@ func (s *Server) adminAllow(next http.Handler) http.Handler {
 
 func (s *Server) adminNets(r *http.Request) []*net.IPNet {
 	s.allow.mu.Lock()
-	defer s.allow.mu.Unlock()
 	if time.Since(s.allow.at) < 5*time.Second {
+		defer s.allow.mu.Unlock()
 		return s.allow.nets
 	}
+	if s.allow.at.IsZero() {
+		// never loaded, or just changed: every request waits for the list
+		defer s.allow.mu.Unlock()
+		return s.loadAdminNets(r)
+	}
+	// A routine refresh: this request reads the database without holding the lock, the
+	// others go on with the list they have, so a slow database does not queue them up.
+	stale := s.allow.nets
+	s.allow.at = time.Now()
+	s.allow.mu.Unlock()
+	n, err := s.Store.Network(r.Context())
+	if err != nil {
+		return stale // keep the last known list on errors
+	}
+	nets := parseAdminNets(n.AdminAllow)
+	s.allow.mu.Lock()
+	defer s.allow.mu.Unlock()
+	if s.allow.at.IsZero() {
+		return s.loadAdminNets(r) // changed meanwhile: what was read may be the old list
+	}
+	s.allow.nets = nets
+	return nets
+}
+
+// loadAdminNets reads the list with the cache lock held.
+func (s *Server) loadAdminNets(r *http.Request) []*net.IPNet {
 	n, err := s.Store.Network(r.Context())
 	if err != nil {
 		return s.allow.nets // keep the last known list on errors
 	}
+	s.allow.nets, s.allow.at = parseAdminNets(n.AdminAllow), time.Now()
+	return s.allow.nets
+}
+
+func parseAdminNets(cidrs []string) []*net.IPNet {
 	var nets []*net.IPNet
-	for _, c := range n.AdminAllow {
+	for _, c := range cidrs {
 		if _, nn, err := net.ParseCIDR(c); err == nil {
 			nets = append(nets, nn)
 		}
 	}
-	s.allow.nets, s.allow.at = nets, time.Now()
 	return nets
 }
 

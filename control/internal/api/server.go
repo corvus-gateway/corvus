@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -554,9 +555,28 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if err == nil && !u.Disabled {
 		hash = u.PasswordHash()
 	}
-	if !auth.CheckPasswordOrDummy(hash, in.Password) {
+	// Checks run a few at a time, and the limits are looked at again once this one has
+	// its turn: a burst of parallel sign-ins can neither get past the limits before the
+	// first failure is recorded nor keep every core busy hashing.
+	if !enterPasswordCheck(r.Context()) {
+		w.Header().Set("Retry-After", "5")
+		writeErr(w, http.StatusServiceUnavailable, "busy", "too many sign-ins in progress, try again shortly")
+		return
+	}
+	ipBlocked, _ := s.Limiter.Blocked(ip)
+	acctBlocked, _ := s.AcctLimiter.Blocked(acct)
+	if ipBlocked || acctBlocked {
+		leavePasswordCheck()
+		writeErr(w, http.StatusTooManyRequests, "rate_limited", "too many failed logins, try again later")
+		return
+	}
+	pwOK := auth.CheckPasswordOrDummy(hash, in.Password)
+	if !pwOK {
 		s.Limiter.Fail(ip)
 		s.AcctLimiter.Fail(acct)
+	}
+	leavePasswordCheck()
+	if !pwOK {
 		s.audit(r, "auth.login_failed", strings.ToLower(strings.TrimSpace(in.Email)), nil)
 		writeErr(w, http.StatusUnauthorized, "invalid_credentials", "invalid email or password")
 		return
@@ -652,10 +672,43 @@ const (
 	maxPasswordInput = 1024 // stored passwords are at most 72 bytes (bcrypt)
 )
 
-// checkPasswordInput is auth.CheckPassword for request input of any length.
+// checkPasswordInput is auth.CheckPassword for request input of any length. It waits
+// for a turn like the sign-in does (a check that gets none counts as wrong).
 func checkPasswordInput(hash, pw string) bool {
-	return len(pw) <= maxPasswordInput && auth.CheckPassword(hash, pw)
+	if len(pw) > maxPasswordInput || !enterPasswordCheck(context.Background()) {
+		return false
+	}
+	defer leavePasswordCheck()
+	return auth.CheckPassword(hash, pw)
 }
+
+// passwordGate bounds how many password hashes are compared at once: one comparison
+// takes a few hundred milliseconds of CPU, so without a bound a burst of sign-ins
+// starves the console and deployments.
+var passwordGate = make(chan struct{}, max(2, runtime.NumCPU()))
+
+// passwordGateWait is how long a check waits for its turn.
+const passwordGateWait = 5 * time.Second
+
+func enterPasswordCheck(ctx context.Context) bool {
+	select {
+	case passwordGate <- struct{}{}:
+		return true
+	default:
+	}
+	t := time.NewTimer(passwordGateWait)
+	defer t.Stop()
+	select {
+	case passwordGate <- struct{}{}:
+		return true
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return false
+	}
+}
+
+func leavePasswordCheck() { <-passwordGate }
 
 // passwordCheckAllowed applies the sign-in limits (per address and per account) to a
 // password check by a signed-in user; it writes the 429 response when blocked.

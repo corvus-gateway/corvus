@@ -25,3 +25,37 @@ func TestEventsByIPSurvivesFlood(t *testing.T) {
 		t.Fatalf("events from before since were counted: %+v", after)
 	}
 }
+
+// Only the detections bans and alerts act on are kept per address, and the number of
+// addresses in all slots together is bounded.
+func TestSourceSlotsBounded(t *testing.T) {
+	c := &Collector{}
+	now := time.Now().Unix()
+	c.countSource(now, "banned", "a.example", "2001:db8::1", 1)
+	c.countSource(now, "rate_limited", "a.example", "2001:db8::2", 1)
+	if c.srcN != 0 {
+		t.Fatalf("kinds nobody reads are tracked: %d", c.srcN)
+	}
+	// an old, full hour that nothing has overwritten
+	old := now - 2*srcSlots*srcStep
+	for i := 0; c.srcN < srcTotalCap; i++ {
+		c.countSource(old+int64(i%srcSlots)*srcStep, "blocked_rule", "a.example", fmt.Sprint("198.51.100.", i), 1)
+	}
+	c.countSource(old+5*srcStep, "blocked_rule", "a.example", "203.0.113.1", 1)
+	if c.srcN != srcTotalCap {
+		t.Fatalf("over the cap: %d", c.srcN)
+	}
+	// new events are still counted: the stale slots make room
+	c.countSource(now, "blocked_rule", "a.example", "203.0.113.9", 3)
+	got := c.EventsByIP(time.Unix(now-srcStep, 0), SourceKinds...)["203.0.113.9"]
+	if got == nil || got.Count != 3 {
+		t.Fatalf("event after a full hour: %+v (tracked %d)", got, c.srcN)
+	}
+	n := 0
+	for i := range c.src {
+		n += len(c.src[i].ips)
+	}
+	if n != c.srcN {
+		t.Fatalf("srcN %d, slots hold %d", c.srcN, n)
+	}
+}

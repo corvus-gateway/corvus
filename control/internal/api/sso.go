@@ -48,6 +48,7 @@ const (
 	// pending flows per client address (several tabs or retries; more evicts the oldest)
 	oidcMaxFlowsPerIP = 20
 	providerTTL       = time.Hour
+	providerFailTTL   = 30 * time.Second
 	callbackPath      = "/api/auth/oidc/callback"
 )
 
@@ -57,6 +58,11 @@ type ssoRuntime struct {
 	mu    sync.Mutex
 	flows map[string]*oidcFlow // by state
 	prov  *cachedProvider
+
+	// the last failed discovery, remembered for providerFailTTL
+	failIssuer string
+	failAt     time.Time
+	failErr    error
 }
 
 type oidcFlow struct {
@@ -107,7 +113,15 @@ func (rt *ssoRuntime) putFlow(state string, f *oidcFlow) bool {
 		}
 	}
 	if len(rt.flows) >= oidcMaxFlows {
-		return false
+		// full: the oldest pending flow makes room instead of refusing everybody (a
+		// client with many addresses could otherwise keep SSO shut for all)
+		var oldest string
+		for k, v := range rt.flows {
+			if oldest == "" || v.exp.Before(rt.flows[oldest].exp) {
+				oldest = k
+			}
+		}
+		delete(rt.flows, oldest)
 	}
 	rt.flows[state] = f
 	return true
@@ -134,6 +148,7 @@ func (rt *ssoRuntime) takeFlow(state string) *oidcFlow {
 func (rt *ssoRuntime) invalidate() {
 	rt.mu.Lock()
 	rt.prov = nil
+	rt.failIssuer, rt.failErr = "", nil
 	rt.mu.Unlock()
 }
 
@@ -144,15 +159,24 @@ func (s *Server) ssoProvider(ctx context.Context, issuer string) (*oidc.Provider
 		rt.mu.Unlock()
 		return c.p, c.client, nil
 	}
+	if rt.failIssuer == issuer && time.Since(rt.failAt) < providerFailTTL {
+		err := rt.failErr
+		rt.mu.Unlock()
+		return nil, nil, err // the IdP just failed: do not ask it again for every sign-in
+	}
 	rt.mu.Unlock()
 	client := sso.NewHTTPClient(issuer)
 	p, _, err := sso.Discover(ctx, client, issuer)
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
 	if err != nil {
+		if ctx.Err() == nil { // a visitor who gave up says nothing about the IdP
+			rt.failIssuer, rt.failAt, rt.failErr = issuer, time.Now(), err
+		}
 		return nil, nil, err
 	}
-	rt.mu.Lock()
+	rt.failIssuer, rt.failErr = "", nil
 	rt.prov = &cachedProvider{issuer: issuer, p: p, client: client, at: time.Now()}
-	rt.mu.Unlock()
 	return p, client, nil
 }
 
@@ -374,6 +398,9 @@ func (s *Server) oidcStart(w http.ResponseWriter, r *http.Request) {
 	}
 	p, _, err := s.ssoProvider(ctx, c.Issuer)
 	if err != nil {
+		// counted like a failed sign-in: while the IdP is down, one address cannot go on
+		// writing audit entries
+		s.Limiter.Fail(clientIP(r))
 		s.ssoFail(w, r, "provider_unavailable", "", map[string]any{"error": trimMsg(err.Error())})
 		return
 	}
@@ -404,15 +431,18 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login?sso_error=rate_limited", http.StatusFound)
 		return
 	}
-	if e := q.Get("error"); e != "" {
-		s.ssoFail(w, r, "idp_error", "", map[string]any{"error": trimMsg(e), "error_description": trimMsg(q.Get("error_description"))})
-		return
-	}
+	// The flow is checked first, also for an error answer (the IdP sends state with it):
+	// a callback nobody started is counted against the address, so it cannot be used to
+	// fill the audit log.
 	f := s.ssoRT.takeFlow(q.Get("state"))
 	ck, cerr := r.Cookie(oidcCookie)
 	if f == nil || cerr != nil || subtle.ConstantTimeCompare([]byte(auth.TokenHash(ck.Value)), []byte(f.bindHash)) != 1 {
 		s.Limiter.Fail(ip) // forged or replayed callbacks count like failed sign-ins
 		s.ssoFail(w, r, "state", "", nil)
+		return
+	}
+	if e := q.Get("error"); e != "" {
+		s.ssoFail(w, r, "idp_error", "", map[string]any{"error": trimMsg(e), "error_description": trimMsg(q.Get("error_description"))})
 		return
 	}
 	if time.Now().After(f.exp) {
