@@ -11,6 +11,7 @@ import { useTheme, type ThemeMode } from "../../lib/theme";
 import { cn } from "../../lib/utils";
 import { Wordmark } from "../Logo";
 import { DirtyBanner } from "../common";
+import { ErrorBoundary } from "../ErrorBoundary";
 import { Menu, Tip } from "../ui/overlay";
 import { Skeleton } from "../ui/display";
 
@@ -159,6 +160,8 @@ export function Shell() {
         <main id="main" className="relative min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]">
           {overview?.dirty && <DirtyBanner />}
           <div className="w-full px-4 pb-10 sm:px-6 lg:px-8">
+            {/* keyed by the route: a page that failed does not keep the next one from showing */}
+            <ErrorBoundary key={loc.pathname}>
             <Suspense fallback={<div className="space-y-4 pt-6"><Skeleton className="h-7 w-48" /><Skeleton className="h-40" /><Skeleton className="h-64" /></div>}>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
@@ -187,6 +190,7 @@ export function Shell() {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Suspense>
+            </ErrorBoundary>
           </div>
         </main>
       </div>
