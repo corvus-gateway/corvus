@@ -1,5 +1,5 @@
 ---
-description: "Corvus AWPG는 웹 서비스 앞에 두는 셀프 호스팅 게이트웨이입니다. Nginx Proxy Manager처럼 쉬운 리버스 프록시와 무료 SSL에 WAF 규칙, 자동 차단, 트래픽 관제, 접속 대기열을 더했습니다."
+description: "Corvus AWPG는 웹 방화벽(WAF)을 내장한 무료 오픈소스 셀프 호스팅 리버스 프록시입니다. Nginx Proxy Manager처럼 쉬운 프록시 호스트와 무료 SSL에 공격 차단, 자동 차단, 요청 속도 제한, 트래픽 관제, 접속 대기열을 더했습니다."
 title: Corvus AWPG
 hide:
   - navigation
@@ -7,9 +7,10 @@ hide:
 
 # Corvus AWPG
 
-**Corvus는 웹 서비스 앞에 두는 자체 호스팅 게이트웨이입니다.** Nginx Proxy Manager처럼 쉽게
-운영할 수 있고(도메인 연결, 전달, 무료 SSL을 몇 번의 클릭으로), 지나가는 트래픽을 **관제하고,
-보호하고, 제어**합니다. 모든 것이 내 서버에서 동작하며, 트래픽이 외부 클라우드로 나가지 않습니다.
+**Corvus는 웹 방화벽(WAF)을 내장한 무료 오픈소스 셀프 호스팅 리버스 프록시입니다.** Nginx Proxy
+Manager처럼 쉽게 운영할 수 있고(도메인 연결, 전달, 무료 SSL을 몇 번의 클릭으로), 지나가는 트래픽을
+**관제하고, 보호하고, 제어**합니다. 모든 것이 내 서버에서 동작하며, 트래픽이 외부 클라우드로 나가지
+않습니다. Apache-2.0 라이선스, Docker 컨테이너 하나, 모든 기능 무료입니다.
 
 Corvus가 80·443 포트로 요청을 받아 뒤에 있는 알맞은 앱이나 웹 서버로 넘겨 주므로, 서버 한 대에서 여러
 사이트를 HTTPS와 보호 기능을 갖춘 채 운영할 수 있습니다. 이미 쓰던 웹 서버 앞에 Corvus를 두는 방법까지
@@ -47,6 +48,15 @@ Corvus가 80·443 포트로 요청을 받아 뒤에 있는 알맞은 앱이나 �
 | **접속 대기열** | 트래픽 급증에 대비한 [정원 기반 대기실](access-queue.md) |
 | **관제** | [실시간 트래픽, 요청 로그, 보안 이벤트](operations/traffic.md), 유입 출처·UTM과 GoAccess용 내보내기를 갖춘 [방문자 통계](operations/traffic.md#visitor-statistics), Slack·Discord·Teams·Telegram 등으로 보내는 [알림](operations/alerts.md) |
 | **운영** | 모든 변경은 검사 후 버전으로 관리, [백업과 복원](operations/backup.md), [역할·MFA·SSO](operations/users.md), [새 버전 알림](reference/configuration.md) |
+
+## 더 알아보기
+
+- **가이드:** [인터넷에 공개한 셀프 호스팅 서비스 보안](guides/secure-self-hosted.md) ·
+  [봇과 스캐너 차단](guides/block-bots.md) · [트래픽 폭주와 DDoS](guides/ddos.md) ·
+  [Nginx Proxy Manager에 WAF 더하기](guides/waf-for-npm.md)
+- **비교:** [Corvus와 다른 리버스 프록시·WAF](compare/index.md): Nginx Proxy Manager, NPMplus, Caddy,
+  Traefik, Zoraxy, BunkerWeb, SafeLine, CrowdSec, Pangolin, 그리고 Corvus가 맞지 않는 경우
+- **[자주 묻는 질문](faq.md):** 라이선스, 요구 사항, Corvus가 하는 일과 하지 않는 일
 
 !!! tip "안전한 기본값"
     시작할 때 규칙을 하나도 쓸 필요가 없습니다. 새 호스트마다 기본 공격 탐지가 켜져 있고,

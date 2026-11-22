@@ -27,7 +27,7 @@
 
 </div>
 
-Corvus 是部署在您的 Web 服务前端的自托管网关。它与 Nginx Proxy Manager 一样易于运行——只需点几下即可配置域名、转发和免费 SSL——同时还能对流经的流量进行**监视、防护和管控**：实时监控、攻击拦截、速率限制，以及应对流量高峰的访问排队。一切都运行在您自己的服务器上，不会有任何流量发送到第三方云。
+Corvus 是一款免费、开源（Apache-2.0）、自托管的**内置 Web 应用防火墙（WAF）的反向代理**。它与 Nginx Proxy Manager 一样易于运行（在 Web 控制台中点几下即可配置域名、转发和免费的 Let's Encrypt SSL），同时还能对流经的流量进行**监视、防护和管控**：默认开启的攻击拦截、自动封禁 IP、速率限制、机器人验证、实时监控，以及应对流量高峰的访问排队。只需一个 Docker 容器，所有功能免费，不会有任何流量发送到第三方云。另请参阅与 Nginx Proxy Manager、Caddy、Traefik、BunkerWeb、SafeLine 等的[对比](https://corvusgateway.org/compare/)。
 
 <p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
 

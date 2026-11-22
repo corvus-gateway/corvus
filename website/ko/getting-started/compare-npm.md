@@ -42,6 +42,9 @@ Corvus는 [Nginx Proxy Manager](https://nginxproxymanager.com/)(NPM)의 간단�
 - **가볍습니다.** Corvus는 트래픽 수집기와 접속 대기열 저장소도 함께 돌리기 때문에 NPM보다 메모리를
   더 씁니다([성능](../reference/performance.md) 참고).
 
+다른 선택지도 살펴보고 있다면 [Corvus와 다른 리버스 프록시·WAF 비교](../compare/index.md)와
+[NPM에 WAF를 더하는 방법](../guides/waf-for-npm.md)을 참고하세요.
+
 ## NPM에서 옮기기
 
 **NPM 가져오기**는 NPM 설정(프록시 호스트, 리디렉션, 스트림, 인증서, Access List)을 읽기만 하고 NPM은

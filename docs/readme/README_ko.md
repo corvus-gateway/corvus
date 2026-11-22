@@ -27,11 +27,13 @@
 
 </div>
 
-Corvus는 웹 서비스 앞단에 두는 셀프 호스팅 게이트웨이입니다. Nginx Proxy Manager만큼 운영이
-쉬워서 도메인, 포워딩, 무료 SSL을 몇 번의 클릭으로 설정할 수 있으며, 여기에 더해 통과하는
-트래픽을 **감시하고, 보호하고, 제어**합니다. 실시간 모니터링, 공격 차단, 속도 제한(Rate Limit),
-트래픽 급증에 대비한 접속 대기열까지 제공합니다. 모든 것이 여러분의 서버에서 동작하며, 트래픽이
-외부 클라우드로 전송되지 않습니다.
+Corvus는 **웹 방화벽(WAF)을 내장한** 무료 오픈소스(Apache-2.0) 셀프 호스팅 **리버스 프록시**입니다.
+Nginx Proxy Manager만큼 운영이 쉬워서 웹 콘솔에서 도메인, 포워딩, 무료 Let's Encrypt SSL을 몇 번의
+클릭으로 설정할 수 있으며, 여기에 더해 통과하는 트래픽을 **감시하고, 보호하고, 제어**합니다. 기본으로
+켜진 공격 차단, 자동 IP 차단, 속도 제한(Rate Limit), 봇 확인, 실시간 모니터링, 트래픽 급증에 대비한
+접속 대기열까지 제공합니다. Docker 컨테이너 하나로 동작하고 모든 기능이 무료이며, 트래픽이 외부
+클라우드로 전송되지 않습니다. Nginx Proxy Manager, Caddy, Traefik, BunkerWeb, SafeLine 등과의
+[비교](https://corvusgateway.org/ko/compare/)도 참고하세요.
 
 <p align="center"><img src="../../assets/demo/corvus-demo-ko.gif" alt="Corvus demo" width="900"></p>
 

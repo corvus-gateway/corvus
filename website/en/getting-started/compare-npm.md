@@ -1,5 +1,5 @@
 ---
-description: How Corvus compares to Nginx Proxy Manager (NPM): what works the same, what Corvus adds (WAF, auto-bans, rate limits, access queue, traffic monitor) and where NPM is still ahead.
+description: "How Corvus compares to Nginx Proxy Manager (NPM): what works the same, what Corvus adds (WAF, auto-bans, rate limits, access queue, traffic monitor) and where NPM is still ahead."
 ---
 
 # Corvus vs Nginx Proxy Manager
@@ -41,6 +41,9 @@ Compared with NPM at the time of writing; NPM may have added features since.
 - **A much longer track record** and a large community. Corvus is young (1.x).
 - **Smaller footprint.** Corvus also runs a traffic collector and the access-queue store, so it
   uses more memory than NPM (see [Performance](../reference/performance.md)).
+
+Looking at other options too? See [Corvus compared with other reverse proxies and WAFs](../compare/index.md)
+and [how to add a WAF to NPM](../guides/waf-for-npm.md).
 
 ## Moving from NPM
 
