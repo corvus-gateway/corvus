@@ -87,6 +87,7 @@ type Service struct {
 	dropped atomic.Int64
 	mode    atomic.Value // string: current log mode (read on the hot path)
 	openLog atomic.Value // string: path of the day file writeLogs is appending to
+	logMax  atomic.Int64 // bytes: size cap of the logs, applied to the file being written
 
 	mu       sync.Mutex
 	coarseAt int64 // last persisted bucket start
@@ -141,7 +142,9 @@ func (s *Service) Open(ctx context.Context) error {
 	}
 	s.db = db
 	s.lines = make(chan []byte, 20000)
-	s.mode.Store(Load(ctx, s.Store).LogMode)
+	set := Load(ctx, s.Store)
+	s.mode.Store(set.LogMode)
+	s.logMax.Store(int64(set.LogMaxMB) << 20)
 	return nil
 }
 
@@ -388,6 +391,11 @@ type dayLog struct {
 	dropped *atomic.Int64
 	openLog *atomic.Value
 	rotated func(prev string) // called with the finished day file (to compress it)
+	// maxBytes is the size cap of the logs (log_max_mb) in bytes; nil or 0 = none. The
+	// file being written is never deleted by the cleanup, so it stops growing here.
+	maxBytes *atomic.Int64
+	size     int64 // bytes in the open file
+	full     bool  // the open file reached maxBytes (reported once a day)
 
 	f        logFile
 	w        *bufio.Writer
@@ -446,6 +454,10 @@ func (d *dayLog) open(now time.Time) bool {
 		return false
 	}
 	d.f, d.w, d.day, d.pending = f, bufio.NewWriterSize(f, 256<<10), day, 0
+	d.size, d.full = 0, false
+	if st, err := os.Stat(path); err == nil {
+		d.size = st.Size()
+	}
 	if d.broken {
 		// the failed write may have left half a line: start on a fresh line
 		if st, err := os.Stat(path); err == nil && st.Size() > 0 && !endsWithNewline(path, st.Size()) {
@@ -478,6 +490,17 @@ func (d *dayLog) write(now time.Time, line []byte) {
 		d.dropped.Add(1)
 		return
 	}
+	if d.maxBytes != nil {
+		if limit := d.maxBytes.Load(); limit > 0 && d.size+int64(len(line))+1 > limit {
+			// a flood of logged requests (errors, refused clients) may not fill the disk
+			d.dropped.Add(1)
+			if !d.full {
+				d.full = true
+				slog.Warn("today's request log reached the size limit; further lines are dropped until tomorrow", "limit_mb", limit>>20)
+			}
+			return
+		}
+	}
 	_, err := d.w.Write(line)
 	if err == nil {
 		err = d.w.WriteByte('\n')
@@ -488,6 +511,7 @@ func (d *dayLog) write(now time.Time, line []byte) {
 		return
 	}
 	d.pending++
+	d.size += int64(len(line)) + 1
 }
 
 // flush writes the buffered lines to the file.
@@ -515,7 +539,7 @@ func (d *dayLog) close(now time.Time) {
 }
 
 func (s *Service) writeLogs(ctx context.Context) {
-	d := &dayLog{dir: s.logDir(), dropped: &s.dropped, openLog: &s.openLog, rotated: func(prev string) { go compress(prev) }}
+	d := &dayLog{dir: s.logDir(), dropped: &s.dropped, openLog: &s.openLog, maxBytes: &s.logMax, rotated: func(prev string) { go compress(prev) }}
 	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()
 	for {
@@ -719,6 +743,7 @@ func (s *Service) Usage() Usage {
 func (s *Service) cleanup(ctx context.Context, now time.Time) {
 	set := Load(ctx, s.Store)
 	s.mode.Store(set.LogMode)
+	s.logMax.Store(int64(set.LogMaxMB) << 20)
 	s.mu.Lock()
 	statsCut := now.AddDate(0, 0, -set.StatsDays).Unix()
 	evCut := float64(now.AddDate(0, 0, -set.EventsDays).Unix())
@@ -763,5 +788,6 @@ func (s *Service) cleanup(ctx context.Context, now time.Time) {
 // Apply stores new settings and applies them immediately.
 func (s *Service) Apply(ctx context.Context, set Settings) {
 	s.mode.Store(set.LogMode)
+	s.logMax.Store(int64(set.LogMaxMB) << 20)
 	go s.cleanup(context.Background(), time.Now())
 }

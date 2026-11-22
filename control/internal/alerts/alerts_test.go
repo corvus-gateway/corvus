@@ -220,3 +220,18 @@ func TestCertExpiryNotForNeverIssued(t *testing.T) {
 		t.Errorf("want only acme_failed, got %d alerts", len(h.msgs))
 	}
 }
+
+// A link-local address with a zone is still link-local: refused when the target is
+// saved and again when it is dialled.
+func TestZonedLinkLocalRefused(t *testing.T) {
+	if err := CheckTarget("webhook", Target{URL: "http://[fe80::1%25eth0]/hook"}); err == nil {
+		t.Fatal("zoned link-local webhook accepted")
+	}
+	control := client.Transport.(*http.Transport).DialContext
+	for _, addr := range []string{"[fe80::1%eth0]:80", "[::ffff:169.254.169.254]:80", "not-an-address"} {
+		if c, err := control(context.Background(), "tcp", addr); err == nil {
+			c.Close()
+			t.Fatalf("dial to %s allowed", addr)
+		}
+	}
+}

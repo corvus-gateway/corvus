@@ -67,6 +67,8 @@ type Service struct {
 
 	mu      sync.Mutex
 	lastErr string
+
+	refreshMu sync.Mutex // one download and install at a time
 }
 
 func (s *Service) File() string     { return filepath.Join(s.Dir, "country.bin") }
@@ -140,6 +142,10 @@ func (s *Service) Refresh(ctx context.Context) (Status, error) {
 }
 
 func (s *Service) refresh(ctx context.Context) error {
+	// one at a time: the daily check and a refresh from the console would otherwise
+	// write the same temporary file, and the gateway could load a half-written database
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
 	if s.Disabled {
 		return errors.New("country database updates are disabled (CORVUS_GEOIP=off)")
 	}

@@ -204,3 +204,31 @@ func TestDayLogRotates(t *testing.T) {
 		}
 	}
 }
+
+// The file being written stops at the size cap (the cleanup never deletes it); a
+// restart counts what the file already holds, and the next day starts again.
+func TestDayLogSizeCap(t *testing.T) {
+	var dropped, limit atomic.Int64
+	limit.Store(20)
+	dir := t.TempDir()
+	day1 := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	d := &dayLog{dir: dir, dropped: &dropped, maxBytes: &limit}
+	for i := 0; i < 5; i++ {
+		d.write(day1, []byte("123456789")) // 10 bytes with the newline
+	}
+	d.close(day1)
+	if st, err := os.Stat(filepath.Join(dir, "access-2026-03-01.jsonl")); err != nil || st.Size() != 20 || dropped.Load() != 3 {
+		t.Fatalf("size %v, dropped %d (%v)", st, dropped.Load(), err)
+	}
+	d = &dayLog{dir: dir, dropped: &dropped, maxBytes: &limit} // restart: still full
+	d.write(day1, []byte("x"))
+	if dropped.Load() != 4 {
+		t.Fatalf("after restart: dropped = %d", dropped.Load())
+	}
+	day2 := day1.Add(24 * time.Hour)
+	d.write(day2, []byte("123456789"))
+	d.close(day2)
+	if st, err := os.Stat(filepath.Join(dir, "access-2026-03-02.jsonl")); err != nil || st.Size() != 10 || dropped.Load() != 4 {
+		t.Fatalf("next day: size %v, dropped %d (%v)", st, dropped.Load(), err)
+	}
+}

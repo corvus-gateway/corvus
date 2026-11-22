@@ -93,7 +93,10 @@ package.loaded["cjson.safe"] = { new = function()
   }
 end }
 
-ngx.re = { find = function(s, p) return (s:find(p, 1, true)) end }
+ngx.re = { find = function(s, p)
+  if p == "LIMIT" and s ~= "" then return nil, nil, "pcre_exec() failed: -8" end
+  return (s:find(p, 1, true))
+end }
 ngx.unescape_uri = function(s)
   return (s:gsub("%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end))
 end
@@ -274,5 +277,27 @@ ngx.req.get_body_data = saved
 ngx.ctx = {}
 ngx.var = { http_content_length = "10", content_length = "10", content_type = "application/json", http_content_encoding = "gzip" }
 eq(body.inspect(1048576), "encoded", "compressed body")
+
+-- ---------------------------------------------------------------- JSON the decoder refuses
+-- a UTF-8 byte order mark is skipped, as parsers do
+eq(inspect('\239\187\191{"a":"EVIL"}', "application/json"), "marker", "json after a BOM")
+eq(inspect('\239\187\191{"a":"fine"}', "application/json"), nil, "clean json after a BOM")
+-- declared as JSON but not readable as JSON: not inspected completely (a lenient parser in
+-- the application may read it); a signature in the raw text still matches first
+eq(inspect('{"a":"fine"} x', "application/json"), "unparsed-json", "text after the document")
+eq(inspect('{"a":"EVIL"} x', "application/json"), "marker", "signature in unparsed json")
+eq(body.UNINSPECTED["unparsed-json"], true, "unparsed json counts as not inspected")
+eq(inspect('  \n', "application/json"), nil, "blank body with a json type is fine")
+-- other types are not expected to be JSON
+eq(inspect('[section] x', "text/plain"), nil, "text that only looks like json")
+
+-- ---------------------------------------------------------------- signature that cannot be evaluated
+-- (the matcher stub fails for the pattern LIMIT on a non-empty subject, as PCRE does at
+-- its match limit): the body was not checked, which is not "no match"
+body.set_signatures({ { id = "heavy", pattern = "LIMIT" }, { id = "marker", pattern = "EVIL" } })
+eq(inspect('{"a":"fine"}', "application/json"), "regex-error", "signature not evaluated")
+eq(inspect('{"a":"EVIL"}', "application/json"), "marker", "a later signature still matches")
+eq(body.UNINSPECTED["regex-error"], true, "regex error counts as not inspected")
+body.set_signatures({ { id = "marker", pattern = "EVIL" } })
 
 T.done("body_test")

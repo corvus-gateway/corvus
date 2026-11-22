@@ -318,6 +318,9 @@ func Extract(r io.Reader, dir string, maxBytes int64) (*Manifest, error) {
 	return m, nil
 }
 
+// maxManifestBytes caps the manifest of an archive being restored.
+const maxManifestBytes = 16 << 20
+
 func extract(r io.Reader, dir string, maxBytes int64) (*Manifest, error) {
 	gz, err := gzip.NewReader(r)
 	if err != nil {
@@ -373,6 +376,10 @@ func extract(r io.Reader, dir string, maxBytes int64) (*Manifest, error) {
 			}
 			total += h.Size
 			if name == ManifestName {
+				// the manifest is read into memory: a few lines per file, never large
+				if h.Size > maxManifestBytes {
+					return nil, invalid("the manifest is larger than %d MB", maxManifestBytes>>20)
+				}
 				if manifest, err = io.ReadAll(io.LimitReader(tr, h.Size)); err != nil {
 					return nil, invalid("corrupt archive: %v", err)
 				}

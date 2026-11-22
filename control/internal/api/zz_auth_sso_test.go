@@ -89,15 +89,25 @@ func TestZZSSOStartFailures(t *testing.T) {
 
 func TestZZSSOBusyAndFlowStore(t *testing.T) {
 	e := newSSOEnv(t, nil)
-	// a full table of live flows: new sign-ins are refused
+	// a full table of live flows: the oldest one makes room, sign-ins go on
 	rt := &e.s.ssoRT
 	rt.mu.Lock()
 	rt.flows = map[string]*oidcFlow{}
-	for i := 0; i < oidcMaxFlows; i++ {
+	for i := 0; i < oidcMaxFlows-1; i++ {
 		rt.flows[auth.RandomToken(12)] = &oidcFlow{exp: time.Now().Add(time.Hour)}
 	}
+	rt.flows["oldest"] = &oidcFlow{exp: time.Now().Add(time.Minute)}
 	rt.mu.Unlock()
-	wantErr(t, e.get(e.browser(), e.console.URL+"/api/auth/oidc/start").Header.Get("Location"), "busy")
+	if loc := e.get(e.browser(), e.console.URL+"/api/auth/oidc/start").Header.Get("Location"); strings.Contains(loc, "sso_error") {
+		t.Fatalf("sign-in refused with a full flow table: %s", loc)
+	}
+	rt.mu.Lock()
+	_, kept := rt.flows["oldest"]
+	n := len(rt.flows)
+	rt.mu.Unlock()
+	if kept || n != oidcMaxFlows {
+		t.Fatalf("full table: oldest kept=%v, %d flows", kept, n)
+	}
 
 	// expired flows are dropped to make room
 	var fresh ssoRuntime
@@ -118,9 +128,18 @@ func TestZZSSOBusyAndFlowStore(t *testing.T) {
 func TestZZSSOCallbackFailures(t *testing.T) {
 	e := newSSOEnv(t, nil)
 
-	// the IdP reports an error
+	// an error answer nobody asked for is a forged callback: counted, not believed
 	c := e.browser()
-	resp := e.get(c, e.console.URL+"/api/auth/oidc/callback?error=access_denied&error_description="+url.QueryEscape(strings.Repeat("d", 400)))
+	resp := e.get(c, e.console.URL+"/api/auth/oidc/callback?error=access_denied")
+	wantErr(t, resp.Header.Get("Location"), "state")
+
+	// the IdP reports an error for a sign-in this browser started
+	started, err := url.Parse(zaStart(t, e, c))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp = e.get(c, e.console.URL+"/api/auth/oidc/callback?state="+url.QueryEscape(started.Query().Get("state"))+
+		"&error=access_denied&error_description="+url.QueryEscape(strings.Repeat("d", 400)))
 	wantErr(t, resp.Header.Get("Location"), "idp_error")
 	list, _ := e.s.Store.ListAudit(context.Background(), 10)
 	if len(list) == 0 || list[0].Action != "auth.sso_failed" || !strings.Contains(string(list[0].Detail), "…") || !strings.Contains(string(list[0].Detail), "access_denied") {
@@ -175,7 +194,10 @@ func TestZZSSOCallbackFailures(t *testing.T) {
 	})
 	e.s.ssoRT.invalidate()
 	wantErr(t, e.get(c, back).Header.Get("Location"), "provider_unavailable")
+	// the failure is remembered for a moment: the next sign-in does not ask the IdP again
+	wantErr(t, e.get(c, e.console.URL+"/api/auth/oidc/start").Header.Get("Location"), "provider_unavailable")
 	down = false
+	e.s.ssoRT.invalidate() // as if providerFailTTL had passed
 
 	// the IdP refuses the code exchange (wrong client secret)
 	back = zaStart(t, e, c)
@@ -206,7 +228,7 @@ func TestZZSSOCallbackFailures(t *testing.T) {
 	if n := e.audited("auth.sso_login"); n != 0 {
 		t.Fatalf("%d successful sign-ins", n)
 	}
-	if n := e.audited("auth.sso_failed"); n != 9 {
+	if n := e.audited("auth.sso_failed"); n != 11 {
 		t.Fatalf("auth.sso_failed audited %d times", n)
 	}
 }

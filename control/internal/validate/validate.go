@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -237,17 +238,36 @@ func RedirectionHost(h *store.RedirectionHost) error {
 }
 
 // deniedDirectives may not appear in operator snippets: they would run code in
-// the gateway (Lua/JS/Perl), read secrets from the environment, or pull in
-// arbitrary files (F10).
-var deniedDirective = regexp.MustCompile(`^(?:.*_by_lua(?:_block|_file)?|lua_\S+|access_by_lua\S*|js_\S+|perl\S*|include|load_module|env|ssl_engine|daemon|master_process|user|pid|working_directory|worker_\S+|thread_pool|lock_file)$`)
+// the gateway (Lua/JS/Perl), read secrets from the environment, pull in arbitrary
+// files (F10), or make the gateway write files it chooses the name of (a response
+// stored as hosts/x.conf is configuration at the next reload).
+var deniedDirective = regexp.MustCompile(`^(?:.*_by_lua(?:_block|_file)?|lua_\S+|access_by_lua\S*|js_\S+|perl\S*|include|load_module|env|ssl_engine|daemon|master_process|user|pid|working_directory|worker_\S+|thread_pool|lock_file` +
+	`|(?:proxy|fastcgi|uwsgi|scgi)_store(?:_access)?|\S+_temp_path|client_body_in_file_only|dav_\S+|create_full_put_path)$`)
 
 // sensitivePath: root/alias may not expose the data volume or system directories.
 var sensitivePath = regexp.MustCompile(`^/(?:$|data|etc|proc|sys|root|run|usr|opt|tmp|dev|bin|sbin|lib|lib64|home|var/(?:lib|run|log|cache|spool|tmp))(?:/|$)`)
 
+// dataDir is where Corvus keeps its state (CORVUS_DATA_DIR); see SetDataDir.
+var dataDir = "/data"
+
+// SetDataDir tells the checks where the data volume is when it is not /data, so that
+// root/alias cannot expose it there either. Call it once at startup.
+func SetDataDir(dir string) {
+	if dir = path.Clean(filepath.ToSlash(dir)); strings.HasPrefix(dir, "/") {
+		dataDir = dir
+	}
+}
+
+// within reports whether p is dir or below it (both cleaned, absolute).
+func within(p, dir string) bool {
+	return p == dir || dir == "/" || strings.HasPrefix(p, dir+"/")
+}
+
 // webRootError checks the directory of a root/alias directive: it must be a literal
 // absolute path (no variables, which are resolved per request) and, once cleaned the
 // way the file system reads it ("//data", "/./data", "/x/../data" are all /data), stay
-// out of the data volume and system directories.
+// out of the data volume and system directories, and not be a directory above the
+// data volume either.
 func webRootError(name, v string) error {
 	v = strings.Trim(v, `"'`)
 	if strings.ContainsAny(v, "$\\") {
@@ -256,8 +276,24 @@ func webRootError(name, v string) error {
 	if !strings.HasPrefix(v, "/") {
 		return fmt.Errorf("%s must be an absolute path", name)
 	}
-	if sensitivePath.MatchString(path.Clean(v)) {
+	clean := path.Clean(v)
+	// "/var" itself is above /var/lib, /var/log, ...; below it only those are refused
+	if sensitivePath.MatchString(clean) || clean == "/var" || within(clean, dataDir) || within(dataDir, clean) {
 		return fmt.Errorf("%s may not point to %s", name, v)
+	}
+	return nil
+}
+
+// logTargetError checks where an access_log/error_log directive writes: nowhere, to
+// the container's output, to syslog, or to a literal *.log file. The gateway can write
+// to the whole data volume, so any other name could be the database or a file that is
+// read as configuration.
+func logTargetError(name, v string) error {
+	switch {
+	case v == "off", v == "stderr", v == "/dev/null", v == "/dev/stdout", v == "/dev/stderr", strings.HasPrefix(v, "syslog:"):
+		return nil
+	case strings.ContainsAny(v, "$\\") || !strings.HasPrefix(v, "/") || !strings.HasSuffix(path.Clean(v), ".log"):
+		return fmt.Errorf("%s may only write to off, stderr, syslog: or an absolute *.log file path without variables", name)
 	}
 	return nil
 }
@@ -295,6 +331,11 @@ func AdvancedConfig(s string) error {
 		}
 		if (name == "root" || name == "alias") && len(stmt) > 1 {
 			if err := webRootError(name, stmt[1]); err != nil {
+				return err
+			}
+		}
+		if (name == "access_log" || name == "error_log") && len(stmt) > 1 {
+			if err := logTargetError(name, stmt[1]); err != nil {
 				return err
 			}
 		}

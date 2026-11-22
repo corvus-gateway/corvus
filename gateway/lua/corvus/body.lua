@@ -37,6 +37,8 @@ _M.UNINSPECTED = {
   ["unreadable"] = true,           -- buffered body file could not be read
   ["items-overflow"] = true,       -- normalisation stopped at a limit
   ["unsupported-charset"] = true,  -- JSON/form body in a charset the decoders cannot read
+  ["unparsed-json"] = true,        -- declared as JSON, but not readable as JSON here
+  ["regex-error"] = true,          -- a signature could not be evaluated (match limit)
 }
 
 -- High-signal signatures (id, PCRE, options). Matched against the normalised text.
@@ -146,17 +148,19 @@ flatten = function(acc, obj, depth)
   end
 end
 
+local function add_form_value(acc, x)
+  if not x or x == "" then return end
+  local d = unescape((gsub(x, "+", " ")))
+  if find(d, "%", 1, true) then d = unescape(d) end
+  add_value(acc, d, 1)
+end
+
 local function decode_form(acc, s)
   for pair in s:gmatch("[^&]+") do
     if acc.n >= MAX_ITEMS then acc.truncated = true return end
     local k, v = pair:match("^([^=]*)=?(.*)$")
-    for _, x in ipairs({ k, v }) do
-      if x and x ~= "" then
-        local d = unescape((gsub(x, "+", " ")))
-        if find(d, "%", 1, true) then d = unescape(d) end
-        add_value(acc, d, 1)
-      end
-    end
+    add_form_value(acc, k)
+    add_form_value(acc, v)
   end
 end
 
@@ -357,10 +361,18 @@ local function normalise(raw, ctype)
   if mtype == "multipart/form-data" then
     decode_multipart(acc, raw, list, meta)
   elseif is_json then
+    -- a UTF-8 byte order mark is not part of the document (parsers skip it)
+    if sub(raw, 1, 3) == "\239\187\191" then raw = sub(raw, 4) end
     local obj = decode_json(acc, raw)
     if type(obj) == "table" then flatten(acc, obj, 1)
     elseif type(obj) == "string" then add_value(acc, obj, 1)
-    else add(acc, raw) end
+    else
+      add(acc, raw)
+      -- Declared as JSON but not readable as JSON here (text after the document, for
+      -- example): a more lenient parser in the application may still read it, and the
+      -- raw text hides escaped characters from the signatures.
+      if obj == nil and not acc.truncated and find(raw, "%S") then meta.unparsed = true end
+    end
   elseif is_form then
     decode_form(acc, raw)
   else
@@ -369,7 +381,9 @@ local function normalise(raw, ctype)
   if acc.truncated then meta.truncated = true end
   acc.n, acc.truncated = nil, nil
   -- one item per line; newlines inside values become spaces so ^/$ anchor whole items
-  for i = 1, #acc do acc[i] = gsub(acc[i], "[\r\n]", " ") end
+  for i = 1, #acc do
+    if find(acc[i], "[\r\n]") then acc[i] = gsub(acc[i], "[\r\n]", " ") end
+  end
   return concat(acc, "\n"), meta
 end
 
@@ -408,14 +422,20 @@ function _M.inspect(max)
     return "skip:" .. tostring(err)
   end
   if meta and meta.anomaly then return "multipart-anomaly" end
+  local regex_err = false
   if text ~= "" then
     for _, s in ipairs(SIGNATURES) do
-      local from = re_find(text, s[2], s[3])
+      -- nil, nil, err when the match could not be completed (PCRE match limit): the
+      -- body was not checked against this signature, which is not "no match"
+      local from, _, rerr = re_find(text, s[2], s[3])
       if from then return s[1] end
+      if rerr then regex_err = true end
     end
   end
   if meta and meta.charset then return "unsupported-charset" end
   if meta and meta.truncated then return "items-overflow" end
+  if meta and meta.unparsed then return "unparsed-json" end
+  if regex_err then return "regex-error" end
   return nil
 end
 

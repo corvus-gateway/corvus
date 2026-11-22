@@ -306,7 +306,7 @@ but Cloudflare's addresses (a firewall on the tunnel server).
 | **Rate limit policy** | Limits requests per IP. See [Bans & rate limits](../security/bans.md#rate-limits) |
 | **Password protection** | Asks for a username and password before the site opens (HTTP Basic auth). Good for staging sites and internal tools |
 | **Block known exploit paths** | Blocks common attack patterns: SQL injection, path traversal, scanner probes. **On by default** |
-| **Request body inspection** | Checks JSON, form and multipart bodies for known exploit payloads: **Off**, **Log only** or **Block**. In **Block** mode, bodies that cannot be fully inspected (compressed, malformed multipart, a charset other than UTF-8 or another ASCII-compatible one, too many fields) are refused too. Bodies above the inspection size limit pass and are logged as not inspected |
+| **Request body inspection** | Checks JSON, form and multipart bodies for known exploit payloads: **Off**, **Log only** or **Block**. In **Block** mode, bodies that cannot be fully inspected (compressed, malformed multipart, a body declared as JSON that is not valid JSON, a charset other than UTF-8 or another ASCII-compatible one, too many fields) are refused too. Bodies above the inspection size limit pass and are logged as not inspected |
 | **Under attack mode** | Makes every visitor pass a browser challenge. See [Challenge & under attack](../security/challenge.md) |
 | **Security headers** | Adds browser security headers (**Basic** or **Strict**). Headers your app already sends are never replaced |
 
@@ -323,7 +323,7 @@ Attach an [access queue](../access-queue.md) and choose the **Protected path** (
 | **Max upload size** | 100 MB | Largest request body. `0` = unlimited. Larger uploads get `413` |
 | **Upstream timeout** | 60 s (1 h with WebSocket) | How long Corvus waits for your service to answer. Empty: 60 s, or 1 h for WebSocket hosts; a value you set applies as is |
 | **Gzip compression** | On | Compresses text responses (HTML, CSS, JS, JSON …). Responses that are already compressed pass unchanged |
-| **Advanced nginx config** | empty | Nginx directives inserted into the host's `server` block (administrators only) |
+| **Advanced nginx config** | empty | Nginx directives inserted into the host's `server` block (administrators only). Directives that run code or make the gateway write files it names are refused (`*_by_lua*`, `include`, `proxy_store`, `*_temp_path`, …); `access_log` and `error_log` may write to `off`, `stderr`, `syslog:` or a `*.log` file |
 
 ### Notes
 

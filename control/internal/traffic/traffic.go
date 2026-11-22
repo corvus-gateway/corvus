@@ -56,6 +56,9 @@ const (
 	srcStep     = 10    // seconds
 	srcSlots    = 360   // one hour
 	srcIPCap    = 20000 // client IPs tracked per slot
+	// client IPs tracked in all slots together: a client that changes its address with
+	// every request (an IPv6 /64 has plenty) could otherwise fill every slot of the hour
+	srcTotalCap = 200000
 )
 
 type srcSlot struct {
@@ -243,6 +246,7 @@ type Collector struct {
 	// unlike the display ring above (eventCap entries), it keeps the full hour during a
 	// wide attack
 	src     [srcSlots]srcSlot
+	srcN    int // client IPs in all slots together (at most srcTotalCap)
 	started time.Time
 	dropped int64
 
@@ -473,7 +477,7 @@ func (c *Collector) Add(r *Record) {
 		}
 		if st != nil {
 			st.n++
-			if r.S >= 400 && r.S < 500 && !isChallenge(r) {
+			if r.S >= 400 && r.S < 500 && !isChallenge(r) && r.BN == "" {
 				st.s4++ // scanner detection: challenge pages are not counted
 			}
 			st.host = r.H
@@ -959,7 +963,8 @@ type SourceActivity struct {
 	Kinds map[string]bool
 }
 
-// EventsByIP sums event counts per client IP for the given kinds since t.
+// EventsByIP sums event counts per client IP for the given kinds since t. Only
+// SourceKinds are counted per address.
 func (c *Collector) EventsByIP(since time.Time, kinds ...string) map[string]*SourceActivity {
 	want := map[string]bool{}
 	for _, k := range kinds {
@@ -1045,10 +1050,24 @@ func (c *Collector) evictIdleHost(now int64) bool {
 	return true
 }
 
+// SourceKinds are the event kinds counted per client address (EventsByIP): the
+// detections that automatic bans and security alerts act on. Other kinds are not kept
+// per address — above all "banned", which a refused client could produce without end.
+var SourceKinds = []string{"blocked_exploit", "exploit_detected", "blocked_rule", "blocked_body", "body_detected"}
+
+func sourceKind(kind string) bool {
+	for _, k := range SourceKinds {
+		if k == kind {
+			return true
+		}
+	}
+	return false
+}
+
 // countSource adds n events of kind from ip at unix time ts to the per-IP slots (caller
 // holds c.mu). Slots older than an hour are overwritten.
 func (c *Collector) countSource(ts int64, kind, host, ip string, n int64) {
-	if ip == "" || n <= 0 {
+	if ip == "" || n <= 0 || !sourceKind(kind) {
 		return
 	}
 	start := ts - ts%srcStep
@@ -1057,15 +1076,26 @@ func (c *Collector) countSource(ts int64, kind, host, ip string, n int64) {
 		if b.start > start && b.ips != nil {
 			return // a newer slot already uses this place (restored event older than an hour)
 		}
+		c.srcN -= len(b.ips)
 		b.start, b.ips = start, map[string]*srcAct{}
 	}
 	a := b.ips[ip]
 	if a == nil {
-		if len(b.ips) >= srcIPCap {
+		if c.srcN >= srcTotalCap {
+			// slots older than the hour still count until something is written there
+			for i := range c.src {
+				if o := &c.src[i]; o.ips != nil && o.start <= start-srcSlots*srcStep {
+					c.srcN -= len(o.ips)
+					o.ips = nil
+				}
+			}
+		}
+		if len(b.ips) >= srcIPCap || c.srcN >= srcTotalCap {
 			return
 		}
 		a = &srcAct{kinds: map[string]int64{}, hosts: map[string]bool{}}
 		b.ips[ip] = a
+		c.srcN++
 	}
 	a.kinds[kind] += n
 	a.hosts[host] = true
