@@ -18,6 +18,8 @@ Corvus가 80·443 포트로 요청을 받아 뒤에 있는 알맞은 앱이나 �
 
 ![Corvus 데모](img/demo.gif){ .shot }
 
+:fontawesome-brands-youtube:{ style="color:#ff0000" } YouTube에서 **[2분 소개 영상](https://youtu.be/wtd2yBssBUk)**을 볼 수 있습니다(영어).
+
 <div class="grid cards" markdown>
 
 - :material-rocket-launch: **[5분 만에 설치](getting-started/install.md)**

@@ -25,7 +25,20 @@ SAME_AS = [
     "https://github.com/corvus-gateway",
     "https://www.producthunt.com/products/corvus-awpg",
     "https://wikidocs.net/book/22096",
+    "https://www.youtube.com/@CorvusGateway",
 ]
+VIDEO = {
+    "@type": "VideoObject",
+    "name": "Corvus: Open-Source Reverse Proxy with a Built-in WAF (Nginx Proxy Manager Alternative)",
+    "description": ("A 2-minute tour of Corvus: adding a site with free HTTPS, built-in attack blocking and "
+                    "automatic bans, security rules and a browser challenge, live traffic and the access queue."),
+    "thumbnailUrl": "https://i.ytimg.com/vi/wtd2yBssBUk/maxresdefault.jpg",
+    "uploadDate": "2026-11-23T07:05:19-08:00",
+    "duration": "PT1M43S",
+    "contentUrl": "https://youtu.be/wtd2yBssBUk",
+    "embedUrl": "https://www.youtube.com/embed/wtd2yBssBUk",
+    "inLanguage": "en",
+}
 
 # Facts used in the SoftwareApplication node. Keep them in line with index.md.
 FEATURES = {
@@ -198,6 +211,8 @@ def _graph(page, config) -> list[dict]:
             "runtimePlatform": ["OpenResty", "Docker"],
             "targetProduct": {"@id": app_id},
         })
+        graph.append({**VIDEO, "@id": origin + "/#video", "about": {"@id": app_id},
+                      "publisher": {"@id": org["@id"]}})
         website["about"] = {"@id": app_id}
         return graph
 
@@ -295,6 +310,7 @@ LLMS_FACTS = {
         f"Source: {GITHUB}",
         "Image: ghcr.io/corvus-gateway/gateway (amd64, arm64)",
         "Install: one docker-compose.yml; ports 80/443 for traffic, 9443 for the admin console",
+        "Intro video (2 min): https://youtu.be/wtd2yBssBUk",
         "Not a fit: Kubernetes ingress, configuration from Docker labels, HTTP/3, servers with no public IP (use a tunnel in front)",
     ],
     "ko": [
@@ -302,6 +318,7 @@ LLMS_FACTS = {
         f"소스: {GITHUB}",
         "이미지: ghcr.io/corvus-gateway/gateway (amd64, arm64)",
         "설치: docker-compose.yml 하나, 트래픽은 80/443, 관리 콘솔은 9443 포트",
+        "소개 영상(2분, 영어): https://youtu.be/wtd2yBssBUk",
         "맞지 않는 경우: 쿠버네티스 인그레스, Docker 라벨로 설정, HTTP/3, 공인 IP가 없는 서버(앞에 터널 필요)",
     ],
 }

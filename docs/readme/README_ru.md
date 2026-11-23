@@ -30,6 +30,7 @@
 Corvus — это бесплатный самостоятельно размещаемый **обратный прокси со встроенным файрволом веб-приложений (WAF)** с открытым исходным кодом (Apache-2.0). Он так же прост в запуске, как Nginx Proxy Manager: домены, проброс трафика и бесплатный SSL от Let's Encrypt настраиваются в веб-консоли в несколько кликов. Кроме того, он **наблюдает, защищает и контролирует** проходящий трафик: блокировка атак, включённая по умолчанию, автоматическая блокировка IP-адресов, ограничение частоты запросов, проверка ботов, мониторинг в реальном времени и очередь доступа на случай всплесков нагрузки. Один контейнер Docker, все функции бесплатны, трафик не отправляется в сторонние облака. См. также [сравнение](https://corvusgateway.org/compare/) с Nginx Proxy Manager, Caddy, Traefik, BunkerWeb, SafeLine и другими.
 
 <p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
+<p align="center"><a href="https://youtu.be/wtd2yBssBUk"><img src="https://img.shields.io/badge/YouTube-FF0000?style=flat-square&logo=youtube&logoColor=white" alt="YouTube"></a> <a href="https://youtu.be/wtd2yBssBUk"><b>Смотреть 2-минутное видео (на английском)</b></a></p>
 
 - [Быстрая установка](#быстрая-установка)
 - [Документация](https://corvusgateway.org/)

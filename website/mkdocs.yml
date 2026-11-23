@@ -53,6 +53,8 @@ extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/corvus-gateway/corvus
+    - icon: fontawesome/brands/youtube
+      link: https://www.youtube.com/@CorvusGateway
 
 extra_css:
   - assets/extra.css

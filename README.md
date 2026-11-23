@@ -37,6 +37,7 @@ spikes. One Docker container, every feature free, and no traffic is sent to a th
 BunkerWeb, SafeLine and others.
 
 <p align="center"><img src="assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
+<p align="center"><a href="https://youtu.be/wtd2yBssBUk"><img src="https://img.shields.io/badge/YouTube-FF0000?style=flat-square&logo=youtube&logoColor=white" alt="YouTube"></a> <a href="https://youtu.be/wtd2yBssBUk"><b>Watch the 2-minute intro video</b></a></p>
 
 - [Quick Setup](#quick-setup)
 - [Documentation](https://corvusgateway.org/)

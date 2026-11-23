@@ -38,6 +38,7 @@ gratuitas, y ningún tráfico se envía a una nube de terceros.
 BunkerWeb, SafeLine y otros.
 
 <p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
+<p align="center"><a href="https://youtu.be/wtd2yBssBUk"><img src="https://img.shields.io/badge/YouTube-FF0000?style=flat-square&logo=youtube&logoColor=white" alt="YouTube"></a> <a href="https://youtu.be/wtd2yBssBUk"><b>Ver el vídeo de presentación de 2 minutos (en inglés)</b></a></p>
 
 - [Instalación rápida](#instalación-rápida)
 - [Documentación](https://corvusgateway.org/)

@@ -36,6 +36,7 @@ Nginx Proxy Manager만큼 운영이 쉬워서 웹 콘솔에서 도메인, 포워
 [비교](https://corvusgateway.org/ko/compare/)도 참고하세요.
 
 <p align="center"><img src="../../assets/demo/corvus-demo-ko.gif" alt="Corvus demo" width="900"></p>
+<p align="center"><a href="https://youtu.be/wtd2yBssBUk"><img src="https://img.shields.io/badge/YouTube-FF0000?style=flat-square&logo=youtube&logoColor=white" alt="YouTube"></a> <a href="https://youtu.be/wtd2yBssBUk"><b>2분 소개 영상 보기 (영어)</b></a></p>
 
 - [빠른 설정](#빠른-설정)
 - [문서](https://corvusgateway.org/ko/)
