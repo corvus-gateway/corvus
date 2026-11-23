@@ -3,6 +3,7 @@ package compiler
 import (
 	"bytes"
 	_ "embed"
+	"errors"
 	"fmt"
 	htmltemplate "html/template"
 	"os"
@@ -77,7 +78,7 @@ func RenderStaticPage(p store.StaticPage, lang, host string) ([]byte, error) {
 	}
 	texts, ok := pageTexts[p.Template]
 	if !ok {
-		return nil, fmt.Errorf("unknown page template %q", p.Template)
+		return nil, errors.New("unknown page template")
 	}
 	if _, ok := texts[lang]; !ok {
 		lang = "en"
