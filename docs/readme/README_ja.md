@@ -36,6 +36,7 @@ Corvus は、**Web アプリケーションファイアウォール（WAF）を�
 Nginx Proxy Manager、Caddy、Traefik、BunkerWeb、SafeLine などとの[比較](https://corvusgateway.org/compare/)もご覧ください。
 
 <p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
+<p align="center"><a href="https://youtu.be/wtd2yBssBUk"><img src="https://img.shields.io/badge/YouTube-FF0000?style=flat-square&logo=youtube&logoColor=white" alt="YouTube"></a> <a href="https://youtu.be/wtd2yBssBUk"><b>2 分の紹介動画を見る（英語）</b></a></p>
 
 - [クイックセットアップ](#クイックセットアップ)
 - [ドキュメント](https://corvusgateway.org/)

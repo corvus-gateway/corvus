@@ -20,6 +20,8 @@ server you already run.
 
 ![Corvus demo](img/demo.gif){ .shot }
 
+:fontawesome-brands-youtube:{ style="color:#ff0000" } **[Watch the 2-minute intro video](https://youtu.be/wtd2yBssBUk)** on YouTube.
+
 <div class="grid cards" markdown>
 
 - :material-rocket-launch: **[Install in 5 minutes](getting-started/install.md)**
