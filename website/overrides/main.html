@@ -16,6 +16,9 @@
   {% endfor %}
   <link rel="alternate" href="{{ config.extra.origin }}/{{ page.url }}" hreflang="x-default">
   <link rel="icon" href="{{ config.theme.favicon | url }}">
+  {% for s in config.extra.social if s.rel_me %}
+    <link rel="me" href="{{ s.link }}">
+  {% endfor %}
 {% endif %}
 {% endblock %}
 
