@@ -11,8 +11,8 @@
 # xslt, geoip, ssi-related extras are NOT compiled in.
 set -eu
 
-OPENRESTY_VERSION=1.31.8.1
-OPENRESTY_SHA256=b569c63b420f80a4ac8466f2deffe73ed93ab760026532e039c3658409a997f4
+OPENRESTY_VERSION=1.31.9.1
+OPENRESTY_SHA256=71d49935bdc186dafc1f4b0a8ba44dba1bf4abc8ca52d4621f2039ec8fdcc95f
 OPENSSL_VERSION=3.5.9
 OPENSSL_SHA256=603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a
 PCRE2_VERSION=10.49
@@ -35,11 +35,8 @@ fetch "https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${
 for f in *.tar.gz; do tar xzf "$f"; done
 
 cd "openresty-${OPENRESTY_VERSION}"
-# nginx security fixes (nginx 1.31.9, 2026-11-18: HTTP/2, resolver, request body, PROXY protocol v2,
-# stream ssl_preread, try_files, …) applied to the bundled nginx 1.31.8 until an OpenResty release
-# includes them. The patch is the src/ part of `git diff release-1.31.8 release-1.31.9` from
-# https://github.com/nginx/nginx (version header excluded); it must apply without rejects.
-patch -d bundle/nginx-1.31.8 -p1 --forward --no-backup-if-mismatch < /patches/nginx-1.31.9-security.patch
+# OpenResty 1.31.9.1 bundles nginx 1.31.9 (the 2026-11-18 security fixes). No temporary patches
+# right now; see deploy/openresty/patches/README.md for how to apply one when needed.
 # OpenSSL, PCRE2 and zlib are compiled in statically from the verified sources above.
 ./configure -j"$JOBS" \
   --prefix=/usr/local/openresty \
