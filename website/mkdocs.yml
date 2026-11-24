@@ -55,6 +55,10 @@ extra:
       link: https://github.com/corvus-gateway/corvus
     - icon: fontawesome/brands/youtube
       link: https://www.youtube.com/@CorvusGateway
+    - icon: fontawesome/brands/mastodon
+      link: https://mastodon.social/@moonjikwang
+      name: Mastodon
+      rel_me: true   # Mastodon profile verification (<link rel="me"> in every page head)
 
 extra_css:
   - assets/extra.css
