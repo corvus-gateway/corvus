@@ -208,6 +208,10 @@ CORVUS_GATEWAY=0 CORVUS_ADMIN_TLS=0 CORVUS_DATA_DIR=./tmp bin/corvus-control   #
 
 请通过私密渠道报告漏洞——参见 [SECURITY.md](../../SECURITY.md)。
 
+## AI 使用
+
+Corvus 在 AI 编程助手的帮助下开发。AI 用在哪里、用了多少，以及每项变更如何验证，请参阅 [AI-DECLARATION.md](../../AI-DECLARATION.md)（英文）。
+
 ## 许可证
 
 [Apache License 2.0](../../LICENSE) © 2026 Jikwang Moon。
