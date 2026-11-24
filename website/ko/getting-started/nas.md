@@ -1,5 +1,5 @@
 ---
-description: NAS에 Corvus 설치하기 — TrueNAS SCALE 앱 카탈로그, Unraid Community Applications, 포트, 설정 토큰, 다른 NAS에서 주의할 점.
+description: "NAS에 Corvus 설치하기: TrueNAS SCALE 앱 카탈로그, Unraid Community Applications, Synology Container Manager, 포트, 설정 토큰, 다른 NAS에서 주의할 점."
 ---
 
 # NAS에 설치
@@ -65,9 +65,50 @@ Corvus는 **Community Applications**(**Apps** 탭)에 있습니다.
 인터넷에서 사이트에 접속하려면 공유기에서 **80 → 1880**, **443 → 18443**으로 포워딩하세요. 콘솔 포트는
 인터넷에 열지 마세요. 업데이트는 다른 컨테이너처럼 **Docker** 탭에 표시됩니다.
 
+## Synology (Container Manager)
+
+DSM 7.2 이상에서는 Container Manager의 **프로젝트**로 설치합니다.
+
+1. **File Station**에서 폴더를 만듭니다. 예: `volume1`의 `docker/corvus`
+2. **Container Manager → 프로젝트 → 생성**. 이름은 `corvus`, 경로는 1에서 만든 폴더로 정하고
+   **docker-compose.yml 만들기**를 고릅니다.
+
+    ```yaml
+    services:
+      corvus:
+        image: 'ghcr.io/corvus-gateway/gateway:latest'
+        restart: unless-stopped
+        environment:
+          PUID: 1026   # DSM 사용자, 아래 참고
+          PGID: 100
+        ports:
+          - '8080:80'
+          - '8443:443'
+          - '9443:9443'
+        volumes:
+          - ./data:/data
+    ```
+
+    DSM이 80·443 포트를 직접 쓰기 때문에(웹 서비스와 DSM 자체 역방향 프록시) Corvus는 8080과 8443으로
+    엽니다. 콘솔 포트 9443은 기본 DSM에서 비어 있습니다.
+
+3. **PUID/PGID**는 데이터 폴더의 주인을 정합니다. 1에서 만든 폴더의 주인인 DSM 사용자로 맞추세요.
+   DSM에서 처음 만든 사용자는 보통 ID가 1026이고, `users` 그룹은 100입니다. 확실하지 않으면 SSH로
+   `id <사용자 이름>`을 실행해 확인하세요.
+4. 마법사를 끝내면 Container Manager가 이미지를 받아 프로젝트를 시작합니다. **컨테이너 → corvus →
+   로그**에서 `setup_token`이 있는 줄을 찾으세요(처음 시작하기 전에 `environment`에
+   `CORVUS_SETUP_TOKEN`을 넣어 직접 정할 수도 있습니다).
+5. `https://<NAS-IP>:9443`을 열고 인증서 경고를 넘긴 뒤 토큰을 입력해 관리자 계정을 만듭니다.
+
+**인터넷에서 접속하려면:** 공유기에서 **80 → 8080**, **443 → 8443**을 NAS로 포워딩하세요. DSM 방화벽을
+켜 두었다면 8080, 8443을 허용하고, 9443은 내부망에서만 허용하세요. 콘솔 포트는 인터넷에 열지 마세요.
+
+**업데이트:** **프로젝트 → corvus → 작업 → 빌드**를 누르면 최신 이미지를 받아 컨테이너를 다시
+만듭니다. `./data`의 데이터는 유지됩니다.
+
 ## 다른 NAS
 
-Docker Compose를 쓸 수 있는 NAS(Synology Container Manager, QNAP Container Station 등)라면
+Docker Compose를 쓸 수 있는 다른 NAS(QNAP Container Station 등)라면
 일반 [설치](install.md) 방법을 그대로 쓰면 됩니다. 주의할 점:
 
 - **NAS가 이미 80/443을 쓰는 경우.** Corvus를 다른 포트(예: `8080:80`, `8443:443`)로 열고 공유기에서
