@@ -61,6 +61,28 @@ All settings, certificates and history are stored in `./data`.
 docker compose up -d
 ```
 
+??? note "Without Compose: `docker run`"
+    The same container with a plain `docker run`, for systems or NAS interfaces without Compose.
+    Run it in the folder that should hold `./data`:
+
+    ```bash
+    docker run -d --name corvus --restart unless-stopped \
+      -p 80:80 -p 443:443 -p 9443:9443 \
+      -v "$PWD/data:/data" \
+      --log-opt max-size=10m --log-opt max-file=3 \
+      ghcr.io/corvus-gateway/gateway:latest
+    ```
+
+    Read the setup token with `docker logs corvus 2>&1 | grep setup_token`. To upgrade, pull the new
+    image, then remove and start the container again with the same command; everything in `./data`
+    is kept:
+
+    ```bash
+    docker pull ghcr.io/corvus-gateway/gateway:latest
+    docker rm -f corvus
+    # run the docker run command above again
+    ```
+
 ## 3. Read the setup token
 
 The first start prints a one-time token that proves you own the server:
@@ -103,7 +125,7 @@ If port 6379 is already used on the host, also set `CORVUS_REDIS_PORT` (see
 
 ## Related
 
-- [Install on a NAS](nas.md): TrueNAS SCALE and Unraid apps, ports and tips for other NAS systems
+- [Install on a NAS](nas.md): TrueNAS SCALE and Unraid apps, Synology Container Manager, ports and tips for other NAS systems
 - [Configuration](../reference/configuration.md): environment variables
 - [Hardened install](../reference/hardened.md): read-only root filesystem, no capabilities
 - [Upgrade](upgrade.md)

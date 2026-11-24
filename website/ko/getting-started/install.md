@@ -61,6 +61,27 @@ services:
 docker compose up -d
 ```
 
+??? note "Compose 없이: `docker run`"
+    Compose가 없는 시스템이나 NAS 화면에서는 같은 컨테이너를 `docker run`으로 실행할 수 있습니다.
+    `./data`를 둘 폴더에서 실행하세요.
+
+    ```bash
+    docker run -d --name corvus --restart unless-stopped \
+      -p 80:80 -p 443:443 -p 9443:9443 \
+      -v "$PWD/data:/data" \
+      --log-opt max-size=10m --log-opt max-file=3 \
+      ghcr.io/corvus-gateway/gateway:latest
+    ```
+
+    설정 토큰은 `docker logs corvus 2>&1 | grep setup_token`으로 확인합니다. 업그레이드할 때는 새 이미지를
+    받은 뒤 컨테이너를 지우고 같은 명령으로 다시 시작하면 됩니다. `./data`의 내용은 그대로 유지됩니다.
+
+    ```bash
+    docker pull ghcr.io/corvus-gateway/gateway:latest
+    docker rm -f corvus
+    # 위의 docker run 명령을 다시 실행
+    ```
+
 ## 3. 설정 토큰 확인
 
 처음 시작할 때 서버 소유자임을 확인하는 일회용 토큰이 출력됩니다.
@@ -103,7 +124,7 @@ services:
 
 ## 관련 문서
 
-- [NAS에 설치](nas.md): TrueNAS SCALE·Unraid 앱, 포트, 다른 NAS에서 주의할 점
+- [NAS에 설치](nas.md): TrueNAS SCALE·Unraid 앱, Synology Container Manager, 포트, 다른 NAS에서 주의할 점
 - [환경 변수](../reference/configuration.md): 환경 변수 설정
 - [강화 설치](../reference/hardened.md): 읽기 전용 루트 파일 시스템, capability 없음
 - [업그레이드](upgrade.md)

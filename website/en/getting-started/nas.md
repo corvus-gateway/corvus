@@ -1,5 +1,5 @@
 ---
-description: Install Corvus on a NAS — TrueNAS SCALE app catalog, Unraid Community Applications, ports, the setup token, and tips for other NAS systems.
+description: "Install Corvus on a NAS: TrueNAS SCALE app catalog, Unraid Community Applications, Synology Container Manager, ports, the setup token, and tips for other NAS systems."
 ---
 
 # Install on a NAS
@@ -68,9 +68,52 @@ Forward ports **80 → 1880** and **443 → 18443** on your router to reach your
 internet. Keep the console port closed to the internet. Updates appear in the **Docker** tab like
 for other containers.
 
+## Synology (Container Manager)
+
+On DSM 7.2 and later, install Corvus as a **Project** in Container Manager.
+
+1. In **File Station**, create a folder for it, e.g. `docker/corvus` on `volume1`.
+2. **Container Manager → Project → Create**. Name it `corvus`, choose the folder from step 1 as the
+   path and **Create docker-compose.yml**:
+
+    ```yaml
+    services:
+      corvus:
+        image: 'ghcr.io/corvus-gateway/gateway:latest'
+        restart: unless-stopped
+        environment:
+          PUID: 1026   # your DSM user, see below
+          PGID: 100
+        ports:
+          - '8080:80'
+          - '8443:443'
+          - '9443:9443'
+        volumes:
+          - ./data:/data
+    ```
+
+    DSM itself uses ports 80 and 443 (for its web services and its own reverse proxy), so Corvus is
+    published on 8080 and 8443. The console port 9443 is free on a default DSM.
+
+3. **PUID/PGID** set who owns the data folder. Use the DSM user that owns the folder from step 1:
+   the first user created on DSM usually has the ID 1026 and the group `users` is 100. If you're not
+   sure, run `id <username>` over SSH.
+4. Finish the wizard; Container Manager pulls the image and starts the project. Open **Container →
+   corvus → Log** and find the line with `setup_token` (or add `CORVUS_SETUP_TOKEN` under
+   `environment` before the first start).
+5. Open `https://<nas-ip>:9443`, accept the certificate warning, enter the token and create the
+   administrator account.
+
+**From the internet:** forward ports **80 → 8080** and **443 → 8443** on your router to the NAS. If
+the DSM firewall is on, allow 8080, 8443 and (only from your LAN) 9443. Keep the console port closed
+to the internet.
+
+**Updates:** **Project → corvus → Action → Build** pulls the latest image and recreates the
+container; data in `./data` is kept.
+
 ## Other NAS systems
 
-Any NAS that runs Docker Compose (Synology Container Manager, QNAP Container Station, …)
+Any other NAS that runs Docker Compose (QNAP Container Station, …)
 can use the normal [install](install.md). Things to watch for:
 
 - **Ports 80/443 already in use by the NAS.** Publish Corvus on other ports (e.g. `8080:80` and
