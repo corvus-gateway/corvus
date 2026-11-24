@@ -17,7 +17,7 @@ RUN npm ci --no-audit --no-fund
 COPY web/ ./
 RUN npx tsc -b && npx vite build --outDir /out/dist --emptyOutDir
 
-FROM golang:1.27.4-alpine@sha256:0a5f7fe796599ff487605987432e7619ae45beeb2fba4c2ce0b907879932aebf AS control
+FROM golang:1.27.4-alpine@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280 AS control
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
