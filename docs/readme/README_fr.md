@@ -230,6 +230,10 @@ CORVUS_GATEWAY=0 CORVUS_ADMIN_TLS=0 CORVUS_DATA_DIR=./tmp bin/corvus-control   #
 
 Merci de signaler les vulnérabilités de manière privée — voir [SECURITY.md](../../SECURITY.md).
 
+## Utilisation de l'IA
+
+Corvus est développé avec l'aide d'un assistant de programmation IA. Où et dans quelle mesure il est utilisé, et comment chaque modification est vérifiée, est décrit dans [AI-DECLARATION.md](../../AI-DECLARATION.md) (en anglais).
+
 ## Licence
 
 [Apache License 2.0](../../LICENSE) © 2026 Jikwang Moon.

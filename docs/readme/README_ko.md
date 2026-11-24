@@ -223,6 +223,10 @@ CORVUS_GATEWAY=0 CORVUS_ADMIN_TLS=0 CORVUS_DATA_DIR=./tmp bin/corvus-control   #
 
 취약점은 비공개로 제보해 주세요. 자세한 내용은 [SECURITY.md](../../SECURITY.md)를 참고하세요.
 
+## AI 사용
+
+Corvus는 AI 코딩 도우미의 도움을 받아 개발합니다. 어디에 얼마나 쓰는지, 모든 변경을 어떻게 검증하는지는 [AI-DECLARATION.md](../../AI-DECLARATION.md)(영어)에 정리되어 있습니다.
+
 ## 라이선스
 
 [Apache License 2.0](../../LICENSE) © 2026 Jikwang Moon.
