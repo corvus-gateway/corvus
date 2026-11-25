@@ -211,6 +211,17 @@ func (s *Server) Handler() http.Handler {
 	priv("GET /api/ip-lists/{id}/check", s.ipListCheck)
 	op("DELETE /api/ip-lists/{id}", s.deleteIPList)
 
+	priv("GET /api/signin-users", s.listSigninUsers) // signin.go: login page users (#294)
+	op("POST /api/signin-users", s.createSigninUser)
+	op("PUT /api/signin-users/{id}", s.updateSigninUser)
+	op("DELETE /api/signin-users/{id}", s.deleteSigninUser)
+	op("POST /api/signin-users/{id}/end-sessions", s.endSigninSessions)
+	op("POST /api/signin-users/{id}/reset-mfa", s.resetSigninMFA)
+	priv("GET /api/signin-groups", s.listSigninGroups)
+	op("POST /api/signin-groups", s.createSigninGroup)
+	op("PUT /api/signin-groups/{id}", s.updateSigninGroup)
+	op("DELETE /api/signin-groups/{id}", s.deleteSigninGroup)
+
 	priv("GET /api/access-lists", s.listAccessLists)
 	op("POST /api/access-lists", s.createAccessList)
 	op("PUT /api/access-lists/{id}", s.updateAccessList)
