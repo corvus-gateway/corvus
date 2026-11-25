@@ -1,12 +1,12 @@
-# Builds the documentation site (website/) and publishes it to GitHub Pages from main.
+# Builds the website (website/: homepage at /, docs at /docs/) and publishes it to GitHub Pages from main.
 # Pull requests only build it (strict mode: broken links fail the check).
 name: docs
 on:
   push:
     branches: [main]
-    paths: ['website/**', '.github/workflows/docs.yml']
+    paths: ['website/**', 'assets/brand/**', '.github/workflows/docs.yml']
   pull_request:
-    paths: ['website/**', '.github/workflows/docs.yml']
+    paths: ['website/**', 'assets/brand/**', '.github/workflows/docs.yml']
   workflow_dispatch:
 permissions:
   contents: read

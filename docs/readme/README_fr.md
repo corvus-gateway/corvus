@@ -34,14 +34,14 @@ redirection et SSL Let's Encrypt gratuit en quelques clics dans une console web)
 par défaut, bannissement automatique d'IP, limitation de débit, défi anti-bots, supervision en
 direct et file d'accès pour absorber les pics de trafic. Un seul conteneur Docker, toutes les
 fonctions gratuites, et aucun trafic n'est envoyé vers un cloud tiers.
-[Comparaison](https://corvusgateway.org/compare/) avec Nginx Proxy Manager, Caddy, Traefik,
+[Comparaison](https://corvusgateway.org/docs/compare/) avec Nginx Proxy Manager, Caddy, Traefik,
 BunkerWeb, SafeLine et d'autres.
 
 <p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
 <p align="center"><a href="https://youtu.be/wtd2yBssBUk"><img src="https://img.shields.io/badge/YouTube-FF0000?style=flat-square&logo=youtube&logoColor=white" alt="YouTube"></a> <a href="https://youtu.be/wtd2yBssBUk"><b>Voir la vidéo de présentation de 2 minutes (en anglais)</b></a></p>
 
 - [Installation rapide](#installation-rapide)
-- [Documentation](https://corvusgateway.org/)
+- [Documentation](https://corvusgateway.org/docs/)
 - [Captures d'écran](#captures-décran)
 
 ## Objectif du projet
@@ -140,7 +140,7 @@ services:
 ```
 
 C'est toute l'installation : la passerelle, la console d'administration et le stockage de la file
-d'attente d'accès fonctionnent dans ce seul conteneur. Consultez la [documentation](https://corvusgateway.org/)
+d'attente d'accès fonctionnent dans ce seul conteneur. Consultez la [documentation](https://corvusgateway.org/docs/)
 pour les options.
 
 3. Démarrez votre stack avec
@@ -177,7 +177,7 @@ de données sont appliquées automatiquement au démarrage.
 
 La configuration, l'installation renforcée, les hôtes de destination, les flux, les sauvegardes, la migration
 depuis Nginx Proxy Manager, les règles de sécurité, la file d'attente d'accès et le dépannage sont décrits dans la
-**[documentation](https://corvusgateway.org/)** (en anglais et en coréen).
+**[documentation](https://corvusgateway.org/docs/)** (en anglais et en coréen).
 
 Un livre tutoriel pas à pas, en coréen, est disponible sur [WikiDocs](https://wikidocs.net/book/22096).
 

@@ -1,16 +1,18 @@
 # Korean documentation — same settings as mkdocs.yml, Korean pages in ko/.
 INHERIT: mkdocs.yml
 docs_dir: ko
-site_dir: ../site/ko
+site_dir: ../site/ko/docs
 edit_uri: edit/main/website/ko/
-site_url: https://corvusgateway.org/ko/
+site_url: https://corvusgateway.org/ko/docs/
 site_description: 웹 방화벽(WAF), 자동 차단, 관제, 접속 대기열을 갖춘 오픈소스 셀프 호스팅 리버스 프록시. 프록시 호스트와 무료 SSL을 몇 번의 클릭으로 설정합니다.
 extra:
+  homepage: https://corvusgateway.org/ko/
   tagline: 보호·관제·접속 대기열을 갖춘 셀프 호스팅 웹 게이트웨이
+  docs_title: 문서
 theme:
   language: ko
 nav:
-  - 홈: index.md
+  - 문서 홈: index.md
   - 시작하기:
       - 동작 방식: getting-started/how-it-works.md
       - 설치: getting-started/install.md

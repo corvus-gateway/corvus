@@ -14,7 +14,7 @@ What users can expect:
 2. **Configured protections are applied as documented.** A *Block* security rule, an IP ban, an IP
    list, password protection, the under-attack challenge, rate limits and the access queue are
    enforced for every request they cover, in the order described in
-   [How protection works](https://corvusgateway.org/security/).
+   [How protection works](https://corvusgateway.org/docs/security/).
 3. **Only authorized administrators change the configuration.** The console and API require a
    signed-in user with a sufficient role; optional TOTP two-factor authentication and OIDC
    single sign-on are supported.
@@ -24,7 +24,7 @@ What users can expect:
    console, not written to logs, and stored encrypted or with file permissions limited to the
    service user.
 6. **Released images are what the source says.** Images are built from tagged source by CI and
-   signed, with SBOM and build provenance (see [Verify the image](https://corvusgateway.org/reference/hardened/)).
+   signed, with SBOM and build provenance (see [Verify the image](https://corvusgateway.org/docs/reference/hardened/)).
 
 What Corvus does **not** promise:
 

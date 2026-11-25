@@ -33,7 +33,7 @@ maintainer's own changes included:
   [1.9.1 release notes](https://github.com/corvus-gateway/corvus/releases/tag/v1.9.1)).
 - Larger changes are tried on a live server as release candidates before the final release.
 - Releases are built in CI, signed (cosign), and come with an SBOM and build provenance, so you can
-  verify that an image was built from this repository ([how](https://corvusgateway.org/reference/hardened/)).
+  verify that an image was built from this repository ([how](https://corvusgateway.org/docs/reference/hardened/)).
 
 ## Other AI use
 

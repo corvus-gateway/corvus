@@ -1,14 +1,15 @@
 # English documentation. The Korean site (mkdocs.ko.yml) inherits this file.
-# Build both: website/build.sh  ·  preview: mkdocs serve -f website/mkdocs.yml
+# The docs live under /docs/; the product homepage at / is website/landing/.
+# Build everything: website/build.sh  ·  preview the docs: mkdocs serve -f website/mkdocs.yml
 site_name: Corvus AWPG
 site_description: Open-source, self-hosted reverse proxy with a built-in WAF, automatic bans, monitoring and an access queue.
-site_url: https://corvusgateway.org/
+site_url: https://corvusgateway.org/docs/
 repo_url: https://github.com/corvus-gateway/corvus
 repo_name: corvus-gateway/corvus
 edit_uri: edit/main/website/en/
 copyright: Copyright &copy; 2026 Jikwang Moon · Apache License 2.0
 docs_dir: en
-site_dir: ../site
+site_dir: ../site/docs
 
 theme:
   name: material
@@ -42,13 +43,17 @@ theme:
 extra:
   generator: false
   origin: https://corvusgateway.org   # absolute links for hreflang and link previews
+  homepage: https://corvusgateway.org/   # the header logo leads back to the product homepage
   tagline: Self-hosted web gateway with protection, monitoring and an access queue
-  alternate:
+  docs_title: Documentation   # <title> of the docs home page
+  alternate:             # link: the docs root, home: the product homepage in that language
     - name: English
-      link: /
+      link: /docs/
+      home: /
       lang: en
     - name: 한국어
-      link: /ko/
+      link: /ko/docs/
+      home: /ko/
       lang: ko
   social:
     - icon: fontawesome/brands/github
@@ -88,7 +93,7 @@ validation:
     anchors: warn
 
 nav:
-  - Home: index.md
+  - Docs home: index.md
   - Getting started:
       - How Corvus works: getting-started/how-it-works.md
       - Install: getting-started/install.md

@@ -34,14 +34,14 @@ Webkonsole) und **überwacht, schützt und steuert** zusätzlich den durchlaufen
 standardmäßig aktive Angriffsabwehr, automatische IP-Sperren, Ratenbegrenzung, Bot-Challenge,
 Live-Monitoring und eine Zugriffswarteschlange für Lastspitzen. Ein Docker-Container, alle
 Funktionen kostenlos, und es wird kein Traffic an eine Drittanbieter-Cloud gesendet.
-[Vergleich](https://corvusgateway.org/compare/) mit Nginx Proxy Manager, Caddy, Traefik,
+[Vergleich](https://corvusgateway.org/docs/compare/) mit Nginx Proxy Manager, Caddy, Traefik,
 BunkerWeb, SafeLine und anderen.
 
 <p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
 <p align="center"><a href="https://youtu.be/wtd2yBssBUk"><img src="https://img.shields.io/badge/YouTube-FF0000?style=flat-square&logo=youtube&logoColor=white" alt="YouTube"></a> <a href="https://youtu.be/wtd2yBssBUk"><b>Das 2-minütige Vorstellungsvideo ansehen (Englisch)</b></a></p>
 
 - [Schnellstart](#schnellstart)
-- [Dokumentation](https://corvusgateway.org/)
+- [Dokumentation](https://corvusgateway.org/docs/)
 - [Screenshots](#screenshots)
 
 ## Projektziel
@@ -140,7 +140,7 @@ services:
 ```
 
 Das ist die gesamte Installation: Gateway, Admin-Konsole und Speicher für die Zugriffswarteschlange laufen in
-diesem einen Container. Optionen finden Sie in der [Dokumentation](https://corvusgateway.org/).
+diesem einen Container. Optionen finden Sie in der [Dokumentation](https://corvusgateway.org/docs/).
 
 3. Starten Sie Ihren Stack mit
 
@@ -175,7 +175,7 @@ Start automatisch angewendet.
 ## Dokumentation
 
 Konfiguration, gehärtete Installation, Ziel-Hosts, Streams, Backups, Migration von Nginx Proxy Manager,
-Sicherheitsregeln, Zugriffswarteschlange und Fehlerbehebung beschreibt die **[Dokumentation](https://corvusgateway.org/)**
+Sicherheitsregeln, Zugriffswarteschlange und Fehlerbehebung beschreibt die **[Dokumentation](https://corvusgateway.org/docs/)**
 (auf Englisch und Koreanisch).
 
 Ein Schritt-für-Schritt-Tutorial als Buch (auf Koreanisch) gibt es auf [WikiDocs](https://wikidocs.net/book/22096).
