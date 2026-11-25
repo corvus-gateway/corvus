@@ -134,10 +134,20 @@ Proxy host fields: `domains` (array), `forward_scheme` (`http`/`https`), `forwar
 `rate_limit_id`, `access_list_id` or `basic_auth`, `block_exploits`, `body_inspection`
 (`off`, `log`, `block`), `body_max_kb`, `security_headers`, `under_attack`, `under_attack_config`,
 `max_upload_mb`, `upstream_timeout_s`, `gzip`, `advanced_config`, `locations`, `extra_targets`,
-`content`, `page`, `notes`, `enabled`.
-`under_attack`, `under_attack_config`, `locations`, `extra_targets`, `content`, `page` and `notes`
-keep their stored value when omitted from a `PUT` (`"locations": []` removes all locations,
+`content`, `page`, `notes`, `login`, `enabled`.
+`under_attack`, `under_attack_config`, `locations`, `extra_targets`, `content`, `page`, `notes` and
+`login` keep their stored value when omitted from a `PUT` (`"locations": []` removes all locations,
 `"extra_targets": []` all extra backends).
+
+`login` is the login page in front of the host (in development for 1.10.0, see #294; the gateway
+does not enforce it yet): `{ "enabled", "mode": "pin" | "users", "pin", "group_ids", "session_hours",
+"exclude_paths", "pass_user" }`. `pin` is write-only (at least 4 characters; omitted or `""` keeps the
+current PIN, a new one ends the sessions signed in with the old one); responses report `pin_set`
+instead. `users` mode needs at least one existing sign-in group. `session_hours` is 1-720 (default
+168). `exclude_paths` (at most 20 prefixes starting with `/`, not `/` itself or `/__corvus`) need no
+sign-in. `pass_user` sends the signed-in user name to the app as `X-Corvus-User` (users mode). A
+host cannot have the login page and password protection (`basic_auth`) at the same time
+(`422`, field `login`, code `basic_auth`).
 
 `content` (default `forward`) is what the host answers with: `forward` proxies to the forward
 target as always; `page` serves `page` for every path and method instead (no upstream; security
@@ -341,6 +351,18 @@ The same fields work for `POST /api/certificates/acme`.
 | PUT / DELETE | `/api/rate-limits/{id}` | operator | Update / delete |
 | GET / POST | `/api/access-lists` | viewer / operator | Password protection lists |
 | PUT / DELETE | `/api/access-lists/{id}` | operator | Update / delete |
+| GET / POST | `/api/signin-users` | viewer / operator | Sign-in users of login pages (#294) |
+| PUT / DELETE | `/api/signin-users/{id}` | operator | Update / delete |
+| POST | `/api/signin-users/{id}/end-sessions` | operator | Sign the user out everywhere |
+| POST | `/api/signin-users/{id}/reset-mfa` | operator | Remove the user's authenticator (enrolled again at the next sign-in) and sign out |
+| GET / POST | `/api/signin-groups` | viewer / operator | Groups of sign-in users; `hosts` counts the login pages that allow the group |
+| PUT / DELETE | `/api/signin-groups/{id}` | operator | Update / delete (`409` while a proxy host allows the group) |
+
+**Sign-in user fields**: `username` (1-64 of `a-z 0-9 . _ @ -`, stored lower-case), `password`
+(write-only, at least 8 characters; required for new users, omitted or `""` keeps it), `totp_required`
+(two-step verification, enrolled by the user at the first sign-in), `enabled`, `note`, `group_ids`;
+read-only `totp_enrolled`, `last_login_at`. A new password, disabling the user or no longer requiring
+two-step verification signs the user out. Group fields: `name`, `user_ids`.
 
 **Security rule fields**: `name`, `description`, `enabled`, `action` (`block`, `allow`, `log`,
 `challenge`), `status_code` (block only: `401`, `403`, `404`, `410`, `429`, `444`), `skip_basic_auth`

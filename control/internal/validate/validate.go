@@ -84,6 +84,7 @@ func ProxyHost(h *store.ProxyHost) error {
 		errs.add("security_headers", "invalid", "security headers must be off, basic or strict")
 	}
 	underAttack(&errs, h)
+	hostLogin(&errs, &h.Login)
 	if h.BodyMaxKB == 0 {
 		h.BodyMaxKB = 1024
 	}

@@ -38,6 +38,19 @@ func HashPassword(pw string) (string, error) {
 	return string(h), err
 }
 
+// HashSecret hashes a password or PIN whose policy is checked by the caller (sign-in
+// users and login page PINs, see validate). It still refuses more than bcrypt's 72 bytes.
+func HashSecret(s string) (string, error) {
+	if s == "" {
+		return "", errors.New("empty secret")
+	}
+	if len(s) > 72 {
+		return "", errors.New("password must be at most 72 bytes")
+	}
+	h, err := bcrypt.GenerateFromPassword([]byte(s), bcryptCost)
+	return string(h), err
+}
+
 func CheckPassword(hash, pw string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(pw)) == nil
 }
