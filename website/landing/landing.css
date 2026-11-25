@@ -77,10 +77,10 @@ code { font-family: var(--mono); font-size: .88em; background: rgba(15, 23, 42, 
 /* ------------------------------------------------------------ nav */
 .nav {
   position: sticky; top: 0; z-index: 50;
-  background: rgba(6, 10, 19, .92);
-  -webkit-backdrop-filter: saturate(160%) blur(14px);
-  backdrop-filter: saturate(160%) blur(14px);
-  border-bottom: 1px solid var(--night-line);
+  background: rgba(6, 10, 19, .55);
+  -webkit-backdrop-filter: saturate(170%) blur(16px);
+  backdrop-filter: saturate(170%) blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, .05);
 }
 .nav-in { display: flex; align-items: center; gap: 28px; height: 64px; }
 .brand { display: flex; align-items: center; gap: 10px; color: #fff; }
@@ -117,7 +117,8 @@ code { font-family: var(--mono); font-size: .88em; background: rgba(15, 23, 42, 
 .hero {
   position: relative; overflow: hidden; isolation: isolate;
   color: var(--on-night); text-align: center;
-  padding: 88px 0 0;
+  margin-top: -65px; /* runs under the translucent header */
+  padding: 153px 0 0;
   background:
     radial-gradient(900px 480px at 50% -80px, rgba(59, 130, 246, .42), transparent 70%),
     radial-gradient(520px 320px at 88% 18%, rgba(34, 211, 238, .14), transparent 70%),
@@ -400,7 +401,7 @@ thead th.us { color: var(--blue); background: #e8f0ff; font-size: 15px; }
   .nav-in { gap: 12px; height: 60px; }
   .brand img { width: 112px; }
   .brand-tag { display: none; }
-  .hero { padding-top: 56px; background:
+  .hero { margin-top: -61px; padding-top: 117px; background:
     radial-gradient(600px 380px at 50% -60px, rgba(59, 130, 246, .42), transparent 70%),
     linear-gradient(var(--night), var(--night) calc(100% - 90px), var(--paper) calc(100% - 90px)); }
   .hero-grid { bottom: 90px; background-size: 40px 40px; }

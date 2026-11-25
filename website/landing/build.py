@@ -2,7 +2,8 @@
 
 Run by website/build.sh after both MkDocs builds (docs in site/docs/ and site/ko/docs/):
 
-* renders template.html with the texts in strings.py into site/index.html and site/ko/index.html,
+* renders template.html with the texts in strings.py into site/index.html (English only; /ko/
+  forwards to the Korean docs),
   with Schema.org JSON-LD (Organization, WebSite, WebPage, SoftwareApplication,
   SoftwareSourceCode, VideoObject);
 * copies landing.css, the root-only files in root/ (robots.txt, the Google site verification
@@ -65,25 +66,17 @@ FEATURES = {
         "Import from Nginx Proxy Manager",
         "Roles, MFA, SSO (OIDC), API tokens, audit log, versioned configuration with rollback",
     ],
-    "ko": [
-        "웹 콘솔로 관리하는 리버스 프록시: 프록시 호스트, 사용자 지정 위치, 리디렉션, TCP/UDP 스트림",
-        "Let's Encrypt 무료 인증서 자동 갱신, DNS 인증으로 와일드카드 인증서",
-        "내장 웹 방화벽(WAF): 알려진 공격 경로와 요청 본문을 기본으로 검사",
-        "IP·국가·경로·헤더·User-Agent 보안 규칙, 기록만 하는 모드",
-        "반복 공격 IP 자동 차단과 호스트별 요청 속도 제한",
-        "브라우저 확인과 자동 '공격 대응' 모드, 외부 서비스 없음",
-        "트래픽 폭주에 대비한 접속 대기열",
-        "실시간 트래픽 관제, 요청 로그, 방문 통계, 알림",
-        "Nginx Proxy Manager 설정 가져오기",
-        "역할, MFA, SSO(OIDC), API 토큰, 감사 로그, 버전 관리와 되돌리기",
-    ],
 }
 
 LANGS = {
     # lang: (texts, path prefix, homepage URL, docs URL, site directory)
     "en": (strings.EN, "", ORIGIN + "/", ORIGIN + "/docs/", SITE),
-    "ko": (strings.KO, "/ko", ORIGIN + "/ko/", ORIGIN + "/ko/docs/", os.path.join(SITE, "ko")),
 }
+
+# The homepage is English only; /ko/ (the Korean docs home until the docs moved) forwards to
+# the Korean docs.
+KO_HOME = os.path.join(SITE, "ko")
+KO_DOCS = "/ko/docs/"
 
 CHECK = ('<span class="yes"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/>'
          '</svg><span class="sr">{}</span></span>')
@@ -203,15 +196,25 @@ def copy_tree(src: str, dst: str) -> None:
     shutil.copytree(src, dst, dirs_exist_ok=True)
 
 
-def sitemap(lang: str) -> None:
-    """Homepage + every docs page of one language, replacing the docs' own sitemap."""
-    _, _, home, _, out_dir = LANGS[lang]
+def ko_forward() -> None:
+    page = ('<!doctype html><meta charset="utf-8"><title>Corvus 문서</title>'
+            f'<meta http-equiv="refresh" content="0; url={KO_DOCS}">'
+            f'<link rel="canonical" href="{ORIGIN}{KO_DOCS}"><meta name="robots" content="noindex">'
+            f'<script>location.replace("{KO_DOCS}" + location.hash)</script>'
+            f'<p><a href="{KO_DOCS}">Corvus 문서로 이동</a></p>\n')
+    os.makedirs(KO_HOME, exist_ok=True)
+    with open(os.path.join(KO_HOME, "index.html"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(page)
+
+
+def sitemap(out_dir: str, home: str | None) -> None:
+    """The homepage (if any) + every docs page of one language, replacing the docs' own sitemap."""
     docs_dir = os.path.join(out_dir, "docs")
     if not os.path.exists(os.path.join(docs_dir, "sitemap.xml")):
         return  # already merged by an earlier run on the same build
     with open(os.path.join(docs_dir, "sitemap.xml"), encoding="utf-8") as f:
         locs = re.findall(r"<loc>([^<]+)</loc>", f.read())
-    urls = [home] + [u for u in locs if u != home]
+    urls = ([home] if home else []) + [u for u in locs if u != home]
     body = "".join(f"  <url><loc>{escape(u)}</loc></url>\n" for u in urls)
     with open(os.path.join(out_dir, "sitemap.xml"), "w", encoding="utf-8", newline="\n") as f:
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -227,7 +230,9 @@ def main() -> None:
         sys.exit("site/docs/ is missing: run the MkDocs builds first (website/build.sh)")
     for lang in LANGS:
         render(lang)
-        sitemap(lang)
+        sitemap(LANGS[lang][4], LANGS[lang][2])
+    ko_forward()
+    sitemap(KO_HOME, None)
     shutil.copy2(os.path.join(HERE, "landing.css"), os.path.join(SITE, "landing.css"))
     copy_tree(os.path.join(HERE, "root"), SITE)
     shutil.copytree(os.path.join(REPO, "assets", "brand"), os.path.join(SITE, "assets", "brand"),
@@ -239,7 +244,7 @@ def main() -> None:
     copy_tree(os.path.join(WEBSITE, "ko", "assets"), os.path.join(SITE, "ko", "assets"))
     # GitHub Pages serves /404.html for every missing path; the docs' one has the search box.
     shutil.copy2(os.path.join(SITE, "docs", "404.html"), os.path.join(SITE, "404.html"))
-    print("landing: site/index.html, site/ko/index.html, sitemaps and root files written")
+    print("landing: site/index.html, /ko/ forward, sitemaps and root files written")
 
 
 if __name__ == "__main__":

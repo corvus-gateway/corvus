@@ -53,7 +53,7 @@ extra:
       lang: en
     - name: 한국어
       link: /ko/docs/
-      home: /ko/
+      home: /
       lang: ko
   social:
     - icon: fontawesome/brands/github
