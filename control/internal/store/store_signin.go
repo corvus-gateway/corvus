@@ -237,6 +237,17 @@ func (s *Store) SaveSigninUser(ctx context.Context, u *SigninUser) error {
 	return nil
 }
 
+// ClaimSigninTOTPStep records step as the user's last accepted TOTP time step; false if
+// that step (or a later one) was already used.
+func (s *Store) ClaimSigninTOTPStep(ctx context.Context, userID, step int64) (bool, error) {
+	res, err := s.q.ExecContext(ctx, `UPDATE signin_users SET mfa_last_step = ? WHERE id = ? AND mfa_last_step < ?`, step, userID, step)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
+}
+
 // TouchSigninUser records a successful sign-in.
 func (s *Store) TouchSigninUser(ctx context.Context, id int64) error {
 	_, err := s.q.ExecContext(ctx, `UPDATE signin_users SET last_login_at = ? WHERE id = ?`, now(), id)
