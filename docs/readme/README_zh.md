@@ -27,13 +27,13 @@
 
 </div>
 
-Corvus 是一款免费、开源（Apache-2.0）、自托管的**内置 Web 应用防火墙（WAF）的反向代理**。它与 Nginx Proxy Manager 一样易于运行（在 Web 控制台中点几下即可配置域名、转发和免费的 Let's Encrypt SSL），同时还能对流经的流量进行**监视、防护和管控**：默认开启的攻击拦截、自动封禁 IP、速率限制、机器人验证、实时监控，以及应对流量高峰的访问排队。只需一个 Docker 容器，所有功能免费，不会有任何流量发送到第三方云。另请参阅与 Nginx Proxy Manager、Caddy、Traefik、BunkerWeb、SafeLine 等的[对比](https://corvusgateway.org/compare/)。
+Corvus 是一款免费、开源（Apache-2.0）、自托管的**内置 Web 应用防火墙（WAF）的反向代理**。它与 Nginx Proxy Manager 一样易于运行（在 Web 控制台中点几下即可配置域名、转发和免费的 Let's Encrypt SSL），同时还能对流经的流量进行**监视、防护和管控**：默认开启的攻击拦截、自动封禁 IP、速率限制、机器人验证、实时监控，以及应对流量高峰的访问排队。只需一个 Docker 容器，所有功能免费，不会有任何流量发送到第三方云。另请参阅与 Nginx Proxy Manager、Caddy、Traefik、BunkerWeb、SafeLine 等的[对比](https://corvusgateway.org/docs/compare/)。
 
 <p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
 <p align="center"><a href="https://youtu.be/wtd2yBssBUk"><img src="https://img.shields.io/badge/YouTube-FF0000?style=flat-square&logo=youtube&logoColor=white" alt="YouTube"></a> <a href="https://youtu.be/wtd2yBssBUk"><b>观看 2 分钟介绍视频（英文）</b></a></p>
 
 - [快速安装](#快速安装)
-- [文档](https://corvusgateway.org/)
+- [文档](https://corvusgateway.org/docs/)
 - [截图](#截图)
 
 ## 项目目标
@@ -126,7 +126,7 @@ services:
 ```
 
 这就是全部安装内容：网关、管理控制台和访问队列存储都运行在这一个容器中。更多选项请参见
-[文档](https://corvusgateway.org/)。
+[文档](https://corvusgateway.org/docs/)。
 
 3. 运行以下命令启动服务：
 
@@ -158,7 +158,7 @@ docker compose up -d
 ## 文档
 
 配置、加固安装、目标主机、流、备份、从 Nginx Proxy Manager 迁移、安全规则、访问队列和故障排查，
-请参见 **[文档](https://corvusgateway.org/)**(英文、韩文)。
+请参见 **[文档](https://corvusgateway.org/docs/)**(英文、韩文)。
 
 韩文的分步教程书见 [WikiDocs](https://wikidocs.net/book/22096)。
 

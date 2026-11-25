@@ -61,7 +61,7 @@ Earlier versions can be restored from the *Deployments* page.
 ## How a request is handled
 
 The order of the checks is documented for users in
-[How protection works](https://corvusgateway.org/security/). In short: IP bans → security rules →
+[How protection works](https://corvusgateway.org/docs/security/). In short: IP bans → security rules →
 exploit-path and body checks → under-attack challenge → rate limit, password protection and access
 queue → proxy to the service. Each request is logged once to the control plane over a Unix
 datagram socket; if the control plane is slow, log lines are dropped instead of delaying traffic.

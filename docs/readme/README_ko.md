@@ -33,13 +33,13 @@ Nginx Proxy Manager만큼 운영이 쉬워서 웹 콘솔에서 도메인, 포워
 켜진 공격 차단, 자동 IP 차단, 속도 제한(Rate Limit), 봇 확인, 실시간 모니터링, 트래픽 급증에 대비한
 접속 대기열까지 제공합니다. Docker 컨테이너 하나로 동작하고 모든 기능이 무료이며, 트래픽이 외부
 클라우드로 전송되지 않습니다. Nginx Proxy Manager, Caddy, Traefik, BunkerWeb, SafeLine 등과의
-[비교](https://corvusgateway.org/ko/compare/)도 참고하세요.
+[비교](https://corvusgateway.org/ko/docs/compare/)도 참고하세요.
 
 <p align="center"><img src="../../assets/demo/corvus-demo-ko.gif" alt="Corvus demo" width="900"></p>
 <p align="center"><a href="https://youtu.be/wtd2yBssBUk"><img src="https://img.shields.io/badge/YouTube-FF0000?style=flat-square&logo=youtube&logoColor=white" alt="YouTube"></a> <a href="https://youtu.be/wtd2yBssBUk"><b>2분 소개 영상 보기 (영어)</b></a></p>
 
 - [빠른 설정](#빠른-설정)
-- [문서](https://corvusgateway.org/ko/)
+- [문서](https://corvusgateway.org/ko/docs/)
 - [스크린샷](#스크린샷)
 
 ## 프로젝트 목표
@@ -137,7 +137,7 @@ services:
 ```
 
 이것이 설치의 전부입니다. 게이트웨이, 관리 콘솔, 접속 대기열 저장소가 이 컨테이너 하나에서
-실행됩니다. 옵션은 [문서](https://corvusgateway.org/ko/)를 참고하세요.
+실행됩니다. 옵션은 [문서](https://corvusgateway.org/ko/docs/)를 참고하세요.
 
 3. 스택을 시작합니다.
 
@@ -171,7 +171,7 @@ docker compose up -d
 ## 문서
 
 구성, 강화된 설치, 포워드 호스트, 스트림, 백업, Nginx Proxy Manager에서 마이그레이션, 보안 규칙,
-접속 대기열, 문제 해결은 **[문서 사이트](https://corvusgateway.org/ko/)**에서 화면과 함께 설명합니다 (한국어 · [English](https://corvusgateway.org/)).
+접속 대기열, 문제 해결은 **[문서 사이트](https://corvusgateway.org/ko/docs/)**에서 화면과 함께 설명합니다 (한국어 · [English](https://corvusgateway.org/docs/)).
 
 설치부터 보안 설정, 접속 대기열까지 차례로 따라 하는 책은 [위키독스](https://wikidocs.net/book/22096)에 있습니다.
 

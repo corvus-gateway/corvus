@@ -34,14 +34,14 @@ además **vigila, protege y controla** el tráfico que lo atraviesa: bloqueo de 
 defecto, bloqueo automático de IP, limitación de tasa, desafío anti-bots, monitorización en vivo
 y una cola de acceso para los picos de tráfico. Un solo contenedor Docker, todas las funciones
 gratuitas, y ningún tráfico se envía a una nube de terceros.
-[Comparación](https://corvusgateway.org/compare/) con Nginx Proxy Manager, Caddy, Traefik,
+[Comparación](https://corvusgateway.org/docs/compare/) con Nginx Proxy Manager, Caddy, Traefik,
 BunkerWeb, SafeLine y otros.
 
 <p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
 <p align="center"><a href="https://youtu.be/wtd2yBssBUk"><img src="https://img.shields.io/badge/YouTube-FF0000?style=flat-square&logo=youtube&logoColor=white" alt="YouTube"></a> <a href="https://youtu.be/wtd2yBssBUk"><b>Ver el vídeo de presentación de 2 minutos (en inglés)</b></a></p>
 
 - [Instalación rápida](#instalación-rápida)
-- [Documentación](https://corvusgateway.org/)
+- [Documentación](https://corvusgateway.org/docs/)
 - [Capturas de pantalla](#capturas-de-pantalla)
 
 ## Objetivo del proyecto
@@ -140,7 +140,7 @@ services:
 ```
 
 Esta es toda la instalación: la pasarela, la consola de administración y el almacén de la cola de acceso se
-ejecutan en este único contenedor. Consulte la [documentación](https://corvusgateway.org/) para ver las opciones.
+ejecutan en este único contenedor. Consulte la [documentación](https://corvusgateway.org/docs/) para ver las opciones.
 
 3. Levante su stack ejecutando
 
@@ -175,7 +175,7 @@ automáticamente al iniciar.
 
 La configuración, la instalación reforzada, los hosts de destino, los streams, las copias de seguridad, la migración
 desde Nginx Proxy Manager, las reglas de seguridad, la cola de acceso y la solución de problemas se describen en la
-**[documentación](https://corvusgateway.org/)** (en inglés y coreano).
+**[documentación](https://corvusgateway.org/docs/)** (en inglés y coreano).
 
 Hay un libro tutorial paso a paso, en coreano, en [WikiDocs](https://wikidocs.net/book/22096).
 

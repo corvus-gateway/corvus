@@ -1,6 +1,7 @@
 User-agent: *
 Allow: /
 
+# The product homepage is at / (Korean: /ko/), the documentation at /docs/ (Korean: /ko/docs/).
 # AI assistants and their crawlers are welcome. A summary for language models is at
 # https://corvusgateway.org/llms.txt and the full documentation in one file at
 # https://corvusgateway.org/llms-full.txt (Korean: /ko/llms.txt, /ko/llms-full.txt)

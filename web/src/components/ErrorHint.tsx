@@ -36,7 +36,7 @@ const HINTS: Record<string, { key: Key; anchor: string }> = {
 /** Troubleshooting guide URL for a hint code (null when the code is unknown). */
 export function hintLink(code: string | undefined, lang: string): string | null {
   const h = code ? HINTS[code] : undefined;
-  return h ? `https://corvusgateway.org/${lang === "ko" ? "ko/" : ""}reference/troubleshooting/#${h.anchor}` : null;
+  return h ? `https://corvusgateway.org/${lang === "ko" ? "ko/" : ""}docs/reference/troubleshooting/#${h.anchor}` : null;
 }
 
 /** The hint code of an API failure, if any. */

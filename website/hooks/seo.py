@@ -1,11 +1,16 @@
 """Build hooks for search engines and AI assistants.
 
-* Schema.org JSON-LD on every page: WebSite and Organization everywhere, SoftwareApplication and
-  SoftwareSourceCode on the home page, TechArticle and BreadcrumbList on the other pages, FAQPage
-  on pages with `faq: true` in their front matter (each `###` heading is a question, the text up
-  to the next heading is the answer).
+The docs are served under /docs/ (English) and /ko/docs/ (Korean). The product homepage at / and
+/ko/ (website/landing/) carries the SoftwareApplication, SoftwareSourceCode and VideoObject nodes;
+the docs pages refer to them by @id.
+
+* Schema.org JSON-LD on every docs page: WebSite and Organization everywhere, WebPage on the docs
+  home, TechArticle on the other pages, a BreadcrumbList from the homepage down, FAQPage on pages
+  with `faq: true` in their front matter (each `###` heading is a question, the text up to the next
+  heading is the answer).
 * llms.txt (an index with one line per page) and llms-full.txt (every page as Markdown, in
-  navigation order, with absolute links), see https://llmstxt.org/.
+  navigation order, with absolute links), see https://llmstxt.org/. They are written next to the
+  homepage (site/ and site/ko/), one level above the docs.
 
 No extra dependencies: only MkDocs' own hook events.
 """
@@ -14,6 +19,7 @@ from __future__ import annotations
 
 import html
 import json
+import os
 import posixpath
 import re
 
@@ -26,47 +32,10 @@ SAME_AS = [
     "https://www.producthunt.com/products/corvus-awpg",
     "https://wikidocs.net/book/22096",
     "https://www.youtube.com/@CorvusGateway",
+    "https://mastodon.social/@moonjikwang",
 ]
-VIDEO = {
-    "@type": "VideoObject",
-    "name": "Corvus: Open-Source Reverse Proxy with a Built-in WAF (Nginx Proxy Manager Alternative)",
-    "description": ("A 2-minute tour of Corvus: adding a site with free HTTPS, built-in attack blocking and "
-                    "automatic bans, security rules and a browser challenge, live traffic and the access queue."),
-    "thumbnailUrl": "https://i.ytimg.com/vi/wtd2yBssBUk/maxresdefault.jpg",
-    "uploadDate": "2026-11-23T07:05:19-08:00",
-    "duration": "PT1M43S",
-    "contentUrl": "https://youtu.be/wtd2yBssBUk",
-    "embedUrl": "https://www.youtube.com/embed/wtd2yBssBUk",
-    "inLanguage": "en",
-}
-
-# Facts used in the SoftwareApplication node. Keep them in line with index.md.
-FEATURES = {
-    "en": [
-        "Reverse proxy with a web console: proxy hosts, custom locations, redirections, TCP/UDP streams",
-        "Free Let's Encrypt certificates with automatic renewal, wildcard certificates via DNS",
-        "Built-in web application firewall: known exploit paths and request bodies checked by default",
-        "Security rules on IP, country, path, header and User-Agent, with a log-only mode",
-        "Automatic IP bans for repeat attackers and per-host rate limits",
-        "Browser challenge and automatic 'under attack' mode, no third-party service",
-        "Access queue (waiting room) for traffic spikes",
-        "Live traffic monitor, request logs, visitor statistics and alerts",
-        "Import from Nginx Proxy Manager",
-        "Roles, MFA, SSO (OIDC), API tokens, audit log, versioned configuration with rollback",
-    ],
-    "ko": [
-        "웹 콘솔로 관리하는 리버스 프록시: 프록시 호스트, 사용자 지정 위치, 리디렉션, TCP/UDP 스트림",
-        "Let's Encrypt 무료 인증서 자동 갱신, DNS 인증으로 와일드카드 인증서",
-        "내장 웹 방화벽(WAF): 알려진 공격 경로와 요청 본문을 기본으로 검사",
-        "IP·국가·경로·헤더·User-Agent 보안 규칙, 기록만 하는 모드",
-        "반복 공격 IP 자동 차단과 호스트별 요청 속도 제한",
-        "브라우저 확인과 자동 '공격 대응' 모드, 외부 서비스 없음",
-        "트래픽 폭주에 대비한 접속 대기열",
-        "실시간 트래픽 관제, 요청 로그, 방문 통계, 알림",
-        "Nginx Proxy Manager 설정 가져오기",
-        "역할, MFA, SSO(OIDC), API 토큰, 감사 로그, 버전 관리와 되돌리기",
-    ],
-}
+# Defined on the homepage (website/landing/build.py); docs pages only refer to it.
+APP_ID = "https://corvusgateway.org/#software"
 
 
 def _lang(config) -> str:
@@ -78,7 +47,13 @@ def _origin(config) -> str:
 
 
 def _abs(config, path: str = "") -> str:
+    """Absolute URL of a docs path (site_url is the docs root, e.g. https://corvusgateway.org/docs/)."""
     return config.site_url.rstrip("/") + "/" + path.lstrip("/")
+
+
+def _home(config) -> str:
+    """The product homepage in this language, e.g. https://corvusgateway.org/ko/."""
+    return config.extra["homepage"].rstrip("/") + "/"
 
 
 def _text(fragment: str) -> str:
@@ -152,6 +127,7 @@ def _faq(content: str) -> list[tuple[str, str]]:
 def _graph(page, config) -> list[dict]:
     lang = _lang(config)
     origin = _origin(config)
+    home = _home(config)
     url = _abs(config, page.url)
     org = {
         "@type": "Organization",
@@ -161,62 +137,25 @@ def _graph(page, config) -> list[dict]:
         "logo": origin + "/assets/logo.svg",
         "sameAs": SAME_AS,
     }
+    # Same @id as the WebSite node on the homepage of this language.
     website = {
         "@type": "WebSite",
-        "@id": _abs(config) + "#website",
+        "@id": home + "#website",
         "name": config.site_name,
-        "url": _abs(config),
+        "url": home,
         "description": config.site_description,
         "inLanguage": lang,
         "publisher": {"@id": org["@id"]},
+        "about": {"@id": APP_ID},
     }
-    app_id = origin + "/#software"
     graph = [org, website]
     description = page.meta.get("description") or config.site_description
-    title = _title(page)
+    title = config.extra["docs_title"] if page.is_homepage else _title(page)
 
+    crumbs = [{"name": config.site_name, "item": home},
+              {"name": config.extra["docs_title"], "item": _abs(config)}]
     if page.is_homepage:
-        graph.append({
-            "@type": "SoftwareApplication",
-            "@id": app_id,
-            "name": "Corvus AWPG",
-            "alternateName": ["Corvus", "Corvus Gateway", "Corvus Active Web Protection Gateway"],
-            "description": description,
-            "url": origin + "/",
-            "applicationCategory": "SecurityApplication",
-            "applicationSubCategory": "Reverse proxy and web application firewall",
-            "operatingSystem": "Linux (Docker), amd64 and arm64",
-            "softwareRequirements": "Docker",
-            "license": "https://www.apache.org/licenses/LICENSE-2.0",
-            "isAccessibleForFree": True,
-            "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
-            "featureList": FEATURES.get(lang, FEATURES["en"]),
-            "screenshot": origin + "/img/dashboard.png",
-            "image": origin + "/assets/social.png",
-            "installUrl": _abs(config, "getting-started/install/"),
-            "downloadUrl": "https://github.com/corvus-gateway/corvus/pkgs/container/gateway",
-            "releaseNotes": GITHUB + "/releases",
-            "inLanguage": ["en", "ko", "zh", "ja", "ru", "fr", "de", "es"],
-            "author": {"@type": "Person", "name": "Jikwang Moon", "url": "https://github.com/moonjikwang"},
-            "publisher": {"@id": org["@id"]},
-            "sameAs": SAME_AS,
-        })
-        graph.append({
-            "@type": "SoftwareSourceCode",
-            "@id": origin + "/#source",
-            "name": "Corvus AWPG",
-            "codeRepository": GITHUB,
-            "license": "https://www.apache.org/licenses/LICENSE-2.0",
-            "programmingLanguage": ["Go", "Lua", "TypeScript"],
-            "runtimePlatform": ["OpenResty", "Docker"],
-            "targetProduct": {"@id": app_id},
-        })
-        graph.append({**VIDEO, "@id": origin + "/#video", "about": {"@id": app_id},
-                      "publisher": {"@id": org["@id"]}})
-        website["about"] = {"@id": app_id}
-        return graph
-
-    crumbs = [{"name": config.site_name, "item": _abs(config)}]
+        crumbs.pop()
     for ancestor in reversed(page.ancestors):
         first = _first_page(ancestor)
         if first and first is not page:
@@ -231,7 +170,7 @@ def _graph(page, config) -> list[dict]:
     })
 
     article = {
-        "@type": page.meta.get("schema_type", "TechArticle"),
+        "@type": page.meta.get("schema_type", "WebPage" if page.is_homepage else "TechArticle"),
         "@id": url + "#article",
         "headline": title[:110],
         "description": description,
@@ -239,7 +178,7 @@ def _graph(page, config) -> list[dict]:
         "mainEntityOfPage": url,
         "inLanguage": lang,
         "isPartOf": {"@id": website["@id"]},
-        "about": {"@type": "SoftwareApplication", "@id": app_id, "name": "Corvus AWPG"},
+        "about": {"@type": "SoftwareApplication", "@id": APP_ID, "name": "Corvus AWPG"},
         "author": {"@id": org["@id"]},
         "publisher": {"@id": org["@id"]},
         "image": origin + "/assets/social.png",
@@ -380,19 +319,22 @@ def on_post_build(config):
     by_page = {id(p): md for p, md in _pages}
     order = _nav_pages(_nav["nav"])
 
+    home = _home(config)
     other = [a for a in config.extra.get("alternate", []) if a.get("lang") != lang]
     lines = [f"# {config.site_name}", "", f"> {LLMS_INTRO.get(lang, LLMS_INTRO['en'])}", ""]
     lines += [f"- {fact}" for fact in LLMS_FACTS.get(lang, LLMS_FACTS["en"])]
-    full_label = "Full documentation in one file" if lang == "en" else "문서 전체를 한 파일로"
-    lines += ["", f"{full_label}: {_abs(config, 'llms-full.txt')}"]
+    en = lang == "en"
+    lines += ["", f"{'Homepage' if en else '홈페이지'}: {home}",
+              f"{'Documentation' if en else '문서'}: {_abs(config)}",
+              f"{'Full documentation in one file' if en else '문서 전체를 한 파일로'}: {home}llms-full.txt"]
     for alt in other:
-        lines.append(f"{alt['name']}: {_origin(config)}{alt['link']}llms.txt")
+        lines.append(f"{alt['name']}: {_origin(config)}{alt['home']}llms.txt")
 
     section = None
     for trail, page in order:
         title = _title(page)
-        home = "Start" if lang == "en" else "시작"
-        heading = trail[0] if trail else (home if page.is_homepage else _strip_title(page.title))
+        start = "Start" if lang == "en" else "시작"
+        heading = trail[0] if trail else (start if page.is_homepage else _strip_title(page.title))
         if heading != section:
             lines += ["", f"## {heading}", ""]
             section = heading
@@ -407,8 +349,9 @@ def on_post_build(config):
             continue
         full += ["", "---", "", f"Source: {_abs(config, page.url)}", "", _clean(markdown, page, config)]
 
-    site_dir = config.site_dir
-    with open(posixpath.join(site_dir, "llms.txt").replace("\\", "/"), "w", encoding="utf-8", newline="\n") as f:
+    # Next to the homepage (site/, site/ko/), one level above the docs (site/docs/, site/ko/docs/).
+    root = os.path.dirname(os.path.normpath(config.site_dir))
+    with open(os.path.join(root, "llms.txt"), "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
-    with open(posixpath.join(site_dir, "llms-full.txt").replace("\\", "/"), "w", encoding="utf-8", newline="\n") as f:
+    with open(os.path.join(root, "llms-full.txt"), "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(full) + "\n")
