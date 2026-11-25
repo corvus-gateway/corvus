@@ -27,6 +27,7 @@ var idTables = map[string]bool{
 	"alert_channels": true, "alert_history": true,
 	"security_rules": true, "security_rule_hosts": true, "ip_lists": true, "ip_bans": true,
 	"api_tokens": true, "redirection_hosts": true, "streams": true, "dns_credentials": true,
+	"signin_users": true, "signin_groups": true,
 }
 
 type pgQuerier struct{ q querier }

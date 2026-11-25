@@ -125,6 +125,9 @@ type proxyHostInput struct {
 
 	Notes *string `json:"notes"` // omitted = unchanged
 
+	// Login page in front of the host (#294); omitted = unchanged (new hosts: none).
+	Login *loginInput `json:"login"`
+
 	// BasicAuth edits the host's password protection; when present it replaces access_list_id.
 	BasicAuth      *basicAuthInput `json:"basic_auth"`
 	BasicAuthUsers []string        `json:"basic_auth_users"` // read-only; accepted and ignored
@@ -364,6 +367,9 @@ func (s *Server) createProxyHost(w http.ResponseWriter, r *http.Request) {
 		if in.BasicAuth != nil {
 			h.AccessListID = nil
 		}
+		if err := applyLogin(h, in.Login); err != nil {
+			return err
+		}
 		if err := checkProxyHost(r, tx, h); err != nil {
 			return err
 		}
@@ -371,9 +377,11 @@ func (s *Server) createProxyHost(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		if in.BasicAuth != nil {
-			return applyBasicAuth(r.Context(), tx, h, nil, in.BasicAuth)
+			if err := applyBasicAuth(r.Context(), tx, h, nil, in.BasicAuth); err != nil {
+				return err
+			}
 		}
-		return nil
+		return checkHostLogin(r.Context(), tx, h)
 	})
 	if err != nil {
 		fail(w, err)
@@ -419,6 +427,9 @@ func (s *Server) updateProxyHost(w http.ResponseWriter, r *http.Request) {
 		if in.BasicAuth != nil {
 			h.AccessListID = before.AccessListID // replaced by applyBasicAuth below
 		}
+		if err := applyLogin(h, in.Login); err != nil {
+			return err
+		}
 		if err := checkProxyHost(r, tx, h); err != nil {
 			return err
 		}
@@ -426,9 +437,11 @@ func (s *Server) updateProxyHost(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		if in.BasicAuth != nil {
-			return applyBasicAuth(r.Context(), tx, h, before, in.BasicAuth)
+			if err := applyBasicAuth(r.Context(), tx, h, before, in.BasicAuth); err != nil {
+				return err
+			}
 		}
-		return nil
+		return checkHostLogin(r.Context(), tx, h)
 	})
 	if err != nil {
 		fail(w, err)
