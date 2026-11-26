@@ -109,8 +109,25 @@ export interface ProxyHost {
   /** "page": the host serves `page` instead of forwarding (forward_* optional). Default "forward". */
   content?: HostContent;
   page?: StaticPage;
+  /** Login page in front of the host (#294). */
+  login?: HostLogin;
   created_at: string; updated_at: string;
 }
+
+export type LoginMode = "pin" | "users";
+/** Login page of a proxy host. pin is write-only (omitted or "" = unchanged); pin_set is read-only. */
+export interface HostLogin {
+  enabled: boolean; mode: LoginMode | ""; group_ids: number[]; session_hours: number; exclude_paths: string[]; pass_user: boolean;
+  pin_set?: boolean; pin?: string;
+}
+
+/** A person who can sign in to the login page of proxy hosts (GET /api/signin-users). */
+export interface SigninUser {
+  id: number; username: string; totp_required: boolean; totp_enrolled: boolean; enabled: boolean; note: string;
+  group_ids: number[]; last_login_at: string | null; created_at: string; updated_at: string;
+}
+/** A group of sign-in users; hosts = proxy hosts whose login page allows it. */
+export interface SigninGroup { id: number; name: string; user_ids: number[]; hosts: number; created_at: string; updated_at: string }
 
 export type HostContent = "forward" | "page";
 export type PageTemplate = "parked" | "coming_soon" | "maintenance" | "custom";
@@ -298,7 +315,8 @@ export interface LogLine {
 }
 export type EventKind = "rate_limited" | "blocked_exploit" | "server_error" | "waitroom_queue" | "waitroom_fail"
   | "exploit_detected" | "blocked_rule" | "rule_logged" | "blocked_body" | "body_detected" | "banned" | "rate_limit_dry_run"
-  | "challenge_issued" | "challenge_passed" | "challenge_failed";
+  | "challenge_issued" | "challenge_passed" | "challenge_failed"
+  | "login_required" | "login_succeeded" | "login_failed" | "login_limited" | "login_totp" | "login_enroll";
 export interface TrafficEvent { ts: number | string; kind: EventKind; host: string; path: string; ip: string; count: number }
 
 export interface NpmPreview {

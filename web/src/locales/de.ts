@@ -24,6 +24,7 @@ import { pagesStrings } from "./de/pages";
 import { consoleHostStrings } from "./de/consolehost";
 import { challengeStrings } from "./de/challenge";
 import { underAttackStrings } from "./de/underattack";
+import { signinStrings } from "./de/signin";
 import type { ko } from "./ko";
 import type { RuleLabels } from "../lib/rules";
 import type { AuditLabels } from "../lib/audit";
@@ -342,6 +343,7 @@ export const de: Partial<Record<keyof typeof ko, string>> = {
   ...consoleHostStrings,
   ...challengeStrings,
   ...underAttackStrings,
+  ...signinStrings,
   ...consoleStrings,
 };
 

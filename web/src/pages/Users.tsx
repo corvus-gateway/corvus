@@ -14,18 +14,11 @@ import { useResource } from "../hooks/useResource";
 import { useI18n } from "../i18n";
 import { useApp } from "../lib/app";
 import { roleKey, useCan, type Role } from "../lib/rbac";
-import { copyText, relTime } from "../lib/utils";
+import { copyText, genPassword, relTime } from "../lib/utils";
 
 const ROLES: Role[] = ["admin", "operator", "viewer"];
 const roleDesc = { admin: "roleAdminDesc", operator: "roleOperatorDesc", viewer: "roleViewerDesc" } as const;
 const roleTone = { admin: "brand", operator: "info", viewer: "neutral" } as const;
-
-export function genPassword(len = 20): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*-_";
-  const buf = new Uint32Array(len);
-  crypto.getRandomValues(buf);
-  return Array.from(buf, (n) => chars[n % chars.length]).join("");
-}
 
 interface Form { email: string; name: string; role: Role; password: string }
 const blank: Form = { email: "", name: "", role: "operator", password: "" };

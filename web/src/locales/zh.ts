@@ -24,6 +24,7 @@ import { pagesStrings } from "./zh/pages";
 import { consoleHostStrings } from "./zh/consolehost";
 import { challengeStrings } from "./zh/challenge";
 import { underAttackStrings } from "./zh/underattack";
+import { signinStrings } from "./zh/signin";
 import type { ko } from "./ko";
 import type { RuleLabels } from "../lib/rules";
 import type { AuditLabels } from "../lib/audit";
@@ -343,6 +344,7 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   ...consoleHostStrings,
   ...challengeStrings,
   ...underAttackStrings,
+  ...signinStrings,
   ...consoleStrings,
 };
 

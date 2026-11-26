@@ -91,6 +91,14 @@ export async function copyText(s: string): Promise<boolean> {
   }
 }
 
+/** A random password from characters that are easy to tell apart. */
+export function genPassword(len = 20): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*-_";
+  const buf = new Uint32Array(len);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, (n) => chars[n % chars.length]).join("");
+}
+
 /** HH:MM(:SS) in 24h, independent of locale quirks (ko-KR renders "13시 3분"). */
 export function fmtClock(ms: number, seconds = true): string {
   const d = new Date(ms);
