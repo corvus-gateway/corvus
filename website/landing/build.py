@@ -9,6 +9,8 @@ Run by website/build.sh after both MkDocs builds (docs in site/docs/ and site/ko
 * copies landing.css, the root-only files in root/ (robots.txt, the Google site verification
   file), the brand logos, and the images and assets that used to live at the site root
   (/img/, /assets/, /ko/img/, /ko/assets/) so links from outside keep working;
+* fetches the certification badges for the footer (falling back to the copies in badges/) and
+  serves them from /img/badges/, so visitors' browsers don't contact the badge services;
 * writes /sitemap.xml and /ko/sitemap.xml (the homepage plus every docs page) in place of the
   per-docs sitemaps, and puts the docs' 404 page at /404.html.
 
@@ -23,6 +25,7 @@ import os
 import re
 import shutil
 import sys
+import urllib.request
 from urllib.parse import quote
 from xml.sax.saxutils import escape
 
@@ -68,6 +71,16 @@ FEATURES = {
         "Import from Nginx Proxy Manager",
         "Roles, MFA, SSO (OIDC), API tokens, audit log, versioned configuration with rollback",
     ],
+}
+
+# Footer badges, as issued by each service. Fetched at build time so the Scorecard score stays
+# current; the copies in badges/ are used when a service can't be reached.
+BADGES = {
+    "best-practices": "https://www.bestpractices.dev/projects/16315/badge",
+    "baseline": "https://www.bestpractices.dev/projects/16315/baseline",
+    "scorecard": "https://api.scorecard.dev/projects/github.com/corvus-gateway/corvus/badge",
+    "slsa": "https://slsa.dev/images/gh-badge-level3.svg",
+    "sigstore": "https://img.shields.io/badge/Sigstore-signed_%C2%B7_SBOM-2f2f8f",
 }
 
 LANGS = {
@@ -196,6 +209,24 @@ def render(lang: str) -> None:
         f.write(page)
 
 
+def badges() -> None:
+    out = os.path.join(SITE, "img", "badges")
+    os.makedirs(out, exist_ok=True)
+    for name, url in BADGES.items():
+        fallback = os.path.join(HERE, "badges", name + ".svg")
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "corvus-site-build"})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                data = r.read()
+            if not data.lstrip().startswith(b"<svg"):
+                raise ValueError("not an SVG")
+            with open(os.path.join(out, name + ".svg"), "wb") as f:
+                f.write(data)
+        except Exception as e:  # noqa: BLE001 - any failure: keep the stored copy
+            print(f"landing: badge {name}: {e}; using the stored copy")
+            shutil.copy2(fallback, os.path.join(out, name + ".svg"))
+
+
 def copy_tree(src: str, dst: str) -> None:
     shutil.copytree(src, dst, dirs_exist_ok=True)
 
@@ -246,6 +277,7 @@ def main() -> None:
     copy_tree(os.path.join(WEBSITE, "en", "assets"), os.path.join(SITE, "assets"))
     copy_tree(os.path.join(WEBSITE, "ko", "img"), os.path.join(SITE, "ko", "img"))
     copy_tree(os.path.join(WEBSITE, "ko", "assets"), os.path.join(SITE, "ko", "assets"))
+    badges()
     # GitHub Pages serves /404.html for every missing path; the docs' one has the search box.
     shutil.copy2(os.path.join(SITE, "docs", "404.html"), os.path.join(SITE, "404.html"))
     print("landing: site/index.html, /ko/ forward, sitemaps and root files written")
