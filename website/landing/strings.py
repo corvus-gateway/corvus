@@ -122,7 +122,7 @@ EN = {
             "be turned off."),
     "k3": "It's built to be checked",
     "k3d": ('Releases are signed and ship with an SBOM and build provenance '
-            '(<a href="/docs/reference/hardened/">verify an image</a>). 368 integration checks run on '
+            '(<a href="/docs/reference/hardened/">verify an image</a>). 431 integration checks run on '
             'every change. <a href="https://www.bestpractices.dev/projects/16315">OpenSSF Best '
             'Practices</a> passing badge and Baseline-1. AI-assisted development is disclosed in the '
             '<a href="https://github.com/corvus-gateway/corvus/blob/main/AI-DECLARATION.md">AI '

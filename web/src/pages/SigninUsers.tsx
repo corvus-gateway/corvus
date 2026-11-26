@@ -141,7 +141,7 @@ export default function SigninUsers() {
                       <span className="num">{t("siMembersN", { n: g.user_ids.length })}</span>
                       {g.user_ids.length > 0 && <div className="truncate text-xs text-fg-subtle">{g.user_ids.slice(0, 5).map((id) => userName.get(id) ?? `#${id}`).join(", ")}{g.user_ids.length > 5 ? " …" : ""}</div>}
                     </Td>
-                    <Td className="hidden text-fg-muted sm:table-cell">{g.hosts > 0 ? t("siHostsN", { n: g.hosts }) : "–"}</Td>
+                    <Td className="hidden text-fg-muted sm:table-cell">{g.hosts === 0 ? "–" : g.hosts === 1 ? t("siHostOne") : t("siHostsN", { n: g.hosts })}</Td>
                     <Td className="text-right"><RowMenu items={[
                       { label: t("edit"), icon: Pencil, onSelect: () => openGroup(g) },
                       { label: t("siDeleteGroup"), icon: Trash2, danger: true, separatorBefore: true, disabled: g.hosts > 0, onSelect: () => setDeletingGroup(g) },

@@ -47,6 +47,7 @@ export const signinStrings: Record<SigninKey, string> = {
   siPickMembers: "Benutzer wählen",
   siMembersN: "{n} Mitglieder",
   siHostsN: "{n} Hosts",
+  siHostOne: "1 Host",
   siNoGroups: "Keine Gruppen",
   siNoGroupsDesc: "Fassen Sie Benutzer in Gruppen zusammen, damit Proxy-Hosts sie erlauben können.",
   siGroupSaved: "Gruppe gespeichert",
