@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, Copy, FileText, Globe, Lock, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2, Users, Zap, Gauge, Server, KeyRound, ExternalLink, UserPlus, X, Siren, ShieldOff } from "lucide-react";
+import { AlertTriangle, ArrowRight, Copy, FileText, Globe, Lock, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2, Users, Zap, Gauge, Server, KeyRound, ExternalLink, UserPlus, X, Siren, ShieldOff, LogIn } from "lucide-react";
 import { toast } from "sonner";
-import { api, type ProxyTarget, type AccessList, type ClientIPMode, type ProxyHost, type RateLimit, type SecurityHeaders, type UnderAttackStatus, type UpstreamError, type Waitroom } from "../api";
+import { Link } from "react-router-dom";
+import { api, type ProxyTarget, type AccessList, type ClientIPMode, type HostLogin, type ProxyHost, type SigninGroup, type RateLimit, type SecurityHeaders, type UnderAttackStatus, type UpstreamError, type Waitroom } from "../api";
 import { ConnCheck, UpstreamBadge, UpstreamCallout } from "../components/ConnCheck";
 import { UnderAttackFields, uaConfig, UA_DEFAULTS } from "../components/UnderAttackFields";
 import { LocationsBadge, LocationsFields } from "../components/LocationsFields";
@@ -14,6 +15,7 @@ import { Button, IconButton } from "../components/ui/button";
 import { Badge, Callout, Card, EmptyState, Mono, TableSkeleton } from "../components/ui/display";
 import { Field, FormSection, IdField, Input, NumberInput, Segmented, Select, SearchInput, Switch, SwitchRow, TagInput, Textarea, fieldErr } from "../components/ui/form";
 import { ConfirmDialog, RowMenu, Sheet, SheetCancel, Tip, tipTrigger, useDirty } from "../components/ui/overlay";
+import { MultiPicker } from "../components/ui/picker";
 import { servesConsole } from "../locales/consolehost.i18n";
 import { Table, THead, Td, Th, Tr } from "../components/ui/table";
 import { useResource } from "../hooks/useResource";
@@ -33,6 +35,15 @@ const authFrom = (h?: ProxyHost): BasicAuthForm => {
 
 interface CertReq { email: string; dns: boolean; dnsc: DnsChoice; staging: boolean; agree: boolean }
 
+/** What visitors must do before the site opens: nothing, Basic auth, or the login page (#294). */
+type Gate = "none" | "basic" | "page";
+const blankLogin: HostLogin = { enabled: false, mode: "pin", group_ids: [], session_hours: 168, exclude_paths: [], pass_user: false, pin: "" };
+const loginOf = (l?: HostLogin): HostLogin => ({
+  ...blankLogin, ...l, mode: l?.mode || "pin", group_ids: l?.group_ids ?? [], exclude_paths: l?.exclude_paths ?? [], session_hours: l?.session_hours || 168, pin: "",
+});
+/** Session length choices (hours); a value set through the API is shown as well. */
+const SESSION_HOURS = [[1, "hlHours1"], [8, "hlHours8"], [24, "hlDays1"], [168, "hlDays7"], [720, "hlDays30"]] as const;
+
 type Form = Omit<ProxyHost, "id" | "created_at" | "updated_at">;
 
 const blank: Form = {
@@ -42,7 +53,7 @@ const blank: Form = {
   body_inspection: "log", body_max_kb: 1024, security_headers: "off",
   max_upload_mb: null, upstream_timeout_s: null, gzip: true, notes: "",
   under_attack: "off", under_attack_config: { ...UA_DEFAULTS }, locations: [], extra_targets: [],
-  content: "forward", page: { ...blankPage },
+  content: "forward", page: { ...blankPage }, login: { ...blankLogin },
 };
 
 /** Backends per host, including the forward host (validate.MaxTargets). */
@@ -51,7 +62,7 @@ const MAX_TARGETS = 32;
 function toForm(h: ProxyHost): Form {
   const { id: _i, created_at: _c, updated_at: _u, ...rest } = h;
   return { ...blank, ...rest, under_attack: rest.under_attack ?? "off", under_attack_config: uaConfig(rest.under_attack_config), locations: rest.locations ?? [], extra_targets: rest.extra_targets ?? [],
-    content: rest.content ?? "forward", page: pageOf(rest.page),
+    content: rest.content ?? "forward", page: pageOf(rest.page), login: loginOf(rest.login),
     // a page host without a forward target: the form starts with the defaults for switching
     ...(rest.content === "page" && !rest.forward_host ? { forward_port: 80, forward_scheme: "http" } : {}) };
 }
@@ -75,7 +86,9 @@ export default function ProxyHosts() {
 
   const [q, setQ] = useState("");
   // htmlMissing: the host's custom page HTML could not be loaded; it is left out on save (kept as stored)
-  const [editing, setEditing] = useState<{ id: number | null; form: Form; req: CertReq | null; auth: BasicAuthForm; htmlMissing?: boolean } | null>(null);
+  // hadLogin: the host has stored login settings (sent on save even when off, so turning it off sticks)
+  // pinOpen: the PIN field is shown although a PIN is set (to change it)
+  const [editing, setEditing] = useState<{ id: number | null; form: Form; req: CertReq | null; auth: BasicAuthForm; htmlMissing?: boolean; hadLogin?: boolean; pinOpen?: boolean } | null>(null);
   const dirty = useDirty(editing);
   const [deleting, setDeleting] = useState<ProxyHost | null>(null);
   const { busy, error, setError, run } = useSubmit();
@@ -101,6 +114,8 @@ export default function ProxyHosts() {
   const showTuning = has("gzip");
   const showLimits = !limits.missing && has("rate_limit_id");
   const showLists = !lists.missing && has("access_list_id");
+  const showLogin = has("login");
+  const signinGroups = useResource<SigninGroup[]>(showLogin ? "/api/signin-groups" : null);
 
   const list = useHostList(hosts.data, q, (h) => hostSearchText(h, t));
   const filtered = list.rows;
@@ -109,6 +124,7 @@ export default function ProxyHosts() {
   const open = async (h?: ProxyHost) => {
     const seq = ++openSeq.current;
     setError(null);
+    if (showLogin) signinGroups.reload();
     let htmlMissing = false;
     // The list leaves custom page HTML out (html_bytes only): load the host before the form opens.
     if (h && (h.page?.html_bytes ?? 0) > 0 && !h.page?.html) {
@@ -116,7 +132,7 @@ export default function ProxyHosts() {
       // another host (or "add") was opened while this one was loading: leave that form alone
       if (seq !== openSeq.current) return;
     }
-    setEditing({ id: h?.id ?? null, form: h ? toForm(h) : { ...blank }, req: null, auth: authFrom(h), htmlMissing });
+    setEditing({ id: h?.id ?? null, form: h ? toForm(h) : { ...blank }, req: null, auth: authFrom(h), htmlMissing, hadLogin: !!(h?.login?.enabled || h?.login?.mode) });
   };
   const newReq = (): CertReq => ({ email: user.email, dns: false, dnsc: newDnsChoice(providers[0]), staging: false, agree: false });
 
@@ -149,6 +165,11 @@ export default function ProxyHosts() {
     }
     if (!showLimits) { delete body.rate_limit_id; }
     if (!showLists) { delete body.basic_auth; }
+    // login: pin is write-only ("" keeps the stored one), pin_set is read-only
+    const L = form.login;
+    if (!showLogin || !L || (!L.enabled && !editing.hadLogin)) delete body.login;
+    else body.login = { enabled: L.enabled, mode: L.mode, group_ids: L.group_ids, session_hours: L.session_hours, exclude_paths: L.exclude_paths,
+      pass_user: L.mode === "users" && L.pass_user, ...(L.mode === "pin" && L.pin ? { pin: L.pin } : {}) };
     const r = await run(() => (id ? api.put(`/api/proxy-hosts/${id}`, body) : api.post("/api/proxy-hosts", body)), { success: req ? undefined : t("savedDeployed") });
     if (r !== undefined) { if (req) toast.success(t("savedIssuing")); setEditing(null); certs.reload(); hosts.reload(); window.dispatchEvent(new Event("corvus:refresh")); }
   };
@@ -180,6 +201,15 @@ export default function ProxyHosts() {
   const useDns = wildcard || !!req?.dns;
   const hasCert = !!f?.certificate_id || !!req;
   const noDomain = f && f.domains.length === 0;
+  const login = f?.login;
+  const setLogin = (l: HostLogin) => set({ login: l });
+  const gate: Gate = editing?.auth.enabled ? "basic" : login?.enabled ? "page" : "none";
+  // Basic auth and the login page exclude each other (the API refuses both at once)
+  const setGate = (g: Gate) => setEditing((e) => e && {
+    ...e,
+    auth: { enabled: g === "basic", users: g === "basic" && !e.auth.users.length ? [{ username: "", password: "" }] : e.auth.users },
+    form: { ...e.form, login: { ...(e.form.login ?? blankLogin), enabled: g === "page" } },
+  });
 
   return (
     <>
@@ -245,6 +275,7 @@ export default function ProxyHosts() {
                           {h.waitroom_id != null && <Badge tone="brand" icon={Users}>{roomName(h.waitroom_id) ?? t("navRooms")}</Badge>}
                           {h.rate_limit_id != null && <Badge tone="info" icon={Gauge}>{limitName(h.rate_limit_id) ?? t("rateLimitShort")}</Badge>}
                           {(h.basic_auth_users?.length ?? 0) > 0 && <Badge tone="info" icon={KeyRound}>{t("basicAuthBadge")}</Badge>}
+                          {h.login?.enabled && <Badge tone="info" icon={LogIn}>{h.login.mode === "users" ? t("hlBadgeUsers") : t("hlBadgePin")}</Badge>}
                           {h.block_exploits && <Badge tone="warn" icon={ShieldAlert}>{t("exploitShort")}</Badge>}
                           {h.under_attack === "auto" && !uaSt?.active && <Badge icon={Siren}>{t("uaAutoArmed")}</Badge>}
                           {h.security_headers && h.security_headers !== "off" && <Badge tone="ok" icon={ShieldCheck}>{t("headersShort")} · {h.security_headers === "strict" ? t("shStrict") : t("shBasic")}</Badge>}
@@ -371,7 +402,7 @@ export default function ProxyHosts() {
             </FormSection>
           )}
 
-          {(showLimits || showLists || showExploits) && (
+          {(showLimits || showLists || showLogin || showExploits) && (
             <FormSection title={t("secProtection")}>
               {showLimits && (
                 <IdField label={t("rateLimitPolicy")} error={fieldErr(error, "rate_limit_id")}>
@@ -383,10 +414,19 @@ export default function ProxyHosts() {
                   )}
                 </IdField>
               )}
-              {showLists && editing && (
+              {(showLists || showLogin) && editing && (
                 <div className="space-y-3">
-                  <SwitchRow label={t("basicAuthProtect")} description={t("basicAuthProtectDesc")} checked={editing.auth.enabled}
-                    onChange={(v) => setEditing({ ...editing, auth: { enabled: v, users: v && !editing.auth.users.length ? [{ username: "", password: "" }] : editing.auth.users } })} />
+                  <Field label={t("hlAccess")} error={fieldErr(error, "login")}>
+                    <Segmented label={t("hlAccess")} value={gate} onChange={setGate} options={[
+                      { value: "none", label: t("hlNone") },
+                      ...(showLists ? [{ value: "basic" as const, label: t("hlBasic") }] : []),
+                      ...(showLogin ? [{ value: "page" as const, label: t("hlPage") }] : []),
+                    ]} />
+                  </Field>
+                  <p className="text-xs leading-5 text-fg-subtle">{gate === "basic" ? t("basicAuthProtectDesc") : gate === "page" ? t("hlPageDesc") : t("hlNoneDesc")}</p>
+                  {gate === "page" && !hasCert && <Callout tone="warn" icon={AlertTriangle}>{t("hlNoHttps")}</Callout>}
+                  {gate === "page" && login && <LoginFields value={login} onChange={setLogin} error={error} groups={signinGroups.data ?? []}
+                    pinOpen={!!editing.pinOpen} onPinOpen={() => setEditing({ ...editing, pinOpen: true })} />}
                   {editing.auth.enabled && (
                     <div className="space-y-2 pl-1">
                       {editing.auth.users.map((u, i) => {
@@ -479,6 +519,56 @@ export default function ProxyHosts() {
         {disabling && <div className="rounded-lg border border-line bg-surface-2 px-3 py-2 font-mono text-xs">{disabling.domains.join(", ")}</div>}
       </ConfirmDialog>
     </>
+  );
+}
+
+/** Settings of the login page in front of the host (#294); the fields of the API's `login`. */
+function LoginFields({ value: l, onChange, error, groups, pinOpen, onPinOpen }: {
+  value: HostLogin; onChange: (v: HostLogin) => void; error: unknown; groups: SigninGroup[]; pinOpen: boolean; onPinOpen: () => void;
+}) {
+  const { t } = useI18n();
+  const set = (p: Partial<HostLogin>) => onChange({ ...l, ...p });
+  const hours = SESSION_HOURS.some(([h]) => h === l.session_hours) ? [] : [l.session_hours];
+  return (
+    <div className="space-y-4 rounded-xl border border-line bg-surface-2/40 p-4">
+      <Field label={t("hlMode")} error={fieldErr(error, "login.mode")}>
+        <Segmented label={t("hlMode")} value={l.mode || "pin"} onChange={(mode) => set({ mode })}
+          options={[{ value: "pin", label: t("hlModePin") }, { value: "users", label: t("hlModeUsers") }]} />
+      </Field>
+      <p className="text-xs leading-5 text-fg-subtle">{l.mode === "users" ? t("hlModeUsersDesc") : t("hlModePinDesc")}</p>
+      {l.mode === "users" ? (
+        <Field label={t("hlGroups")} required hint={groups.length ? t("hlGroupsHint") : undefined} error={fieldErr(error, "login.group_ids")}>
+          {groups.length ? (
+            <MultiPicker label={t("hlGroups")} placeholder={t("siPickGroups")} options={groups.map((g) => ({ value: String(g.id), label: g.name, hint: t("siMembersN", { n: g.user_ids.length }) }))}
+              value={l.group_ids.map(String)} onChange={(v) => set({ group_ids: v.map(Number) })} invalid={!!fieldErr(error, "login.group_ids")} />
+          ) : <p className="text-xs leading-5 text-fg-subtle">{t("hlNoGroups")}</p>}
+          <Link to="/signin-users" className="mt-1.5 inline-block text-xs text-brand hover:underline">{t("hlManageUsers")}</Link>
+        </Field>
+      ) : (
+        <IdField label={t("hlPin")} required={!l.pin_set} hint={l.pin_set ? (pinOpen ? t("hlPinChangeHint") : undefined) : t("hlPinHint")} error={fieldErr(error, "login.pin")}>
+          {(id) => l.pin_set && !pinOpen ? (
+            <div className="flex items-center gap-2">
+              <Badge tone="ok" dot>{t("hlPinSet")}</Badge>
+              <Button size="sm" onClick={onPinOpen}>{t("hlPinChange")}</Button>
+            </div>
+          ) : (
+            <Input id={id} type="password" autoComplete="new-password" spellCheck={false} value={l.pin ?? ""} onChange={(e) => set({ pin: e.target.value })} invalid={!!fieldErr(error, "login.pin")} />
+          )}
+        </IdField>
+      )}
+      <IdField label={t("hlSession")} hint={t("hlSessionHint")} error={fieldErr(error, "login.session_hours")}>
+        {(id) => (
+          <Select id={id} value={l.session_hours} onChange={(e) => set({ session_hours: Number(e.target.value) })}>
+            {SESSION_HOURS.map(([h, k]) => <option key={h} value={h}>{t(k)}</option>)}
+            {hours.map((h) => <option key={h} value={h}>{t("hlHoursN", { n: h })}</option>)}
+          </Select>
+        )}
+      </IdField>
+      <Field label={t("hlExclude")} hint={t("hlExcludeHint")} error={fieldErr(error, "login.exclude_paths")}>
+        <TagInput label={t("hlExclude")} value={l.exclude_paths} onChange={(v) => set({ exclude_paths: v })} placeholder="/api/webhook, /health" invalid={!!fieldErr(error, "login.exclude_paths")} />
+      </Field>
+      {l.mode === "users" && <SwitchRow label={t("hlPassUser")} description={t("hlPassUserDesc")} checked={l.pass_user} onChange={(v) => set({ pass_user: v })} />}
+    </div>
   );
 }
 

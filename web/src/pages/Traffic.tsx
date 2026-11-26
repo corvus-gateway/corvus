@@ -1,6 +1,6 @@
 import { useSearchParams } from "react-router-dom";
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Activity, AlertOctagon, Ban, BadgeCheck, Download, Gauge, Hourglass, ListFilter, Puzzle, Radio, ScrollText, ServerCrash, TimerReset, type LucideIcon } from "lucide-react";
+import { Activity, AlertOctagon, Ban, BadgeCheck, Download, Gauge, Hourglass, ListFilter, LogIn, Puzzle, Radio, ScrollText, ServerCrash, TimerReset, type LucideIcon } from "lucide-react";
 import { getText, type EventKind, type HostTraffic, type LogLine, type PathTraffic, type Timeseries, type TrafficEvent, type TrafficSummary } from "../api";
 import { ChartLegend, StackBar, TimeChart, type Series } from "../components/charts";
 import { ErrorBox, PageHeader, RefreshError, Toolbar, useSubmit } from "../components/common";
@@ -296,6 +296,12 @@ const eventMeta: Record<EventKind, { icon: LucideIcon; tone: Tone; key: Key }> =
   challenge_issued: { icon: Puzzle, tone: "info", key: "evChallengeIssued" },
   challenge_passed: { icon: BadgeCheck, tone: "ok", key: "evChallengePassed" },
   challenge_failed: { icon: Puzzle, tone: "warn", key: "evChallengeFailed" },
+  login_required: { icon: LogIn, tone: "info", key: "evLoginRequired" },
+  login_succeeded: { icon: BadgeCheck, tone: "ok", key: "evLoginSucceeded" },
+  login_failed: { icon: LogIn, tone: "warn", key: "evLoginFailed" },
+  login_limited: { icon: Ban, tone: "danger", key: "evLoginLimited" },
+  login_totp: { icon: LogIn, tone: "info", key: "evLoginTotp" },
+  login_enroll: { icon: LogIn, tone: "info", key: "evLoginEnroll" },
 };
 
 function Events({ qs, poll }: { qs: string; poll: number }) {

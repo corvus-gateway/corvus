@@ -49,6 +49,7 @@ export function actionMeta(action: string): { icon: LucideIcon; tone: Tone } {
   const icon: Record<string, LucideIcon> = {
     proxy_host: Globe, redirection_host: Signpost, stream: Cable, waitroom: Users, certificate: ShieldCheck, dns_credential: KeyRound, deploy: ArrowLeftRight, auth: LogIn, setup: UserCog,
     rate_limit: Gauge, access_list: KeyRound, security_rule: ShieldBan, ip_list: ListChecks, geoip: Globe, network: Network, settings: Network, import: FileInput, mfa: KeyRound, token: KeyRound,
+    signin_user: LogIn, signin_group: Users,
   };
   return { icon: icon[d] ?? Activity, tone };
 }

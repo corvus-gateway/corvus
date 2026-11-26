@@ -24,6 +24,7 @@ import { pagesStrings } from "./en/pages";
 import { consoleHostStrings } from "./en/consolehost";
 import { challengeStrings } from "./en/challenge";
 import { underAttackStrings } from "./en/underattack";
+import { signinStrings } from "./en/signin";
 import { enSecurity } from "./security.en";
 import { enUsers } from "./users.en";
 import type { ko } from "./ko";
@@ -242,5 +243,6 @@ export const en: Record<keyof typeof ko, string> = {
   ...consoleHostStrings,
   ...challengeStrings,
   ...underAttackStrings,
+  ...signinStrings,
   ...consoleStrings,
 };

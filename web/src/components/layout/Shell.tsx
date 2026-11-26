@@ -25,6 +25,7 @@ const RateLimits = lazy(() => import("../../pages/RateLimits"));
 const SecurityRules = lazy(() => import("../../pages/SecurityRules"));
 const IpLists = lazy(() => import("../../pages/IpLists"));
 const Bans = lazy(() => import("../../pages/Bans"));
+const SigninUsers = lazy(() => import("../../pages/SigninUsers"));
 const Retention = lazy(() => import("../../pages/Retention"));
 const Certificates = lazy(() => import("../../pages/Certificates"));
 const NetworkPage = lazy(() => import("../../pages/Network"));
@@ -173,6 +174,7 @@ export function Shell() {
                 <Route path="/rate-limits" element={<RateLimits />} />
                 <Route path="/security-rules" element={<SecurityRules />} />
                 <Route path="/ip-lists" element={<IpLists />} />
+                <Route path="/signin-users" element={<SigninUsers />} />
                 <Route path="/bans" element={<Bans />} />
                 <Route path="/settings/retention" element={<Retention />} />
                 <Route path="/access-lists" element={<Navigate to="/proxy-hosts" replace />} />

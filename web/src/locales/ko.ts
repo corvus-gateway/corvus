@@ -24,6 +24,7 @@ import { koPages } from "./pages.i18n";
 import { koConsoleHost } from "./consolehost.i18n";
 import { koChallenge } from "./challenge.i18n";
 import { koUnderAttack } from "./underattack.i18n";
+import { koSignin } from "./signin.i18n";
 import { koSecurity } from "./security";
 import { koUsers } from "./users";
 import { koAlerts } from "./alerts";
@@ -240,5 +241,6 @@ export const ko = {
   ...koConsoleHost,
   ...koChallenge,
   ...koUnderAttack,
+  ...koSignin,
   ...koConsole,
 } as const;
