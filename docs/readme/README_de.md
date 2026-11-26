@@ -86,6 +86,7 @@ Go-Steuerungsebene, React-Konsole), die ein **bestehendes NPM-Setup importieren*
 - Verwaltete Signatur-Updates, die nur akzeptiert werden, wenn sie signiert und neuer sind (keine Manipulation, kein Downgrade)
 - Automatische IP-Sperren für Wiederholungstäter, mit Eskalation und Ausnahmen; optional sofortige Sperren bei auffälligem Verhalten (zu viele 4xx-Antworten pro IP und Website)
 - Ratenbegrenzungen mit Dry-Run-Modus; Blockierung von Exploit-Pfaden ab Werk
+- Anmeldeseite vor jedem Proxy-Host: eine gemeinsame PIN oder Anmeldebenutzer in Gruppen mit optionaler Zwei-Faktor-Anmeldung ([Doku](https://corvusgateway.org/docs/security/login-page/))
 
 **Zugriffswarteschlange**
 - Besucher bis zu einer festgelegten Kapazität zulassen und den Rest bei Lastspitzen fair in die Warteschlange stellen

@@ -84,6 +84,7 @@ Go control plane, React console) that can **import an existing NPM setup**.
 - Managed signature updates, accepted only when signed and newer (no tampering, no downgrade)
 - Automatic IP bans for repeat offenders, with escalation and exemptions; optional immediate bans on bad behaviour (too many 4xx responses per IP and site)
 - Rate limits with a dry-run mode; exploit-path blocking out of the box
+- Login page in front of any proxy host: one shared PIN, or sign-in users in groups with optional two-step verification ([docs](https://corvusgateway.org/docs/security/login-page/))
 
 **Access Queue**
 - Admit visitors up to a capacity and queue the rest fairly during spikes

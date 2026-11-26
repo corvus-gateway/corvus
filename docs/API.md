@@ -139,8 +139,8 @@ Proxy host fields: `domains` (array), `forward_scheme` (`http`/`https`), `forwar
 `login` keep their stored value when omitted from a `PUT` (`"locations": []` removes all locations,
 `"extra_targets": []` all extra backends).
 
-`login` is the login page in front of the host (in development for 1.10.0, see #294; the console
-does not show it yet): `{ "enabled", "mode": "pin" | "users", "pin", "group_ids", "session_hours",
+`login` is the login page in front of the host (console: *Protection → Require sign-in → Login
+page*; user guide: <https://corvusgateway.org/docs/security/login-page/>): `{ "enabled", "mode": "pin" | "users", "pin", "group_ids", "session_hours",
 "exclude_paths", "pass_user" }`. `pin` is write-only (at least 4 characters; omitted or `""` keeps the
 current PIN, a new one ends the sessions signed in with the old one); responses report `pin_set`
 instead. `users` mode needs at least one existing sign-in group. `session_hours` is 1-720 (default
@@ -371,7 +371,7 @@ The same fields work for `POST /api/certificates/acme`.
 | PUT / DELETE | `/api/rate-limits/{id}` | operator | Update / delete |
 | GET / POST | `/api/access-lists` | viewer / operator | Password protection lists |
 | PUT / DELETE | `/api/access-lists/{id}` | operator | Update / delete |
-| GET / POST | `/api/signin-users` | viewer / operator | Sign-in users of login pages (#294) |
+| GET / POST | `/api/signin-users` | viewer / operator | Sign-in users of login pages |
 | PUT / DELETE | `/api/signin-users/{id}` | operator | Update / delete |
 | POST | `/api/signin-users/{id}/end-sessions` | operator | Sign the user out everywhere |
 | POST | `/api/signin-users/{id}/reset-mfa` | operator | Remove the user's authenticator (enrolled again at the next sign-in) and sign out |

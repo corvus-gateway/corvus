@@ -32,6 +32,7 @@ nav:
       - IP 목록: security/ip-lists.md
       - 챌린지와 공격 대응 모드: security/challenge.md
       - 차단과 Rate Limit: security/bans.md
+      - 로그인 페이지: security/login-page.md
   - 접속 대기열: access-queue.md
   - 가이드:
       - 셀프 호스팅 서비스 보안: guides/secure-self-hosted.md

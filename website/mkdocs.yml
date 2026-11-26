@@ -113,6 +113,7 @@ nav:
       - IP lists: security/ip-lists.md
       - Challenge & under attack: security/challenge.md
       - Bans & rate limits: security/bans.md
+      - Login page: security/login-page.md
   - Access queue: access-queue.md
   - Guides:
       - Securing self-hosted services: guides/secure-self-hosted.md

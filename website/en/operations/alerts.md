@@ -41,7 +41,7 @@ threshold.
 | Rate-limit surge | Many requests of a host are rate-limited |
 | Exploit attempts | Many attack patterns are detected or blocked on a host |
 | Security events | Many security-rule and body-inspection detections on a host |
-| Repeated attack source | One IP triggers detections again and again (the alert shows the IP; **Ban for 24 h** is one click) |
+| Repeated attack source | One IP triggers detections again and again, failed sign-ins on login pages included (the alert shows the IP; **Ban for 24 h** is one click) |
 | Possible scanner | One IP gets many 4xx responses in a short time |
 | Access queue backlog | The number of waiting visitors reaches the threshold |
 | Cache DB disconnected | The access-queue store can't be reached |

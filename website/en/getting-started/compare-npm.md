@@ -17,6 +17,7 @@ adds the protection and monitoring layer in the same console.
 | Let's Encrypt with auto-renewal | ✅ | ✅ |
 | Wildcard certificates (DNS challenge) | ✅ many DNS providers | ✅ 7 providers (Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap), [saved and shared](../proxy/certificates.md) between certificates |
 | Password protection (Basic auth) and IP access lists | ✅ Access lists | ✅ Password protection and [security rules](../security/rules.md) |
+| Login page in front of a host (PIN or users, two-step verification) | ❌ | ✅ [Login page](../security/login-page.md) |
 | Custom nginx configuration per host | ✅ | ✅ |
 | Answer for unknown hosts (404, close, redirect) | ✅ Default site | ✅ [Unknown hosts](../operations/pages.md#unknown-hosts) |
 | Blocking of common exploit paths | ✅ on/off switch | ✅ on by default, with [categories and logs](../security/index.md) |

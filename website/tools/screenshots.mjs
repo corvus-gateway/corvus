@@ -9,6 +9,12 @@
 // login.txt holds the e-mail on the first line and the password on the second.
 // Images are written to website/en/img and website/ko/img (console language en / ko).
 // Optional: CHROME=<path to chrome or msedge>, LANGS=en,ko, WIDTH=1440, HEIGHT=900.
+//
+// img/gateway-login.png (the login page in front of a host, not part of the console) is taken
+// with Chrome itself, per language:
+//   chrome --headless --lang=en --blink-settings=preferredColorScheme=1 --ignore-certificate-errors \
+//     --host-resolver-rules="MAP photos.example.com 127.0.0.1" --window-size=900,640 \
+//     --screenshot=website/en/img/gateway-login.png https://photos.example.com:<https port>/
 
 import { spawn } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
@@ -71,6 +77,8 @@ const shots = [
   { name: "proxy-host-locations", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^(Custom locations|사용자 지정 위치)$/);`, dialog: true },
   { name: "proxy-host-tls", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^TLS$/);`, dialog: true },
   { name: "proxy-host-protection", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^(Protection|보호)$/);`, dialog: true },
+  // needs a host photos.example.com with a certificate and a login page for sign-in users
+  { name: "proxy-host-login", path: "/proxy-hosts", act: `await __edit("photos.example.com"); await __scrollTo(/^(Require sign-in|로그인 요구)$/);`, dialog: true },
   { name: "proxy-host-queue", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^(Access queue|접속 대기열)$/);`, dialog: true },
   { name: "proxy-host-advanced", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^(Advanced|고급)$/);`, dialog: true },
   { name: "proxy-host-notes", path: "/proxy-hosts", act: `await __edit("shop.example.com"); await __scrollTo(/^(Notes|메모)$/);`, dialog: true },
@@ -96,6 +104,8 @@ const shots = [
   { name: "security-rules", path: "/security-rules" },
   { name: "security-rule-form", path: "/security-rules", act: `await __edit("Challenge login");`, dialog: true },
   { name: "ip-lists", path: "/ip-lists" },
+  // needs sign-in users in groups, some signed in (with two-step) through a login page
+  { name: "signin-users", path: "/signin-users" },
   { name: "bans", path: "/bans" },
   { name: "waitrooms", path: "/waitrooms" },
   { name: "waitroom-form", path: "/waitrooms", act: `__qa("button").find(b => /^(Edit|편집)$/.test(b.textContent.trim())).click(); await __sleep(700);`, dialog: true },

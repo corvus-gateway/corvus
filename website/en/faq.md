@@ -145,6 +145,9 @@ Not yet. Corvus serves HTTP/1.1 and HTTP/2 over TLS.
 
 ### Can Corvus add a login (single sign-on) in front of my apps?
 
-Corvus can protect a host with a password (Basic auth), an IP allow list or a challenge. It does not
-include a forward-auth or identity provider for the apps behind it; single sign-on is for the Corvus
-console only. Put Authelia, Authentik or the app's own login in front if you need SSO for your apps.
+A login, yes; single sign-on, no. A host can have a [login page](security/login-page.md) with one
+shared PIN, or with sign-in users in groups and optional two-step verification, besides password
+protection (Basic auth), an IP allow list or a challenge. The sign-in users live in Corvus, and each
+host is signed in to separately. There is no forward-auth or identity provider (OIDC, LDAP) for the
+apps behind it; single sign-on is for the Corvus console only. Put Authelia, Authentik or the app's
+own login in front if you need SSO across your apps.

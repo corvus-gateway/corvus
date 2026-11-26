@@ -145,6 +145,9 @@ Gandi, GoDaddy, Hetzner, Namecheap을 지원합니다. 직접 가진 인증서�
 
 ### Corvus로 앱 앞에 로그인(SSO)을 붙일 수 있나요?
 
-Corvus는 호스트를 비밀번호(Basic auth), IP 허용 목록, 챌린지로 보호할 수 있습니다. 뒤에 있는 앱을
-위한 forward-auth나 ID 공급자(IdP)는 들어 있지 않으며, SSO는 Corvus 콘솔에만 적용됩니다. 앱에
-SSO가 필요하다면 Authelia, Authentik, 또는 앱 자체의 로그인을 앞에 두세요.
+로그인은 되고, SSO는 안 됩니다. 호스트 앞에 [로그인 페이지](security/login-page.md)를 둘 수 있습니다.
+모두가 쓰는 PIN 하나, 또는 그룹으로 묶은 로그인 사용자와 선택적 2단계 인증으로 들어옵니다. 그 밖에
+비밀번호 보호(Basic auth), IP 허용 목록, 챌린지로도 보호할 수 있습니다. 로그인 사용자는 Corvus 안에만
+있고, 호스트마다 따로 로그인합니다. 뒤에 있는 앱을 위한 forward-auth나 ID 공급자(OIDC, LDAP)는 들어
+있지 않으며, SSO는 Corvus 콘솔에만 적용됩니다. 여러 앱에 걸친 SSO가 필요하다면 Authelia, Authentik,
+또는 앱 자체의 로그인을 앞에 두세요.

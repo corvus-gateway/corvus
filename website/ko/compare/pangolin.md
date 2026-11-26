@@ -42,6 +42,7 @@ Pangolin이 트래픽을 Corvus까지 실어 나를 수 있습니다. Pangolin �
 | | Pangolin | Corvus |
 |---|---|---|
 | 공인 IP / 열린 포트 필요 | 아니요 (터널) | 예 |
+| 앱 앞의 로그인 화면(PIN, 사용자) | ✅ | ✅ [로그인 페이지](../security/login-page.md) |
 | 앱 앞의 SSO와 역할 | ✅ | ❌ (콘솔만) |
 | WAF | ❌ | ✅ |
 | 자동 차단 | CrowdSec 사용 시 | ✅ 내장 |

@@ -86,6 +86,7 @@ OpenResty, plan de contrôle en Go, console React) capable d'**importer une conf
 - Mises à jour de signatures gérées, acceptées uniquement si elles sont signées et plus récentes (pas de falsification, pas de rétrogradation)
 - Bannissement automatique des IP récidivistes, avec escalade et exemptions ; bannissement immédiat optionnel en cas de mauvais comportement (trop de réponses 4xx par IP et par site)
 - Limites de débit avec mode simulation (dry-run) ; blocage des chemins d'exploitation prêt à l'emploi
+- Page de connexion devant n'importe quel hôte proxy : un code PIN partagé, ou des utilisateurs regroupés avec vérification en deux étapes en option ([docs](https://corvusgateway.org/docs/security/login-page/))
 
 **File d'accès**
 - Admettre les visiteurs jusqu'à une capacité donnée et mettre les autres en file d'attente équitablement lors des pics
