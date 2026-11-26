@@ -360,6 +360,9 @@ func classify(r *Record) (blocked bool, kinds []string) {
 			kinds = append(kinds, "challenge_failed")
 		}
 	}
+	if k, ok := loginKind(r.R); ok {
+		kinds = append(kinds, k)
+	}
 	if r.X != "" {
 		if r.S == 403 {
 			blocked = true
@@ -378,6 +381,32 @@ func classify(r *Record) (blocked bool, kinds []string) {
 		kinds = append(kinds, "server_error")
 	}
 	return blocked, kinds
+}
+
+// LoginRule is the rule part of $corvus_rule for the login page of a proxy host
+// ("login:required", "login:succeeded", "login:failed", "login:limited", "login:totp",
+// "login:enroll"); see gateway corvus/login.lua.
+const LoginRule = "login"
+
+// loginKinds maps the login page outcomes to event kinds. Only failed sign-ins are
+// detections (SourceKinds): the others are visitors doing what the page asks.
+var loginKinds = map[string]string{
+	"required":  "login_required",  // sent to the login page (or 401 for API clients)
+	"succeeded": "login_succeeded", // signed in
+	"failed":    "login_failed",    // wrong name, password, PIN or code
+	"limited":   "login_limited",   // too many failures from the client or for the user
+	"totp":      "login_totp",      // password accepted, asked for the authenticator code
+	"enroll":    "login_enroll",    // password accepted, shown the two-step enrolment
+}
+
+// loginKind returns the event kind of a login page outcome in the log field $corvus_rule.
+func loginKind(v string) (string, bool) {
+	a, ok := strings.CutPrefix(v, LoginRule+":")
+	if !ok {
+		return "", false
+	}
+	k, ok := loginKinds[a]
+	return k, ok
 }
 
 // waitroomHeld reports whether the access queue answered the request itself (cookie
@@ -1051,9 +1080,10 @@ func (c *Collector) evictIdleHost(now int64) bool {
 }
 
 // SourceKinds are the event kinds counted per client address (EventsByIP): the
-// detections that automatic bans and security alerts act on. Other kinds are not kept
-// per address — above all "banned", which a refused client could produce without end.
-var SourceKinds = []string{"blocked_exploit", "exploit_detected", "blocked_rule", "blocked_body", "body_detected"}
+// detections that automatic bans and security alerts act on (failed sign-ins on a login
+// page included: guessing passwords is an attack). Other kinds are not kept per address,
+// above all "banned", which a refused client could produce without end.
+var SourceKinds = []string{"blocked_exploit", "exploit_detected", "blocked_rule", "blocked_body", "body_detected", "login_failed"}
 
 func sourceKind(kind string) bool {
 	for _, k := range SourceKinds {

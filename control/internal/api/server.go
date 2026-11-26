@@ -27,6 +27,7 @@ import (
 	"corvus/control/internal/hints"
 	"corvus/control/internal/history"
 	"corvus/control/internal/live"
+	"corvus/control/internal/signin"
 	"corvus/control/internal/store"
 	"corvus/control/internal/traffic"
 	"corvus/control/internal/underattack"
@@ -66,13 +67,15 @@ type Server struct {
 	GeoIP        GeoIPService // country database for security rules (nil = unavailable)
 	AutoBan      *autoban.Service
 	UnderAttack  *underattack.Service // automatic under-attack mode (nil = unavailable)
-	History      *history.Service
-	Rules        RulesService
-	Feeds        ListFeeds // URL-fed lists (nil = unavailable)
-	allow        allowCache
-	connLimit    *auth.Limiter // connection checks per user
-	connSem      chan struct{} // connection checks running at once (all users)
-	ssoRT        ssoRuntime    // OIDC sign-in flows + provider cache (sso.go)
+	// SigninSessions pushes login page session versions to the gateway (nil = none).
+	SigninSessions *signin.Sessions
+	History        *history.Service
+	Rules          RulesService
+	Feeds          ListFeeds // URL-fed lists (nil = unavailable)
+	allow          allowCache
+	connLimit      *auth.Limiter // connection checks per user
+	connSem        chan struct{} // connection checks running at once (all users)
+	ssoRT          ssoRuntime    // OIDC sign-in flows + provider cache (sso.go)
 }
 
 type ctxKey struct{}

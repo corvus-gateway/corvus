@@ -123,6 +123,36 @@ func TestLogRuleMatchesDoNotBan(t *testing.T) {
 	}
 }
 
+// Failed sign-ins on a login page are detections: guessing passwords gets the client
+// banned like any other attack. Visitors only sent to the login page are not.
+func TestFailedSignInsBan(t *testing.T) {
+	s, tc, st := setup(t)
+	ctx := context.Background()
+	raw, _ := json.Marshal(DefaultSettings()) // 20 in 10 min
+	_ = st.SetMeta(ctx, "autoban", string(raw))
+	now := time.Now()
+	for i := 0; i < 25; i++ {
+		at := float64(now.Unix()) - float64(i)
+		tc.Add(&traffic.Record{T: at, H: "photos.example.com", U: "/__corvus/login", M: "POST", S: 401, IP: "203.0.113.20", R: "login:failed"})
+		tc.Add(&traffic.Record{T: at, H: "photos.example.com", U: "/", S: 302, IP: "203.0.113.21", R: "login:required"})
+	}
+	got := s.Evaluate(ctx, now)
+	if len(got) != 1 || got[0] != "203.0.113.20" {
+		t.Fatalf("banned %v, want only the client guessing passwords", got)
+	}
+	b, err := st.BanByIP(ctx, "203.0.113.20")
+	if err != nil || b.Source != "auto" {
+		t.Fatalf("ban: %+v %v", b, err)
+	}
+	found := false
+	for _, k := range Kinds {
+		found = found || k == "login_failed"
+	}
+	if !found {
+		t.Errorf("login_failed not among the ban kinds: %v", Kinds)
+	}
+}
+
 func TestBanUntil(t *testing.T) {
 	now := time.Date(2026, 11, 4, 0, 0, 0, 0, time.UTC)
 	set := DefaultSettings() // 15 min, doubling, max 7 days

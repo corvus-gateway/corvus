@@ -516,13 +516,22 @@ func run() error {
 	}
 	// "Under attack" mode, automatic activations pushed to the gateway's shared memory.
 	ua := &underattack.Service{Store: st, Traffic: tc}
+	// Login page session versions pushed to the gateway's shared memory (#294).
+	sessions := &signin.Sessions{Store: st}
 	if withGateway {
 		ua.PushURL = "http://127.0.0.1:9180/under-attack"
 		ua.StatusKey = statusKey
-		ban.OnGatewayRestart = ua.Trigger // empty shared memory: push the activations at once
+		sessions.PushURL = "http://127.0.0.1:9180/signin-sessions"
+		sessions.StatusKey = statusKey
+		// empty shared memory: push the activations and the session versions at once
+		ban.OnGatewayRestart = func() {
+			ua.Trigger()
+			sessions.Trigger()
+		}
 	}
 	go ban.Run(ctx)
 	go ua.Run(ctx)
+	go sessions.Run(ctx)
 
 	// Login pages in front of proxy hosts (#294): the gateway asks here whether a sign-in
 	// is valid; it never sees password hashes or TOTP secrets.
@@ -572,7 +581,7 @@ func run() error {
 	srv := &api.Server{Store: st, Deployer: dep, Paths: paths, Live: lv, Setup: setup,
 		Limiter: auth.NewLimiter(10, 10*time.Minute), UI: webui.Handler(), SecureCookie: tlsOn, Version: version, Updates: updates, Proxies: api.NewConsoleProxies(adminProxies, consoleKey),
 		AcctLimiter: auth.NewLimiter(10, 15*time.Minute),
-		Traffic:     tc, ACME: acmeSvc, NPMImportDir: env("CORVUS_IMPORT_DIR", "/import"), DataKey: dataKey, MFA: auth.NewMFAChallenges(), GeoIP: geo, AutoBan: ban, UnderAttack: ua, History: hist, Rules: rulesSvc, Feeds: listFeeds}
+		Traffic:     tc, ACME: acmeSvc, NPMImportDir: env("CORVUS_IMPORT_DIR", "/import"), DataKey: dataKey, MFA: auth.NewMFAChallenges(), GeoIP: geo, AutoBan: ban, UnderAttack: ua, SigninSessions: sessions, History: hist, Rules: rulesSvc, Feeds: listFeeds}
 	if or != nil {
 		srv.Gateway = or.Status
 		srv.GatewayProblem = or.Problem
