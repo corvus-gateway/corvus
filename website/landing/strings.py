@@ -112,7 +112,7 @@ EN = {
     "code_term": "Terminal",
 
     # Three things
-    "k_h": "Three things you should<br> know about Corvus",
+    "k_h": "Free, self-contained<br> and built to be checked",
     "k1": "It's free and open source",
     "k1d": ("Apache-2.0, with no paid edition, no feature held back and no license key. Read the code, "
             "run it, change it."),
