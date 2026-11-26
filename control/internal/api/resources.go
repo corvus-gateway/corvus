@@ -390,6 +390,7 @@ func (s *Server) createProxyHost(w http.ResponseWriter, r *http.Request) {
 	s.startOrder(r, cert, newCred)
 	s.audit(r, "proxy_host.create", fmt.Sprintf("proxy_host:%d", h.ID), auditHost(h))
 	s.underAttackChanged()
+	s.signinChanged()
 	writeJSON(w, 201, map[string]any{"proxy_host": h, "version": v, "certificate": cert})
 }
 
@@ -450,6 +451,7 @@ func (s *Server) updateProxyHost(w http.ResponseWriter, r *http.Request) {
 	s.startOrder(r, cert, newCred)
 	s.audit(r, "proxy_host.update", fmt.Sprintf("proxy_host:%d", id), map[string]any{"before": auditHost(before), "after": auditHost(h)})
 	s.underAttackChanged()
+	s.signinChanged()
 	writeJSON(w, 200, map[string]any{"proxy_host": h, "version": v, "certificate": cert})
 }
 
@@ -480,6 +482,7 @@ func (s *Server) deleteProxyHost(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "proxy_host.delete", fmt.Sprintf("proxy_host:%d", id), auditHost(before))
 	s.underAttackChanged()
+	s.signinChanged()
 	writeJSON(w, 200, map[string]any{"version": v})
 }
 

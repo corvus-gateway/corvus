@@ -81,6 +81,13 @@ func checkHostLogin(ctx context.Context, tx *store.Store, h *store.ProxyHost) er
 	return errs.OrNil()
 }
 
+// signinChanged pushes the session versions to the gateway after a change that can end
+// sessions (users, groups, a host's login page): the gateway refuses a session as soon as
+// its version is gone or different.
+func (s *Server) signinChanged() {
+	s.SigninSessions.Trigger()
+}
+
 // ------------------------------------------------------------------ users
 
 type signinUserInput struct {
@@ -168,6 +175,7 @@ func (s *Server) createSigninUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "signin_user.create", fmt.Sprintf("signin_user:%d", u.ID), u)
+	s.signinChanged()
 	writeJSON(w, 201, u)
 }
 
@@ -200,6 +208,7 @@ func (s *Server) updateSigninUser(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "signin_user.update", fmt.Sprintf("signin_user:%d", id), map[string]any{
 		"before": before, "after": u, "password_changed": in.Password != ""})
+	s.signinChanged()
 	writeJSON(w, 200, u)
 }
 
@@ -218,6 +227,7 @@ func (s *Server) deleteSigninUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "signin_user.delete", fmt.Sprintf("signin_user:%d", id), before)
+	s.signinChanged()
 	writeJSON(w, 200, map[string]any{"deleted": id})
 }
 
@@ -250,6 +260,7 @@ func (s *Server) bumpSigninUser(w http.ResponseWriter, r *http.Request, action s
 		return
 	}
 	s.audit(r, action, fmt.Sprintf("signin_user:%d", id), map[string]any{"username": u.Username})
+	s.signinChanged()
 	writeJSON(w, 200, u)
 }
 
@@ -314,6 +325,7 @@ func (s *Server) createSigninGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "signin_group.create", fmt.Sprintf("signin_group:%d", g.ID), g)
+	s.signinChanged()
 	writeJSON(w, 201, g)
 }
 
@@ -336,6 +348,7 @@ func (s *Server) updateSigninGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "signin_group.update", fmt.Sprintf("signin_group:%d", id), map[string]any{"before": before, "after": cp})
+	s.signinChanged()
 	writeJSON(w, 200, cp)
 }
 
@@ -354,5 +367,6 @@ func (s *Server) deleteSigninGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "signin_group.delete", fmt.Sprintf("signin_group:%d", id), before)
+	s.signinChanged()
 	writeJSON(w, 200, map[string]any{"deleted": id})
 }

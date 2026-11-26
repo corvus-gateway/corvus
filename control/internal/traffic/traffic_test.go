@@ -117,6 +117,49 @@ func TestChallengeEvents(t *testing.T) {
 	}
 }
 
+// Login page outcomes are events of their own; only failed sign-ins are security
+// detections counted per address (automatic bans, security alerts), and none of them is
+// a blocked request or a rule event.
+func TestLoginEvents(t *testing.T) {
+	c := New()
+	now := time.Now()
+	ts := float64(now.Unix())
+	for _, r := range []Record{
+		{U: "/photos", S: 302, R: "login:required"},
+		{U: "/api/x", S: 401, R: "login:required"},
+		{U: "/__corvus/login", S: 401, R: "login:failed"},
+		{U: "/__corvus/login", S: 401, R: "login:failed"},
+		{U: "/__corvus/login", S: 429, R: "login:limited"},
+		{U: "/__corvus/login", S: 200, R: "login:totp"},
+		{U: "/__corvus/login", S: 200, R: "login:enroll"},
+		{U: "/__corvus/login", S: 303, R: "login:succeeded"},
+		{U: "/__corvus/login", S: 200, R: "login:other"},
+	} {
+		r.T, r.H, r.IP = ts, "h", "2.2.2.2"
+		c.Add(&r)
+	}
+	kinds := map[string]int64{}
+	for _, e := range c.Events("", 50) {
+		kinds[e.Kind] += e.Count
+	}
+	want := map[string]int64{"login_required": 2, "login_failed": 2, "login_limited": 1, "login_totp": 1, "login_enroll": 1, "login_succeeded": 1}
+	for k, n := range want {
+		if kinds[k] != n {
+			t.Errorf("%s: %d, want %d (all: %v)", k, kinds[k], n, kinds)
+		}
+	}
+	if len(kinds) != len(want)+1 || kinds["rate_limited"] != 1 { // the 429 of the login page limit also counts as rate limited
+		t.Errorf("kinds: %v", kinds)
+	}
+	src := c.EventsByIP(now.Add(-time.Minute), SourceKinds...)["2.2.2.2"]
+	if src == nil || src.Count != 2 || len(src.Kinds) != 1 || !src.Kinds["login_failed"] {
+		t.Errorf("per-address detections: %+v", src)
+	}
+	if ev := c.RuleEvents(0, 50); len(ev) != 0 {
+		t.Errorf("login outcomes recorded as rule events: %+v", ev)
+	}
+}
+
 // Unique IPs are counted for the API (Summary), cached for uniqTTL, and skipped by
 // SummaryFor, which the alert engine calls for every host and rule.
 func TestUniqueIPsCached(t *testing.T) {

@@ -139,8 +139,8 @@ Proxy host fields: `domains` (array), `forward_scheme` (`http`/`https`), `forwar
 `login` keep their stored value when omitted from a `PUT` (`"locations": []` removes all locations,
 `"extra_targets": []` all extra backends).
 
-`login` is the login page in front of the host (in development for 1.10.0, see #294; the gateway
-does not enforce it yet): `{ "enabled", "mode": "pin" | "users", "pin", "group_ids", "session_hours",
+`login` is the login page in front of the host (in development for 1.10.0, see #294; the console
+does not show it yet): `{ "enabled", "mode": "pin" | "users", "pin", "group_ids", "session_hours",
 "exclude_paths", "pass_user" }`. `pin` is write-only (at least 4 characters; omitted or `""` keeps the
 current PIN, a new one ends the sessions signed in with the old one); responses report `pin_set`
 instead. `users` mode needs at least one existing sign-in group. `session_hours` is 1-720 (default
@@ -148,6 +148,26 @@ instead. `users` mode needs at least one existing sign-in group. `session_hours`
 sign-in. `pass_user` sends the signed-in user name to the app as `X-Corvus-User` (users mode). A
 host cannot have the login page and password protection (`basic_auth`) at the same time
 (`422`, field `login`, code `basic_auth`).
+
+With the login page on, the gateway checks every request after bans, security rules, attack
+blocking and the under-attack challenge (allow rules with `skip_basic_auth` skip it, as do
+`exclude_paths`, `/__corvus/` and certificate validation). Without a valid session, `GET`/`HEAD`
+requests that accept `text/html` are redirected (`302`) to `/__corvus/login?r=<path>`; anything
+else gets `401` `{"error":"login_required"}` with `Cache-Control: no-store`. The page (8 languages,
+works without JavaScript) posts to `/__corvus/login`: the gateway asks corvus-control over a Unix
+socket (it never sees password hashes or TOTP secrets), then sets the `__corvus_login` cookie
+(HttpOnly, SameSite=Lax, Secure on HTTPS, valid for `session_hours`, not bound to the IP) and
+redirects (`303`) back to `r` (same-host paths only). The form carries a signed token valid for
+10 minutes. Sign-in attempts are rate-limited per client (gateway) and per client and user name
+(corvus-control: `429` with `Retry-After`); users with two-step sign-in enter an authenticator code
+or, the first time, enrol by scanning the QR code shown. `POST /__corvus/logout` clears the cookie.
+A session ends at once when its user is disabled, deleted, removed from the host's groups or signed
+out (`end-sessions`, a new password, `reset-mfa`), and when a host's PIN changes: corvus-control
+pushes the session versions to the gateway after every such change and every minute. The session
+cookie is not passed to the app; a client-sent `X-Corvus-User` header is always removed. Outcomes
+are traffic events `login_required`, `login_succeeded`, `login_failed`, `login_limited`,
+`login_totp` and `login_enroll`; `login_failed` counts as a security detection (automatic bans,
+security alerts). Login page responses never count as bad behaviour.
 
 `content` (default `forward`) is what the host answers with: `forward` proxies to the forward
 target as always; `page` serves `page` for every path and method instead (no upstream; security

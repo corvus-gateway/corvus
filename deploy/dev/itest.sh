@@ -40,6 +40,8 @@ cleanup() {
   for id in $(c $A/api/security-rules | js "' '.join(str(x['id']) for x in d if x['name'].startswith('itest') or '(converted from access list)' in x['name'])"); do c -o /dev/null -X DELETE $A/api/security-rules/$id; done
   for id in $(c $A/api/ip-lists | js "' '.join(str(x['id']) for x in d if x['name'].startswith('itest'))"); do c -o /dev/null -X DELETE $A/api/ip-lists/$id; done
   for id in $(c $A/api/rate-limits | js "' '.join(str(x['id']) for x in d if x['name'].startswith('itest'))"); do c -o /dev/null -X DELETE $A/api/rate-limits/$id; done
+  for id in $(c $A/api/signin-users | js "' '.join(str(x['id']) for x in d if x['username'].startswith('itest'))"); do c -o /dev/null -X DELETE $A/api/signin-users/$id; done
+  for id in $(c $A/api/signin-groups | js "' '.join(str(x['id']) for x in d if x['name'].startswith('itest'))"); do c -o /dev/null -X DELETE $A/api/signin-groups/$id; done
 }
 cleanup
 AUTOBAN=$(c $A/api/settings/autoban)
@@ -413,6 +415,139 @@ chk "$(code "$G/itest-ua/page")" 200 "under attack off: no challenge"
 chk "$(c $A/api/under-attack | js "[s for s in d if s['host_id']==$HOST1]")" "[]" "host no longer listed"
 rm -f "$UJ"
 for id in $UAA $UAB; do c -o /dev/null -X DELETE $A/api/security-rules/$id; done
+
+echo "[login page]"
+# A proxy host with a login page (#294): PIN mode, sign-in users and groups, two-step
+# sign-in, sessions ended from the API, failed sign-ins leading to an automatic ban.
+LGH='"domains":["login.corvus.test"],"forward_host":"demo","forward_port":80'
+LJ=$TN/login.jar
+lcurl()   { curl -s -H 'Host: login.corvus.test' "$@"; }
+lstatus() { lcurl -o /dev/null -w '%{http_code}' "$@"; }
+lput()    { c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$LGID -d "{$LGH,$1}"; }
+# POST the login form with the session jar; headers on stdout, the page in lp.html
+lpost()   { lcurl -D - -o "$TN/lp.html" -c "$LJ" -b "$LJ" "$@" "$G/__corvus/login" | tr -d '\r'; }
+# sign in as user $1 with password $2 (fresh form token): status of the answer
+lsign()   { local cs; cs=$(lcurl -c "$LJ" -b "$LJ" "$G/__corvus/login" | field csrf)
+            lpost --data-urlencode "csrf=$cs" --data-urlencode "r=/hdr" --data-urlencode "username=$1" --data-urlencode "secret=$2" | status; }
+LGID=$(c -X POST $A/api/proxy-hosts -d "{$LGH,\"login\":{\"enabled\":true,\"mode\":\"pin\",\"pin\":\"itest-pin-1234\",\"exclude_paths\":[\"/api/\"]}}" | js "d['proxy_host']['id']")
+chk "$(c $A/api/proxy-hosts/$LGID | js "(d['login']['enabled'], d['login']['mode'], d['login']['pin_set'], 'pin' in d['login'])")" "(True, 'pin', True, False)" "host with a PIN login page (PIN never returned)"
+sleep 2
+R=$(lcurl -D - -o /dev/null -H 'Accept: text/html' "$G/photos?x=1" | tr -d '\r')
+chk "$(echo "$R" | status)" 302 "no session: a page request goes to the login page"
+echo "$R" | grep -qi '^location: .*/__corvus/login?r=%2Fphotos%3Fx%3D1$' && ok "the login page keeps the original URL" || bad "login redirect: $(echo "$R" | grep -i '^location')"
+lcurl -H 'Accept: text/html' "$G/photos" | grep '^Hostname:' >/dev/null && bad "backend reached without a session" || ok "backend not reached without a session"
+R=$(lcurl -D - -H 'Accept: application/json' "$G/photos" | tr -d '\r')
+chk "$(echo "$R" | status)" 401 "API client without a session: 401"
+echo "$R" | grep -q '"error":"login_required"' && ok "401 names login_required" || bad "401 body: $(echo "$R" | tail -1)"
+echo "$R" | grep -qi '^cache-control: no-store' && ok "401 is not cacheable" || bad "401 without Cache-Control: no-store"
+chk "$(lstatus -X POST -H 'Accept: text/html' "$G/form")" 401 "form post without a session: 401"
+chk "$(lstatus "$G/api/items")" 200 "excluded path /api/ reaches the backend without a session"
+case "$(lstatus --path-as-is -H 'Accept: application/json' "$G/api%2F..%2Fsecret")" in 401|400) ok "encoded separators do not escape the excluded path";; *) bad "encoded separators passed the excluded path";; esac
+P=$(lcurl -c "$LJ" -b "$LJ" "$G/__corvus/login?r=/photos?x=1")
+echo "$P" | grep -q 'data-mode="pin" data-state="signin"' && ok "login page in PIN mode" || bad "login page state: $(echo "$P" | grep -o 'data-mode="[^"]*" data-state="[^"]*"')"
+echo "$P" | grep -q 'autocomplete="current-password"' && ok "password field marked for password managers" || bad "no autocomplete attribute"
+CS=$(echo "$P" | field csrf)
+chk "$(echo "$P" | field r)" "/photos?x=1" "return path in the form"
+R=$(lpost --data-urlencode "csrf=$CS" --data-urlencode "r=/photos?x=1" --data-urlencode "secret=wrong-pin")
+chk "$(echo "$R" | status)" 401 "wrong PIN refused"
+grep -q 'data-error="fail"' "$T/lp.html" && ok "wrong PIN: the page again with a generic error" || bad "wrong PIN page"
+R=$(lpost --data-urlencode "r=/photos" --data-urlencode "secret=itest-pin-1234")
+chk "$(echo "$R" | status)" 403 "sign-in without the form token refused"
+grep -q 'data-error="expired"' "$T/lp.html" && ok "missing form token: a fresh form" || bad "missing form token page"
+chk "$(lstatus --data-urlencode "csrf=$CS" --data-urlencode "secret=itest-pin-1234" "$G/__corvus/login")" 403 "form token used from another browser refused"
+R=$(lpost --data-urlencode "csrf=$CS" --data-urlencode "r=/photos?x=1" --data-urlencode "secret=itest-pin-1234")
+chk "$(echo "$R" | status)" 303 "right PIN accepted (303)"
+echo "$R" | grep -qi '^location: .*/photos?x=1$' && ok "back to the original URL" || bad "redirect after sign-in: $(echo "$R" | grep -i '^location')"
+SC=$(echo "$R" | grep -i '^set-cookie: __corvus_login=')
+case "$SC" in *HttpOnly*SameSite=Lax*) ok "session cookie is HttpOnly, SameSite=Lax";; *) bad "session cookie flags: $SC";; esac
+case "$SC" in *Max-Age=604800*) ok "a sign-in lasts 7 days by default";; *) bad "session lifetime: $SC";; esac
+B=$(lcurl -b "$LJ" -H 'X-Corvus-User: mallory' "$G/hdr")
+echo "$B" | grep -q '^Hostname:' && ok "signed in: the backend answers" || bad "signed in: no backend answer"
+echo "$B" | grep -qi '^x-corvus-user:' && bad "X-Corvus-User passed on in PIN mode" || ok "client X-Corvus-User removed (PIN mode)"
+echo "$B" | grep -q '__corvus_login' && bad "session cookie passed to the backend" || ok "session cookie not passed to the backend"
+curl -s -H 'X-Corvus-User: mallory' "$G/hdr" | grep -i '^x-corvus-user:' >/dev/null && bad "X-Corvus-User passed on by a host without login page" || ok "client X-Corvus-User removed on other hosts too"
+R=$(lpost --data-urlencode "csrf=$CS" --data-urlencode "r=//evil.example/x" --data-urlencode "secret=itest-pin-1234")
+echo "$R" | grep -i '^location:' | grep -qi 'evil' && bad "open redirect: $(echo "$R" | grep -i '^location')" || ok "open redirect refused (r=//evil.example)"
+P=$(lcurl -c "$LJ" -b "$LJ" "$G/__corvus/login")
+echo "$P" | grep -q 'data-state="signedin"' && ok "login page shows the signed-in state" || bad "signed-in state missing"
+chk "$(lstatus -X POST "$G/__corvus/logout")" 403 "sign out without form token or same-site origin refused"
+R=$(lcurl -D - -o /dev/null -c "$LJ" -b "$LJ" --data-urlencode "csrf=$(echo "$P" | field csrf)" "$G/__corvus/logout" | tr -d '\r')
+chk "$(echo "$R" | status)" 303 "sign out"
+chk "$(lstatus -b "$LJ" -H 'Accept: application/json' "$G/photos")" 401 "signed out: the session is gone"
+chk "$(lsign "" itest-pin-1234)" 303 "signed in again"
+chk "$(lstatus -b "$LJ" -H 'Accept: application/json' "$G/photos")" 200 "session valid"
+chk "$(lput '"login":{"enabled":true,"mode":"pin","pin":"itest-pin-5678","exclude_paths":["/api/"]}')" 200 "change the PIN"
+sleep 1
+chk "$(lstatus -b "$LJ" -H 'Accept: application/json' "$G/photos")" 401 "a new PIN ends the sessions at once"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/proxy-hosts/$LGID -d "{$LGH,\"basic_auth\":{\"enabled\":true,\"users\":[{\"username\":\"lx\",\"password\":\"lx-pass-1234\"}]}}")" 422 "login page and Basic auth together refused"
+
+# sign-in users: only the host's groups get in; the user name goes to the app
+GF=$(c -X POST $A/api/signin-groups -d '{"name":"itest-family"}' | js "d['id']")
+GO=$(c -X POST $A/api/signin-groups -d '{"name":"itest-other"}' | js "d['id']")
+UA=$(c -X POST $A/api/signin-users -d "{\"username\":\"itest-alice\",\"password\":\"alice-pass-123\",\"group_ids\":[$GF]}" | js "d['id']")
+c -o /dev/null -X POST $A/api/signin-users -d "{\"username\":\"itest-bob\",\"password\":\"bob-pass-1234\",\"group_ids\":[$GO]}"
+c -o /dev/null -X POST $A/api/signin-users -d "{\"username\":\"itest-carol\",\"password\":\"carol-pass-12\",\"totp_required\":true,\"group_ids\":[$GF]}"
+chk "$(lput "\"login\":{\"enabled\":true,\"mode\":\"users\",\"group_ids\":[$GF],\"pass_user\":true}")" 200 "users mode for one group, user name passed to the app"
+sleep 1
+rm -f "$T/login.jar"
+lcurl "$G/__corvus/login" | grep 'data-mode="users"' >/dev/null && ok "login page asks for a user name" || bad "login page not in users mode"
+chk "$(lsign itest-bob bob-pass-1234)" 401 "user of another group refused"
+chk "$(lsign itest-alice alice-pass-123)" 303 "user of the allowed group signs in"
+B=$(lcurl -b "$LJ" -H 'X-Corvus-User: mallory' "$G/hdr")
+echo "$B" | grep -qi '^x-corvus-user: itest-alice' && ok "X-Corvus-User is the signed-in user (spoofed value replaced)" || bad "X-Corvus-User: $(echo "$B" | grep -i '^x-corvus-user')"
+chk "$(echo "$B" | grep -ci '^x-corvus-user:')" 1 "a single X-Corvus-User header"
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/signin-users/$UA -d "{\"username\":\"itest-alice\",\"enabled\":false,\"group_ids\":[$GF]}")" 200 "disable the user"
+sleep 1
+chk "$(lstatus -b "$LJ" -H 'Accept: application/json' "$G/hdr")" 401 "disabled user: the session ends at once"
+chk "$(lsign itest-alice alice-pass-123)" 401 "disabled user cannot sign in"
+c -o /dev/null -X PUT $A/api/signin-users/$UA -d "{\"username\":\"itest-alice\",\"enabled\":true,\"group_ids\":[$GF]}"
+sleep 1
+chk "$(lsign itest-alice alice-pass-123)" 303 "enabled again: signs in"
+chk "$(c -o /dev/null -w '%{http_code}' -X POST $A/api/signin-users/$UA/end-sessions)" 200 "end the user's sessions"
+sleep 1
+chk "$(lstatus -b "$LJ" -H 'Accept: application/json' "$G/hdr")" 401 "ended sessions refused"
+
+# two-step sign-in: enrolment at the first sign-in, then the code from the authenticator
+totp() { $PY -c '
+import base64, hashlib, hmac, struct, sys, time
+k = sys.argv[1]; k = base64.b32decode(k + "=" * (-len(k) % 8)); n = int(time.time()) // 30 + int(sys.argv[2])
+h = hmac.new(k, struct.pack(">Q", n), hashlib.sha1).digest(); o = h[-1] & 15
+print("%06d" % ((struct.unpack(">I", h[o:o + 4])[0] & 0x7fffffff) % 1000000))' "$1" "$2"; }
+rm -f "$T/login.jar"
+chk "$(lsign itest-carol carol-pass-12)" 200 "two-step user: password accepted, enrolment shown"
+grep -q 'data-state="enroll"' "$T/lp.html" && ok "enrolment page" || bad "no enrolment page"
+grep -q 'src="data:image/png;base64,' "$T/lp.html" && ok "enrolment shows the QR code" || bad "no QR code"
+KEY=$(sed -n 's/.*<div class="key">\([A-Z2-7]*\)<\/div>.*/\1/p' "$T/lp.html")
+ST=$(field step < "$T/lp.html")
+chk "$(lpost --data-urlencode "csrf=$(field csrf < "$T/lp.html")" --data-urlencode "r=/hdr" --data-urlencode "step=$ST" --data-urlencode "code=$(totp "$KEY" 5)" | status)" 401 "wrong code refused"
+grep -q 'data-error="code"' "$T/lp.html" && ok "wrong code: asked again" || bad "wrong code page"
+chk "$(lpost --data-urlencode "csrf=$(field csrf < "$T/lp.html")" --data-urlencode "r=/hdr" --data-urlencode "step=$ST" --data-urlencode "code=$(totp "$KEY" 0)" | status)" 303 "enrolled with the authenticator code"
+chk "$(lstatus -b "$LJ" "$G/hdr")" 200 "two-step user signed in"
+rm -f "$T/login.jar"
+chk "$(lsign itest-carol carol-pass-12)" 200 "next sign-in asks for the code"
+grep -q 'data-state="totp"' "$T/lp.html" && ok "code page" || bad "no code page"
+chk "$(lpost --data-urlencode "csrf=$(field csrf < "$T/lp.html")" --data-urlencode "r=/hdr" --data-urlencode "step=$(field step < "$T/lp.html")" --data-urlencode "code=$(totp "$KEY" 1)" | status)" 303 "authenticator code accepted"
+
+# a static page host can be behind a login page too
+c -o /dev/null -X POST $A/api/proxy-hosts -d '{"domains":["loginpage.corvus.test"],"content":"page","page":{"template":"maintenance"},"login":{"enabled":true,"mode":"pin","pin":"itest-pin-1234"}}'
+sleep 2
+chk "$(code -H 'Host: loginpage.corvus.test' -H 'Accept: text/html' "$G/")" 302 "static page host behind the login page"
+
+# guessing passwords: failed sign-ins are detections for automatic bans
+chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/settings/autoban -d '{"enabled":true,"threshold":3,"window_s":60,"duration_s":120,"include_scans":false,"scan_threshold":200,"exempt":[]}')" 200 "auto ban: threshold 3 in 1 min"
+sleep 11
+rm -f "$T/login.jar"
+for i in 1 2 3 4; do lsign itest-alice "wrong-pass-$i" >/dev/null; done
+banned=""
+for i in $(seq 1 12); do sleep 2; if [ "$(lstatus "$G/api/after-guessing")" = 403 ]; then banned=1; break; fi; done
+[ -n "$banned" ] && ok "repeated failed sign-ins → automatic ban" || bad "no automatic ban after failed sign-ins"
+c -o /dev/null -X PUT $A/api/settings/autoban -d '{"enabled":false,"threshold":20,"window_s":600,"duration_s":900,"include_scans":false,"scan_threshold":200,"exempt":[]}'
+for id in $(c $A/api/bans | js "' '.join(str(b['id']) for b in d if b['ip']=='$ip')"); do c -o /dev/null -X DELETE $A/api/bans/$id; done
+sleep 2
+chk "$(lstatus -H 'Accept: application/json' "$G/after-unban")" 401 "ban lifted (login required again, not banned)"
+chk "$(c "$A/api/traffic/events?limit=500" | js "sorted({e['kind'] for e in d} & {'login_required','login_failed','login_succeeded','login_enroll','login_totp'})")" "['login_enroll', 'login_failed', 'login_required', 'login_succeeded', 'login_totp']" "login traffic events"
+c -o /dev/null -X DELETE $A/api/proxy-hosts/$LGID
+rm -f "$T/login.jar" "$T/lp.html"
 
 echo "[admin console allowlist]"
 chk "$(c -o /dev/null -w '%{http_code}' -X PUT $A/api/settings/network -d '{"trusted_proxies":[],"admin_allow":["10.255.255.0/24"]}')" 422 "allowlist without my address refused (lock-out guard)"

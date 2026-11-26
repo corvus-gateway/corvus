@@ -25,6 +25,8 @@ type rulesFile struct {
 	ErrorPage string              `json:"error_page"` // upstream errors 502/503/504
 	// Page for the "challenge" rule action (built-in only).
 	ChallengePage string `json:"challenge_page"`
+	// Login page of hosts with a login page (built-in only, corvus/login.lua).
+	LoginPage string `json:"login_page"`
 	// Request-body signatures from the active rule bundle (empty: built-in list in Lua).
 	BodySignatures []sigJSON `json:"body_signatures,omitempty"`
 }
@@ -80,6 +82,16 @@ type hostJSON struct {
 	// active; otherwise active while corvus-control has pushed an auto activation for
 	// the host (corvus/underattack.lua).
 	UnderAttack *underAttackJSON `json:"under_attack,omitempty"`
+	// Login page (#294): only for hosts that have it on. Never carries the PIN hash: the
+	// gateway asks corvus-control to check credentials (internal/signin).
+	Login *loginJSON `json:"login,omitempty"`
+}
+
+type loginJSON struct {
+	Mode     string   `json:"mode"`      // pin | users
+	Hours    int      `json:"hours"`     // session lifetime
+	Exclude  []string `json:"exclude"`   // path prefixes that need no sign-in
+	PassUser bool     `json:"pass_user"` // send X-Corvus-User (users mode)
 }
 
 type underAttackJSON struct {
@@ -122,7 +134,8 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 	out := &rulesFile{Rules: []ruleJSON{}, Hosts: map[string]hostJSON{}, Geo: c.P.GeoFile(),
 		BlockPage:     filepath.ToSlash(filepath.Join(c.P.HTMLDir, "blocked.html")),
 		ErrorPage:     filepath.ToSlash(filepath.Join(c.P.HTMLDir, "error.html")),
-		ChallengePage: filepath.ToSlash(filepath.Join(c.P.HTMLDir, "challenge.html"))}
+		ChallengePage: filepath.ToSlash(filepath.Join(c.P.HTMLDir, "challenge.html")),
+		LoginPage:     filepath.ToSlash(filepath.Join(c.P.HTMLDir, "login.html"))}
 	if c.Bundle != nil {
 		if b := c.Bundle(); b != nil {
 			for _, sg := range b.Signatures {
@@ -198,6 +211,9 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 			hj.UnderAttack = &underAttackJSON{On: h.UnderAttack == "on",
 				challengeJSON: challengeJSON{Mode: uc.Mode, Difficulty: uc.Difficulty, TTL: uc.TTL, Bind: uc.Bind}}
 		}
+		if h.Login.Enabled {
+			hj.Login = hostLoginJSON(h.Login)
+		}
 		for i, sc := range scopes {
 			if sc.all || sc.hosts[h.ID] {
 				hj.Rules = append(hj.Rules, i+1)
@@ -220,6 +236,16 @@ func (c *Compiler) rulePolicy(ctx context.Context, s *store.Store, hosts []store
 		out.Hosts[redirectRuleKey(h.ID)] = hj
 	}
 	return out, nil
+}
+
+// hostLoginJSON is a host's login page for the gateway (defaults filled in).
+func hostLoginJSON(l store.HostLogin) *loginJSON {
+	hours := l.SessionHours
+	if hours <= 0 {
+		hours = validate.DefaultSessionHours
+	}
+	ex := append([]string{}, l.ExcludePaths...)
+	return &loginJSON{Mode: l.Mode, Hours: hours, Exclude: ex, PassUser: l.Mode == store.LoginUsers && l.PassUser}
 }
 
 // uaEntries expands User-Agent list references into lower-cased, de-duplicated

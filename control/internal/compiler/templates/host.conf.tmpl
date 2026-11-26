@@ -46,6 +46,9 @@
             proxy_set_header Forwarded "";
             # Framework-internal headers clients must never set (Next.js CVE-2025-29927).
             proxy_set_header X-Middleware-Subrequest "";
+            # The signed-in user of the login page ("pass user"), else nothing: a value a
+            # client sent is never passed on (corvus/rules.lua also removes it).
+            proxy_set_header X-Corvus-User $corvus_user;
 {{- if .Console}}
             # Admin console port: prove to the console that this request comes from the
             # gateway (a TCP stream to the console could not add it). Key from the environment.
@@ -189,6 +192,7 @@ server {
     set $corvus_ban "";
     set $corvus_skip "";
     set $corvus_auth "Restricted";
+    set $corvus_user "";
 {{- if .UploadLimit}}
     client_max_body_size {{.UploadLimit}};{{if eq .UploadLimit "0"}}   # unlimited{{end}}
 {{- end}}
@@ -274,6 +278,47 @@ server {
         default_type text/html;
         content_by_lua_block { require("corvus.rules").challenge_verify({{.ID}}) }
     }
+
+{{- if .Login.Enabled}}
+
+    # Login page ({{.Login.Mode}}, corvus/login.lua). Bans, block rules and the under-attack
+    # challenge still apply (server rewrite phase); sign-in attempts are rate-limited per
+    # client here and per client and user by corvus-control.
+    location = /__corvus/login {
+{{- if and .CertDir .SSLForced}}
+        if ($corvus_https_redirect) { return 301 https://$host$request_uri; }
+{{- end}}
+        client_max_body_size 8k;
+        client_body_buffer_size 8k;
+        limit_req zone=corvus_login_client burst=10 nodelay;
+        limit_req_status 429;
+        default_type text/html;
+        content_by_lua_block { require("corvus.rules").login_page({{.ID}}) }
+    }
+    location = /__corvus/logout {
+        client_max_body_size 4k;
+        client_body_buffer_size 4k;
+        limit_req zone=corvus_ch_client burst=20 nodelay;
+        limit_req_status 429;
+        default_type text/html;
+        content_by_lua_block { require("corvus.rules").logout({{.ID}}) }
+    }
+    # Credential check for the login page: corvus-control's sign-in socket. Subrequests
+    # only ("internal"); none of the visitor's headers are passed on.
+    location = /__corvus/signin-check {
+        internal;
+        rewrite_by_lua_block { return }
+        proxy_http_version 1.1;
+        proxy_pass_request_headers off;
+        proxy_set_header Host corvus-signin;
+        proxy_set_header Connection "";
+        proxy_set_header Content-Type application/json;
+        proxy_connect_timeout 3s;
+        proxy_send_timeout 10s;
+        proxy_read_timeout 20s;
+        proxy_pass http://unix:{{.P.DataDir}}/run/corvus-signin.sock:/v1/signin;
+    }
+{{- end}}
 
     # Upstream error pages (502/503/504, corvus/rules.lua). Named locations: not
     # reachable by clients; the security rules already ran for this request.

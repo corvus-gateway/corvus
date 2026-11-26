@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
+<title>Sign in</title>
+<style>
+  :root { --bg: #f5f6f8; --card: #fff; --fg: #0f172a; --muted: #5b6474; --line: #e7e9ee; --tile: #f6f7f9; --acc: #4f46e5; --acc-soft: rgba(79,70,229,.10); --bad: #c2410c; --bad-soft: rgba(194,65,12,.08); }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b0d12; --card: #14171d; --fg: #eef1f6; --muted: #a3abba; --line: #232832; --tile: #1a1e26; --acc: #a5b4fc; --acc-soft: rgba(165,180,252,.14); --bad: #fb923c; --bad-soft: rgba(251,146,60,.10); }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; background: var(--bg); color: var(--fg);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "PingFang SC", "Microsoft YaHei", "Hiragino Sans", "Yu Gothic", sans-serif; }
+  .card { width: 100%; max-width: 26rem; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 30px; box-shadow: 0 12px 32px -12px rgba(15,23,42,.18); }
+  .pill { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--acc); background: var(--acc-soft); padding: 4px 10px; border-radius: 999px; margin-bottom: 14px; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -.01em; }
+  .site { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13px; color: var(--muted); margin: 0 0 16px; overflow-wrap: anywhere; }
+  p { margin: 0 0 16px; color: var(--muted); }
+  html:lang(ko) p { word-break: keep-all; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 0 0 6px; }
+  input[type=text], input[type=password] { display: block; width: 100%; font: inherit; color: var(--fg); background: var(--tile); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; margin: 0 0 14px; }
+  input:focus { outline: 2px solid var(--acc); outline-offset: 1px; }
+  button, .btn { display: inline-block; font: inherit; font-weight: 600; color: #fff; background: var(--acc); border: 0; border-radius: 10px; padding: 9px 18px; cursor: pointer; text-decoration: none; }
+  button.quiet { color: var(--fg); background: var(--tile); border: 1px solid var(--line); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .err { display: none; color: var(--bad); background: var(--bad-soft); border-radius: 10px; padding: 9px 12px; margin: 0 0 16px; font-size: 14px; }
+  .qr { display: block; width: 200px; height: 200px; margin: 0 auto 12px; background: #fff; border-radius: 12px; padding: 8px; image-rendering: pixelated; }
+  .qr[src=""] { display: none; }
+  .key { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13px; background: var(--tile); border-radius: 10px; padding: 8px 12px; margin: 0 0 16px; overflow-wrap: anywhere; user-select: all; }
+  .s, .m { display: none; }
+  main[data-state="signin"] .s-signin, main[data-state="totp"] .s-totp, main[data-state="enroll"] .s-enroll,
+  main[data-state="signedin"] .s-signedin, main[data-state="unavailable"] .s-unavailable { display: block; }
+  main[data-mode="pin"] .m-pin, main[data-mode="users"] .m-users { display: block; }
+  main[data-error="fail"] .e-fail, main[data-error="expired"] .e-expired, main[data-error="limited"] .e-limited,
+  main[data-error="unavailable"] .e-unavailable, main[data-error="code"] .e-code { display: block; }
+  footer { margin-top: 18px; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+  <main class="card" id="main" data-mode="{{MODE}}" data-state="{{STATE}}" data-error="{{ERROR}}">
+    <span class="pill" data-t="0">Private site</span>
+    <h1 data-t="1">Sign in</h1>
+    <div class="site">{{HOST}}</div>
+
+    <div class="err e-fail" role="alert" data-t="15">The sign-in details are not correct.</div>
+    <div class="err e-expired" role="alert" data-t="16">The form expired. Please try again.</div>
+    <div class="err e-limited" role="alert" data-t="17" data-n="{{RETRY}}">Too many attempts. Please try again in {{RETRY}} seconds.</div>
+    <div class="err e-unavailable" role="alert" data-t="18">Signing in is not possible right now. Please try again later.</div>
+    <div class="err e-code" role="alert" data-t="19">The code is not correct. Please try again.</div>
+
+    <div class="s s-signin">
+      <p data-t="2">Sign in to continue to this site.</p>
+      <form class="m m-users" method="post" action="/__corvus/login">
+        <input type="hidden" name="csrf" value="{{CSRF}}">
+        <input type="hidden" name="r" value="{{RETURN}}">
+        <label for="u-name" data-t="3">User name</label>
+        <input type="text" id="u-name" name="username" value="{{USER}}" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="64" required>
+        <label for="u-pass" data-t="4">Password</label>
+        <input type="password" id="u-pass" name="secret" autocomplete="current-password" maxlength="1024" required>
+        <button type="submit" data-t="6">Sign in</button>
+      </form>
+      <form class="m m-pin" method="post" action="/__corvus/login">
+        <input type="hidden" name="csrf" value="{{CSRF}}">
+        <input type="hidden" name="r" value="{{RETURN}}">
+        <label for="p-pin" data-t="5">PIN or password</label>
+        <input type="password" id="p-pin" name="secret" autocomplete="current-password" maxlength="1024" required>
+        <button type="submit" data-t="6">Sign in</button>
+      </form>
+    </div>
+
+    <form class="s s-totp" method="post" action="/__corvus/login">
+      <input type="hidden" name="csrf" value="{{CSRF}}">
+      <input type="hidden" name="r" value="{{RETURN}}">
+      <input type="hidden" name="step" value="{{STEP}}">
+      <p data-t="7">Enter the 6-digit code from your authenticator app.</p>
+      <label for="t-code" data-t="8">Code</label>
+      <input type="text" id="t-code" name="code" inputmode="numeric" pattern="[0-9 ]{6,8}" autocomplete="one-time-code" maxlength="8" required>
+      <button type="submit" data-t="9">Verify</button>
+    </form>
+
+    <form class="s s-enroll" method="post" action="/__corvus/login">
+      <input type="hidden" name="csrf" value="{{CSRF}}">
+      <input type="hidden" name="r" value="{{RETURN}}">
+      <input type="hidden" name="step" value="{{STEP}}">
+      <p data-t="10">Two-step sign-in is required. Scan this QR code with an authenticator app (or enter the key), then enter the code it shows.</p>
+      <img class="qr" src="{{QR}}" alt="QR code" width="200" height="200">
+      <label data-t="11">Key</label>
+      <div class="key">{{KEY}}</div>
+      <label for="e-code" data-t="8">Code</label>
+      <input type="text" id="e-code" name="code" inputmode="numeric" pattern="[0-9 ]{6,8}" autocomplete="one-time-code" maxlength="8" required>
+      <button type="submit" data-t="9">Verify</button>
+    </form>
+
+    <div class="s s-signedin">
+      <p data-t="12">You are signed in.</p>
+      <form class="row" method="post" action="/__corvus/logout">
+        <input type="hidden" name="csrf" value="{{CSRF}}">
+        <a class="btn" href="{{RETURN}}" data-t="13">Continue</a>
+        <button type="submit" class="quiet" data-t="14">Sign out</button>
+      </form>
+    </div>
+
+    <footer>Protected by Corvus AWPG</footer>
+  </main>
+<script>
+// Texts in the browser's language; the page works without this (English, plain forms).
+(function () {
+  var L = {
+    ko: ["비공개 사이트", "로그인", "이 사이트를 이용하려면 로그인하세요.", "사용자 이름", "비밀번호", "PIN 또는 비밀번호", "로그인", "인증 앱에 표시된 6자리 코드를 입력하세요.", "코드", "확인", "2단계 인증이 필요합니다. 인증 앱으로 이 QR 코드를 스캔하거나 키를 입력한 다음, 앱에 표시된 코드를 입력하세요.", "키", "로그인되어 있습니다.", "계속", "로그아웃", "로그인 정보가 올바르지 않습니다.", "입력 시간이 지났습니다. 다시 시도하세요.", "시도 횟수가 너무 많습니다. %s초 후에 다시 시도하세요.", "지금은 로그인할 수 없습니다. 잠시 후 다시 시도하세요.", "코드가 올바르지 않습니다. 다시 입력하세요."],
+    zh: ["私密网站", "登录", "请登录以继续访问本网站。", "用户名", "密码", "PIN 或密码", "登录", "请输入身份验证器应用中显示的 6 位代码。", "代码", "验证", "需要两步验证。请用身份验证器应用扫描此二维码（或输入密钥），然后输入应用显示的代码。", "密钥", "您已登录。", "继续", "退出登录", "登录信息不正确。", "表单已过期，请重试。", "尝试次数过多。请在 %s 秒后重试。", "目前无法登录，请稍后再试。", "代码不正确，请重试。"],
+    ja: ["非公開サイト", "サインイン", "このサイトを利用するにはサインインしてください。", "ユーザー名", "パスワード", "PIN またはパスワード", "サインイン", "認証アプリに表示されている 6 桁のコードを入力してください。", "コード", "確認", "2 段階認証が必要です。認証アプリでこの QR コードを読み取るか、キーを入力してから、アプリに表示されたコードを入力してください。", "キー", "サインインしています。", "続ける", "サインアウト", "サインイン情報が正しくありません。", "フォームの有効期限が切れました。もう一度お試しください。", "試行回数が多すぎます。%s 秒後にもう一度お試しください。", "現在サインインできません。しばらくしてからもう一度お試しください。", "コードが正しくありません。もう一度お試しください。"],
+    ru: ["Закрытый сайт", "Вход", "Войдите, чтобы продолжить.", "Имя пользователя", "Пароль", "PIN-код или пароль", "Войти", "Введите 6-значный код из приложения-аутентификатора.", "Код", "Подтвердить", "Требуется двухэтапный вход. Отсканируйте этот QR-код приложением-аутентификатором (или введите ключ), затем введите показанный код.", "Ключ", "Вы вошли.", "Продолжить", "Выйти", "Неверные данные для входа.", "Срок действия формы истёк. Попробуйте ещё раз.", "Слишком много попыток. Повторите через %s с.", "Сейчас войти невозможно. Попробуйте позже.", "Неверный код. Попробуйте ещё раз."],
+    fr: ["Site privé", "Connexion", "Connectez-vous pour accéder à ce site.", "Nom d'utilisateur", "Mot de passe", "PIN ou mot de passe", "Se connecter", "Saisissez le code à 6 chiffres affiché par votre application d'authentification.", "Code", "Vérifier", "La connexion en deux étapes est requise. Scannez ce code QR avec une application d'authentification (ou saisissez la clé), puis saisissez le code affiché.", "Clé", "Vous êtes connecté.", "Continuer", "Se déconnecter", "Les informations de connexion sont incorrectes.", "Le formulaire a expiré. Veuillez réessayer.", "Trop de tentatives. Réessayez dans %s secondes.", "La connexion est impossible pour le moment. Réessayez plus tard.", "Le code est incorrect. Veuillez réessayer."],
+    de: ["Privater Bereich", "Anmelden", "Melden Sie sich an, um diese Website zu nutzen.", "Benutzername", "Passwort", "PIN oder Passwort", "Anmelden", "Geben Sie den 6-stelligen Code aus Ihrer Authenticator-App ein.", "Code", "Bestätigen", "Die Zwei-Schritt-Anmeldung ist erforderlich. Scannen Sie diesen QR-Code mit einer Authenticator-App (oder geben Sie den Schlüssel ein) und geben Sie dann den angezeigten Code ein.", "Schlüssel", "Sie sind angemeldet.", "Weiter", "Abmelden", "Die Anmeldedaten sind nicht korrekt.", "Das Formular ist abgelaufen. Bitte versuchen Sie es erneut.", "Zu viele Versuche. Bitte versuchen Sie es in %s Sekunden erneut.", "Die Anmeldung ist gerade nicht möglich. Bitte versuchen Sie es später erneut.", "Der Code ist nicht korrekt. Bitte versuchen Sie es erneut."],
+    es: ["Sitio privado", "Iniciar sesión", "Inicie sesión para continuar en este sitio.", "Nombre de usuario", "Contraseña", "PIN o contraseña", "Iniciar sesión", "Introduzca el código de 6 dígitos de su aplicación de autenticación.", "Código", "Verificar", "Se requiere el inicio de sesión en dos pasos. Escanee este código QR con una aplicación de autenticación (o introduzca la clave) y luego introduzca el código que muestra.", "Clave", "Ha iniciado sesión.", "Continuar", "Cerrar sesión", "Los datos de inicio de sesión no son correctos.", "El formulario ha caducado. Inténtelo de nuevo.", "Demasiados intentos. Inténtelo de nuevo en %s segundos.", "Ahora no es posible iniciar sesión. Inténtelo más tarde.", "El código no es correcto. Inténtelo de nuevo."]
+  };
+  var langs = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
+  for (var i = 0; i < langs.length; i++) {
+    var p = String(langs[i] || "").toLowerCase().split("-")[0];
+    if (p === "en") break;
+    if (L[p]) {
+      var S = L[p];
+      document.documentElement.lang = p === "zh" ? "zh-CN" : p;
+      document.title = S[1];
+      var els = document.querySelectorAll("[data-t]");
+      for (var j = 0; j < els.length; j++) {
+        var t = S[parseInt(els[j].getAttribute("data-t"), 10)];
+        if (t) els[j].textContent = t.replace("%s", els[j].getAttribute("data-n") || "");
+      }
+      break;
+    }
+  }
+  var vis = document.querySelectorAll("input[type=text], input[type=password]");
+  for (var k = 0; k < vis.length; k++) {
+    if (vis[k].offsetParent !== null && !vis[k].value) { vis[k].focus(); break; }
+  }
+})();
+</script>
+</body>
+</html>

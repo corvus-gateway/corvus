@@ -12,7 +12,8 @@
 -- attack-pattern map ($corvus_exploit), body inspection runs, and hosts in "under
 -- attack" mode challenge every remaining visitor without a pass (corvus/underattack.lua).
 -- Precedence: bans → block / allow / challenge rules → exploit and body blocking →
--- under-attack challenge → (later phases) rate limiting, Basic auth, access queue.
+-- under-attack challenge → login page (corvus/login.lua; skipped by allow rules with
+-- "skip Basic auth") → (later phases) rate limiting, Basic auth, access queue.
 --
 -- Expressions are in disjunctive normal form: any group whose conditions all match.
 
@@ -21,6 +22,7 @@ local body = require "corvus.body"
 local ualist = require "corvus.ualist"
 local challenge = require "corvus.challenge"
 local underattack = require "corvus.underattack"
+local login = require "corvus.login"
 local accesslog = require "corvus.accesslog"
 local ipkey = require "corvus.ipkey"
 local iplist = require "corvus.iplist"
@@ -40,6 +42,11 @@ local ERROR_PAGE = "<!doctype html><title>Unavailable</title><p>The site is temp
 local CHALLENGE_PAGE = [[<!doctype html><meta charset=utf-8><title>Checking your browser</title>]]
   .. [[<form method=post action="/__corvus/challenge/verify"><input type=hidden name=t value="{{TOKEN}}">]]
   .. [[<input type=hidden name=r value="{{RETURN}}"><button>Continue</button></form>]]
+local LOGIN_PAGE = [[<!doctype html><meta charset=utf-8><title>Sign in</title>]]
+  .. [[<form method=post action="/__corvus/login"><input type=hidden name=csrf value="{{CSRF}}">]]
+  .. [[<input type=hidden name=r value="{{RETURN}}"><input type=hidden name=step value="{{STEP}}">]]
+  .. [[<input name=username autocomplete=username><input type=password name=secret autocomplete=current-password>]]
+  .. [[<input name=code autocomplete=one-time-code><button>Sign in</button></form>]]
 
 pcall(ffi.cdef, "int memcmp(const void *s1, const void *s2, size_t n);")
 
@@ -269,9 +276,10 @@ function _M.init(path)
     local ua = underattack.settings(h.under_attack)
     HOSTS[tonumber(hid) or hid] = { rules = list, cf = h.cf and true or false, exploits = h.exploits and true or false,
       body = h.body or "off", body_max = tonumber(h.body_max) or 1048576,
-      ua = ua, ua_rule = ua and { id = underattack.RULE, ch = ua.ch } or nil }
+      ua = ua, ua_rule = ua and { id = underattack.RULE, ch = ua.ch } or nil,
+      login = login.settings(h.login) }
     local hc = HOSTS[tonumber(hid) or hid]
-    hc.idle = #list == 0 and not hc.exploits and hc.body == "off" and not ua
+    hc.idle = #list == 0 and not hc.exploits and hc.body == "off" and not ua and not hc.login
   end
   GEO = load_geo(cfg.geo)
   if cfg.body_signatures then body.set_signatures(cfg.body_signatures) end
@@ -284,7 +292,11 @@ function _M.init(path)
   if cfg.challenge_page then
     CHALLENGE_PAGE = read_file(cfg.challenge_page) or CHALLENGE_PAGE
   end
+  if cfg.login_page then
+    LOGIN_PAGE = read_file(cfg.login_page) or LOGIN_PAGE
+  end
   challenge.init()
+  login.init()
 end
 
 -- ------------------------------------------------------------------ under attack
@@ -489,7 +501,71 @@ local function banned(bans, ip)
   return false
 end
 
+-- ------------------------------------------------------------------ login page
+
+-- Session versions pushed by corvus-control (corvus_signin: "data" = JSON, "v" = counter),
+-- decoded once per worker and version.
+local SI_V, SI_ST = nil, nil
+
+local function signin_state()
+  local d = ngx.shared.corvus_signin
+  if not d then return nil end
+  local v = d:get("v")
+  if not v then return nil end
+  if v ~= SI_V then
+    SI_ST = login.normalize_state(cjson.decode(d:get("data") or ""))
+    SI_V = v
+  end
+  return SI_ST
+end
+
+-- The request's valid session for the host (parsed cookie) and the pushed state, or nil.
+local function valid_session(host_id, lg)
+  local tok = ngx.var["cookie_" .. login.COOKIE]
+  if not tok then return nil end
+  local s = login.parse_session(tok, host_id, ngx.var.host, ngx.time())
+  if not s then return nil end
+  local st = signin_state()
+  if not login.session_ok(s, host_id, lg.mode, st) then return nil end
+  return s, st
+end
+
+-- Login check of the rewrite phase (after the under-attack challenge). A request with a
+-- valid session goes on (its session cookie is not passed to the backend; with "pass
+-- user" the user name is sent as X-Corvus-User); anything else is answered here.
+local function login_check(host_id, lg, uri)
+  if login.exempt_path(uri) or login.excluded(uri, ngx.var.request_uri, lg.exclude) then return end
+  local s, st = valid_session(host_id, lg)
+  if s then
+    local raw = ngx.var.http_cookie
+    if raw then
+      local rest = login.strip_cookie(ngx.req.get_headers()["cookie"] or raw)
+      if rest == "" then ngx.req.clear_header("Cookie") else ngx.req.set_header("Cookie", rest) end
+    end
+    if lg.pass_user and s.uid > 0 then
+      local name = login.header_name(st.names[s.uid])
+      if name then
+        ngx.var.corvus_user = name
+        ngx.req.set_header("X-Corvus-User", name)
+      end
+    end
+    return
+  end
+  ngx.var.corvus_rule = "login:required"
+  ngx.ctx.corvus_ch = true   -- not bad behaviour (see _M.log)
+  ngx.header["Cache-Control"] = "no-store"
+  if login.wants_page(ngx.req.get_method(), ngx.var.http_accept) then
+    return ngx.redirect(login.PAGE .. "?r=" .. ngx.escape_uri(login.return_target(ngx.var.request_uri, challenge.safe_return)), 302)
+  end
+  ngx.status = 401
+  ngx.header["Content-Type"] = "application/json"
+  ngx.print('{"error":"login_required","message":"Sign in first"}')
+  return ngx.exit(ngx.HTTP_OK)
+end
+
 function _M.rewrite(host_id)
+  -- X-Corvus-User comes only from the login page (see login_check), never from a client.
+  if ngx.var.http_x_corvus_user ~= nil then ngx.req.clear_header("X-Corvus-User") end
   local host = HOSTS[host_id]
   if not host then return end
 
@@ -524,9 +600,14 @@ function _M.rewrite(host_id)
         if a == "block" then
           return deny(rule.status)
         end
-        -- allow: skip later rules, attack-pattern blocking and rate limiting
+        -- allow: skip later rules, attack-pattern blocking and rate limiting; with "skip
+        -- Basic auth" also the login page
         ngx.var.corvus_skip = "1"
-        if rule.skip_auth then ngx.var.corvus_auth = "off" end
+        if rule.skip_auth then
+          ngx.var.corvus_auth = "off"
+          return
+        end
+        if host.login then return login_check(host_id, host.login, uri) end
         return
       end
     end
@@ -567,6 +648,8 @@ function _M.rewrite(host_id)
       end
     end
   end
+  -- Login page: every request needs a valid session (excluded paths aside).
+  if host.login then return login_check(host_id, host.login, uri) end
 end
 
 -- content_by_lua of /__corvus/challenge/verify (every proxy and redirection host):
@@ -599,6 +682,149 @@ function _M.challenge_verify(host_id)
   if not rule then return deny(403) end
   ngx.var.corvus_rule = tag .. ":challenge_fail"
   return send_challenge(rule, ret)
+end
+
+-- ------------------------------------------------------------------ login page endpoints
+
+-- The form nonce cookie (see corvus/login.lua): reused while present, otherwise a new one.
+local function form_nonce()
+  local n = ngx.var["cookie_" .. login.NONCE_COOKIE]
+  if type(n) == "string" and #n == 32 and not find(n, "[^0-9a-f]") then return n, nil end
+  local rrandom = require "resty.random"
+  local crypto = require "corvus.crypto"
+  n = crypto.to_hex(rrandom.bytes(16, true) or rrandom.bytes(16))
+  local c = login.NONCE_COOKIE .. "=" .. n .. "; Path=/__corvus/; Max-Age=" .. login.FORM_TTL .. "; HttpOnly; SameSite=Strict"
+  if ngx.var.scheme == "https" then c = c .. "; Secure" end
+  return n, c
+end
+
+-- Serves the login page. state: signin | totp | enroll | signedin | unavailable;
+-- v: page values (ERROR, RETURN, USER, STEP, QR, KEY, RETRY).
+local function login_view(host_id, lg, state, v, status, cookies)
+  local nonce, nc = form_nonce()
+  cookies = cookies or {}
+  if nc then cookies[#cookies + 1] = nc end
+  if #cookies > 0 then ngx.header["Set-Cookie"] = cookies end
+  ngx.header["X-Robots-Tag"] = "noindex"
+  ngx.header["X-Frame-Options"] = "DENY"
+  ngx.header["Referrer-Policy"] = "no-referrer"
+  v.MODE = lg.mode
+  v.STATE = state
+  v.ERROR = v.ERROR or ""
+  v.CSRF = login.make_form(host_id, ngx.var.host, nonce, ngx.time())
+  return send_page(LOGIN_PAGE, status or 200, v)
+end
+
+local function post_arg(args, k, max)
+  local v = args[k]
+  if type(v) == "table" then v = v[1] end
+  if type(v) ~= "string" or #v > max then return "" end
+  return v
+end
+
+-- content_by_lua of /__corvus/login (hosts with a login page). GET shows the form; POST
+-- checks it with corvus-control (sign-in socket, internal location /__corvus/signin-check),
+-- then signs the session cookie and goes back to r. Fails closed: when corvus-control
+-- cannot be asked, nobody new signs in (existing sessions stay valid).
+-- Log field $corvus_rule: "login:succeeded" / "login:failed" / "login:limited" /
+-- "login:totp" / "login:enroll".
+function _M.login_page(host_id)
+  ngx.ctx.corvus_ch = true
+  local host = HOSTS[host_id]
+  local lg = host and host.login
+  if not lg then return ngx.exit(404) end
+  local method = ngx.req.get_method()
+  if method == "GET" or method == "HEAD" then
+    local q = ngx.req.get_uri_args(8)
+    local r = q.r
+    if type(r) == "table" then r = r[1] end
+    local ret = login.return_target(r, challenge.safe_return)
+    return login_view(host_id, lg, valid_session(host_id, lg) and "signedin" or "signin", { RETURN = ret })
+  end
+  if method ~= "POST" then
+    ngx.header["Allow"] = "GET, POST"
+    return ngx.exit(405)
+  end
+  ngx.req.read_body()
+  local args = ngx.req.get_post_args(12)
+  if type(args) ~= "table" then args = {} end
+  local ret = login.return_target(post_arg(args, "r", 2048), challenge.safe_return)
+  local user = lg.mode == "users" and post_arg(args, "username", 128) or ""
+  local now = ngx.time()
+  if not login.check_form(post_arg(args, "csrf", 100), host_id, ngx.var.host,
+      ngx.var["cookie_" .. login.NONCE_COOKIE], now) then
+    -- the form is too old, or was not loaded in this browser: show a fresh one
+    return login_view(host_id, lg, "signin", { ERROR = "expired", RETURN = ret, USER = user }, 403)
+  end
+  local step = login.safe_step(post_arg(args, "step", 128))
+  local req = cjson.encode({
+    host_id = host_id, host = ngx.var.host or "", client = ipkey.client(ngx.var.remote_addr),
+    username = user, secret = step == "" and post_arg(args, "secret", 1024) or "",
+    step = step, code = step ~= "" and (string.gsub(post_arg(args, "code", 16), "%s", "")) or "",
+  })
+  local res = ngx.location.capture("/__corvus/signin-check", { method = ngx.HTTP_POST, body = req })
+  local out = res and res.status == 200 and cjson.decode(res.body or "")
+  if type(out) ~= "table" then
+    ngx.log(ngx.ERR, "corvus login: the sign-in check is unavailable (status ",
+      tostring(res and res.status), "); nobody can sign in until corvus-control answers")
+    return login_view(host_id, lg, "signin", { ERROR = "unavailable", RETURN = ret, USER = user }, 503)
+  end
+  local tag = login.rule_tag(out.event)
+  if tag then ngx.var.corvus_rule = tag end
+  local result = out.result
+  if result == "ok" then
+    local uid, ver = tonumber(out.user_id) or 0, tonumber(out.version)
+    -- a PIN sign-in on a users host (or the reverse) can only follow a settings change
+    if not ver or (lg.mode == "pin") ~= (uid == 0) then
+      return login_view(host_id, lg, "signin", { ERROR = "unavailable", RETURN = ret }, 503)
+    end
+    local hours = math.floor(tonumber(out.hours) or lg.hours)
+    if hours < 1 or hours > login.MAX_HOURS then hours = lg.hours end
+    local https = ngx.var.scheme == "https"
+    ngx.header["Set-Cookie"] = login.session_cookie(login.make_session(host_id, uid, ver, hours, ngx.var.host, now), hours, https)
+    ngx.header["Cache-Control"] = "no-store"
+    return ngx.redirect(ret, 303)
+  end
+  local failed = out.event == "login_failed"
+  if result == "totp" or result == "enroll" then
+    local st = login.safe_step(out.step)
+    if st ~= "" then
+      return login_view(host_id, lg, result, { ERROR = failed and "code" or "", RETURN = ret, STEP = st,
+        QR = login.safe_qr(out.qr_png), KEY = login.safe_key(out.key) }, failed and 401 or 200)
+    end
+  elseif result == "limited" then
+    local after = math.floor(tonumber(out.retry_after) or 60)
+    if after < 1 then after = 1 end
+    ngx.header["Retry-After"] = after
+    return login_view(host_id, lg, "signin", { ERROR = "limited", RETRY = after, RETURN = ret, USER = user }, 429)
+  elseif result == "unavailable" then
+    return login_view(host_id, lg, "unavailable", { ERROR = "unavailable", RETURN = ret }, 503)
+  end
+  -- wrong credentials (never which part), or a second step that ran out
+  return login_view(host_id, lg, "signin", { ERROR = "fail", RETURN = ret, USER = user }, 401)
+end
+
+-- content_by_lua of /__corvus/logout: POST only, from the login page (form token) or
+-- from a page of the same site (Origin), clears the session cookie.
+function _M.logout(host_id)
+  ngx.ctx.corvus_ch = true
+  if ngx.req.get_method() ~= "POST" then
+    ngx.header["Allow"] = "POST"
+    return ngx.exit(405)
+  end
+  ngx.req.read_body()
+  local args = ngx.req.get_post_args(4)
+  if type(args) ~= "table" then args = {} end
+  local same = login.check_form(post_arg(args, "csrf", 100), host_id, ngx.var.host,
+    ngx.var["cookie_" .. login.NONCE_COOKIE], ngx.time())
+  if not same then
+    local origin = ngx.var.http_origin
+    same = type(origin) == "string" and origin == ngx.var.scheme .. "://" .. (ngx.var.http_host or "")
+  end
+  if not same then return deny(403) end
+  ngx.header["Set-Cookie"] = login.clear_cookie(ngx.var.scheme == "https")
+  ngx.header["Cache-Control"] = "no-store"
+  return ngx.redirect(login.PAGE, 303)
 end
 
 -- The status-port handlers below change or read the gateway's protection state. They
@@ -740,6 +966,41 @@ function _M.set_under_attack()
   for _, k in ipairs(d:get_keys(0)) do
     if sub(k, 1, 2) == "h:" and not keep[k] then d:delete(k) end
   end
+  ngx.say(n)
+end
+
+-- Status-port handler: replace the sign-in session versions (login pages). Body:
+--   {"users": {"<id>": <version>}, "names": {"<id>": "<name>"},
+--    "hosts": {"<host id>": <pin version>}, "access": {"<host id>": [<user id>, ...]}}
+-- (see corvus/login.lua normalize_state). Stored whole; every worker decodes it once per
+-- version. Until the first push no session is valid (fail closed).
+function _M.set_signin_sessions()
+  if not _M.status_key_ok() then return end
+  ngx.req.read_body()
+  local data = ngx.req.get_body_data()
+  local st = data and login.normalize_state(cjson.decode(data))
+  if not st then
+    ngx.status = 400
+    ngx.say("bad request")
+    return
+  end
+  local d = ngx.shared.corvus_signin
+  if not d then
+    ngx.status = 503
+    ngx.say("no sign-in store")
+    return
+  end
+  if d:get("data") ~= data or not d:get("v") then
+    local ok, err = d:set("data", data)
+    if not ok then
+      ngx.status = 507
+      ngx.say("sign-in store: ", tostring(err))
+      return
+    end
+    d:incr("v", 1, 0)
+  end
+  local n = 0
+  for _ in pairs(st.users) do n = n + 1 end
   ngx.say(n)
 end
 
