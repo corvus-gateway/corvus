@@ -47,6 +47,7 @@ export const koSignin = {
   siPickMembers: "사용자 선택",
   siMembersN: "{n}명",
   siHostsN: "호스트 {n}개",
+  siHostOne: "호스트 1개",
   siNoGroups: "그룹이 없습니다",
   siNoGroupsDesc: "그룹을 만들어 사용자를 묶으면 프록시 호스트에서 허용할 수 있습니다.",
   siGroupSaved: "그룹을 저장했습니다",

@@ -47,6 +47,7 @@ export const signinStrings: Record<SigninKey, string> = {
   siPickMembers: "ユーザーを選択",
   siMembersN: "{n} 人",
   siHostsN: "{n} ホスト",
+  siHostOne: "1 ホスト",
   siNoGroups: "グループがありません",
   siNoGroupsDesc: "ユーザーをグループにまとめると、プロキシホストで許可できます。",
   siGroupSaved: "グループを保存しました",

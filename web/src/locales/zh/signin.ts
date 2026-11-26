@@ -47,6 +47,7 @@ export const signinStrings: Record<SigninKey, string> = {
   siPickMembers: "选择用户",
   siMembersN: "{n} 名成员",
   siHostsN: "{n} 个主机",
+  siHostOne: "1 个主机",
   siNoGroups: "暂无分组",
   siNoGroupsDesc: "把用户归入分组后，即可在代理主机中允许他们。",
   siGroupSaved: "分组已保存",
