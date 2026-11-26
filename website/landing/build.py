@@ -23,6 +23,7 @@ import os
 import re
 import shutil
 import sys
+from urllib.parse import quote
 from xml.sax.saxutils import escape
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -172,6 +173,8 @@ def render(lang: str) -> None:
         "yes": CHECK.format(texts["yes_sr"]),
         "no": DASH.format(texts["no_sr"]),
         "jsonld": jsonld(lang, texts, home, docs, prefix),
+        # The prompt for the "ask your favourite AI" links, as a URL query value.
+        "ai_q": quote(texts["ai_prompt"], safe=""),
     })
     # Attribute values (title, description) must not break out of their quotes.
     for key in ("title", "description"):

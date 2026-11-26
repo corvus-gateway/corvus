@@ -1,7 +1,7 @@
 """Texts of the product homepage (template.html), English only.
 
 Values are inserted into the template as-is, so they may contain HTML. Keep facts in line with the
-docs (website/en/, website/ko/), and keep both languages in step.
+docs (website/en/, website/ko/).
 """
 
 EN = {
@@ -18,119 +18,88 @@ EN = {
     "nav_compare": "Compare",
     "nav_docs": "Docs",
     "nav_cta": "Get started",
+    "pill_oss": "Open source",
+    "pill_signed": "Signed releases · SBOM",
 
-    "hero_pill": "Reverse proxy with a built-in WAF",
-    "hero_h1": 'The reverse proxy<br class="br-lg"> that <span class="grad">defends your sites</span>',
-    "hero_lead": ("Free, open-source and self-hosted. Proxy hosts and free HTTPS as easy as Nginx Proxy "
-                  "Manager, plus attack blocking, automatic bans, a bot challenge, live traffic and a "
-                  "waiting room. One Docker container."),
+    # Hero
+    "hero_h1": 'The reverse proxy<br> that <span class="accent">defends your sites</span>',
+    "hero_lead": ("Proxy hosts and free HTTPS as easy as Nginx Proxy Manager, with attack blocking, "
+                  "automatic bans and a bot challenge built in. Free and open source, in one container."),
     "hero_cta1": "Install in 5 minutes",
     "hero_cta2": "View on GitHub",
-    "trust_free": "No paid edition",
-    "trust_langs": "8 languages",
-    "alt_dashboard": ("The Corvus console dashboard: requests per second, error rate, latency, blocked "
-                      "requests, live traffic chart and access queues"),
 
-    "ov_eyebrow": "One console",
-    "ov_h2": "Everything a public server needs, without the glue",
-    "ov_sub": ("A reverse proxy for TLS, a WAF, fail2ban, a log viewer and a queue for launch day: "
-               "Corvus is all of them, set up with safe defaults."),
-    "t1": "Proxy hosts", "t1d": "Domains, locations, redirects, TCP/UDP streams",
-    "t2": "Free HTTPS", "t2d": "Let's Encrypt with auto-renewal and wildcards",
-    "t3": "Built-in WAF", "t3d": "Exploit paths and request bodies, on by default",
-    "t4": "Automatic bans", "t4d": "Repeat attackers locked out, for longer each time",
-    "t5": "Security rules", "t5d": "IP, country, path, header and User-Agent",
-    "t6": "Waiting room", "t6d": "Admit up to your capacity, queue the rest",
-    "t7": "Live traffic", "t7d": "Requests, errors, latency and request logs",
-    "t8": "Alerts", "t8d": "Slack, Discord, Teams, Telegram and webhooks",
+    # Feature tabs
+    "tabs_label": "Features",
+    "explore": "Explore",
+    "tab1": "Proxy and<br>free HTTPS",
+    "tab2": "Attack blocking<br>and bans",
+    "tab3": "Rules and<br>bot challenge",
+    "tab4": "Live traffic<br>and alerts",
+    "tab5": "Waiting<br>room",
+    "tab6": "Import from<br>NPM",
 
-    "features_label": "Features",
-    "alt_hosts": "The proxy hosts list in the Corvus console",
-    "alt_check": "The proxy host form with a failed connection check explaining that the port refused the connection",
-    "alt_bans": "Automatic ban settings: detections, time window, first and longest ban, exempt networks",
-    "alt_rules": "The security rules list with block, allow and challenge rules and their matches in the last 24 hours",
-    "alt_traffic": "The traffic monitor: requests by status, latency percentiles and per-host statistics",
-    "alt_queues": "The access queues page with one active queue at 3% of its capacity",
-    "alt_queue_form": "The access queue form: capacity, admission rate and expiry times",
-    "alt_pages": "The block and error pages editor with a live preview",
-    "alt_page_form": "The proxy host form set to serve a maintenance page with status 503",
-    "f1_tag": "Proxy & HTTPS",
-    "f1_h": "Add a site with free HTTPS in a minute",
-    "f1_p": ("Enter the domain and where the app runs, then save. Corvus gets a Let's Encrypt "
-             "certificate, renews it on time and deploys the change right away."),
-    "f1_b1": "Wildcards, WebSocket, HTTP/2 and custom locations",
-    "f1_b2": "A connection check that says why a backend can't be reached",
-    "f1_b3": "Several backends per host, round-robin with failover",
-    "f1_more": "Your first proxy host",
+    "p1_h": "Proxy and HTTPS",
+    "p1_sub": "Add a site with free HTTPS in a minute",
+    "p1_b1": "<strong>Let's Encrypt</strong> certificates, renewed on time, wildcards via DNS",
+    "p1_b2": "<strong>WebSocket, HTTP/2</strong>, custom locations and TCP/UDP streams",
+    "p1_b3": "A <strong>connection check</strong> that says why a backend can't be reached",
+    "p1_alt": "The proxy host form in the Corvus console: domains, forward target and WebSocket support",
 
-    "f2_tag": "Protection",
-    "f2_h": "Protection is on from the first host",
-    "f2_p": ("Known exploit paths and request bodies are checked the moment a host is added, without "
-             "writing a single rule. IPs that keep attacking are banned automatically."),
-    "f2_b1": "Ban durations that double for repeat offenders",
-    "f2_b2": "Rate limits per host, exempt networks for your office",
-    "f2_b3": "Under attack mode that challenges every visitor of a host",
-    "f2_more": "How protection works",
+    "p2_h": "Attack blocking and bans",
+    "p2_sub": "Protection is on from the first host",
+    "p2_b1": "<strong>Exploit paths and request bodies</strong> checked by default, no rules to write",
+    "p2_b2": "<strong>Automatic bans</strong> for repeat attackers, twice as long each time",
+    "p2_b3": "<strong>Rate limits</strong> per host and an <strong>under attack</strong> mode",
+    "p2_alt": "The protection settings of a proxy host: rate limit, blocking known exploit paths, request body inspection and under attack mode",
 
-    "f3_tag": "Rules & challenge",
-    "f3_h": "Your own rules, and a bot check without a CAPTCHA",
-    "f3_p": ("Block, allow, log or challenge requests by IP, country, path, header or User-Agent. The "
-             "browser challenge is served by Corvus itself: no CAPTCHA provider, no third-party "
-             "service."),
-    "f3_b1": "Start from templates, try a rule in log-only mode first",
-    "f3_b2": "IP and User-Agent lists, including blocklists with millions of entries",
-    "f3_b3": "Country blocking with a monthly updated database",
-    "f3_more": "Security rules",
+    "p3_h": "Rules and bot challenge",
+    "p3_sub": "Your own rules, and a bot check without a CAPTCHA",
+    "p3_b1": "Block, allow, log or challenge by <strong>IP, country, path, header or User-Agent</strong>",
+    "p3_b2": "A <strong>browser challenge</strong> served by Corvus itself, no third-party service",
+    "p3_b3": "Try a rule in <strong>log-only mode</strong> first, or start from a template",
+    "p3_alt": "The security rules list with block, allow and challenge rules and their matches in the last 24 hours",
 
-    "f4_tag": "Monitoring",
-    "f4_h": "See everything that reaches your sites",
-    "f4_p": ("Live requests by status, latency percentiles, blocked requests and top paths for every "
-             "host. Search the request logs, follow security events and get an alert when something "
-             "is off."),
-    "f4_b1": "Request logs you can search and export",
-    "f4_b2": "Visitor statistics with referrers and UTM values",
-    "f4_b3": "Alerts to Slack, Discord, Teams, Telegram and more",
-    "f4_more": "Traffic monitor",
+    "p4_h": "Live traffic and alerts",
+    "p4_sub": "See everything that reaches your sites",
+    "p4_b1": "<strong>Live requests</strong> by status, latency percentiles and top paths",
+    "p4_b2": "<strong>Request logs</strong> you can search and export",
+    "p4_b3": "<strong>Alerts</strong> to Slack, Discord, Teams, Telegram, Mattermost or a webhook",
+    "p4_alt": "The traffic monitor: requests by status, latency percentiles and per-host statistics",
 
-    "f5_tag": "Access queue",
-    "f5_h": "A waiting room for launch day",
-    "f5_p": ("Let in only as many visitors as your service can handle and queue the rest in order. "
-             "Waiting visitors see their position on a page that refreshes by itself."),
-    "f5_b1": "Capacity and admission rate you choose",
-    "f5_b2": "Protect the whole site or only one path",
-    "f5_b3": "Waiting page in 8 languages, emergency release in one click",
-    "f5_more": "Access queue",
+    "p5_h": "Waiting room",
+    "p5_sub": "Let in what your service can handle, queue the rest",
+    "p5_b1": "<strong>Capacity and admission rate</strong> that you choose",
+    "p5_b2": "Protect the <strong>whole site or one path</strong>",
+    "p5_b3": "A waiting page in <strong>8 languages</strong>, emergency release in one click",
+    "p5_alt": "The access queue form: name, capacity, admission rate and expiry times",
 
-    "f6_tag": "Pages",
-    "f6_h": "Serve a page without a backend",
-    "f6_p": ("Coming soon, maintenance, a parked domain or your own HTML, answered by the gateway "
-             "itself. Security rules, HTTPS and statistics still apply."),
-    "f6_b1": "Ready-made templates in the visitor's language",
-    "f6_b2": "The right status code, such as 503 for maintenance",
-    "f6_b3": "Your own block and error pages, with a live preview",
-    "f6_more": "Pages without a backend",
+    "p6_h": "Import from NPM",
+    "p6_sub": "Bring your Nginx Proxy Manager setup with you",
+    "p6_b1": "<strong>Proxy hosts, redirections, streams, certificates</strong> and access lists",
+    "p6_b2": "A <strong>preview</strong> lists conflicts and skipped items before anything changes",
+    "p6_b3": "<strong>NPM itself is never changed</strong>, so you can go back at any time",
+    "p6_alt": "The import page: choose the NPM database type and the mounted NPM data path, then preview",
 
-    "npm_tag": "Coming from NPM?",
-    "npm_h": "Bring your Nginx Proxy Manager setup with you",
-    "npm_p": ("Corvus reads an NPM data folder and imports proxy hosts, redirection hosts, streams, "
-              "certificates and access lists. NPM itself is never changed, so you can go back at any "
-              "time."),
-    "npm_cta1": "Migration guide",
-    "npm_cta2": "Corvus vs NPM",
-    "npm_s1": "Mount the NPM data folder", "npm_s1d": "Read-only, into the Corvus container",
-    "npm_s2": "Review the preview", "npm_s2d": "Conflicts and skipped items are listed",
-    "npm_s3": "Pick what to import", "npm_s3d": "Hosts keep their certificates and access lists",
+    # Works with
+    "works_h": "Runs where you self-host, works with what you already use",
 
-    "video_eyebrow": "Video",
-    "video_h": "Watch the 2-minute intro",
-    "video_p": ("Adding a site with free HTTPS, attack blocking and bans, security rules and the "
-                "browser challenge, live traffic and the waiting room."),
-    "video_aria": "Watch the 2-minute intro video on YouTube",
-    "video_title": "Corvus in 2 minutes",
-    "video_len": "YouTube · 1:43",
+    # Diagram
+    "dg_h": "Put a shield in front of<br> everything you expose",
+    "dg_p": ("Corvus sits between the internet and your apps. Visitors get HTTPS and a fast site; "
+             "exploit probes, scanners and floods stop at the gateway and never reach your apps."),
+    "dg_label": "How requests flow through Corvus",
+    "dg_visitors": "Visitors", "dg_visitors_d": "Browsers and apps",
+    "dg_bots": "Bots and scanners", "dg_bots_d": "Exploit probes, floods",
+    "dg_https": "HTTPS",
+    "dg_blocked": "blocked",
+    "dg_allowed": "allowed",
+    "dg_corvus_d": "Checks every request",
+    "dg_c1": "IP bans", "dg_c2": "Security rules", "dg_c3": "WAF", "dg_c4": "Rate limits",
+    "dg_c5": "Challenge", "dg_c6": "Waiting room",
+    "dg_apps": "Your apps",
 
-    "inst_eyebrow": "Install",
-    "inst_h": "Up and running in five minutes",
+    # Install
+    "inst_h": "Up and running<br> in five minutes",
     "inst_p": ("One container holds the gateway, the admin console and the queue store. All you need "
                "is a Linux server with Docker, amd64 or arm64."),
     "inst_s1": "Save the <code>docker-compose.yml</code> and run <code>docker compose up -d</code>.",
@@ -142,29 +111,24 @@ EN = {
     "code_c2": "admin console",
     "code_term": "Terminal",
 
-    "tr_eyebrow": "Built in the open",
-    "tr_h": "Software you can check, not just trust",
-    "tr_sub": "A security tool should show its work. Here is how Corvus is built and shipped.",
-    "tr1": "Signed releases",
-    "tr1d": ("Images are signed with Sigstore cosign and ship with an SBOM and SLSA build provenance. "
-             '<a href="/docs/reference/hardened/">Verify an image</a>.'),
-    "tr2": "368 integration checks",
-    "tr2d": ("Every pull request builds the image and runs 368 checks against a real gateway, plus "
-             "Go, Lua and TypeScript tests and an upgrade test."),
-    "tr3": "OpenSSF Best Practices",
-    "tr3d": ('<a href="https://www.bestpractices.dev/projects/16315">OpenSSF Best Practices</a> '
-             "passing badge and Baseline-1, scored by OpenSSF Scorecard, CodeQL on every pull request."),
-    "tr4": "Nothing leaves your server",
-    "tr4d": ("Requests, logs and keys stay with you. No telemetry and no cloud account; the release "
-             "check can be turned off."),
-    "tr5": "AI-assisted, disclosed",
-    "tr5d": ("Built with an AI coding assistant; the maintainer reviews every change. Where and how "
-             'much: <a href="https://github.com/corvus-gateway/corvus/blob/main/AI-DECLARATION.md">AI '
-             "declaration</a>."),
-    "tr6": "Free, all of it",
-    "tr6d": "Apache-2.0. No paid edition, no feature held back, no license key.",
+    # Three things
+    "k_h": "Three things you should<br> know about Corvus",
+    "k1": "It's free and open source",
+    "k1d": ("Apache-2.0, with no paid edition, no feature held back and no license key. Read the code, "
+            "run it, change it."),
+    "k2": "It's one container, and it stays yours",
+    "k2d": ("The gateway, the console and the queue store run in one Docker container. Requests, logs "
+            "and keys stay on your server: no telemetry, no cloud account, and the release check can "
+            "be turned off."),
+    "k3": "It's built to be checked",
+    "k3d": ('Releases are signed and ship with an SBOM and build provenance '
+            '(<a href="/docs/reference/hardened/">verify an image</a>). 368 integration checks run on '
+            'every change. <a href="https://www.bestpractices.dev/projects/16315">OpenSSF Best '
+            'Practices</a> passing badge and Baseline-1. AI-assisted development is disclosed in the '
+            '<a href="https://github.com/corvus-gateway/corvus/blob/main/AI-DECLARATION.md">AI '
+            'declaration</a>.'),
 
-    "cmp_eyebrow": "Compare",
+    # Compare
     "cmp_h": "How Corvus compares",
     "cmp_sub": ("Good reverse proxies make different trade-offs. Here is where Corvus is different, "
                 "and where the others fit better."),
@@ -186,18 +150,32 @@ EN = {
     "yes_sr": "Yes",
     "no_sr": "No",
 
-    "final_h": "Put a shield in front of your apps today",
-    "final_p": "One container, five minutes, and every feature included.",
-    "final_cta2": "Read the docs",
+    # Video
+    "video_h": "Watch the 2-minute intro",
+    "video_p": ("Adding a site with free HTTPS, attack blocking and bans, security rules and the "
+                "browser challenge, live traffic and the waiting room."),
+    "video_aria": "Watch the 2-minute intro video on YouTube",
+    "video_len": "YouTube · 1:43",
 
+    # Final
+    "final_h": "Start with one site.<br> It takes five minutes.",
+    "final_cta2": "Read the docs",
+    "ai_h": "Short on time? Ask your favourite AI about Corvus",
+    "ai_prompt": ("Summarize Corvus (https://corvusgateway.org), the open-source reverse proxy with a "
+                  "built-in WAF: what it does, how it compares to Nginx Proxy Manager, and when it's "
+                  "the wrong choice."),
+
+    # Footer
     "foot_tag": "Open-source reverse proxy with a built-in WAF, automatic bans, live traffic and a waiting room.",
     "foot_label": "Footer",
     "foot_product": "Product",
-    "foot_releases": "Releases",
-    "foot_docs_home": "Documentation",
-    "foot_install": "Install",
-    "foot_migrate": "Migrate from NPM",
-    "foot_security": "Security",
     "foot_community": "Community",
+    "foot_project": "Project",
+    "foot_install": "Install",
+    "foot_security": "Security",
     "foot_discussions": "Discussions",
+    "foot_license": "License",
+    "foot_ai": "AI declaration",
+    "foot_releases": "Release notes",
+    "foot_ko": "한국어 문서",
 }
