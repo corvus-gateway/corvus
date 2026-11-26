@@ -121,7 +121,7 @@ EN = {
             "and keys stay on your server: no telemetry, no cloud account, and the release check can "
             "be turned off."),
     "k3": "It's built to be checked",
-    "k3d": ('Releases are signed and ship with an SBOM and build provenance '
+    "k3d": ('Releases are signed and ship with an SBOM and SLSA Build Level 3 provenance '
             '(<a href="/docs/reference/hardened/">verify an image</a>). 431 integration checks run on '
             'every change. <a href="https://www.bestpractices.dev/projects/16315">OpenSSF Best '
             'Practices</a> passing badge and Baseline-1. AI-assisted development is disclosed in the '
