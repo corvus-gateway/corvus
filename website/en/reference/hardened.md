@@ -28,16 +28,25 @@ docker compose -f docker-compose.hardened.yml up -d
 
 Release images are built by GitHub Actions from the tagged source and signed keylessly with
 [Sigstore](https://www.sigstore.dev/) cosign. There is no long-lived key to obtain: the signature
-proves the image came from the `release.yml` workflow of this repository. Use cosign 3 (or 2.6 with
+proves the image came from this repository's release workflow. Use cosign 3 (or 2.6 with
 `--new-bundle-format`).
+
+From 1.10.0 on, the build runs in a separate reusable workflow, `build-image.yml`, that the
+release workflow can only start, not change. Its build provenance meets
+[SLSA](https://slsa.dev/) v1.0 **Build Level 3**; releases up to 1.9.x were signed by `release.yml`
+directly (Build Level 2). The commands below accept both.
 
 ```bash
 cosign verify ghcr.io/corvus-gateway/gateway:1.9.2 \
-  --certificate-identity-regexp '^https://github.com/corvus-gateway/corvus/.github/workflows/release.yml@refs/tags/v' \
+  --certificate-identity-regexp '^https://github.com/corvus-gateway/corvus/.github/workflows/(build-image|release).yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 # build provenance (SLSA), with the GitHub CLI
 gh attestation verify oci://ghcr.io/corvus-gateway/gateway:1.9.2 --owner corvus-gateway
+
+# 1.10.0 and later: also require the isolated build workflow (SLSA Build Level 3)
+gh attestation verify oci://ghcr.io/corvus-gateway/gateway:<version> --owner corvus-gateway \
+  --signer-workflow corvus-gateway/corvus/.github/workflows/build-image.yml
 ```
 
 Each [GitHub release](https://github.com/corvus-gateway/corvus/releases) also has these files:
@@ -54,7 +63,7 @@ Check the downloaded files:
 
 ```bash
 cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
-  --certificate-identity-regexp '^https://github.com/corvus-gateway/corvus/.github/workflows/release.yml@refs/tags/v' \
+  --certificate-identity-regexp '^https://github.com/corvus-gateway/corvus/.github/workflows/(build-image|release).yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 sha256sum -c SHA256SUMS
 ```
