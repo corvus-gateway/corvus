@@ -42,6 +42,7 @@ so Corvus sees the real visitor IP.
 | | Pangolin | Corvus |
 |---|---|---|
 | Needs a public IP / open ports | No (tunnel) | Yes |
+| Login screen in front of apps (PIN, users) | ✅ | ✅ [login page](../security/login-page.md) |
 | SSO and roles in front of apps | ✅ | ❌ (console only) |
 | WAF | ❌ | ✅ |
 | Automatic bans | With CrowdSec | ✅ built in |

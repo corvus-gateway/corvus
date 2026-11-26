@@ -151,7 +151,7 @@ answers with a page itself: no forward host is needed, and **Check connection** 
 - The page answers every path and method (`GET /anything`, `POST /form` …); `HEAD` gets the headers
   only.
 - Everything else applies as for a host that forwards: security rules, bans, attack-pattern
-  blocking, "under attack" mode, rate limit, Basic auth, the access queue, Force HTTPS and HSTS,
+  blocking, "under attack" mode, rate limit, Basic auth or the login page, the access queue, Force HTTPS and HSTS,
   security headers, the access log and traffic statistics.
 - [Custom locations](locations.md) keep forwarding, for example a maintenance page at `/` while
   `/api` still reaches the backend. A location `/` is not allowed on a host that serves a page (it
@@ -304,7 +304,7 @@ but Cloudflare's addresses (a firewall on the tunnel server).
 | Option | What it does |
 |---|---|
 | **Rate limit policy** | Limits requests per IP. See [Bans & rate limits](../security/bans.md#rate-limits) |
-| **Password protection** | Asks for a username and password before the site opens (HTTP Basic auth). Good for staging sites and internal tools |
+| **Require sign-in** | **None**; **Password protection**: asks for a username and password before the site opens (HTTP Basic auth), good for staging sites and internal tools; or **Login page**: a Corvus login page with one PIN or password, or with sign-in users and optional two-step verification. See [Login page](../security/login-page.md) |
 | **Block known exploit paths** | Blocks common attack patterns: SQL injection, path traversal, scanner probes. **On by default** |
 | **Request body inspection** | Checks JSON, form and multipart bodies for known exploit payloads: **Off**, **Log only** or **Block**. In **Block** mode, bodies that cannot be fully inspected (compressed, malformed multipart, a body declared as JSON that is not valid JSON, a charset other than UTF-8 or another ASCII-compatible one, too many fields) are refused too. Bodies above the inspection size limit pass and are logged as not inspected |
 | **Under attack mode** | Makes every visitor pass a browser challenge. See [Challenge & under attack](../security/challenge.md) |

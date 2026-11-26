@@ -17,6 +17,7 @@ Corvus는 [Nginx Proxy Manager](https://nginxproxymanager.com/)(NPM)의 간단�
 | Let's Encrypt 자동 갱신 | ✅ | ✅ |
 | 와일드카드 인증서 (DNS 인증) | ✅ 다양한 DNS 업체 | ✅ 7개 업체(Cloudflare, DigitalOcean, DuckDNS, Gandi, GoDaddy, Hetzner, Namecheap). 토큰을 [저장해 여러 인증서에서 공유](../proxy/certificates.md) |
 | 비밀번호 보호(Basic auth)와 IP 접근 제한 | ✅ Access List | ✅ 비밀번호 보호와 [보안 규칙](../security/rules.md) |
+| 호스트 앞의 로그인 페이지(PIN 또는 사용자, 2단계 인증) | ❌ | ✅ [로그인 페이지](../security/login-page.md) |
 | 호스트별 nginx 설정 직접 추가 | ✅ | ✅ |
 | 등록되지 않은 호스트 응답 (404, 연결 끊기, 리다이렉트) | ✅ Default Site | ✅ [알 수 없는 호스트](../operations/pages.md#unknown-hosts) |
 | 알려진 공격 경로 차단 | ✅ 켜기/끄기 | ✅ 기본으로 켜짐, [유형별 분류와 기록](../security/index.md) |

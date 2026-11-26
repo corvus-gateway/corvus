@@ -56,7 +56,7 @@ November 2026. Projects change, so check their docs for anything that matters to
 | Bot challenge without a CAPTCHA service | ✅ | ❌ | ❌ | ❌ | 🧩 | ❌ | ✅ | ✅ | ❌ |
 | Waiting room for traffic spikes | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (edition unclear) | ❌ |
 | Request log / traffic view in the UI | ✅ | ❌ | ✅ GoAccess | ❌ | ❌ | ❓ | ✅ | ✅ | ✅ access logs |
-| SSO in front of your apps | ❌ | ❌ | ❌ | 🧩 forward_auth + IdP | 🧩 ForwardAuth + IdP | ❓ | 💲 | ❓ | ✅ |
+| SSO in front of your apps | ❌ [login page](../security/login-page.md) with its own users, no IdP | ❌ | ❌ | 🧩 forward_auth + IdP | 🧩 ForwardAuth + IdP | ❓ | 💲 | ❓ | ✅ |
 | Tunnel, no open ports needed | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 ❓ = not clearly documented. CrowdSec is not a reverse proxy, so it is not in the table; it adds
@@ -66,7 +66,9 @@ detection and community blocklists to the proxy you run ([details](crowdsec.md))
 
 - **You configure everything as code** (Docker labels, Kubernetes, GitOps). Corvus is managed in a
   console or its [HTTP API](../reference/api.md); Traefik or Caddy fit better.
-- **You need HTTP/3**, or single sign-on in front of your apps. Corvus has neither today.
+- **You need HTTP/3**, or single sign-on in front of your apps. Corvus has neither today: its
+  [login page](../security/login-page.md) signs people in to one host at a time with users kept in
+  Corvus, not through your identity provider.
 - **You need the OWASP Core Rule Set** with paranoia levels for compliance. Corvus uses its own,
   smaller signature set tuned to be on by default.
 - **Your server has no public IP.** Corvus needs ports 80 and 443 reachable; use a tunnel such as

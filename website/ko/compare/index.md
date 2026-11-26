@@ -56,7 +56,7 @@ Corvus 메인테이너가 썼으니 그 점을 감안하고 읽어 주세요. �
 | CAPTCHA 서비스 없는 봇 챌린지 | ✅ | ❌ | ❌ | ❌ | 🧩 | ❌ | ✅ | ✅ | ❌ |
 | 트래픽이 몰릴 때 접속 대기열 | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (에디션 불명확) | ❌ |
 | UI의 요청 로그 / 트래픽 화면 | ✅ | ❌ | ✅ GoAccess | ❌ | ❌ | ❓ | ✅ | ✅ | ✅ 접근 로그 |
-| 앱 앞의 SSO | ❌ | ❌ | ❌ | 🧩 forward_auth + IdP | 🧩 ForwardAuth + IdP | ❓ | 💲 | ❓ | ✅ |
+| 앱 앞의 SSO | ❌ 자체 사용자의 [로그인 페이지](../security/login-page.md), IdP 없음 | ❌ | ❌ | 🧩 forward_auth + IdP | 🧩 ForwardAuth + IdP | ❓ | 💲 | ❓ | ✅ |
 | 터널, 포트를 열 필요 없음 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 ❓ = 문서에 명확히 나와 있지 않음. CrowdSec은 리버스 프록시가 아니어서 표에 없습니다. 쓰고 있는
@@ -67,6 +67,8 @@ Corvus 메인테이너가 썼으니 그 점을 감안하고 읽어 주세요. �
 - **모든 것을 코드로 설정합니다**(Docker 라벨, Kubernetes, GitOps). Corvus는 콘솔이나
   [HTTP API](../reference/api.md)로 관리합니다. Traefik이나 Caddy가 더 잘 맞습니다.
 - **HTTP/3가 필요하거나**, 앱 앞에 SSO가 필요합니다. Corvus에는 현재 둘 다 없습니다.
+  Corvus의 [로그인 페이지](../security/login-page.md)는 Corvus 안의 사용자로 호스트마다 따로
+  로그인시키며, ID 공급자를 거치지 않습니다.
 - 규정 준수를 위해 paranoia level을 갖춘 **OWASP Core Rule Set이 필요합니다.** Corvus는 기본으로
   켜 둘 수 있게 조정한, 더 작은 자체 시그니처 세트를 씁니다.
 - **서버에 공인 IP가 없습니다.** Corvus는 80·443 포트로 접속할 수 있어야 합니다. Pangolin이나

@@ -92,9 +92,10 @@ IP 마스킹**을 켜면 트래픽 관제에서 내보낸 파일의 IP도 가려
     분석이 필요하면 [Umami](https://umami.is/), [Plausible](https://plausible.io/), Google Analytics 4
     같은 도구를 Corvus와 함께 쓰세요. 요청 로그는 서버 쪽 기록으로 남습니다.
 
-## 이벤트
+## 이벤트 { #events }
 
-차단, Rate Limit, 챌린지, 서버 오류, 접속 대기열 대기를 시간순으로 보여 줍니다. 보안 규칙 일치는
+차단, Rate Limit, 챌린지, 서버 오류, 접속 대기열 대기, [로그인 페이지](../security/login-page.md)의
+로그인 성공·실패를 시간순으로 보여 줍니다. 보안 규칙 일치는
 **보안 규칙 → 규칙 이벤트**에도 나열됩니다.
 
 ## Prometheus

@@ -82,6 +82,7 @@ Rate Limit은 비밀번호 추측과 스크래핑을 느리게 만듭니다. 로
 | 공격을 반복하는 IP 차단 | 차단 시간이 점점 늘어나고 예외 네트워크를 지원하는 [자동 차단](../security/bans.md), 로그 파싱 불필요 |
 | Rate Limit과 봇 | [호스트별 Rate Limit](../security/bans.md#rate-limits), [브라우저 챌린지와 공격 대응 모드](../security/challenge.md) |
 | 규칙과 차단 목록 | IP, 국가, 경로, 헤더, User-Agent 기준의 [보안 규칙](../security/rules.md), [URL에서 가져오는 차단 목록](../security/ip-lists.md) |
+| 일부 사람만 쓰는 앱 | 호스트 앞의 [로그인 페이지](../security/login-page.md): PIN 하나, 또는 2단계 인증을 갖춘 사용자 |
 | 비공개 콘솔 | 별도 포트, [접근 허용 네트워크, MFA, SSO](../operations/users.md) |
 | 관찰 | [실시간 트래픽, 요청 로그](../operations/traffic.md), [알림](../operations/alerts.md), [백업](../operations/backup.md) |
 

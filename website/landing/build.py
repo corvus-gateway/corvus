@@ -61,6 +61,7 @@ FEATURES = {
         "Built-in web application firewall: known exploit paths and request bodies checked by default",
         "Security rules on IP, country, path, header and User-Agent, with a log-only mode",
         "Automatic IP bans for repeat attackers and per-host rate limits",
+        "Login page in front of any host: one PIN, or users in groups with two-step verification",
         "Browser challenge and automatic 'under attack' mode, no third-party service",
         "Access queue (waiting room) for traffic spikes",
         "Live traffic monitor, request logs, visitor statistics and alerts",

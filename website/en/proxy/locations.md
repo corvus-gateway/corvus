@@ -21,7 +21,7 @@ Open a proxy host and expand **Custom locations** in the form, then click **Add 
 ## Good to know
 
 - **Protection carries over.** Every location keeps the host's security rules, bans, exploit and body
-  inspection, "under attack" mode, rate limit, password protection and access queue, as well as its
+  inspection, "under attack" mode, rate limit, password protection or login page and access queue, as well as its
   upload limit, timeout and gzip setting.
 - A location `/` replaces the host's forward target.
 - `/__corvus` and `/.well-known/acme-challenge` are reserved.

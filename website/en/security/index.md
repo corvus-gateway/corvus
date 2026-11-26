@@ -18,10 +18,12 @@ Each request goes through these checks in order. The first one that blocks wins.
 | 2 | **Security rules**: block, allow, log or challenge, top to bottom | [Security rules](rules.md) |
 | 3 | **Exploit-path blocking** and **request body inspection** | Proxy host → *Protection* |
 | 4 | **Under attack mode**: every visitor must pass a challenge | [Challenge & under attack](challenge.md) |
-| 5 | **Rate limit**, **password protection** and the **access queue** | Proxy host → *Protection*, [Access queue](../access-queue.md) |
+| 5 | **Login page**: visitors without a session are sent to sign in | [Login page](login-page.md) |
+| 6 | **Rate limit**, **password protection** and the **access queue** | Proxy host → *Protection*, [Access queue](../access-queue.md) |
 
 An **allow** rule skips the remaining rules, exploit blocking and rate limits for that request, but
-not the access queue.
+not the access queue. Password protection and the login page are skipped only by allow rules with
+**Also skip Basic auth**.
 
 Blocked visitors see the [block page](../operations/pages.md) with their IP and the time, so a user who
 reports a false block can be found in the [request logs](../operations/traffic.md).

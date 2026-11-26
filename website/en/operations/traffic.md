@@ -97,7 +97,8 @@ monitor contains masked IPs.
 
 ## Events
 
-Blocks, rate limits, challenges, server errors and access-queue waits in time order. Security rule
+Blocks, rate limits, challenges, server errors, access-queue waits and sign-ins on
+[login pages](../security/login-page.md) in time order. Security rule
 matches are also listed under **Security rules → Rule events**.
 
 ## Prometheus

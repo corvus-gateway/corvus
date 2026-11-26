@@ -86,6 +86,7 @@ OpenResty, plano de control en Go, consola en React) que puede **importar una co
 - Actualizaciones de firmas gestionadas, aceptadas solo si están firmadas y son más recientes (sin manipulación ni degradación)
 - Bloqueo automático de IP reincidentes, con escalado y exenciones; bloqueo inmediato opcional por mal comportamiento (demasiadas respuestas 4xx por IP y sitio)
 - Límites de tasa con modo de simulación (dry-run); bloqueo de rutas de exploits listo para usar
+- Página de inicio de sesión delante de cualquier host proxy: un PIN compartido, o usuarios en grupos con verificación en dos pasos opcional ([docs](https://corvusgateway.org/docs/security/login-page/))
 
 **Cola de acceso**
 - Admite visitantes hasta una capacidad determinada y pone en cola al resto de forma equitativa durante los picos

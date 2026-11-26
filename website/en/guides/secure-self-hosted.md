@@ -82,6 +82,7 @@ The admin panels of your proxy, NAS, router and apps should not be on the public
 | Ban repeat attackers | [Automatic bans](../security/bans.md) with escalating duration and exempt networks, no log parsing |
 | Rate limits and bots | [Per-host rate limits](../security/bans.md#rate-limits), [browser challenge and "under attack" mode](../security/challenge.md) |
 | Rules and blocklists | [Security rules](../security/rules.md) on IP, country, path, header, User-Agent; [blocklists from a URL](../security/ip-lists.md) |
+| Apps only some people should reach | A [login page](../security/login-page.md) in front of the host: one PIN, or users with two-step verification |
 | Private console | Separate port, [allowed networks, MFA, SSO](../operations/users.md) |
 | Watch | [Live traffic, request logs](../operations/traffic.md), [alerts](../operations/alerts.md), [backups](../operations/backup.md) |
 
