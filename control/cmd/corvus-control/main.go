@@ -38,6 +38,7 @@ import (
 	"corvus/control/internal/ipset"
 	"corvus/control/internal/live"
 	"corvus/control/internal/netcfg"
+	"corvus/control/internal/signin"
 	"corvus/control/internal/sigs"
 	"corvus/control/internal/store"
 	"corvus/control/internal/traffic"
@@ -522,6 +523,14 @@ func run() error {
 	}
 	go ban.Run(ctx)
 	go ua.Run(ctx)
+
+	// Login pages in front of proxy hosts (#294): the gateway asks here whether a sign-in
+	// is valid; it never sees password hashes or TOTP secrets.
+	signinSvc := &signin.Service{Store: st, DataKey: dataKey,
+		IP: auth.NewLimiter(10, 10*time.Minute), Account: auth.NewLimiter(10, 15*time.Minute)}
+	if err := signinSvc.Serve(ctx, filepath.Join(dataDir, "run", "corvus-signin.sock")); err != nil {
+		return fmt.Errorf("sign-in socket: %w", err)
+	}
 
 	// Lists fed from a URL (e.g. Tor exit nodes, bad-bot User-Agents).
 	listFeeds := &feeds.Service{Store: st, Lists: comp.Lists, Apply: func(ctx context.Context, msg string, mutate func(tx *store.Store) error) error {
