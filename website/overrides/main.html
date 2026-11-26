@@ -1,5 +1,6 @@
 {#- Search and link-preview metadata on top of the Material theme.
-    The English and Korean sites have the same page tree, so every page links to its counterpart. -#}
+    The docs are served under /docs/ (English) and /ko/docs/ (Korean); both have the same page tree,
+    so every page links to its counterpart. The product homepage at / is website/landing/. -#}
 {% extends "base.html" %}
 
 {% block site_meta %}
@@ -14,7 +15,7 @@
   {% for alt in config.extra.alternate %}
     <link rel="alternate" href="{{ config.extra.origin }}{{ alt.link }}{{ page.url }}" hreflang="{{ alt.lang }}">
   {% endfor %}
-  <link rel="alternate" href="{{ config.extra.origin }}/{{ page.url }}" hreflang="x-default">
+  <link rel="alternate" href="{{ config.extra.origin }}{{ config.extra.alternate[0].link }}{{ page.url }}" hreflang="x-default">
   <link rel="icon" href="{{ config.theme.favicon | url }}">
   {% for s in config.extra.social if s.rel_me %}
     <link rel="me" href="{{ s.link }}">
@@ -25,7 +26,7 @@
 {% block htmltitle %}
 {% if not page %}{{ super() }}{% else %}
   {% if page.is_homepage %}
-    {% set title = config.site_name ~ " – " ~ config.extra.tagline %}
+    {% set title = config.extra.docs_title ~ " - " ~ config.site_name %}
   {% else %}
     {% set title = (page.meta.title or page.title | striptags) ~ " - " ~ config.site_name %}
   {% endif %}

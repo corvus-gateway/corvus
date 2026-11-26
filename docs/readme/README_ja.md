@@ -33,13 +33,13 @@ Corvus は、**Web アプリケーションファイアウォール（WAF）を�
 トラフィックを**監視し、保護し、制御**します。既定で有効な攻撃ブロック、IP の自動 BAN、レート制限、
 ボットチャレンジ、リアルタイム監視、アクセス集中に備えたアクセスキューを備えています。Docker コンテナ
 1 つで動作し、すべての機能が無料で、トラフィックがサードパーティのクラウドに送信されることはありません。
-Nginx Proxy Manager、Caddy、Traefik、BunkerWeb、SafeLine などとの[比較](https://corvusgateway.org/compare/)もご覧ください。
+Nginx Proxy Manager、Caddy、Traefik、BunkerWeb、SafeLine などとの[比較](https://corvusgateway.org/docs/compare/)もご覧ください。
 
 <p align="center"><img src="../../assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
 <p align="center"><a href="https://youtu.be/wtd2yBssBUk"><img src="https://img.shields.io/badge/YouTube-FF0000?style=flat-square&logo=youtube&logoColor=white" alt="YouTube"></a> <a href="https://youtu.be/wtd2yBssBUk"><b>2 分の紹介動画を見る（英語）</b></a></p>
 
 - [クイックセットアップ](#クイックセットアップ)
-- [ドキュメント](https://corvusgateway.org/)
+- [ドキュメント](https://corvusgateway.org/docs/)
 - [スクリーンショット](#スクリーンショット)
 
 ## プロジェクトの目標
@@ -137,7 +137,7 @@ services:
 ```
 
 これでインストールは完了です。ゲートウェイ、管理コンソール、アクセス待機列ストアは、この 1 つの
-コンテナ内で動作します。オプションについては[ドキュメント](https://corvusgateway.org/)を参照してください。
+コンテナ内で動作します。オプションについては[ドキュメント](https://corvusgateway.org/docs/)を参照してください。
 
 3. 次のコマンドでスタックを起動します。
 
@@ -170,7 +170,7 @@ docker compose up -d
 ## ドキュメント
 
 設定、ハードニング済みインストール、転送先ホスト、ストリーム、バックアップ、Nginx Proxy Manager からの移行、
-セキュリティルール、アクセス待機列、トラブルシューティングは **[ドキュメント](https://corvusgateway.org/)**(英語・韓国語)で説明しています。
+セキュリティルール、アクセス待機列、トラブルシューティングは **[ドキュメント](https://corvusgateway.org/docs/)**(英語・韓国語)で説明しています。
 
 手順を追って学べる韓国語のチュートリアル本が [WikiDocs](https://wikidocs.net/book/22096) にあります。
 

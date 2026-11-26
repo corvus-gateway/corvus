@@ -33,14 +33,14 @@ and free Let's Encrypt SSL in a few clicks in a web console), and it also **watc
 controls** the traffic that passes through it: attack blocking on by default, automatic IP bans,
 rate limits, a bot challenge, live monitoring and an access queue (waiting room) for traffic
 spikes. One Docker container, every feature free, and no traffic is sent to a third-party cloud.
-[How it compares](https://corvusgateway.org/compare/) with Nginx Proxy Manager, Caddy, Traefik,
+[How it compares](https://corvusgateway.org/docs/compare/) with Nginx Proxy Manager, Caddy, Traefik,
 BunkerWeb, SafeLine and others.
 
 <p align="center"><img src="assets/demo/corvus-demo.gif" alt="Corvus demo" width="900"></p>
 <p align="center"><a href="https://youtu.be/wtd2yBssBUk"><img src="https://img.shields.io/badge/YouTube-FF0000?style=flat-square&logo=youtube&logoColor=white" alt="YouTube"></a> <a href="https://youtu.be/wtd2yBssBUk"><b>Watch the 2-minute intro video</b></a></p>
 
 - [Quick Setup](#quick-setup)
-- [Documentation](https://corvusgateway.org/)
+- [Documentation](https://corvusgateway.org/docs/)
 - [Screenshots](#screenshots)
 
 ## Project Goal
@@ -138,7 +138,7 @@ services:
 ```
 
 This is the whole installation: gateway, admin console and access-queue store run in this one
-container. See the [documentation](https://corvusgateway.org/) for options.
+container. See the [documentation](https://corvusgateway.org/docs/) for options.
 
 3. Bring up your stack by running
 
@@ -173,7 +173,7 @@ automatically on start.
 
 Configuration, the hardened install, forward hosts, streams, backups, migrating from Nginx Proxy
 Manager, security rules, the access queue and troubleshooting are covered in the
-**[documentation](https://corvusgateway.org/)** (English · [한국어](https://corvusgateway.org/ko/)).
+**[documentation](https://corvusgateway.org/docs/)** (English · [한국어](https://corvusgateway.org/ko/docs/)).
 
 A step-by-step tutorial book in Korean is on [WikiDocs](https://wikidocs.net/book/22096).
 
