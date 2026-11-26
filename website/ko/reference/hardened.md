@@ -28,16 +28,25 @@ docker compose -f docker-compose.hardened.yml up -d
 
 릴리즈 이미지는 태그된 소스로 GitHub Actions에서 빌드되고, [Sigstore](https://www.sigstore.dev/)
 cosign으로 키 없이(keyless) 서명됩니다. 따로 받아 둘 공개 키는 없습니다. 서명이 이 저장소의
-`release.yml` 워크플로에서 만든 이미지임을 증명합니다. cosign 3(또는 `--new-bundle-format`을 쓴
+릴리스 워크플로에서 만든 이미지임을 증명합니다. cosign 3(또는 `--new-bundle-format`을 쓴
 2.6)을 사용하세요.
+
+1.10.0부터는 빌드를 별도의 재사용 워크플로 `build-image.yml`에서 합니다. 릴리스 워크플로는 이 빌드를
+시작만 할 수 있고 바꿀 수 없습니다. 그래서 빌드 출처 증명이 [SLSA](https://slsa.dev/) v1.0
+**Build Level 3**을 충족합니다. 1.9.x까지는 `release.yml`이 직접 서명했습니다(Build Level 2). 아래 명령은
+두 경우를 모두 받아들입니다.
 
 ```bash
 cosign verify ghcr.io/corvus-gateway/gateway:1.9.2 \
-  --certificate-identity-regexp '^https://github.com/corvus-gateway/corvus/.github/workflows/release.yml@refs/tags/v' \
+  --certificate-identity-regexp '^https://github.com/corvus-gateway/corvus/.github/workflows/(build-image|release).yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 # 빌드 출처(SLSA) 확인, GitHub CLI 사용
 gh attestation verify oci://ghcr.io/corvus-gateway/gateway:1.9.2 --owner corvus-gateway
+
+# 1.10.0 이후: 분리된 빌드 워크플로까지 확인 (SLSA Build Level 3)
+gh attestation verify oci://ghcr.io/corvus-gateway/gateway:<버전> --owner corvus-gateway \
+  --signer-workflow corvus-gateway/corvus/.github/workflows/build-image.yml
 ```
 
 각 [GitHub 릴리즈](https://github.com/corvus-gateway/corvus/releases)에는 다음 파일도 첨부됩니다.
@@ -54,7 +63,7 @@ gh attestation verify oci://ghcr.io/corvus-gateway/gateway:1.9.2 --owner corvus-
 
 ```bash
 cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
-  --certificate-identity-regexp '^https://github.com/corvus-gateway/corvus/.github/workflows/release.yml@refs/tags/v' \
+  --certificate-identity-regexp '^https://github.com/corvus-gateway/corvus/.github/workflows/(build-image|release).yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 sha256sum -c SHA256SUMS
 ```
