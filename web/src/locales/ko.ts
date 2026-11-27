@@ -72,7 +72,7 @@ export const ko = {
   // dashboard
   dashboardDesc: "게이트웨이 상태와 트래픽을 한눈에 확인합니다.", liveUpdating: "실시간 갱신 중",
   kpiRps: "초당 요청", kpiRequests: "요청 수", kpiErrorRate: "오류율", kpiP95: "p95 지연", kpiBlocked: "차단", kpiWaiting: "대기 인원",
-  uniqueIps: "고유 IP", blockedHint: "Rate Limit·공격 경로", waitingHint: "접속 대기열 대기열 합계", enabledOfTotal: "사용 중 / 전체",
+  uniqueIps: "고유 IP", blockedHint: "Rate Limit·공격 경로", waitingHint: "모든 접속 대기열의 대기 인원 합계", enabledOfTotal: "사용 중 / 전체",
   expiringN: "만료 임박 {n}건", allHealthy: "모두 정상",
   liveTraffic: "실시간 트래픽", liveTrafficDesc: "상태 코드별 요청 수", perStep: "{s}초 단위", noTrafficYet: "아직 수집된 트래픽이 없습니다",
   noTrafficYetDesc: "프록시 호스트로 요청이 들어오면 이곳에 표시됩니다.",
@@ -183,7 +183,7 @@ export const ko = {
   queuedRequests: "대기 처리", queuedHint: "접속 대기열에 새로 줄을 선 방문자", egress: "송신량", requestsByStatus: "상태별 요청", latency: "응답 지연", latencyDesc: "백분위수 (ms)",
   byHost: "호스트별", topPaths: "상위 경로", searchLogs: "경로·IP·유입 출처·UTM 검색", allStatus: "모든 상태", noLogs: "표시할 로그가 없습니다", noLogsDesc: "조건을 바꾸거나 기간을 늘려 보세요.",
   responseTime: "응답 시간", eventType: "이벤트 종류", allEvents: "모든 이벤트", noEvents: "이벤트가 없습니다", noEventsDesc: "차단·오류·대기 이벤트가 발생하면 시간순으로 표시됩니다.",
-  evRateLimited: "Rate Limit 차단", evBlockedExploit: "공격 경로 차단", evServerError: "서버 오류 (5xx)", evWaitroomQueue: "접속 대기열 대기열 발생", evWaitroomFail: "접속 대기열 장애 정책 적용",
+  evRateLimited: "Rate Limit 차단", evBlockedExploit: "공격 경로 차단", evServerError: "서버 오류 (5xx)", evWaitroomQueue: "접속 대기열 대기 발생", evWaitroomFail: "접속 대기열 장애 정책 적용",
   // deployments
   deployDesc: "설정이 배포될 때마다 버전이 기록됩니다. 생성된 설정을 확인하고 이전 버전으로 되돌릴 수 있습니다.", deployNow: "지금 배포", deployNowDesc: "저장된 설정을 게이트웨이에 새 버전으로 배포합니다.",
   messagePlaceholder: "변경 내용을 간단히 적어 두세요 (선택)", noDeployments: "배포 이력이 없습니다", noDeploymentsDesc: "프록시 호스트를 저장하면 첫 버전이 만들어집니다.",
