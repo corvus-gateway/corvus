@@ -65,7 +65,7 @@ var texts = map[string]map[string]string{
 		"scan_suspect":         "Possible scanner · %s",
 		"scan_suspectText":     "%[2]d 4xx responses out of %[3]d requests in the last %[1]s min (host: %[4]s). Looks like path/content scanning.",
 		"kinds":                "Detections",
-		"waitroom_queue":       "Access queue queue · %s",
+		"waitroom_queue":       "Visitors waiting in access queue · %s",
 		"waitroom_queueText":   "%d visitors are waiting (active %d / capacity %d).",
 		"redis_down":           "Cache DB unreachable",
 		"redis_downText":       "The access queue state store (cache DB) is unreachable. Rooms follow their failure policy (fail-open/closed).",

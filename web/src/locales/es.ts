@@ -251,6 +251,10 @@ export const es: Partial<Record<keyof typeof ko, string>> = {
   rule_login_failed: "Inicios de sesión de administrador fallidos", ruled_login_failed: "Alerta cuando los inicios de sesión fallidos en la ventana superan el umbral.",
   thrl_error_rate: "Tasa 5xx ≥", thrl_latency_p95: "p95 ≥", thrl_traffic_spike: "vs. media", thrl_rate_limited: "Bloqueadas ≥", thrl_exploit: "Detectados ≥",
   thrl_waitroom_queue: "En espera ≥", thrl_cert_expiry: "Días restantes ≤", thrl_login_failed: "Fallos ≥",
+  // active alert titles in the console language ({s}: host, IP, access queue, certificate, version)
+  alt_error_rate: "Pico de la tasa de errores 5xx · {s}", alt_latency_p95: "Latencia degradada · {s}", alt_traffic_spike: "Pico de tráfico", alt_rate_limited: "Aumento de limitaciones de tasa · {s}", alt_exploit: "Aumento de intentos de exploit · {s}",
+  alt_security_events: "Aumento de eventos de seguridad · {s}", alt_attack_source: "Ataques repetidos desde {s}", alt_scan_suspect: "Posible escáner · {s}", alt_waitroom_queue: "Espera en la cola de acceso · {s}", alt_redis_down: "Base de caché desconectada",
+  alt_cert_expiry: "Certificado por vencer · {s}", alt_acme_failed: "Error en la emisión/renovación del certificado · {s}", alt_deploy_failed: "Configuración rechazada · versión #{s}", alt_login_failed: "Inicios de sesión de administrador fallidos repetidos",
   // users
   navUsers: "Usuarios", usersDesc: "Gestione quién puede acceder a la consola y con qué permisos.",
   roleAdmin: "Administrador", roleOperator: "Operador", roleViewer: "Lector",

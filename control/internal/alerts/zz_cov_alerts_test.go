@@ -231,6 +231,13 @@ func TestCovRoomsRedisCertAndResolved(t *testing.T) {
 	if !rules["waitroom_queue"] || !rules["redis_down"] || !rules["cert_expiry"] || len(act) != 3 {
 		t.Fatalf("active: %+v", act)
 	}
+	// subject: the title's variable part, for a console title in the console's language
+	for _, a := range act {
+		want := map[string]string{"waitroom_queue": "sale", "redis_down": "", "cert_expiry": "a.example"}[a.Rule]
+		if a.Subject != want {
+			t.Errorf("%s subject %q, want %q (title %q)", a.Rule, a.Subject, want, a.Title)
+		}
+	}
 	if h.n() != 3 { // queue now warning, redis critical, cert warning
 		t.Fatalf("notifications %d", h.n())
 	}

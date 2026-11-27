@@ -8,6 +8,7 @@ import { Badge, Card, CardHeader, EmptyState, Skeleton, StatusDot, type Tone } f
 import { Segmented } from "../components/ui/form";
 import { useResource } from "../hooks/useResource";
 import { useI18n } from "../i18n";
+import { alertTitle } from "../lib/alerts";
 import { actionLabel, actionMeta } from "../lib/audit";
 import { useApp } from "../lib/app";
 import { cn, daysUntil, fmtCompact, fmtMs, fmtNum, fmtUptime, relTime } from "../lib/utils";
@@ -87,7 +88,7 @@ export default function Dashboard() {
         <Link to="/alerts" className="flex items-center gap-3 rounded-[3px] border border-danger/40 bg-danger/10 px-4 py-2.5 hover:border-danger">
           <BellRing className="h-4 w-4 shrink-0 text-danger" aria-hidden />
           <span className="text-sm font-semibold">{t("activeNowN", { n: alerts.data.length })}</span>
-          <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">{alerts.data.map((x) => x.title).join(" · ")}</span>
+          <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">{alerts.data.map((x) => alertTitle(t, x)).join(" · ")}</span>
           <ArrowRight className="h-4 w-4 shrink-0 text-fg-subtle" aria-hidden />
         </Link>
       )}

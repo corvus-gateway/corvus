@@ -37,4 +37,8 @@ export const enAlerts: Record<keyof typeof koAlerts, string> = {
   rule_login_failed: "Admin login failures", ruled_login_failed: "Alerts when failed logins within the window exceed the threshold.",
   thrl_error_rate: "5xx rate ≥", thrl_latency_p95: "p95 ≥", thrl_traffic_spike: "vs. average", thrl_rate_limited: "Blocked ≥", thrl_exploit: "Detected ≥",
   thrl_waitroom_queue: "Waiting ≥", thrl_cert_expiry: "Days left ≤", thrl_login_failed: "Failures ≥",
+  // active alert titles in the console language ({s}: host, IP, access queue, certificate, version)
+  alt_error_rate: "5xx error rate spike · {s}", alt_latency_p95: "Latency degraded · {s}", alt_traffic_spike: "Traffic spike", alt_rate_limited: "Many requests rate-limited · {s}", alt_exploit: "Attack attempts increased · {s}",
+  alt_security_events: "Security events increased · {s}", alt_attack_source: "Repeated attacks from {s}", alt_scan_suspect: "Possible scanner · {s}", alt_waitroom_queue: "Visitors waiting in access queue · {s}", alt_redis_down: "Cache DB unreachable",
+  alt_cert_expiry: "Certificate expiring · {s}", alt_acme_failed: "Certificate issuance/renewal failed · {s}", alt_deploy_failed: "Configuration rejected · version #{s}", alt_login_failed: "Repeated admin login failures",
 };

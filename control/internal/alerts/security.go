@@ -24,7 +24,7 @@ func securityFindings(c *traffic.Collector, on func(string) (Rule, bool), win fu
 		blocked := c.EventCounts(since, "blocked_rule", "blocked_body")
 		for h, n := range c.EventCounts(since, "blocked_rule", "rule_logged", "blocked_body", "body_detected") {
 			if float64(n) >= r.Threshold {
-				out = append(out, finding{rule: "security_events", key: h, title: fmt.Sprintf(tr["security_events"], h),
+				out = append(out, finding{rule: "security_events", key: h, title: fmt.Sprintf(tr["security_events"], h), subject: h,
 					text:   fmt.Sprintf(tr["security_eventsText"], mins(win(r)), n, blocked[h]),
 					fields: [][2]string{{tr["host"], h}, {tr["count"], fmt.Sprint(n)}, {tr["blocked"], fmt.Sprint(blocked[h])}}})
 			}
@@ -47,7 +47,7 @@ func securityFindings(c *traffic.Collector, on func(string) (Rule, bool), win fu
 				break
 			}
 			hosts, kinds := keys(s.a.Hosts), keys(s.a.Kinds)
-			out = append(out, finding{rule: "attack_source", key: s.ip, title: fmt.Sprintf(tr["attack_source"], s.ip),
+			out = append(out, finding{rule: "attack_source", key: s.ip, title: fmt.Sprintf(tr["attack_source"], s.ip), subject: s.ip,
 				text:   fmt.Sprintf(tr["attack_sourceText"], mins(win(r)), s.a.Count, strings.Join(hosts, ", ")),
 				fields: [][2]string{{"IP", s.ip}, {tr["count"], fmt.Sprint(s.a.Count)}, {tr["kinds"], strings.Join(kinds, ", ")}}})
 		}
@@ -69,7 +69,7 @@ func securityFindings(c *traffic.Collector, on func(string) (Rule, bool), win fu
 			if i >= maxSourceFindings {
 				break
 			}
-			out = append(out, finding{rule: "scan_suspect", key: s.ip, title: fmt.Sprintf(tr["scan_suspect"], s.ip),
+			out = append(out, finding{rule: "scan_suspect", key: s.ip, title: fmt.Sprintf(tr["scan_suspect"], s.ip), subject: s.ip,
 				text:   fmt.Sprintf(tr["scan_suspectText"], mins(win(r)), s.a.S4xx, s.a.Requests, s.a.Host),
 				fields: [][2]string{{"IP", s.ip}, {tr["host"], s.a.Host}, {"4xx", fmt.Sprintf("%d / %d", s.a.S4xx, s.a.Requests)}}})
 		}

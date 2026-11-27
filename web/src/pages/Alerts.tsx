@@ -14,6 +14,7 @@ import { ConfirmDialog, RowMenu, Sheet, SheetCancel, Tip, tipTrigger, useDirty }
 import { Table, THead, Td, Th, Tr, clickableRow } from "../components/ui/table";
 import { useResource } from "../hooks/useResource";
 import { useCan } from "../lib/rbac";
+import { alertTitle } from "../lib/alerts";
 import { useI18n, type Key, type TFn } from "../i18n";
 import { cn, fmtDateTime, relTime, toMs } from "../lib/utils";
 
@@ -89,7 +90,7 @@ function ActiveStrip({ items }: { items: AlertActive[] | null }) {
           <li key={a.rule + a.key} className="rounded-lg border border-line bg-surface px-3 py-2 text-xs">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={sevTone[a.severity]} dot>{t(sevKey[a.severity])}</Badge>
-              <span className="font-medium">{a.title}</span>
+              <span className="font-medium">{alertTitle(t, a)}</span>
               <span className="text-fg-subtle">{t("since", { t: relTime(new Date(toMs(a.since)).toISOString(), lang) })}</span>
               <span className="ml-auto flex flex-wrap gap-1.5">
                 {IP_RULES.has(a.rule) && <>
