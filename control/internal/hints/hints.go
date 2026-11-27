@@ -63,6 +63,10 @@ func has(s string, subs ...string) bool {
 }
 
 // ACME classifies a certificate issuance or renewal error (lego / Let's Encrypt).
+// tldZone matches lego's "failed to find zone <tld>." (a single label: the zone search got
+// past the domain itself).
+var tldZone = regexp.MustCompile(`failed to find zone [a-z0-9-]+\.:`)
+
 func ACME(msg string) string {
 	m := strings.ToLower(msg)
 	if m == "" {
@@ -76,6 +80,10 @@ func ACME(msg string) string {
 	case has(m, propagationTimedOut),
 		has(m, acmeProblem+"unauthorized") && has(m, "_acme-challenge"):
 		return ACMEDNSPropagation
+	// "failed to find zone org.": the zone lookup walked up to the TLD because the domain
+	// itself does not resolve (not registered or delegated yet), not a token problem.
+	case tldZone.MatchString(m):
+		return ACMEDNSLookup
 	case has(m, "error presenting token") &&
 		(has(m, "zone could not be found") || apiStatusAuth.MatchString(m) || apiAuthWords.MatchString(m)):
 		return ACMEDNSCredential
