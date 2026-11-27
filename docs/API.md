@@ -491,6 +491,19 @@ tested, deployed and rolled back with the rest of the configuration.
 | GET / PUT | `/api/alerts/rules` | viewer / operator | Alert rules |
 | GET | `/api/alerts/history`, `/api/alerts/active` | viewer | Alert history / currently firing |
 
+Each currently firing alert from `/api/alerts/active`:
+
+```json
+{"rule": "attack_source", "key": "192.0.2.57", "severity": "warning",
+ "title": "Repeated attacks from 192.0.2.57", "subject": "192.0.2.57",
+ "text": "…", "since": "2026-11-27T10:00:00Z"}
+```
+
+`title` and `text` are in the notification language (alert settings). `subject` is the variable
+part of the title (host, IP, access queue, certificate, version number; empty for rules without
+one such as `traffic_spike`, `redis_down`, `login_failed`), so a client can build the title from
+`rule` + `subject` in its own language.
+
 ### Settings, users, tokens, import
 
 | Method | Path | Role | Description |

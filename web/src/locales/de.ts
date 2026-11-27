@@ -251,6 +251,10 @@ export const de: Partial<Record<keyof typeof ko, string>> = {
   rule_login_failed: "Fehlgeschlagene Admin-Anmeldungen", ruled_login_failed: "Warnt, wenn fehlgeschlagene Anmeldungen im Zeitfenster den Schwellenwert überschreiten.",
   thrl_error_rate: "5xx-Rate ≥", thrl_latency_p95: "p95 ≥", thrl_traffic_spike: "ggü. Durchschnitt", thrl_rate_limited: "Blockiert ≥", thrl_exploit: "Erkannt ≥",
   thrl_waitroom_queue: "Wartend ≥", thrl_cert_expiry: "Resttage ≤", thrl_login_failed: "Fehlversuche ≥",
+  // active alert titles in the console language ({s}: host, IP, access queue, certificate, version)
+  alt_error_rate: "Anstieg der 5xx-Fehlerrate · {s}", alt_latency_p95: "Erhöhte Latenz · {s}", alt_traffic_spike: "Traffic-Spitze", alt_rate_limited: "Anstieg der Ratenbegrenzung · {s}", alt_exploit: "Mehr Exploit-Versuche · {s}",
+  alt_security_events: "Anstieg von Sicherheitsereignissen · {s}", alt_attack_source: "Wiederholte Angriffe von {s}", alt_scan_suspect: "Scanner-Verdacht · {s}", alt_waitroom_queue: "Wartende Besucher in Zugriffswarteschlange · {s}", alt_redis_down: "Cache-Datenbank getrennt",
+  alt_cert_expiry: "Zertifikat läuft ab · {s}", alt_acme_failed: "Zertifikatsausstellung/-erneuerung fehlgeschlagen · {s}", alt_deploy_failed: "Konfiguration abgelehnt · Version #{s}", alt_login_failed: "Wiederholt fehlgeschlagene Admin-Anmeldungen",
   // users
   navUsers: "Benutzer", usersDesc: "Verwalten Sie, wer mit welchen Berechtigungen auf die Konsole zugreifen kann.",
   roleAdmin: "Administrator", roleOperator: "Operator", roleViewer: "Betrachter",

@@ -57,6 +57,7 @@ type active struct {
 	Key      string    `json:"key"`
 	Severity string    `json:"severity"`
 	Title    string    `json:"title"`
+	Subject  string    `json:"subject"` // the title's variable part (host, IP, room…), for a localized console title
 	Text     string    `json:"text"`
 	Since    time.Time `json:"since"`
 	lastSent time.Time // last successful notification (zero: not delivered yet)
@@ -81,6 +82,7 @@ type finding struct {
 	rule, key string
 	oneShot   bool // events (deploy failure) are not "resolved"
 	title     string
+	subject   string // the value filling the title's format verb (empty if none)
 	text      string
 	fields    [][2]string
 }
@@ -157,12 +159,12 @@ func (e *Engine) Evaluate(ctx context.Context, now time.Time) {
 		case !ok && !f.oneShot && now.Sub(e.resolved[id]) < cooldown:
 			// back within the cooldown of its last resolution (a flapping condition):
 			// track it again without a new notification
-			e.state[id] = &active{Rule: f.rule, Key: f.key, Severity: r.Severity, Title: f.title, Text: f.text, Since: now, lastSent: e.resolved[id], msg: m}
+			e.state[id] = &active{Rule: f.rule, Key: f.key, Severity: r.Severity, Title: f.title, Subject: f.subject, Text: f.text, Since: now, lastSent: e.resolved[id], msg: m}
 			delete(e.resolved, id)
 		case !ok:
 			o := outgoing{m: m, at: now, logFail: true}
 			if !f.oneShot {
-				o.st = &active{Rule: f.rule, Key: f.key, Severity: r.Severity, Title: f.title, Text: f.text, Since: now, inflight: true, msg: m}
+				o.st = &active{Rule: f.rule, Key: f.key, Severity: r.Severity, Title: f.title, Subject: f.subject, Text: f.text, Since: now, inflight: true, msg: m}
 				e.state[id] = o.st
 			}
 			send = append(send, o)
@@ -172,10 +174,10 @@ func (e *Engine) Evaluate(ctx context.Context, now time.Time) {
 			if !a.lastSent.IsZero() {
 				m.Title = tr["ongoing"] + " · " + m.Title
 			}
-			a.inflight, a.msg, a.Title, a.Text = true, m, f.title, f.text
+			a.inflight, a.msg, a.Title, a.Subject, a.Text = true, m, f.title, f.subject, f.text
 			send = append(send, outgoing{m: m, st: a, at: now, logFail: !a.failLog})
 		default:
-			a.msg, a.Title, a.Text = m, f.title, f.text
+			a.msg, a.Title, a.Subject, a.Text = m, f.title, f.subject, f.text
 		}
 	}
 	for id, a := range e.state {
@@ -272,7 +274,7 @@ func (e *Engine) detect(ctx context.Context, set Settings, tr map[string]string,
 				if s.Requests >= int64(r.MinRequests) && s.Requests > 0 {
 					pct := float64(s.S5xx) / float64(s.Requests) * 100
 					if pct >= r.Threshold {
-						out = append(out, finding{rule: "error_rate", key: h, title: fmt.Sprintf(tr["error_rate"], h),
+						out = append(out, finding{rule: "error_rate", key: h, title: fmt.Sprintf(tr["error_rate"], h), subject: h,
 							text:   fmt.Sprintf(tr["error_rateText"], mins(win(r)), pct, s.S5xx, s.Requests),
 							fields: [][2]string{{tr["host"], h}, {"5xx", fmt.Sprintf("%.1f%%", pct)}, {tr["threshold"], fmt.Sprintf("%g%%", r.Threshold)}}})
 					}
@@ -283,7 +285,7 @@ func (e *Engine) detect(ctx context.Context, set Settings, tr map[string]string,
 			for _, h := range hosts {
 				s := c.SummaryFor(win(r), h, now)
 				if s.Requests >= int64(r.MinRequests) && s.Requests > 0 && s.P95 >= r.Threshold {
-					out = append(out, finding{rule: "latency_p95", key: h, title: fmt.Sprintf(tr["latency_p95"], h),
+					out = append(out, finding{rule: "latency_p95", key: h, title: fmt.Sprintf(tr["latency_p95"], h), subject: h,
 						text:   fmt.Sprintf(tr["latency_p95Text"], mins(win(r)), s.P95, s.P50),
 						fields: [][2]string{{tr["host"], h}, {"p95", fmt.Sprintf("%g ms", s.P95)}, {tr["threshold"], fmt.Sprintf("%g ms", r.Threshold)}}})
 				}
@@ -301,7 +303,7 @@ func (e *Engine) detect(ctx context.Context, set Settings, tr map[string]string,
 		if r, ok := on("rate_limited"); ok {
 			for h, n := range c.EventCounts(now.Add(-win(r)), "rate_limited") {
 				if float64(n) >= r.Threshold {
-					out = append(out, finding{rule: "rate_limited", key: h, title: fmt.Sprintf(tr["rate_limited"], h),
+					out = append(out, finding{rule: "rate_limited", key: h, title: fmt.Sprintf(tr["rate_limited"], h), subject: h,
 						text: fmt.Sprintf(tr["rate_limitedText"], mins(win(r)), n), fields: [][2]string{{tr["host"], h}, {tr["count"], fmt.Sprint(n)}}})
 				}
 			}
@@ -311,7 +313,7 @@ func (e *Engine) detect(ctx context.Context, set Settings, tr map[string]string,
 			blocked := c.EventCounts(since, "blocked_exploit")
 			for h, n := range c.EventCounts(since, "blocked_exploit", "exploit_detected") {
 				if float64(n) >= r.Threshold {
-					out = append(out, finding{rule: "exploit", key: h, title: fmt.Sprintf(tr["exploit"], h),
+					out = append(out, finding{rule: "exploit", key: h, title: fmt.Sprintf(tr["exploit"], h), subject: h,
 						text:   fmt.Sprintf(tr["exploitText"], mins(win(r)), n, blocked[h]),
 						fields: [][2]string{{tr["host"], h}, {tr["count"], fmt.Sprint(n)}, {tr["blocked"], fmt.Sprint(blocked[h])}}})
 				}
@@ -339,7 +341,7 @@ func (e *Engine) detect(ctx context.Context, set Settings, tr map[string]string,
 			}
 			for _, s := range rooms {
 				if s.Available && float64(s.Waiting) >= th {
-					out = append(out, finding{rule: "waitroom_queue", key: s.Name, title: fmt.Sprintf(tr["waitroom_queue"], s.Name),
+					out = append(out, finding{rule: "waitroom_queue", key: s.Name, title: fmt.Sprintf(tr["waitroom_queue"], s.Name), subject: s.Name,
 						text:   fmt.Sprintf(tr["waitroom_queueText"], s.Waiting, s.Active, s.Capacity),
 						fields: [][2]string{{tr["room"], s.Name}, {tr["waiting"], fmt.Sprint(s.Waiting)}, {tr["active"], fmt.Sprintf("%d / %d", s.Active, s.Capacity)}}})
 				}
@@ -365,12 +367,12 @@ func (e *Engine) detect(ctx context.Context, set Settings, tr map[string]string,
 			// (not_after is still its creation time): that is acme_failed, not cert_expiry
 			neverIssued := c.Kind == "acme" && !c.NotAfter.After(c.CreatedAt.Add(time.Hour))
 			if expOn && c.Status != "pending" && !c.NotAfter.IsZero() && !neverIssued && days <= r1.Threshold {
-				out = append(out, finding{rule: "cert_expiry", key: key, title: fmt.Sprintf(tr["cert_expiry"], name),
+				out = append(out, finding{rule: "cert_expiry", key: key, title: fmt.Sprintf(tr["cert_expiry"], name), subject: name,
 					text:   fmt.Sprintf(tr["cert_expiryText"], days, c.NotAfter.Format("2006-01-02"), map[bool]string{true: tr["autoRenewOn"], false: tr["autoRenewOff"]}[c.AutoRenew]),
 					fields: [][2]string{{tr["certificate"], name}, {tr["expires"], c.NotAfter.Format("2006-01-02")}}})
 			}
 			if acmeOn && c.Kind == "acme" && c.LastError != "" && c.Status != "pending" {
-				out = append(out, finding{rule: "acme_failed", key: key, title: fmt.Sprintf(tr["acme_failed"], name),
+				out = append(out, finding{rule: "acme_failed", key: key, title: fmt.Sprintf(tr["acme_failed"], name), subject: name,
 					text: trim(c.LastError, 400) + hintSuffix(set.Language, c.LastErrorHint), fields: [][2]string{{tr["certificate"], name}, {tr["status"], c.Status}}})
 			}
 		}
@@ -391,7 +393,7 @@ func (e *Engine) detect(ctx context.Context, set Settings, tr map[string]string,
 				if who == "" {
 					who = "system"
 				}
-				out = append(out, finding{rule: "deploy_failed", key: fmt.Sprint(v.ID), oneShot: true, title: fmt.Sprintf(tr["deploy_failed"], v.ID),
+				out = append(out, finding{rule: "deploy_failed", key: fmt.Sprint(v.ID), oneShot: true, title: fmt.Sprintf(tr["deploy_failed"], v.ID), subject: fmt.Sprint(v.ID),
 					text: trim(v.TestOutput, 500), fields: [][2]string{{tr["change"], v.Message}, {tr["by"], who}}})
 			}
 			e.mu.Lock()

@@ -35,4 +35,8 @@ export const koAlerts = {
   rule_login_failed: "관리자 로그인 실패", ruled_login_failed: "일정 시간 내 로그인 실패가 기준을 넘으면 알립니다.",
   thrl_error_rate: "5xx 오류율 ≥", thrl_latency_p95: "p95 ≥", thrl_traffic_spike: "평균 대비", thrl_rate_limited: "차단 수 ≥", thrl_exploit: "탐지 수 ≥",
   thrl_waitroom_queue: "대기 인원 ≥", thrl_cert_expiry: "남은 기간 ≤", thrl_login_failed: "실패 수 ≥",
+  // active alert titles in the console language ({s}: host, IP, access queue, certificate, version)
+  alt_error_rate: "5xx 오류율 급증 · {s}", alt_latency_p95: "응답 지연 증가 · {s}", alt_traffic_spike: "트래픽 급증", alt_rate_limited: "요청 제한 차단 다수 발생 · {s}", alt_exploit: "공격 의심 요청 증가 · {s}",
+  alt_security_events: "보안 이벤트 증가 · {s}", alt_attack_source: "반복 공격 IP · {s}", alt_scan_suspect: "스캐너 의심 · {s}", alt_waitroom_queue: "접속 대기열 대기 발생 · {s}", alt_redis_down: "캐시 DB 연결 끊김",
+  alt_cert_expiry: "인증서 만료 임박 · {s}", alt_acme_failed: "인증서 발급/갱신 실패 · {s}", alt_deploy_failed: "설정 배포가 거부됨 · 버전 #{s}", alt_login_failed: "관리자 로그인 실패 반복",
 } as const;

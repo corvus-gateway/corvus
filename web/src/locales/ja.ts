@@ -252,6 +252,10 @@ export const ja: Partial<Record<keyof typeof ko, string>> = {
   rule_login_failed: "管理者ログインの失敗", ruled_login_failed: "集計期間内のログイン失敗数がしきい値を超えたときに通知します。",
   thrl_error_rate: "5xx 率 ≥", thrl_latency_p95: "p95 ≥", thrl_traffic_spike: "平均比", thrl_rate_limited: "ブロック数 ≥", thrl_exploit: "検知数 ≥",
   thrl_waitroom_queue: "待機人数 ≥", thrl_cert_expiry: "残り日数 ≤", thrl_login_failed: "失敗数 ≥",
+  // active alert titles in the console language ({s}: host, IP, access queue, certificate, version)
+  alt_error_rate: "5xx エラー率の急増 · {s}", alt_latency_p95: "レイテンシの悪化 · {s}", alt_traffic_spike: "トラフィック急増", alt_rate_limited: "レート制限の急増 · {s}", alt_exploit: "エクスプロイトの試行が増加 · {s}",
+  alt_security_events: "セキュリティイベント増加 · {s}", alt_attack_source: "繰り返し攻撃する IP · {s}", alt_scan_suspect: "スキャナーの疑い · {s}", alt_waitroom_queue: "アクセスキューの待機 · {s}", alt_redis_down: "キャッシュDB切断",
+  alt_cert_expiry: "証明書の期限切れ間近 · {s}", alt_acme_failed: "証明書の発行・更新失敗 · {s}", alt_deploy_failed: "設定のデプロイが拒否されました · バージョン #{s}", alt_login_failed: "管理者ログインの失敗が続いています",
   // users
   navUsers: "ユーザー", usersDesc: "コンソールにアクセスできるユーザーとその権限を管理します。",
   roleAdmin: "管理者", roleOperator: "オペレーター", roleViewer: "閲覧者",

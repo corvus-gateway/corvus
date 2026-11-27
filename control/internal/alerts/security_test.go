@@ -30,6 +30,10 @@ func TestSecurityAlertsWithoutBlocking(t *testing.T) {
 	got := map[string]string{}
 	for _, a := range e.Active() {
 		got[a.Rule+"|"+a.Key] = a.Title
+		// the subject (IP or host) is what fills the title, so the console can localize it
+		if a.Subject != a.Key {
+			t.Errorf("%s|%s: subject %q, want the key", a.Rule, a.Key, a.Subject)
+		}
 	}
 	for _, want := range []string{"attack_source|203.0.113.9", "security_events|api.example.com", "scan_suspect|192.0.2.77"} {
 		if _, ok := got[want]; !ok {
