@@ -26,6 +26,7 @@ import (
 
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
+	"github.com/go-acme/lego/v4/challenge/dns01"
 	"github.com/go-acme/lego/v4/lego"
 	"github.com/go-acme/lego/v4/registration"
 
@@ -544,6 +545,11 @@ func (s *Service) obtain(ctx context.Context, c *store.Certificate) obtained {
 			r.err = err
 			return r
 		}
+		// lego keeps each name's DNS zone in a process-wide cache until the zone's SOA refresh
+		// time (2 h for .org). A domain that did not resolve yet (just bought, nameservers just
+		// changed) is cached under its parent, e.g. "org.", and every retry fails with
+		// "failed to find zone org." until it expires. Look the zones up afresh for each order.
+		dns01.ClearFqdnCache()
 		if err := cl.Challenge.SetDNS01Provider(p); err != nil {
 			r.err = err
 			return r

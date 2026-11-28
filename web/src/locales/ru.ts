@@ -251,6 +251,10 @@ export const ru: Partial<Record<keyof typeof ko, string>> = {
   rule_login_failed: "Неудачные входы администраторов", ruled_login_failed: "Оповещение, когда число неудачных входов в окне превышает порог.",
   thrl_error_rate: "Доля 5xx ≥", thrl_latency_p95: "p95 ≥", thrl_traffic_spike: "к среднему", thrl_rate_limited: "Заблокировано ≥", thrl_exploit: "Обнаружено ≥",
   thrl_waitroom_queue: "Ожидают ≥", thrl_cert_expiry: "Осталось дней ≤", thrl_login_failed: "Неудач ≥",
+  // active alert titles in the console language ({s}: host, IP, access queue, certificate, version)
+  alt_error_rate: "Рост доли ошибок 5xx · {s}", alt_latency_p95: "Рост задержки · {s}", alt_traffic_spike: "Всплеск трафика", alt_rate_limited: "Рост ограниченных запросов · {s}", alt_exploit: "Рост попыток эксплойтов · {s}",
+  alt_security_events: "Рост событий безопасности · {s}", alt_attack_source: "Повторяющиеся атаки с {s}", alt_scan_suspect: "Подозрение на сканер · {s}", alt_waitroom_queue: "Ожидание в очереди доступа · {s}", alt_redis_down: "Кеш-БД отключена",
+  alt_cert_expiry: "Истечение сертификата · {s}", alt_acme_failed: "Ошибка выпуска/продления сертификата · {s}", alt_deploy_failed: "Конфигурация отклонена · версия #{s}", alt_login_failed: "Повторяющиеся неудачные входы администраторов",
   // users
   navUsers: "Пользователи", usersDesc: "Управляйте тем, кто и с какими правами может работать в консоли.",
   roleAdmin: "Администратор", roleOperator: "Оператор", roleViewer: "Наблюдатель",

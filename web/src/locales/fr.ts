@@ -251,6 +251,10 @@ export const fr: Partial<Record<keyof typeof ko, string>> = {
   rule_login_failed: "Échecs de connexion administrateur", ruled_login_failed: "Alerte lorsque les échecs de connexion dans la fenêtre dépassent le seuil.",
   thrl_error_rate: "Taux 5xx ≥", thrl_latency_p95: "p95 ≥", thrl_traffic_spike: "vs moyenne", thrl_rate_limited: "Bloquées ≥", thrl_exploit: "Détectées ≥",
   thrl_waitroom_queue: "En attente ≥", thrl_cert_expiry: "Jours restants ≤", thrl_login_failed: "Échecs ≥",
+  // active alert titles in the console language ({s}: host, IP, access queue, certificate, version)
+  alt_error_rate: "Pic du taux d'erreurs 5xx · {s}", alt_latency_p95: "Latence dégradée · {s}", alt_traffic_spike: "Pic de trafic", alt_rate_limited: "Hausse des requêtes limitées · {s}", alt_exploit: "Hausse des tentatives d'exploit · {s}",
+  alt_security_events: "Hausse des événements de sécurité · {s}", alt_attack_source: "Attaques répétées depuis {s}", alt_scan_suspect: "Scanner suspecté · {s}", alt_waitroom_queue: "Attente dans la file d'accès · {s}", alt_redis_down: "Base de cache déconnectée",
+  alt_cert_expiry: "Certificat arrivant à expiration · {s}", alt_acme_failed: "Échec d'émission/renouvellement du certificat · {s}", alt_deploy_failed: "Configuration rejetée · version #{s}", alt_login_failed: "Échecs répétés de connexion administrateur",
   // users
   navUsers: "Utilisateurs", usersDesc: "Gérez qui peut accéder à la console et avec quelles autorisations.",
   roleAdmin: "Administrateur", roleOperator: "Opérateur", roleViewer: "Lecteur",

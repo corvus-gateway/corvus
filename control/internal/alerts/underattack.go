@@ -17,9 +17,10 @@ func underAttackFindings(events []underattack.Transition, tr map[string]string, 
 		if t.On {
 			until := t.Until.UTC().Format("2006-01-02 15:04 UTC")
 			out = append(out, finding{rule: "under_attack", key: key + "|on", oneShot: true,
-				title:  fmt.Sprintf(tr["under_attack_on"], t.Host),
-				text:   fmt.Sprintf(tr["under_attack_onText"], t.Reason, until),
-				fields: [][2]string{{tr["host"], t.Host}, {tr["reason"], t.Reason}, {tr["until"], until}}})
+				title:   fmt.Sprintf(tr["under_attack_on"], t.Host),
+				subject: t.Host,
+				text:    fmt.Sprintf(tr["under_attack_onText"], t.Reason, until),
+				fields:  [][2]string{{tr["host"], t.Host}, {tr["reason"], t.Reason}, {tr["until"], until}}})
 			continue
 		}
 		text := tr["under_attack_offText"]
@@ -27,9 +28,10 @@ func underAttackFindings(events []underattack.Transition, tr map[string]string, 
 			text = tr["under_attack_manual"]
 		}
 		out = append(out, finding{rule: "under_attack", key: key + "|off", oneShot: true,
-			title:  fmt.Sprintf(tr["under_attack_off"], t.Host),
-			text:   fmt.Sprintf(text, humanDuration(t.At.Sub(t.Since).Round(time.Minute), lang)),
-			fields: [][2]string{{tr["host"], t.Host}, {tr["reason"], t.Reason}}})
+			title:   fmt.Sprintf(tr["under_attack_off"], t.Host),
+			subject: t.Host,
+			text:    fmt.Sprintf(text, humanDuration(t.At.Sub(t.Since).Round(time.Minute), lang)),
+			fields:  [][2]string{{tr["host"], t.Host}, {tr["reason"], t.Reason}}})
 	}
 	return out
 }

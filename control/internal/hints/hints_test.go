@@ -14,6 +14,7 @@ func TestACME(t *testing.T) {
 		{"rate limited", "acme: error: 429 :: POST :: https://acme-v02.api.letsencrypt.org/acme/new-order :: urn:ietf:params:acme:error:rateLimited :: too many certificates (5) already issued for this exact set of identifiers in the last 168h0m0s", ACMERateLimited},
 		{"rate limited wins over propagation", "propagation: time limit exceeded urn:ietf:params:acme:error:rateLimited", ACMERateLimited},
 		{"cloudflare zone", "[example.com] acme: error presenting token: cloudflare: failed to find zone example.com.: zone could not be found", ACMEDNSCredential},
+		{"zone walked up to the tld", "[example.org] acme: error presenting token: cloudflare: failed to find zone org.: zone could not be found", ACMEDNSLookup},
 		{"status code 403", "[example.com] acme: error presenting token: digitalocean: unexpected status code: [status code: 403] body: {\"id\":\"forbidden\"}", ACMEDNSCredential},
 		{"invalid token", "[example.com] acme: error presenting token: duckdns: invalid API token", ACMEDNSCredential},
 		{"present other", "[example.com] acme: error presenting token: could not write file", ""},

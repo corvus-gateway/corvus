@@ -252,6 +252,10 @@ export const zh: Partial<Record<keyof typeof ko, string>> = {
   rule_login_failed: "管理员登录失败", ruled_login_failed: "统计窗口内登录失败次数超过阈值时告警。",
   thrl_error_rate: "5xx 错误率 ≥", thrl_latency_p95: "p95 ≥", thrl_traffic_spike: "相对平均值", thrl_rate_limited: "拦截数 ≥", thrl_exploit: "检测数 ≥",
   thrl_waitroom_queue: "排队人数 ≥", thrl_cert_expiry: "剩余天数 ≤", thrl_login_failed: "失败次数 ≥",
+  // active alert titles in the console language ({s}: host, IP, access queue, certificate, version)
+  alt_error_rate: "5xx 错误率突增 · {s}", alt_latency_p95: "延迟升高 · {s}", alt_traffic_spike: "流量突增", alt_rate_limited: "速率限制激增 · {s}", alt_exploit: "漏洞利用尝试增加 · {s}",
+  alt_security_events: "安全事件增加 · {s}", alt_attack_source: "重复攻击来源 IP · {s}", alt_scan_suspect: "疑似扫描器 · {s}", alt_waitroom_queue: "访问排队出现等待 · {s}", alt_redis_down: "缓存数据库连接中断",
+  alt_cert_expiry: "证书即将过期 · {s}", alt_acme_failed: "证书签发/续期失败 · {s}", alt_deploy_failed: "配置部署被拒绝 · 版本 #{s}", alt_login_failed: "管理员登录反复失败",
   // users
   navUsers: "用户", usersDesc: "管理可访问控制台的用户及其权限。",
   roleAdmin: "管理员", roleOperator: "运维", roleViewer: "只读",
