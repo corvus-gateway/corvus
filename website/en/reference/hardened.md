@@ -37,12 +37,12 @@ release workflow can only start, not change. Its build provenance meets
 directly (Build Level 2). The commands below accept both.
 
 ```bash
-cosign verify ghcr.io/corvus-gateway/gateway:1.10.0 \
+cosign verify ghcr.io/corvus-gateway/gateway:1.10.1 \
   --certificate-identity-regexp '^https://github.com/corvus-gateway/corvus/.github/workflows/(build-image|release).yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 # build provenance (SLSA Build Level 3), with the GitHub CLI
-gh attestation verify oci://ghcr.io/corvus-gateway/gateway:1.10.0 --owner corvus-gateway \
+gh attestation verify oci://ghcr.io/corvus-gateway/gateway:1.10.1 --owner corvus-gateway \
   --signer-workflow corvus-gateway/corvus/.github/workflows/build-image.yml
 
 # 1.9.x and earlier were built by release.yml itself: leave out --signer-workflow
