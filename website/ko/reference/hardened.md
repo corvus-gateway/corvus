@@ -37,12 +37,12 @@ cosign으로 키 없이(keyless) 서명됩니다. 따로 받아 둘 공개 키�
 두 경우를 모두 받아들입니다.
 
 ```bash
-cosign verify ghcr.io/corvus-gateway/gateway:1.10.0 \
+cosign verify ghcr.io/corvus-gateway/gateway:1.10.1 \
   --certificate-identity-regexp '^https://github.com/corvus-gateway/corvus/.github/workflows/(build-image|release).yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 # 빌드 출처(SLSA Build Level 3) 확인, GitHub CLI 사용
-gh attestation verify oci://ghcr.io/corvus-gateway/gateway:1.10.0 --owner corvus-gateway \
+gh attestation verify oci://ghcr.io/corvus-gateway/gateway:1.10.1 --owner corvus-gateway \
   --signer-workflow corvus-gateway/corvus/.github/workflows/build-image.yml
 
 # 1.9.x 이하는 release.yml이 직접 빌드했으므로 --signer-workflow 없이
